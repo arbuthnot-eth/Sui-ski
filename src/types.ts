@@ -5,9 +5,8 @@ export interface Env {
 	SUI_RPC_URL: string
 	WALRUS_NETWORK: 'mainnet' | 'testnet'
 	CACHE: KVNamespace
-	TRADEPORT_API_KEY?: string
-	TRADEPORT_USER?: string
-	TRADEPORT_API_URL?: string
+	// Messaging SDK contract addresses (testnet/mainnet)
+	MESSAGING_CONTRACT_ADDRESS?: string
 }
 
 export type RouteType = 'suins' | 'mvr' | 'content' | 'rpc' | 'root' | 'play'
