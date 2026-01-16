@@ -964,16 +964,40 @@ export function generateRegistrationPage(name: string, env: Env): string {
 	</div>
 
 	<div class="container">
-		<div class="site-header">
-			<h2>sui.ski</h2>
-		</div>
 		<div class="card">
 			${
 				isRegisterable
 					? `
-			<div class="status-badge">Available for Claiming</div>
 			<div class="name">${cleanName}<span class="suffix">.sui</span></div>
-			<p class="description">This name is available for registration.</p>
+			<div class="status-badge">Available for Claiming</div>
+
+			<div id="price-section">
+				<div class="year-selector">
+					<div class="selector-label">Registration Duration</div>
+					<div class="selector-controls">
+						<button class="year-btn" id="year-minus" disabled>−</button>
+						<div class="year-display">
+							<span class="number" id="year-number">1</span>
+							<span class="unit" id="year-label">year</span>
+						</div>
+						<button class="year-btn" id="year-plus">+</button>
+					</div>
+					<div class="price-display" id="price-display">
+						<span class="price-loading">Loading price...</span>
+					</div>
+				</div>
+			</div>
+
+			<div id="wallet-section">
+				<div id="wallet-info" class="wallet-info hidden">
+					<span class="wallet-address" id="wallet-address"></span>
+					<button class="disconnect" id="disconnect-btn">Disconnect</button>
+				</div>
+				<button class="connect-btn" id="connect-btn">Connect Wallet</button>
+				<button class="register-btn hidden" id="register-btn">Register ${cleanName}.sui</button>
+			</div>
+
+			<div id="status" class="status hidden"></div>
 
 			<!-- Knowledge Section (Dictionary + Grokipedia) -->
 			<div class="collapsible-section" id="knowledge-section">
@@ -1077,34 +1101,6 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					</div>
 				</div>
 			</div>
-
-			<div id="price-section">
-				<div class="year-selector">
-					<div class="selector-label">Registration Duration</div>
-					<div class="selector-controls">
-						<button class="year-btn" id="year-minus" disabled>−</button>
-						<div class="year-display">
-							<span class="number" id="year-number">1</span>
-							<span class="unit" id="year-label">year</span>
-						</div>
-						<button class="year-btn" id="year-plus">+</button>
-					</div>
-					<div class="price-display" id="price-display">
-						<span class="price-loading">Loading price...</span>
-					</div>
-				</div>
-			</div>
-
-			<div id="wallet-section">
-				<div id="wallet-info" class="wallet-info hidden">
-					<span class="wallet-address" id="wallet-address"></span>
-					<button class="disconnect" id="disconnect-btn">Disconnect</button>
-				</div>
-				<button class="connect-btn" id="connect-btn">Connect Wallet</button>
-				<button class="register-btn hidden" id="register-btn">Register ${cleanName}.sui</button>
-			</div>
-
-			<div id="status" class="status hidden"></div>
 			`
 					: `
 			<div class="status-badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171;">✗ Unavailable</div>

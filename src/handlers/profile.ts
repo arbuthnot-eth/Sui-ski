@@ -1956,7 +1956,7 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			.sidebar {
 				width: 100%;
 				position: static;
-				margin-bottom: 12px;
+				margin-bottom: 20px;
 			}
 			.sidebar-nav {
 				display: flex;
@@ -1975,80 +1975,83 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 		}
 
 		@media (max-width: 600px) {
-			body { padding: 10px; }
-			.card { padding: 14px; border-radius: 12px; }
+			body { padding: 16px 12px; }
+			.card { padding: 20px; border-radius: 12px; margin-bottom: 20px; }
 
 			.profile-hero {
 				flex-direction: column;
-				gap: 14px;
-			}
-			.hero-main {
-				order: 1;
+				align-items: center;
+				gap: 20px;
 			}
 			.identity-card {
+				order: 1;
+			}
+			.hero-main {
 				order: 2;
+				width: 100%;
 			}
 
 			.wallet-bar {
 				flex-wrap: wrap;
-				gap: 8px;
+				gap: 10px;
+				margin-bottom: 16px;
 			}
 			.wallet-bar .connect-btn {
-				padding: 8px 14px;
-				font-size: 0.75rem;
+				padding: 10px 16px;
+				font-size: 0.8rem;
 			}
 
 			.header {
-				margin-bottom: 12px;
-				padding-bottom: 12px;
+				margin-bottom: 16px;
+				padding-bottom: 16px;
 			}
-			.header-top { gap: 8px; }
-			h1 { font-size: 1.25rem; }
-			.badge { font-size: 0.55rem; padding: 2px 8px; }
+			.header-top { gap: 10px; }
+			h1 { font-size: 1.35rem; }
+			.badge { font-size: 0.6rem; padding: 4px 10px; }
 			.header-meta {
-				gap: 8px;
-				font-size: 0.7rem;
+				gap: 10px;
+				font-size: 0.75rem;
 			}
-			.header-meta-item { gap: 4px; }
-			.header-meta-item svg { width: 12px; height: 12px; }
+			.header-meta-item { gap: 6px; }
+			.header-meta-item svg { width: 14px; height: 14px; }
 
-			.identity-card { width: 140px; }
-			.owner-display { flex-direction: column; gap: 8px; padding: 10px; }
-			.owner-info { flex-direction: column; align-items: flex-start; gap: 4px; }
+			.identity-card { width: 160px; }
+			.owner-display { flex-direction: column; gap: 12px; padding: 14px; }
+			.owner-info { flex-direction: column; align-items: flex-start; gap: 6px; }
 			.owner-actions { width: 100%; justify-content: flex-start; }
-			.identity-name { font-size: 0.7rem; padding: 8px; }
+			.identity-name { font-size: 0.75rem; padding: 10px; }
 
-			.section { padding: 14px; border-radius: 12px; margin-bottom: 12px; }
-			.profile-grid { gap: 8px; }
-			.profile-item { padding: 10px; }
+			.section { padding: 18px; border-radius: 12px; margin-bottom: 16px; }
+			.profile-grid { gap: 10px; }
+			.profile-item { padding: 12px; }
 
-			.knowledge-box { padding: 12px; }
-			.knowledge-header { flex-direction: column; align-items: flex-start; gap: 6px; }
-			.knowledge-word { font-size: 0.95rem; }
+			.knowledge-box { padding: 14px; }
+			.knowledge-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+			.knowledge-word { font-size: 1rem; }
 
-			.qr-expanded-content { padding: 14px; max-width: 240px; }
-			.qr-expanded-content canvas { width: 160px; height: 160px; }
+			.qr-expanded-content { padding: 18px; max-width: 260px; }
+			.qr-expanded-content canvas { width: 180px; height: 180px; }
 			.qr-expanded-actions { flex-direction: column; width: 100%; }
 			.qr-expanded-actions button { width: 100%; justify-content: center; }
 
-			.media-player-section { padding: 12px; }
+			.media-player-section { padding: 18px; }
 			.media-player-input { flex-direction: column; }
 			.media-player-input button { width: 100%; }
 
-			.queue-bid-section { padding: 12px; }
+			.queue-bid-section { padding: 18px; }
 			.queue-bid-form { flex-direction: column; }
 			.queue-bid-btn { width: 100%; }
 
-			.edit-modal-content { margin: 10px; padding: 14px; }
+			.edit-modal-content { margin: 12px; padding: 18px; }
 		}
 
 		@media (max-width: 380px) {
-			body { padding: 8px; }
-			.card { padding: 12px; }
-			h1 { font-size: 1.1rem; }
-			.identity-card { width: 120px; }
-			.identity-name { font-size: 0.65rem; padding: 6px; }
-			.identity-qr-toggle { width: 28px; height: 28px; bottom: 6px; left: 6px; right: auto; }
+			body { padding: 12px; }
+			.card { padding: 16px; margin-bottom: 16px; }
+			h1 { font-size: 1.2rem; }
+			.identity-card { width: 140px; }
+			.identity-name { font-size: 0.7rem; padding: 8px; }
+			.identity-qr-toggle { width: 30px; height: 30px; bottom: 8px; left: 8px; right: auto; }
 		}
 	</style>
 </head>
