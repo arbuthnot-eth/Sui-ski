@@ -2,8 +2,8 @@ import { handleBidsRequest } from './handlers/bids'
 import { handleGrokipediaRequest } from './handlers/grokipedia'
 import { handleLandingPage } from './handlers/landing'
 import { handlePlayerEntryPage, handlePlayRequest } from './handlers/media'
+import { handleMessagingPage, handleMessagingRequest } from './handlers/messaging'
 import { generateProfilePage } from './handlers/profile'
-import { handleTradeportRequest } from './handlers/tradeport'
 import { handleTransaction } from './handlers/transaction'
 import { handleUploadPage } from './handlers/upload'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
@@ -30,8 +30,10 @@ export default {
 		}
 
 		const url = new URL(request.url)
-		if (url.pathname.startsWith('/api/tradeport')) {
-			return handleTradeportRequest(request, env)
+
+		// Messaging API endpoints
+		if (url.pathname.startsWith('/api/messaging')) {
+			return handleMessagingRequest(request, env)
 		}
 
 		if (url.pathname.startsWith('/api/bids')) {
@@ -40,6 +42,11 @@ export default {
 
 		if (url.pathname === '/api/grokipedia') {
 			return handleGrokipediaRequest(request, env)
+		}
+
+		// Messaging page
+		if (url.pathname === '/messages' || url.pathname === '/messages/') {
+			return handleMessagingPage(env)
 		}
 
 		// Walrus upload proxy (to avoid CORS issues)

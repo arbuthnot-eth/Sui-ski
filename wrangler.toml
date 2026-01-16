@@ -14,12 +14,8 @@ routes = [
 SUI_NETWORK = "mainnet"
 SUI_RPC_URL = "https://fullnode.mainnet.sui.io:443"
 WALRUS_NETWORK = "mainnet"
-TRADEPORT_API_URL = "https://api.indexer.xyz/graphql"
-
-# Secrets are set via `wrangler secret put ...` for production or a local `.env`
-# for development. Required keys:
-#   TRADEPORT_USER
-#   TRADEPORT_API_KEY
+# Sui Stack Messaging SDK contract (testnet)
+MESSAGING_CONTRACT_ADDRESS = "0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d"
 
 # KV namespace for caching resolved names
 [[kv_namespaces]]
