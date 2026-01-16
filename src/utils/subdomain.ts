@@ -1,4 +1,4 @@
-import type { ParsedSubdomain, RouteType } from '../types'
+import type { ParsedSubdomain } from '../types'
 
 const DOMAIN = 'sui.ski'
 const STAGING_DOMAIN = 'staging.sui.ski'
@@ -14,6 +14,7 @@ const STAGING_DOMAIN = 'staging.sui.ski'
  * - rpc.sui.ski -> RPC proxy endpoint
  * - ipfs-{cid}.sui.ski -> Direct IPFS content
  * - walrus-{blobId}.sui.ski -> Direct Walrus content
+ * - play-{blobId}.sui.ski -> Media player for audio/video or playlist
  */
 export function parseSubdomain(hostname: string): ParsedSubdomain {
 	// Normalize hostname
@@ -54,6 +55,15 @@ export function parseSubdomain(hostname: string): ParsedSubdomain {
 		}
 	}
 
+	// Media player: play-{blobId}.sui.ski
+	if (subdomain.startsWith('play-')) {
+		return {
+			type: 'play',
+			subdomain,
+			hostname: host,
+		}
+	}
+
 	// MVR package pattern: pkg--name or pkg--name--v{version}
 	if (subdomain.includes('--')) {
 		const parts = subdomain.split('--')
@@ -64,7 +74,7 @@ export function parseSubdomain(hostname: string): ParsedSubdomain {
 		// Check for version suffix: --v2, --v3, etc.
 		if (parts.length > 2 && parts[2].startsWith('v')) {
 			version = parseInt(parts[2].slice(1), 10)
-			if (isNaN(version)) version = undefined
+			if (Number.isNaN(version)) version = undefined
 		}
 
 		return {

@@ -8,10 +8,7 @@ export interface CacheEntry<T> {
 	expiresAt: number
 }
 
-export async function getCached<T>(
-	env: Env,
-	key: string,
-): Promise<T | null> {
+export async function getCached<T>(env: Env, key: string): Promise<T | null> {
 	try {
 		const cached = await env.CACHE.get(key, 'json')
 		if (!cached) return null

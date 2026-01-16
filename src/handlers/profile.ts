@@ -1,0 +1,4439 @@
+import type { Env, SuiNSRecord } from '../types'
+
+/**
+ * Generate sui.ski themed SuiNS profile page HTML
+ */
+export function generateProfilePage(name: string, record: SuiNSRecord, env: Env): string {
+	const network = env.SUI_NETWORK
+	const explorerBase =
+		network === 'mainnet' ? 'https://suiscan.xyz/mainnet' : `https://suiscan.xyz/${network}`
+	const explorerUrl = `${explorerBase}/account/${record.address}`
+	const nftExplorerUrl = record.nftId ? `${explorerBase}/object/${record.nftId}` : ''
+
+	const cleanName = name.replace(/\.sui$/i, '').toLowerCase()
+	const fullName = `${cleanName}.sui`
+	const expiresMs = record.expirationTimestampMs ? Number(record.expirationTimestampMs) : undefined
+	const expiresAt =
+		typeof expiresMs === 'number' && Number.isFinite(expiresMs) ? new Date(expiresMs) : null
+	const daysToExpire = expiresAt ? Math.ceil((expiresAt.getTime() - Date.now()) / 86_400_000) : null
+	const escapeHtml = (value: string) =>
+		value.replace(/[&<>"']/g, (char) => {
+			switch (char) {
+				case '&':
+					return '&amp;'
+				case '<':
+					return '&lt;'
+				case '>':
+					return '&gt;'
+				case '"':
+					return '&quot;'
+				case "'":
+					return '&#39;'
+				default:
+					return char
+			}
+		})
+
+	const serializeJson = (value: unknown) =>
+		JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
+
+	const recordEntries = Object.entries(record.records || {})
+		.filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
+		.sort(([a], [b]) => a.localeCompare(b))
+
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>${escapeHtml(fullName)} | sui.ski</title>
+	<style>
+		:root {
+			--bg-gradient-start: #0a0a0f;
+			--bg-gradient-end: #12121a;
+			--card-bg: rgba(22, 22, 30, 0.9);
+			--card-bg-solid: #16161e;
+			--glass-border: rgba(255, 255, 255, 0.08);
+			--text: #e4e4e7;
+			--text-muted: #71717a;
+			--accent: #60a5fa;
+			--accent-light: rgba(96, 165, 250, 0.12);
+			--accent-hover: #93c5fd;
+			--accent-glow: rgba(96, 165, 250, 0.3);
+			--success: #34d399;
+			--success-light: rgba(52, 211, 153, 0.12);
+			--warning: #fbbf24;
+			--warning-light: rgba(251, 191, 36, 0.12);
+			--error: #f87171;
+			--error-light: rgba(248, 113, 113, 0.12);
+			--border: rgba(255, 255, 255, 0.06);
+			--border-strong: rgba(255, 255, 255, 0.12);
+			--shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+			--shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+		}
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body {
+			font-family: 'Inter', system-ui, -apple-system, sans-serif;
+			background: linear-gradient(145deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 50%, #0d0d14 100%);
+			background-attachment: fixed;
+			color: var(--text);
+			min-height: 100vh;
+			padding: 24px 16px;
+		}
+		body::before {
+			content: '';
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background:
+				radial-gradient(ellipse at 20% 20%, rgba(96, 165, 250, 0.08) 0%, transparent 50%),
+				radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
+			pointer-events: none;
+		}
+		.container { max-width: 900px; margin: 0 auto; position: relative; }
+
+		.page-layout {
+			display: flex;
+			gap: 16px;
+		}
+		.sidebar {
+			width: 180px;
+			flex-shrink: 0;
+			position: sticky;
+			top: 24px;
+			align-self: flex-start;
+		}
+		.sidebar-nav {
+			background: var(--card-bg);
+			border-radius: 16px;
+			padding: 8px;
+			border: 1px solid var(--border);
+			backdrop-filter: blur(20px);
+		}
+		.sidebar-tab {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			width: 100%;
+			padding: 10px 12px;
+			border: none;
+			background: transparent;
+			color: var(--text-muted);
+			font-size: 0.8rem;
+			font-weight: 500;
+			cursor: pointer;
+			border-radius: 10px;
+			transition: all 0.2s;
+			text-align: left;
+		}
+		.sidebar-tab:hover {
+			background: rgba(255, 255, 255, 0.05);
+			color: var(--text);
+		}
+		.sidebar-tab.active {
+			background: var(--accent-light);
+			color: var(--accent);
+		}
+		.sidebar-tab svg {
+			width: 16px;
+			height: 16px;
+			flex-shrink: 0;
+		}
+		.main-content {
+			flex: 1;
+			min-width: 0;
+		}
+		.tab-panel {
+			display: none;
+		}
+		.tab-panel.active {
+			display: block;
+		}
+
+		.profile-hero {
+			display: flex;
+			gap: 16px;
+			align-items: flex-start;
+			margin-bottom: 16px;
+		}
+		.identity-card {
+			width: 160px;
+			background: #050818;
+			border-radius: 16px;
+			overflow: hidden;
+			box-shadow: 0 12px 32px rgba(59, 130, 246, 0.2);
+			position: relative;
+		}
+		.identity-visual {
+			position: relative;
+			aspect-ratio: 1;
+			background: linear-gradient(135deg, #0a1628 0%, #050818 100%);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.identity-visual img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		.identity-visual canvas {
+			width: 85%;
+			height: 85%;
+			border-radius: 8px;
+		}
+		.identity-qr-toggle {
+			position: absolute;
+			bottom: 8px;
+			left: 8px;
+			right: auto;
+			width: 32px;
+			height: 32px;
+			background: rgba(5, 8, 24, 0.9);
+			border: 1px solid rgba(96, 165, 250, 0.3);
+			border-radius: 8px;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: all 0.2s;
+			z-index: 2;
+		}
+		.identity-qr-toggle:hover {
+			background: rgba(96, 165, 250, 0.2);
+			border-color: var(--accent);
+		}
+		.identity-qr-toggle svg {
+			width: 16px;
+			height: 16px;
+			color: var(--accent);
+		}
+		.identity-qr-toggle.active {
+			background: var(--accent);
+			border-color: var(--accent);
+		}
+		.identity-qr-toggle.active svg {
+			color: white;
+		}
+		.identity-name {
+			padding: 10px;
+			text-align: center;
+			font-family: ui-monospace, SFMono-Regular, monospace;
+			font-size: 0.75rem;
+			font-weight: 600;
+			color: var(--accent);
+			background: rgba(96, 165, 250, 0.08);
+			cursor: pointer;
+			transition: all 0.2s;
+			border-top: 1px solid rgba(96, 165, 250, 0.15);
+		}
+		.identity-name:hover {
+			background: rgba(96, 165, 250, 0.15);
+		}
+		.identity-name.copied {
+			background: rgba(52, 211, 153, 0.15);
+			color: var(--success);
+		}
+		.hero-main {
+			flex: 1;
+			min-width: 0;
+		}
+
+		.card {
+			background: var(--card-bg);
+			backdrop-filter: blur(20px);
+			-webkit-backdrop-filter: blur(20px);
+			border-radius: 14px;
+			padding: 20px;
+			border: 1px solid var(--glass-border);
+			box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.05);
+			margin-bottom: 16px;
+			position: relative;
+			overflow: hidden;
+		}
+		.card::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			height: 1px;
+			background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+		}
+
+		.header {
+			margin-bottom: 16px;
+			padding-bottom: 16px;
+			border-bottom: 1px solid var(--border);
+		}
+		.header-top {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			margin-bottom: 8px;
+			flex-wrap: wrap;
+		}
+		h1 {
+			font-size: 1.5rem;
+			font-weight: 700;
+			color: var(--text);
+			letter-spacing: -0.03em;
+			margin: 0;
+			word-break: break-all;
+		}
+		h1 .suffix {
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			padding: 4px 10px;
+			border-radius: 8px;
+			font-size: 0.65rem;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			white-space: nowrap;
+		}
+		.badge.network {
+			background: var(--accent-light);
+			color: var(--accent);
+			border: 1px solid var(--border);
+		}
+		.badge.expiry {
+			background: rgba(34, 197, 94, 0.15);
+			color: #22c55e;
+			border: 1px solid rgba(34, 197, 94, 0.2);
+		}
+		.badge.expiry.warning {
+			background: var(--warning-light);
+			color: var(--warning);
+			border: 1px solid rgba(245, 158, 11, 0.2);
+		}
+		.badge.expiry.danger {
+			background: var(--error-light);
+			color: var(--error);
+			border: 1px solid rgba(239, 68, 68, 0.2);
+		}
+		.badge.expiry.premium {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(167, 139, 250, 0.15));
+			color: #60a5fa;
+			border: 1px solid rgba(96, 165, 250, 0.3);
+		}
+		.header-meta {
+			display: flex;
+			align-items: center;
+			gap: 16px;
+			flex-wrap: wrap;
+			font-size: 0.8rem;
+			color: var(--text-muted);
+		}
+		.header-meta-item {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+		.header-meta-item svg {
+			width: 14px;
+			height: 14px;
+			opacity: 0.7;
+		}
+		.header-meta-item a {
+			color: var(--text-muted);
+		}
+		.header-meta-item a:hover {
+			color: var(--accent);
+		}
+
+		.owner-display {
+			background: linear-gradient(135deg, rgba(30, 30, 40, 0.8), rgba(20, 20, 30, 0.9));
+			padding: 12px 16px;
+			border-radius: 12px;
+			border: 1px solid var(--border);
+			margin-top: 12px;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+		}
+		.owner-info {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			flex: 1;
+			min-width: 0;
+		}
+		.owner-label {
+			font-size: 0.65rem;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+		}
+		.owner-name {
+			font-weight: 700;
+			font-size: 0.95rem;
+			color: var(--text);
+		}
+		.owner-name .suffix {
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.owner-addr {
+			font-family: ui-monospace, SFMono-Regular, monospace;
+			color: var(--text-muted);
+			font-size: 0.7rem;
+		}
+		.owner-actions {
+			display: flex;
+			gap: 6px;
+			align-items: center;
+		}
+		.owner-actions .copy-btn {
+			background: none;
+			border: none;
+			color: var(--text-muted);
+			cursor: pointer;
+			padding: 6px;
+			display: flex;
+			align-items: center;
+			transition: all 0.2s;
+			border-radius: 8px;
+		}
+		.owner-actions .copy-btn:hover {
+			color: var(--accent);
+			background: var(--accent-light);
+		}
+		.owner-actions .edit-btn {
+			background: var(--card-bg-solid);
+			border: 1px solid var(--border-strong);
+			color: var(--text);
+			padding: 8px 14px;
+			border-radius: 10px;
+			font-size: 0.75rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.owner-actions .edit-btn:hover:not(:disabled) {
+			background: var(--accent);
+			color: white;
+			border-color: var(--accent);
+		}
+		.owner-actions .edit-btn:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+		.owner-actions .edit-btn.hidden {
+			display: none;
+		}
+
+
+		.qr-expanded {
+			display: none;
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background: rgba(0,0,0,0.8);
+			backdrop-filter: blur(8px);
+			z-index: 1000;
+			align-items: center;
+			justify-content: center;
+			flex-direction: column;
+			gap: 16px;
+			padding: 20px;
+		}
+		.qr-expanded.active {
+			display: flex;
+		}
+		.qr-expanded-content {
+			background: #050818;
+			border: 1px solid rgba(96, 165, 250, 0.3);
+			border-radius: 24px;
+			padding: 24px;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 16px;
+			max-width: 320px;
+			box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 60px rgba(96, 165, 250, 0.15);
+		}
+		.qr-expanded-content canvas {
+			width: 220px;
+			height: 220px;
+			border-radius: 16px;
+		}
+		.qr-expanded-url {
+			font-family: ui-monospace, monospace;
+			font-size: 0.95rem;
+			color: var(--text);
+			font-weight: 600;
+			padding: 8px 16px;
+			background: rgba(96, 165, 250, 0.1);
+			border-radius: 10px;
+		}
+		.qr-expanded-actions {
+			display: flex;
+			gap: 10px;
+			width: 100%;
+		}
+		.qr-expanded-actions button {
+			flex: 1;
+			padding: 12px 16px;
+			border-radius: 10px;
+			border: none;
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			transition: all 0.2s;
+		}
+		.qr-expanded-actions button svg {
+			width: 16px;
+			height: 16px;
+		}
+		.qr-expanded-actions .copy-btn {
+			background: rgba(96, 165, 250, 0.15);
+			border: 1px solid rgba(96, 165, 250, 0.3);
+			color: var(--accent);
+		}
+		.qr-expanded-actions .copy-btn:hover {
+			background: rgba(96, 165, 250, 0.25);
+		}
+		.qr-expanded-actions .download-btn {
+			background: transparent;
+			border: 1px solid var(--glass-border);
+			color: var(--text);
+		}
+		.qr-expanded-actions .download-btn:hover {
+			background: rgba(255, 255, 255, 0.05);
+			border-color: var(--text-muted);
+		}
+		.qr-expanded-close {
+			color: white;
+			font-size: 0.85rem;
+			opacity: 0.7;
+			cursor: pointer;
+			margin-top: 8px;
+		}
+		.qr-expanded-close:hover {
+			opacity: 1;
+		}
+
+		/* Edit Modal */
+		.edit-modal {
+			display: none;
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background: rgba(0, 0, 0, 0.7);
+			backdrop-filter: blur(8px);
+			z-index: 100;
+			align-items: center;
+			justify-content: center;
+			padding: 20px;
+		}
+		.edit-modal.open { display: flex; }
+		.edit-modal-content {
+			background: var(--card-bg-solid);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			padding: 28px;
+			max-width: 480px;
+			width: 100%;
+			box-shadow: var(--shadow-lg);
+		}
+		.edit-modal h3 {
+			color: var(--text);
+			margin-bottom: 8px;
+			font-size: 1.15rem;
+			font-weight: 700;
+		}
+		.edit-modal p {
+			color: var(--text-muted);
+			font-size: 0.85rem;
+			margin-bottom: 18px;
+		}
+		.edit-modal input {
+			width: 100%;
+			padding: 14px 16px;
+			border: 2px solid var(--border);
+			border-radius: 12px;
+			background: var(--card-bg-solid);
+			color: var(--text);
+			font-family: ui-monospace, SFMono-Regular, monospace;
+			font-size: 0.85rem;
+			margin-bottom: 8px;
+			transition: all 0.2s;
+		}
+		.edit-modal input:focus {
+			outline: none;
+			border-color: var(--accent);
+			box-shadow: 0 0 0 4px var(--accent-glow);
+		}
+		.edit-modal-buttons {
+			display: flex;
+			gap: 12px;
+			margin-top: 20px;
+		}
+		.edit-modal-buttons button {
+			flex: 1;
+			padding: 12px 18px;
+			border-radius: 12px;
+			font-size: 0.9rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.edit-modal-buttons .cancel-btn {
+			background: transparent;
+			color: var(--text-muted);
+			border: 1px solid var(--border);
+		}
+		.edit-modal-buttons .cancel-btn:hover {
+			background: rgba(255, 255, 255, 0.05);
+			color: var(--text);
+		}
+		.edit-modal-buttons .save-btn {
+			background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+			color: white;
+			border: none;
+			box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+		}
+		.edit-modal-buttons .save-btn:hover {
+			filter: brightness(1.1);
+			transform: translateY(-1px);
+		}
+		.edit-modal-buttons .save-btn:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+			transform: none;
+		}
+
+		/* Wallet status bar */
+		.wallet-bar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 10px;
+			margin-bottom: 12px;
+			font-size: 0.75rem;
+		}
+		.wallet-bar .wallet-status {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 8px 14px;
+			background: var(--accent-light);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+		}
+		.wallet-bar .wallet-addr {
+			font-family: ui-monospace, SFMono-Regular, monospace;
+			color: var(--accent);
+			font-weight: 600;
+		}
+		.wallet-bar .wallet-name {
+			color: var(--text-muted);
+			font-size: 0.7rem;
+		}
+		.wallet-bar button {
+			background: none;
+			border: none;
+			color: var(--text-muted);
+			cursor: pointer;
+			font-size: 1rem;
+			transition: color 0.2s;
+			padding: 4px;
+		}
+		.wallet-bar button:hover { color: var(--error); }
+		.wallet-bar .connect-btn {
+			padding: 10px 18px;
+			background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+			border: none;
+			border-radius: 10px;
+			color: white;
+			font-weight: 600;
+			font-size: 0.8rem;
+			transition: all 0.2s;
+			box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+		}
+		.wallet-bar .connect-btn:hover {
+			filter: brightness(1.1);
+			transform: translateY(-1px);
+			box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+		}
+
+		.section {
+			background: var(--card-bg);
+			backdrop-filter: blur(20px);
+			-webkit-backdrop-filter: blur(20px);
+			border: 1px solid var(--glass-border);
+			border-radius: 14px;
+			padding: 16px;
+			margin-bottom: 14px;
+			box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.03);
+			position: relative;
+		}
+		.section::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			height: 1px;
+			background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+		}
+		.section h3 {
+			color: var(--text);
+			font-size: 0.85rem;
+			font-weight: 700;
+			margin-bottom: 12px;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+		.section h3 svg {
+			width: 16px;
+			height: 16px;
+			color: var(--accent);
+		}
+
+		.profile-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+			gap: 8px;
+			padding-top: 12px;
+			border-top: 1px solid var(--border);
+		}
+		.profile-item {
+			background: linear-gradient(135deg, rgba(30, 30, 40, 0.5), rgba(20, 20, 30, 0.6));
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 14px;
+			box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+		}
+		.profile-label {
+			font-size: 0.65rem;
+			font-weight: 600;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			margin-bottom: 6px;
+		}
+		.profile-value {
+			font-size: 0.85rem;
+			color: var(--text);
+			word-break: break-all;
+			font-weight: 500;
+		}
+		.profile-value.mono {
+			font-family: ui-monospace, SFMono-Regular, monospace;
+			font-size: 0.75rem;
+		}
+		.profile-value.highlight {
+			color: var(--accent);
+		}
+
+		.status {
+			padding: 12px 16px;
+			border-radius: 12px;
+			font-size: 0.85rem;
+			margin-top: 14px;
+			font-weight: 500;
+		}
+		.status.error { background: var(--error-light); color: var(--error); border: 1px solid rgba(239, 68, 68, 0.2); }
+		.status.success { background: var(--success-light); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2); }
+		.status.info { background: var(--accent-light); color: var(--accent); border: 1px solid var(--border); }
+		.status.hidden { display: none; }
+
+		/* Records Table */
+		.records-table {
+			width: 100%;
+			border-collapse: collapse;
+			font-size: 0.85rem;
+		}
+		.records-table th,
+		.records-table td {
+			padding: 12px 10px;
+			border-bottom: 1px solid var(--border);
+			text-align: left;
+		}
+		.records-table th {
+			color: var(--text-muted);
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			font-size: 0.7rem;
+		}
+		.record-key {
+			font-family: ui-monospace, SFMono-Regular, monospace;
+			color: var(--accent);
+			width: 35%;
+			font-size: 0.8rem;
+			font-weight: 600;
+		}
+		.record-value {
+			color: var(--text);
+			word-break: break-all;
+		}
+		.record-empty {
+			color: var(--text-muted);
+			font-style: italic;
+			text-align: center;
+		}
+
+		/* Links */
+		a { color: var(--accent); text-decoration: none; transition: all 0.2s; }
+		a:hover { color: var(--accent-hover); }
+
+		.links {
+			display: flex;
+			gap: 12px;
+			flex-wrap: wrap;
+			margin-top: 24px;
+		}
+		.links a {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 12px 18px;
+			background: var(--card-bg-solid);
+			border: 1px solid var(--border-strong);
+			border-radius: 12px;
+			font-size: 0.8rem;
+			color: var(--text);
+			transition: all 0.2s;
+			font-weight: 600;
+		}
+		.links a:hover {
+			border-color: var(--accent);
+			color: var(--accent);
+			box-shadow: var(--shadow);
+			transform: translateY(-2px);
+		}
+		.links a svg {
+			width: 16px;
+			height: 16px;
+		}
+
+		.footer {
+			text-align: center;
+			margin-top: 32px;
+			padding-top: 20px;
+			color: var(--text-muted);
+			font-size: 0.8rem;
+		}
+		.footer a { color: var(--accent); font-weight: 600; }
+
+		.loading {
+			display: inline-block;
+			width: 16px;
+			height: 16px;
+			border: 2px solid var(--border);
+			border-top-color: var(--accent);
+			border-radius: 50%;
+			animation: spin 0.7s linear infinite;
+		}
+		@keyframes spin { to { transform: rotate(360deg); } }
+		.hidden { display: none !important; }
+
+		/* Marketplace Section */
+		.marketplace-section {
+			background: var(--card-bg);
+			backdrop-filter: blur(20px);
+			-webkit-backdrop-filter: blur(20px);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			padding: 24px;
+			margin-bottom: 20px;
+			box-shadow: var(--shadow);
+		}
+		.marketplace-section h3 {
+			color: var(--text);
+			font-size: 0.9rem;
+			font-weight: 700;
+			margin-bottom: 6px;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.marketplace-section h3 svg {
+			width: 18px;
+			height: 18px;
+			color: var(--accent);
+		}
+		.marketplace-subtitle {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			margin-bottom: 16px;
+		}
+		.marketplace-loading {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 20px;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+		}
+		.marketplace-content {
+			display: flex;
+			flex-direction: column;
+			gap: 16px;
+		}
+		.marketplace-listing {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.05), rgba(167, 139, 250, 0.05));
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 16px;
+		}
+		.listing-status {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+		.listing-label {
+			font-size: 0.75rem;
+			font-weight: 600;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+		.listing-value {
+			font-size: 0.9rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.listing-value.for-sale {
+			color: #22c55e;
+		}
+		.listing-price {
+			margin-top: 8px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+		.listing-price-label {
+			font-size: 0.7rem;
+			color: var(--text-muted);
+		}
+		.listing-price-value {
+			font-size: 1.1rem;
+			font-weight: 700;
+			color: var(--accent);
+		}
+		.marketplace-bids {
+			background: rgba(30, 30, 40, 0.5);
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			overflow: hidden;
+		}
+		.bids-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 12px 16px;
+			border-bottom: 1px solid var(--border);
+			font-size: 0.8rem;
+			font-weight: 600;
+			color: var(--text-muted);
+		}
+		.bids-count {
+			background: var(--accent-light);
+			color: var(--accent);
+			padding: 2px 8px;
+			border-radius: 10px;
+			font-size: 0.7rem;
+		}
+		.bids-list {
+			max-height: 200px;
+			overflow-y: auto;
+		}
+		.bid-item {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 12px 16px;
+			border-bottom: 1px solid var(--border);
+		}
+		.bid-item:last-child {
+			border-bottom: none;
+		}
+		.bid-item-info {
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+		}
+		.bid-item-bidder {
+			font-size: 0.8rem;
+			color: var(--text);
+			font-family: ui-monospace, SFMono-Regular, monospace;
+		}
+		.bid-item-time {
+			font-size: 0.7rem;
+			color: var(--text-muted);
+		}
+		.bid-item-amount {
+			font-size: 0.9rem;
+			font-weight: 700;
+			color: var(--accent);
+		}
+		.no-bids {
+			padding: 20px 16px;
+			text-align: center;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+		}
+		.place-bid-section {
+			background: linear-gradient(135deg, rgba(34, 197, 94, 0.05), rgba(16, 185, 129, 0.05));
+			border: 1px solid rgba(34, 197, 94, 0.2);
+			border-radius: 14px;
+			padding: 16px;
+		}
+		.place-bid-section h4 {
+			font-size: 0.85rem;
+			font-weight: 600;
+			color: var(--text);
+			margin-bottom: 12px;
+		}
+		.bid-form {
+			display: flex;
+			gap: 12px;
+			align-items: flex-end;
+		}
+		.bid-input-group {
+			flex: 1;
+		}
+		.bid-input-group label {
+			display: block;
+			font-size: 0.7rem;
+			font-weight: 600;
+			color: var(--text-muted);
+			margin-bottom: 6px;
+		}
+		.bid-input-group input {
+			width: 100%;
+			padding: 10px 12px;
+			border: 2px solid var(--border);
+			border-radius: 10px;
+			background: var(--card-bg-solid);
+			color: var(--text);
+			font-size: 0.9rem;
+			font-weight: 600;
+		}
+		.bid-input-group input:focus {
+			outline: none;
+			border-color: #22c55e;
+			box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15);
+		}
+		.bid-submit-btn {
+			padding: 10px 20px;
+			background: linear-gradient(135deg, #22c55e, #10b981);
+			color: white;
+			border: none;
+			border-radius: 10px;
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+			white-space: nowrap;
+		}
+		.bid-submit-btn:hover:not(:disabled) {
+			transform: translateY(-1px);
+			box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+		}
+		.bid-submit-btn:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+		}
+		.bid-status {
+			margin-top: 12px;
+			padding: 10px 14px;
+			border-radius: 10px;
+			font-size: 0.8rem;
+		}
+		.bid-status.success {
+			background: rgba(34, 197, 94, 0.15);
+			color: #22c55e;
+			border: 1px solid rgba(34, 197, 94, 0.3);
+		}
+		.bid-status.error {
+			background: var(--error-light);
+			color: var(--error);
+			border: 1px solid rgba(239, 68, 68, 0.3);
+		}
+		.tradeport-link {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			padding: 12px 16px;
+			background: rgba(30, 30, 40, 0.5);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			color: var(--accent);
+			font-size: 0.85rem;
+			font-weight: 500;
+			text-decoration: none;
+			transition: all 0.2s;
+		}
+		.tradeport-link:hover {
+			border-color: var(--accent);
+			background: var(--accent-light);
+		}
+		.tradeport-link svg {
+			width: 16px;
+			height: 16px;
+		}
+		.marketplace-error {
+			text-align: center;
+			padding: 20px;
+			color: var(--text-muted);
+		}
+		.marketplace-error p {
+			margin-bottom: 12px;
+		}
+		.retry-btn {
+			padding: 8px 16px;
+			background: var(--accent-light);
+			color: var(--accent);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			font-size: 0.8rem;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.retry-btn:hover {
+			border-color: var(--accent);
+		}
+
+		/* Queue Bid Section */
+		.queue-bid-section {
+			background: var(--card-bg);
+			backdrop-filter: blur(20px);
+			-webkit-backdrop-filter: blur(20px);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			padding: 24px;
+			margin-bottom: 20px;
+			box-shadow: var(--shadow);
+		}
+		.queue-bid-section h3 {
+			color: var(--text);
+			font-size: 0.9rem;
+			font-weight: 700;
+			margin-bottom: 14px;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.queue-bid-section h3 svg {
+			width: 18px;
+			height: 18px;
+			color: var(--warning);
+		}
+		.queue-bid-info {
+			display: grid;
+			grid-template-columns: repeat(2, 1fr);
+			gap: 14px;
+			margin-bottom: 18px;
+		}
+		@media (max-width: 480px) {
+			.queue-bid-info { grid-template-columns: 1fr; }
+		}
+		.queue-bid-stat {
+			background: linear-gradient(135deg, rgba(14, 165, 233, 0.03), rgba(6, 182, 212, 0.03));
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 14px;
+		}
+		.queue-bid-stat-label {
+			font-size: 0.65rem;
+			font-weight: 600;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			margin-bottom: 6px;
+		}
+		.queue-bid-stat-value {
+			font-size: 0.95rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.queue-bid-stat-value.warning {
+			color: var(--warning);
+		}
+		.queue-bid-stat-value.countdown {
+			color: var(--accent);
+			font-family: ui-monospace, SFMono-Regular, monospace;
+		}
+		.queue-bid-form {
+			display: flex;
+			gap: 12px;
+			align-items: flex-end;
+		}
+		.queue-bid-input-group {
+			flex: 1;
+		}
+		.queue-bid-input-group label {
+			display: block;
+			font-size: 0.75rem;
+			font-weight: 600;
+			color: var(--text-muted);
+			margin-bottom: 8px;
+		}
+		.queue-bid-input-group input {
+			width: 100%;
+			padding: 12px 14px;
+			border: 2px solid var(--border);
+			border-radius: 12px;
+			background: var(--card-bg-solid);
+			color: var(--text);
+			font-size: 0.9rem;
+			font-weight: 600;
+		}
+		.queue-bid-input-group input:focus {
+			outline: none;
+			border-color: var(--accent);
+			box-shadow: 0 0 0 4px var(--accent-glow);
+		}
+		.queue-bid-btn {
+			padding: 12px 24px;
+			background: linear-gradient(135deg, var(--warning), #f97316);
+			color: white;
+			border: none;
+			border-radius: 12px;
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+			white-space: nowrap;
+			box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+		}
+		.queue-bid-btn:hover:not(:disabled) {
+			filter: brightness(1.1);
+			transform: translateY(-1px);
+		}
+		.queue-bid-btn:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+			transform: none;
+		}
+		.queue-bid-status {
+			margin-top: 14px;
+			padding: 12px 16px;
+			border-radius: 12px;
+			font-size: 0.85rem;
+			font-weight: 500;
+		}
+		.queue-bid-existing {
+			background: var(--accent-light);
+			border: 1px solid var(--border-strong);
+			border-radius: 14px;
+			padding: 14px;
+			margin-bottom: 18px;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 14px;
+		}
+		.queue-bid-existing-info {
+			flex: 1;
+		}
+		.queue-bid-existing-label {
+			font-size: 0.7rem;
+			color: var(--accent);
+			text-transform: uppercase;
+			font-weight: 600;
+			margin-bottom: 4px;
+		}
+		.queue-bid-existing-value {
+			font-size: 1rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.queue-bid-cancel {
+			padding: 8px 14px;
+			background: transparent;
+			border: 2px solid var(--error);
+			color: var(--error);
+			border-radius: 10px;
+			font-size: 0.75rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.queue-bid-cancel:hover {
+			background: var(--error);
+			color: white;
+		}
+		.queue-bid-note {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			margin-top: 14px;
+			line-height: 1.6;
+		}
+
+		/* Knowledge Section */
+		.knowledge-section {
+			background: var(--card-bg);
+			backdrop-filter: blur(20px);
+			-webkit-backdrop-filter: blur(20px);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			margin-bottom: 20px;
+			overflow: hidden;
+			box-shadow: var(--shadow);
+		}
+		.knowledge-box {
+			border-bottom: 1px solid var(--border);
+		}
+		.knowledge-box:last-child {
+			border-bottom: none;
+		}
+		.knowledge-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 16px 20px;
+			background: linear-gradient(135deg, rgba(14, 165, 233, 0.05), rgba(6, 182, 212, 0.05));
+		}
+		.knowledge-header-left {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+		.knowledge-icon {
+			width: 36px;
+			height: 36px;
+			border-radius: 10px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: linear-gradient(135deg, var(--accent), #06b6d4);
+		}
+		.knowledge-icon.wiki {
+			background: linear-gradient(135deg, #10b981, #059669);
+		}
+		.knowledge-icon svg {
+			width: 18px;
+			height: 18px;
+			color: white;
+		}
+		.knowledge-title {
+			font-size: 0.95rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.knowledge-badge {
+			font-size: 0.7rem;
+			font-weight: 600;
+			padding: 4px 10px;
+			border-radius: 8px;
+			text-transform: uppercase;
+			letter-spacing: 0.03em;
+		}
+		.knowledge-badge.found {
+			background: var(--success-light);
+			color: var(--success);
+			border: 1px solid rgba(16, 185, 129, 0.2);
+		}
+		.knowledge-badge.not-found {
+			background: rgba(100, 116, 139, 0.1);
+			color: var(--text-muted);
+		}
+		.knowledge-content {
+			padding: 20px;
+		}
+		.knowledge-word {
+			font-size: 1.5rem;
+			font-weight: 800;
+			background: linear-gradient(135deg, var(--accent), #06b6d4);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+			margin-bottom: 4px;
+		}
+		.knowledge-phonetic {
+			font-size: 0.9rem;
+			color: var(--text-muted);
+			font-style: italic;
+			margin-bottom: 16px;
+		}
+		.knowledge-meanings {
+			display: flex;
+			flex-direction: column;
+			gap: 14px;
+		}
+		.knowledge-meaning {
+			padding-left: 14px;
+			border-left: 3px solid var(--accent);
+		}
+		.knowledge-pos {
+			font-size: 0.7rem;
+			font-weight: 700;
+			color: var(--accent);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			margin-bottom: 6px;
+		}
+		.knowledge-def {
+			font-size: 0.9rem;
+			color: var(--text);
+			line-height: 1.6;
+			margin-bottom: 6px;
+		}
+		.knowledge-example {
+			font-size: 0.85rem;
+			color: var(--text-muted);
+			font-style: italic;
+			padding-left: 12px;
+			border-left: 2px solid var(--border);
+		}
+		.knowledge-article-title {
+			font-size: 1.1rem;
+			font-weight: 700;
+			color: var(--text);
+			margin-bottom: 12px;
+		}
+		.knowledge-article-desc {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			font-style: italic;
+			margin-bottom: 12px;
+		}
+		.knowledge-article-extract {
+			font-size: 0.9rem;
+			color: var(--text);
+			line-height: 1.7;
+			margin-bottom: 16px;
+		}
+		.knowledge-link {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			color: var(--accent);
+			font-size: 0.85rem;
+			font-weight: 600;
+			margin-right: 16px;
+		}
+		.knowledge-link svg {
+			width: 14px;
+			height: 14px;
+		}
+		.knowledge-loading {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			padding: 24px;
+			color: var(--text-muted);
+		}
+
+		/* Command Palette / Quick Search */
+		.search-overlay {
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background: rgba(12, 74, 110, 0.6);
+			backdrop-filter: blur(8px);
+			z-index: 1000;
+			display: flex;
+			align-items: flex-start;
+			justify-content: center;
+			padding-top: 20vh;
+			opacity: 0;
+			visibility: hidden;
+			transition: all 0.2s ease;
+		}
+		.search-overlay.active {
+			opacity: 1;
+			visibility: visible;
+		}
+		.search-box {
+			background: var(--card-bg-solid);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			padding: 8px;
+			width: 100%;
+			max-width: 520px;
+			box-shadow: 0 20px 60px rgba(14, 165, 233, 0.2), 0 8px 24px rgba(0, 0, 0, 0.1);
+			transform: translateY(-20px) scale(0.95);
+			transition: transform 0.2s ease;
+		}
+		.search-overlay.active .search-box {
+			transform: translateY(0) scale(1);
+		}
+		.search-input-wrapper {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+			padding: 14px 18px;
+		}
+		.search-input-wrapper svg {
+			width: 24px;
+			height: 24px;
+			color: var(--accent);
+			flex-shrink: 0;
+		}
+		.search-input {
+			flex: 1;
+			border: none;
+			background: none;
+			font-size: 1.25rem;
+			font-weight: 500;
+			color: var(--text);
+			outline: none;
+		}
+		.search-input::placeholder {
+			color: var(--text-muted);
+		}
+		.search-hint {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 12px 18px;
+			border-top: 1px solid var(--border);
+			font-size: 0.8rem;
+			color: var(--text-muted);
+		}
+		.search-hint kbd {
+			background: var(--accent-light);
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			padding: 3px 8px;
+			font-family: ui-monospace, monospace;
+			font-size: 0.75rem;
+			color: var(--accent);
+		}
+
+		/* Floating Search Button */
+		.search-fab {
+			position: fixed;
+			bottom: 24px;
+			right: 24px;
+			width: 56px;
+			height: 56px;
+			border-radius: 14px;
+			background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+			border: none;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4), 0 2px 8px rgba(0,0,0,0.3);
+			transition: all 0.2s;
+			z-index: 100;
+		}
+		.search-fab:hover {
+			transform: translateY(-2px) scale(1.05);
+			box-shadow: 0 6px 24px rgba(139, 92, 246, 0.5), 0 4px 12px rgba(0,0,0,0.4);
+		}
+		.search-fab svg {
+			width: 24px;
+			height: 24px;
+			color: white;
+		}
+		.search-fab-hint {
+			position: fixed;
+			bottom: 88px;
+			right: 24px;
+			background: var(--card-bg-solid);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			padding: 8px 12px;
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			box-shadow: var(--shadow);
+			opacity: 0;
+			transform: translateY(10px);
+			transition: all 0.2s;
+			pointer-events: none;
+			z-index: 99;
+		}
+		.search-fab:hover + .search-fab-hint,
+		.search-fab-hint:hover {
+			opacity: 1;
+			transform: translateY(0);
+		}
+
+		/* Upload Section */
+		.upload-section {
+			background: var(--card-bg);
+			backdrop-filter: blur(20px);
+			-webkit-backdrop-filter: blur(20px);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			padding: 24px;
+			margin-bottom: 20px;
+			box-shadow: var(--shadow);
+		}
+		.upload-section h3 {
+			color: var(--text);
+			font-size: 0.9rem;
+			font-weight: 700;
+			margin-bottom: 18px;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.upload-section h3 svg {
+			width: 18px;
+			height: 18px;
+			color: var(--accent);
+		}
+		.upload-header {
+			display: flex;
+			align-items: flex-start;
+			justify-content: space-between;
+			gap: 14px;
+			margin-bottom: 16px;
+		}
+		.upload-title {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+		.upload-subtitle {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+		}
+		.upload-badges {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+		.badge.walrus {
+			background: rgba(59, 130, 246, 0.12);
+			color: #93c5fd;
+			border: 1px solid rgba(59, 130, 246, 0.25);
+		}
+		.badge.browser {
+			background: rgba(16, 185, 129, 0.12);
+			color: #6ee7b7;
+			border: 1px solid rgba(16, 185, 129, 0.25);
+		}
+		.upload-dropzone {
+			border: 2px dashed var(--border-strong);
+			border-radius: 12px;
+			padding: 32px 20px;
+			text-align: center;
+			cursor: pointer;
+			transition: all 0.2s;
+			background: linear-gradient(135deg, rgba(30, 30, 40, 0.3), rgba(20, 20, 30, 0.4));
+			position: relative;
+			overflow: hidden;
+		}
+		.upload-dropzone:hover,
+		.upload-dropzone.dragover {
+			border-color: #60a5fa;
+			background: rgba(59, 130, 246, 0.1);
+		}
+		.upload-dropzone svg {
+			width: 40px;
+			height: 40px;
+			color: var(--accent);
+			margin-bottom: 12px;
+		}
+		.upload-dropzone p {
+			color: var(--text);
+			font-size: 0.9rem;
+			font-weight: 500;
+			margin-bottom: 4px;
+		}
+		.upload-dropzone .hint {
+			color: var(--text-muted);
+			font-size: 0.75rem;
+			font-weight: 400;
+		}
+		.upload-meta {
+			margin-top: 14px;
+			display: grid;
+			gap: 10px;
+			padding: 12px 14px;
+			background: linear-gradient(135deg, rgba(30, 30, 40, 0.45), rgba(20, 20, 30, 0.55));
+			border-radius: 12px;
+			border: 1px solid var(--border);
+		}
+		.upload-meta-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 10px;
+			font-size: 0.75rem;
+		}
+		.upload-meta-label {
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+			font-weight: 600;
+		}
+		.upload-meta-value {
+			color: var(--text);
+			font-weight: 600;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			max-width: 240px;
+			text-align: right;
+		}
+		.upload-helper {
+			margin-top: 12px;
+			font-size: 0.75rem;
+			color: var(--text-muted);
+		}
+		.upload-options {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			margin-top: 16px;
+			font-size: 0.85rem;
+		}
+		.upload-options label {
+			color: var(--text-muted);
+			font-weight: 500;
+		}
+		.upload-options select {
+			flex: 1;
+			padding: 10px 14px;
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			background: var(--card-bg-solid);
+			color: var(--text);
+			font-size: 0.85rem;
+			cursor: pointer;
+		}
+		.upload-options select:focus {
+			outline: none;
+			border-color: var(--accent);
+		}
+		.upload-progress {
+			margin-top: 16px;
+			padding: 16px;
+			background: linear-gradient(135deg, rgba(30, 30, 40, 0.5), rgba(20, 20, 30, 0.6));
+			border-radius: 12px;
+			border: 1px solid var(--border);
+		}
+		.upload-progress .progress-bar {
+			height: 6px;
+			background: rgba(255, 255, 255, 0.1);
+			border-radius: 3px;
+			overflow: hidden;
+			margin-bottom: 10px;
+		}
+		.upload-progress .progress-fill {
+			height: 100%;
+			background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+			border-radius: 3px;
+			transition: width 0.3s;
+			width: 0%;
+		}
+		.upload-progress .progress-status {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+
+		/* Content Display Section */
+		.content-display {
+			background: var(--card-bg);
+			backdrop-filter: blur(20px);
+			-webkit-backdrop-filter: blur(20px);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			padding: 24px;
+			margin-bottom: 20px;
+			box-shadow: var(--shadow);
+		}
+		.content-display h3 {
+			color: var(--text);
+			font-size: 0.9rem;
+			font-weight: 700;
+			margin-bottom: 18px;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.content-display h3 svg {
+			width: 18px;
+			height: 18px;
+			color: var(--accent);
+		}
+		.content-item {
+			background: linear-gradient(135deg, rgba(14, 165, 233, 0.03), rgba(6, 182, 212, 0.03));
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 16px;
+			margin-bottom: 12px;
+		}
+		.content-item:last-child {
+			margin-bottom: 0;
+		}
+		.content-image {
+			max-width: 100%;
+			border-radius: 10px;
+			display: block;
+		}
+		.content-video {
+			width: 100%;
+			border-radius: 10px;
+			background: #000;
+		}
+		.content-audio {
+			width: 100%;
+		}
+		.content-meta {
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 6px;
+			margin-top: 12px;
+			font-size: 0.8rem;
+		}
+		.content-meta-main {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			width: 100%;
+		}
+		.content-meta .content-name {
+			color: var(--text);
+			font-weight: 500;
+		}
+		.content-meta .content-type {
+			color: var(--text-muted);
+		}
+		.content-meta-secondary {
+			color: var(--text-muted);
+			font-size: 0.7rem;
+		}
+		.content-actions {
+			display: flex;
+			gap: 8px;
+			margin-top: 12px;
+		}
+		.content-actions a,
+		.content-actions button {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 8px 14px;
+			background: var(--card-bg-solid);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			color: var(--text);
+			font-size: 0.75rem;
+			font-weight: 500;
+			text-decoration: none;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.content-actions a:hover,
+		.content-actions button:hover {
+			border-color: var(--accent);
+			color: var(--accent);
+		}
+		.content-actions svg {
+			width: 14px;
+			height: 14px;
+		}
+		.content-empty {
+			text-align: center;
+			padding: 24px;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+		}
+
+		/* Media Player Section */
+		.media-player-section {
+			background: var(--card-bg);
+			backdrop-filter: blur(20px);
+			border: 1px solid var(--glass-border);
+			border-radius: 16px;
+			padding: 24px;
+			margin-bottom: 20px;
+		}
+		.media-player-section h3 {
+			color: var(--text);
+			font-size: 0.95rem;
+			font-weight: 700;
+			margin-bottom: 12px;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.media-player-section h3 svg {
+			width: 20px;
+			height: 20px;
+			color: var(--accent);
+		}
+		.media-player-section p {
+			color: var(--text-muted);
+			font-size: 0.85rem;
+			margin-bottom: 16px;
+		}
+		.media-player-section p a {
+			color: var(--accent);
+		}
+		.media-player-input {
+			display: flex;
+			gap: 10px;
+		}
+		.media-player-input input {
+			flex: 1;
+			padding: 12px 14px;
+			background: rgba(30, 30, 40, 0.6);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			color: var(--text);
+			font-size: 0.9rem;
+			font-family: ui-monospace, monospace;
+			outline: none;
+			transition: border-color 0.2s;
+		}
+		.media-player-input input:focus {
+			border-color: var(--accent);
+		}
+		.media-player-input input::placeholder {
+			color: var(--text-muted);
+			font-family: inherit;
+		}
+		.media-player-input button {
+			padding: 12px 20px;
+			background: linear-gradient(135deg, var(--accent), #8b5cf6);
+			border: none;
+			border-radius: 10px;
+			color: white;
+			font-size: 0.9rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: transform 0.2s, box-shadow 0.2s;
+			box-shadow: 0 4px 12px var(--accent-glow);
+		}
+		.media-player-input button:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 6px 16px var(--accent-glow);
+		}
+		.media-format-badges {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px;
+			margin-top: 12px;
+		}
+		.media-format-badge {
+			padding: 4px 10px;
+			background: var(--accent-light);
+			border: 1px solid rgba(96, 165, 250, 0.15);
+			border-radius: 6px;
+			font-size: 0.7rem;
+			font-weight: 600;
+			color: var(--accent);
+		}
+
+		/* ===== MOBILE RESPONSIVE ===== */
+		@media (max-width: 768px) {
+			.page-layout { flex-direction: column; }
+			.sidebar {
+				width: 100%;
+				position: static;
+				margin-bottom: 12px;
+			}
+			.sidebar-nav {
+				display: flex;
+				gap: 4px;
+				overflow-x: auto;
+				padding: 6px;
+				-webkit-overflow-scrolling: touch;
+			}
+			.sidebar-tab {
+				padding: 8px 12px;
+				white-space: nowrap;
+				font-size: 0.75rem;
+			}
+			.sidebar-tab span { display: none; }
+			.sidebar-tab svg { margin: 0; }
+		}
+
+		@media (max-width: 600px) {
+			body { padding: 10px; }
+			.card { padding: 14px; border-radius: 12px; }
+
+			.profile-hero {
+				flex-direction: column;
+				gap: 14px;
+			}
+			.hero-main {
+				order: 1;
+			}
+			.identity-card {
+				order: 2;
+			}
+
+			.wallet-bar {
+				flex-wrap: wrap;
+				gap: 8px;
+			}
+			.wallet-bar .connect-btn {
+				padding: 8px 14px;
+				font-size: 0.75rem;
+			}
+
+			.header {
+				margin-bottom: 12px;
+				padding-bottom: 12px;
+			}
+			.header-top { gap: 8px; }
+			h1 { font-size: 1.25rem; }
+			.badge { font-size: 0.55rem; padding: 2px 8px; }
+			.header-meta {
+				gap: 8px;
+				font-size: 0.7rem;
+			}
+			.header-meta-item { gap: 4px; }
+			.header-meta-item svg { width: 12px; height: 12px; }
+
+			.identity-card { width: 140px; }
+			.owner-display { flex-direction: column; gap: 8px; padding: 10px; }
+			.owner-info { flex-direction: column; align-items: flex-start; gap: 4px; }
+			.owner-actions { width: 100%; justify-content: flex-start; }
+			.identity-name { font-size: 0.7rem; padding: 8px; }
+
+			.section { padding: 14px; border-radius: 12px; margin-bottom: 12px; }
+			.profile-grid { gap: 8px; }
+			.profile-item { padding: 10px; }
+
+			.knowledge-box { padding: 12px; }
+			.knowledge-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+			.knowledge-word { font-size: 0.95rem; }
+
+			.qr-expanded-content { padding: 14px; max-width: 240px; }
+			.qr-expanded-content canvas { width: 160px; height: 160px; }
+			.qr-expanded-actions { flex-direction: column; width: 100%; }
+			.qr-expanded-actions button { width: 100%; justify-content: center; }
+
+			.media-player-section { padding: 12px; }
+			.media-player-input { flex-direction: column; }
+			.media-player-input button { width: 100%; }
+
+			.queue-bid-section { padding: 12px; }
+			.queue-bid-form { flex-direction: column; }
+			.queue-bid-btn { width: 100%; }
+
+			.edit-modal-content { margin: 10px; padding: 14px; }
+		}
+
+		@media (max-width: 380px) {
+			body { padding: 8px; }
+			.card { padding: 12px; }
+			h1 { font-size: 1.1rem; }
+			.identity-card { width: 120px; }
+			.identity-name { font-size: 0.65rem; padding: 6px; }
+			.identity-qr-toggle { width: 28px; height: 28px; bottom: 6px; left: 6px; right: auto; }
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="page-layout">
+			<div class="sidebar">
+				<nav class="sidebar-nav">
+					<button class="sidebar-tab active" data-tab="overview">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+						<span>Overview</span>
+					</button>
+					<button class="sidebar-tab" data-tab="records">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+						<span>Records</span>
+					</button>
+					<button class="sidebar-tab" data-tab="media">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+						<span>Media</span>
+					</button>
+					<button class="sidebar-tab" data-tab="upload">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+						<span>Upload</span>
+					</button>
+					<button class="sidebar-tab" data-tab="bid">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+						<span>Queue Bid</span>
+					</button>
+					<button class="sidebar-tab" data-tab="knowledge">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+						<span>Knowledge</span>
+					</button>
+				</nav>
+			</div>
+			<div class="main-content">
+				<div class="tab-panel active" id="tab-overview">
+					<div class="card">
+			<div class="profile-hero">
+				<div class="identity-card">
+					<div class="identity-visual" id="identity-visual">
+						<canvas id="qr-canvas"></canvas>
+						<button class="identity-qr-toggle" id="qr-toggle" title="Toggle QR code">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
+						</button>
+					</div>
+					<div class="identity-name" id="identity-name" title="Click to copy">${escapeHtml(cleanName)}.sui.ski</div>
+				</div>
+				<div class="hero-main">
+					<div class="wallet-bar" id="wallet-bar"></div>
+					<div class="header">
+						<div class="header-top">
+							<h1>${escapeHtml(cleanName)}<span class="suffix">.sui</span></h1>
+							${
+								daysToExpire !== null
+									? `<span class="badge expiry${daysToExpire <= 0 ? ' danger' : daysToExpire <= 7 ? ' danger' : daysToExpire <= 90 ? ' warning' : daysToExpire > 365 ? ' premium' : ''}">${
+											daysToExpire <= 0 ? 'Expired' : daysToExpire > 365 ? `${Math.floor(daysToExpire / 365)}y ${daysToExpire % 365}d` : `${daysToExpire}d left`
+										}</span>`
+									: ''
+							}
+						</div>
+						<div class="header-meta">
+							<div class="header-meta-item">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+								${expiresAt ? `Expires ${expiresAt.toLocaleDateString()}` : 'No expiration'}
+							</div>
+							<div class="header-meta-item">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+								<a href="https://${escapeHtml(cleanName)}.sui.ski" target="_blank">${escapeHtml(cleanName)}.sui.ski</a>
+							</div>
+							${record.nftId ? `<a href="${escapeHtml(nftExplorerUrl)}" target="_blank" class="header-meta-item" style="color:var(--accent);text-decoration:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>View NFT</a>` : ''}
+						</div>
+					</div>
+					<div class="owner-display">
+						<div class="owner-info">
+							<span class="owner-label">Owner</span>
+							<span class="owner-name" id="addr-name"></span>
+							<span class="owner-addr" id="addr-text">${escapeHtml(record.address.slice(0, 8))}...${escapeHtml(record.address.slice(-6))}</span>
+						</div>
+						<div class="owner-actions">
+							<button class="copy-btn" id="copy-address-btn" title="Copy address">
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+							</button>
+							<button class="edit-btn hidden" id="set-self-btn" title="Set to my address">Self</button>
+							<button class="edit-btn" id="edit-address-btn">Edit</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			${
+				record.contentHash || record.walrusSiteId
+					? `
+			<div class="profile-grid">
+				${
+					record.contentHash
+						? `
+				<div class="profile-item">
+					<div class="profile-label">Content Hash</div>
+					<div class="profile-value mono">${escapeHtml(`${record.contentHash.slice(0, 24)}...`)}</div>
+				</div>
+				`
+						: ''
+				}
+				${
+					record.walrusSiteId
+						? `
+				<div class="profile-item">
+					<div class="profile-label">Walrus Site</div>
+					<div class="profile-value mono">${escapeHtml(`${record.walrusSiteId.slice(0, 24)}...`)}</div>
+				</div>
+				`
+						: ''
+				}
+			</div>
+			`
+					: ''
+			}
+					</div>
+				</div><!-- end tab-overview -->
+
+				<div class="tab-panel" id="tab-records">
+					<!-- On-chain Records -->
+					<div class="section">
+			<h3>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+					<polyline points="14 2 14 8 20 8"></polyline>
+				</svg>
+				On-chain Records
+			</h3>
+			<table class="records-table">
+				<thead>
+					<tr><th>Key</th><th>Value</th></tr>
+				</thead>
+				<tbody>
+					${
+						recordEntries.length > 0
+							? recordEntries
+									.map(
+										([key, value]) => `
+						<tr>
+							<td class="record-key">${escapeHtml(key)}</td>
+							<td class="record-value">${/^https?:\/\//i.test(value) ? `<a href="${escapeHtml(value)}" target="_blank">${escapeHtml(value)}</a>` : escapeHtml(value)}</td>
+						</tr>
+					`,
+									)
+									.join('')
+							: '<tr><td colspan="2" class="record-empty">No records set</td></tr>'
+					}
+				</tbody>
+			</table>
+					</div>
+				</div><!-- end tab-records -->
+
+				<div class="tab-panel" id="tab-media">
+					<!-- Content Display Section -->
+					<div class="content-display" id="content-display" style="display: none;">
+			<h3>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<polygon points="23 7 16 12 23 17 23 7"></polygon>
+					<rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+				</svg>
+				Media Library
+			</h3>
+			<div id="content-items"></div>
+					</div>
+
+					<!-- Media Player Section -->
+					<div class="media-player-section">
+						<h3>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polygon points="5 3 19 12 5 21 5 3"></polygon>
+							</svg>
+							Media Player
+						</h3>
+						<p>Play audio and video from Walrus. <a href="/play">More options</a></p>
+						<form class="media-player-input" onsubmit="goToPlayer(event)">
+							<input type="text" id="media-blob-input" placeholder="Paste blob ID or URL...">
+							<button type="submit">Play</button>
+						</form>
+						<div class="media-format-badges">
+							<span class="media-format-badge">MP4</span>
+							<span class="media-format-badge">WebM</span>
+							<span class="media-format-badge">MP3</span>
+							<span class="media-format-badge">OGG</span>
+							<span class="media-format-badge">WAV</span>
+							<span class="media-format-badge">FLAC</span>
+						</div>
+					</div>
+				</div><!-- end tab-media -->
+
+				<div class="tab-panel" id="tab-upload">
+					<!-- Upload Section (only visible to NFT owner) -->
+					<div class="upload-section" id="upload-section" style="display: none;">
+			<div class="upload-header">
+				<div class="upload-title">
+					<h3>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+							<polyline points="17 8 12 3 7 8"></polyline>
+							<line x1="12" y1="3" x2="12" y2="15"></line>
+						</svg>
+						Upload Content
+					</h3>
+					<p class="upload-subtitle">Stored on Walrus and written to your SuiNS records.</p>
+				</div>
+				<div class="upload-badges">
+					<span class="badge walrus">Walrus ${network}</span>
+					<span class="badge browser">Browser Upload</span>
+				</div>
+			</div>
+			<div class="upload-dropzone" id="upload-dropzone">
+				<input type="file" id="file-input" hidden>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+					<polyline points="17 8 12 3 7 8"></polyline>
+					<line x1="12" y1="3" x2="12" y2="15"></line>
+				</svg>
+				<p>Drop file here or click to upload</p>
+				<p class="hint">Images, videos, audio, documents - stored on Walrus</p>
+			</div>
+			<div class="upload-meta" id="upload-meta">
+				<div class="upload-meta-row">
+					<span class="upload-meta-label">File</span>
+					<span class="upload-meta-value" id="upload-file-name">No file selected</span>
+				</div>
+				<div class="upload-meta-row">
+					<span class="upload-meta-label">Type</span>
+					<span class="upload-meta-value" id="upload-file-type">-</span>
+				</div>
+				<div class="upload-meta-row">
+					<span class="upload-meta-label">Size</span>
+					<span class="upload-meta-value" id="upload-file-size">-</span>
+				</div>
+			</div>
+			<div class="upload-options">
+				<label>Save as:</label>
+				<select id="record-key">
+					<option value="content_hash">Content (media/files)</option>
+					<option value="avatar">Avatar (profile picture)</option>
+				</select>
+			</div>
+			<p class="upload-helper">Uploads stream from your browser to the Walrus publisher, then the blob ID is saved on-chain.</p>
+			<div class="upload-progress" id="upload-progress" style="display: none;">
+				<div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+				<p class="progress-status" id="progress-status"><span class="loading"></span> Uploading...</p>
+			</div>
+			<div id="upload-status" class="status hidden"></div>
+					</div>
+				</div><!-- end tab-upload -->
+
+				<div class="tab-panel" id="tab-bid">
+					<!-- Tradeport Marketplace Section -->
+					<div class="marketplace-section" id="marketplace-section">
+						<h3>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+								<line x1="3" y1="6" x2="21" y2="6"></line>
+								<path d="M16 10a4 4 0 0 1-8 0"></path>
+							</svg>
+							Marketplace
+						</h3>
+						<p class="marketplace-subtitle">Trade this name on Tradeport</p>
+
+						<div class="marketplace-loading" id="marketplace-loading">
+							<span class="loading"></span>
+							Loading marketplace data...
+						</div>
+
+						<div class="marketplace-content" id="marketplace-content" style="display: none;">
+							<!-- Listing Status -->
+							<div class="marketplace-listing" id="marketplace-listing">
+								<div class="listing-status" id="listing-status">
+									<span class="listing-label">Status</span>
+									<span class="listing-value" id="listing-value">Not Listed</span>
+								</div>
+							</div>
+
+							<!-- Existing Bids -->
+							<div class="marketplace-bids">
+								<div class="bids-header">
+									<span>Current Bids</span>
+									<span class="bids-count" id="bids-count">0</span>
+								</div>
+								<div class="bids-list" id="bids-list">
+									<div class="no-bids">No bids yet</div>
+								</div>
+							</div>
+
+							<!-- Place Bid Form -->
+							<div class="place-bid-section" id="place-bid-section">
+								<h4>Place a Bid</h4>
+								<div class="bid-form">
+									<div class="bid-input-group">
+										<label for="marketplace-bid-amount">Bid Amount (SUI)</label>
+										<input type="number" id="marketplace-bid-amount" placeholder="Enter amount" min="0.1" step="0.1" />
+									</div>
+									<button class="bid-submit-btn" id="place-bid-btn" disabled>
+										<span class="btn-text">Connect Wallet</span>
+									</button>
+								</div>
+								<div id="bid-status" class="bid-status hidden"></div>
+							</div>
+
+							<!-- Tradeport Link -->
+							<a href="https://tradeport.xyz/sui/collection/suins?name=${escapeHtml(cleanName)}.sui" target="_blank" class="tradeport-link">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+								View on Tradeport
+							</a>
+						</div>
+
+						<div class="marketplace-error" id="marketplace-error" style="display: none;">
+							<p>Failed to load marketplace data</p>
+							<button class="retry-btn" id="retry-marketplace">Retry</button>
+						</div>
+					</div>
+
+					${
+						expiresAt
+							? `
+					<!-- Registration Queue Section -->
+					<div class="queue-bid-section" id="queue-bid-section">
+						<h3>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<circle cx="12" cy="12" r="10"></circle>
+								<polyline points="12 6 12 12 16 14"></polyline>
+							</svg>
+							Registration Queue
+						</h3>
+						<p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px;">
+							Queue a bid for when this name expires and becomes available.
+						</p>
+						<div class="queue-bid-info">
+							<div class="queue-bid-stat">
+								<div class="queue-bid-stat-label">Expires</div>
+								<div class="queue-bid-stat-value">${expiresAt.toLocaleDateString()}</div>
+							</div>
+							<div class="queue-bid-stat">
+								<div class="queue-bid-stat-label">Available</div>
+								<div class="queue-bid-stat-value warning" id="grace-period-end">${new Date(expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</div>
+							</div>
+							<div class="queue-bid-stat">
+								<div class="queue-bid-stat-label">Countdown</div>
+								<div class="queue-bid-stat-value countdown" id="countdown-timer">Calculating...</div>
+							</div>
+						</div>
+					</div>
+					`
+							: ''
+					}
+				</div><!-- end tab-bid -->
+
+				<div class="tab-panel" id="tab-knowledge">
+					<!-- Knowledge Section -->
+					<div class="knowledge-section" id="knowledge-section">
+			<!-- Dictionary -->
+			<div class="knowledge-box" id="dictionary-box">
+				<div class="knowledge-header">
+					<div class="knowledge-header-left">
+						<div class="knowledge-icon">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+								<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+							</svg>
+						</div>
+						<span class="knowledge-title">Dictionary</span>
+					</div>
+					<span class="knowledge-badge" id="dictionary-badge">Loading...</span>
+				</div>
+				<div class="knowledge-content" id="dictionary-content">
+					<div class="knowledge-loading">
+						<span class="loading"></span>
+						Looking up definition...
+					</div>
+				</div>
+			</div>
+
+			<!-- Grokipedia -->
+			<div class="knowledge-box" id="grokipedia-box">
+				<div class="knowledge-header">
+					<div class="knowledge-header-left">
+						<div class="knowledge-icon wiki">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<circle cx="12" cy="12" r="10"></circle>
+								<line x1="2" y1="12" x2="22" y2="12"></line>
+								<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+							</svg>
+						</div>
+						<span class="knowledge-title">Grokipedia</span>
+					</div>
+					<span class="knowledge-badge" id="grokipedia-badge">Loading...</span>
+				</div>
+				<div class="knowledge-content" id="grokipedia-content">
+					<div class="knowledge-loading">
+						<span class="loading"></span>
+						Searching encyclopedia...
+					</div>
+				</div>
+					</div>
+					</div>
+				</div><!-- end tab-knowledge -->
+
+				<div class="links">
+			<a href="${escapeHtml(explorerUrl)}" target="_blank">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+				View on Explorer
+			</a>
+			<a href="/json">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+				View JSON
+			</a>
+			<a href="https://suins.io/name/${escapeHtml(cleanName)}" target="_blank">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+				Manage on SuiNS
+			</a>
+				</div>
+			</div><!-- end main-content -->
+		</div><!-- end page-layout -->
+	</div>
+
+	<!-- Floating Search Button -->
+	<button class="search-fab" id="search-fab" title="Search names">
+		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<circle cx="11" cy="11" r="8"></circle>
+			<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+		</svg>
+	</button>
+	<div class="search-fab-hint">Just start typing...</div>
+
+	<!-- Quick Search Overlay -->
+	<div class="search-overlay" id="search-overlay">
+		<div class="search-box">
+			<div class="search-input-wrapper">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="11" cy="11" r="8"></circle>
+					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+				</svg>
+				<input type="text" class="search-input" id="search-input" placeholder="Search for a name..." autocomplete="off" spellcheck="false" />
+			</div>
+			<div class="search-hint">
+				<span>Type to search SuiNS names</span>
+				<span><kbd>Enter</kbd> to go · <kbd>Esc</kbd> to close</span>
+			</div>
+		</div>
+	</div>
+
+	<!-- Edit Address Modal -->
+	<div class="edit-modal" id="edit-modal">
+		<div class="edit-modal-content">
+			<h3>Set Target Address</h3>
+			<p>Enter a Sui address or SuiNS name. Only the NFT owner can change this.</p>
+			<input type="text" id="target-address" placeholder="0x... or name.sui" value="${escapeHtml(record.address)}" />
+			<div id="resolved-address" style="font-size: 0.75rem; color: var(--text-muted); min-height: 18px;"></div>
+			<div id="modal-status" class="status hidden"></div>
+			<div class="edit-modal-buttons">
+				<button class="cancel-btn" id="cancel-edit-btn">Cancel</button>
+				<button class="save-btn" id="save-address-btn">Update</button>
+			</div>
+		</div>
+	</div>
+
+	<script type="module">
+		import { getWallets } from 'https://esm.sh/@mysten/wallet-standard@0.13.8';
+		import { SuiClient } from 'https://esm.sh/@mysten/sui@1.27.0/client';
+		import { Transaction } from 'https://esm.sh/@mysten/sui@1.27.0/transactions';
+		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.7.2';
+
+		const NAME = '${cleanName}';
+		const FULL_NAME = ${serializeJson(fullName)};
+		const NETWORK = ${serializeJson(network)};
+		const RPC_URL = ${serializeJson(env.SUI_RPC_URL)};
+		const NFT_ID = ${serializeJson(record.nftId || '')};
+		const CURRENT_ADDRESS = ${serializeJson(record.address)};
+		const PROFILE_URL = ${serializeJson(`https://${cleanName}.sui.ski`)};
+		const NFT_EXPLORER_URL = ${serializeJson(nftExplorerUrl)};
+		const IS_SUBNAME = NAME.includes('.');
+		const STORAGE_KEY = 'sui_ski_wallet';
+		const EXPIRATION_MS = ${expiresMs || 0};
+		const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+		const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
+
+		let connectedWallet = null;
+		let connectedAccount = null;
+		let connectedAddress = null;
+		let connectedWalletName = null;
+		let connectedPrimaryName = null;
+		let walletsApi = null;
+		let nftOwnerAddress = null;
+		let targetPrimaryName = null;
+		let canEdit = false;
+
+		try {
+			walletsApi = getWallets();
+		} catch (e) {
+			console.error('Failed to init wallet API:', e);
+		}
+
+		// DOM Elements
+		const walletBar = document.getElementById('wallet-bar');
+		const editBtn = document.getElementById('edit-address-btn');
+		const setSelfBtn = document.getElementById('set-self-btn');
+		const copyBtn = document.getElementById('copy-address-btn');
+		const editModal = document.getElementById('edit-modal');
+		const targetAddressInput = document.getElementById('target-address');
+		const resolvedAddressEl = document.getElementById('resolved-address');
+		const modalStatus = document.getElementById('modal-status');
+		const cancelBtn = document.getElementById('cancel-edit-btn');
+		const saveBtn = document.getElementById('save-address-btn');
+		// Identity card elements (merged NFT + QR)
+		const identityVisual = document.getElementById('identity-visual');
+		const identityCanvas = document.getElementById('qr-canvas');
+		const identityName = document.getElementById('identity-name');
+		const qrToggle = document.getElementById('qr-toggle');
+		let nftImageUrl = null;
+		let showingQr = true;
+		let nftDisplayLoaded = false;
+
+		// Tab navigation
+		const sidebarTabs = document.querySelectorAll('.sidebar-tab');
+		const tabPanels = document.querySelectorAll('.tab-panel');
+
+		function switchTab(tabId) {
+			// Update sidebar tabs
+			sidebarTabs.forEach(tab => {
+				if (tab.dataset.tab === tabId) {
+					tab.classList.add('active');
+				} else {
+					tab.classList.remove('active');
+				}
+			});
+			// Update tab panels
+			tabPanels.forEach(panel => {
+				if (panel.id === 'tab-' + tabId) {
+					panel.classList.add('active');
+				} else {
+					panel.classList.remove('active');
+				}
+			});
+			// Save preference
+			localStorage.setItem('sui_ski_active_tab', tabId);
+		}
+
+		// Initialize tab navigation
+		sidebarTabs.forEach(tab => {
+			tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+		});
+
+		// Restore last active tab
+		const savedTab = localStorage.getItem('sui_ski_active_tab');
+		if (savedTab && document.getElementById('tab-' + savedTab)) {
+			switchTab(savedTab);
+		}
+
+		function truncAddr(addr) {
+			return addr.slice(0, 6) + '...' + addr.slice(-4);
+		}
+
+		function showStatus(el, msg, type) {
+			el.innerHTML = msg;
+			el.className = 'status ' + type;
+		}
+
+		function hideStatus(el) {
+			el.className = 'status hidden';
+		}
+
+		// Check if input looks like a SuiNS name
+		function isSuiNSName(input) {
+			if (!input || input.startsWith('0x')) return false;
+			const cleaned = input.toLowerCase().replace(/\\.sui$/i, '');
+			return /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(cleaned);
+		}
+
+		// Resolve a SuiNS name to its target address
+		async function resolveSuiNSName(name) {
+			const suiClient = new SuiClient({ url: RPC_URL });
+			const suinsClient = new SuinsClient({
+				client: suiClient,
+				network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+			});
+
+			const cleanedName = name.toLowerCase().replace(/\\.sui$/i, '') + '.sui';
+			const record = await suinsClient.getNameRecord(cleanedName);
+			if (!record || !record.targetAddress) {
+				throw new Error(\`Could not resolve "\${cleanedName}" to an address\`);
+			}
+			return { address: record.targetAddress, name: cleanedName };
+		}
+
+		// Debounce helper
+		let resolveTimeout = null;
+		function debounce(fn, delay) {
+			return (...args) => {
+				clearTimeout(resolveTimeout);
+				resolveTimeout = setTimeout(() => fn(...args), delay);
+			};
+		}
+
+		// Live preview of resolved address
+		const previewResolvedAddress = debounce(async (input) => {
+			if (!input || input === CURRENT_ADDRESS) {
+				resolvedAddressEl.textContent = '';
+				return;
+			}
+
+			if (isSuiNSName(input)) {
+				resolvedAddressEl.innerHTML = '<span class="loading" style="width:12px;height:12px;border-width:1px;"></span> Resolving...';
+				try {
+					const { address, name } = await resolveSuiNSName(input);
+					resolvedAddressEl.innerHTML = \`→ \${name} resolves to <span style="color:var(--accent);">\${truncAddr(address)}</span>\`;
+				} catch (e) {
+					resolvedAddressEl.innerHTML = \`<span style="color:var(--error);">Could not resolve "\${input}"</span>\`;
+				}
+			} else {
+				resolvedAddressEl.textContent = '';
+			}
+		}, 500);
+
+		targetAddressInput.addEventListener('input', (e) => {
+			previewResolvedAddress(e.target.value.trim());
+		});
+
+		// Get available Sui wallets
+		function getSuiWallets() {
+			const wallets = [];
+			if (walletsApi) {
+				try {
+					const standardWallets = walletsApi.get();
+					for (const wallet of standardWallets) {
+						if (wallet.chains?.some(chain => chain.startsWith('sui:'))) {
+							wallets.push(wallet);
+						}
+					}
+				} catch (e) {}
+			}
+			return wallets;
+		}
+
+		// Fetch NFT owner address
+		async function fetchNftOwner() {
+			if (!NFT_ID) return null;
+			try {
+				const suiClient = new SuiClient({ url: RPC_URL });
+				const obj = await suiClient.getObject({
+					id: NFT_ID,
+					options: { showOwner: true }
+				});
+				if (obj?.data?.owner && typeof obj.data.owner === 'object') {
+					if ('AddressOwner' in obj.data.owner) {
+						return obj.data.owner.AddressOwner;
+					}
+					if ('ObjectOwner' in obj.data.owner) {
+						return obj.data.owner.ObjectOwner;
+					}
+				}
+			} catch (e) {
+				console.log('Failed to fetch NFT owner:', e.message);
+			}
+			return null;
+		}
+
+		// Fetch primary SuiNS name for an address using RPC
+		async function fetchPrimaryName(address) {
+			if (!address) return null;
+			try {
+				const suiClient = new SuiClient({ url: RPC_URL });
+				const result = await suiClient.resolveNameServiceNames({ address });
+				if (result?.data?.length > 0) {
+					return result.data[0];
+				}
+			} catch (e) {
+				console.log('Failed to fetch primary name:', e.message);
+			}
+			return null;
+		}
+
+		// Check if connected wallet can edit
+		async function checkEditPermission() {
+			if (!connectedAddress) {
+				canEdit = false;
+				connectedPrimaryName = null;
+				updateEditButton();
+				return;
+			}
+
+			// Fetch NFT owner and primary name in parallel
+			const [owner, primaryName] = await Promise.all([
+				nftOwnerAddress ? Promise.resolve(nftOwnerAddress) : fetchNftOwner(),
+				fetchPrimaryName(connectedAddress)
+			]);
+
+			if (!nftOwnerAddress && owner) {
+				nftOwnerAddress = owner;
+			}
+			connectedPrimaryName = primaryName;
+
+			// Can edit if wallet is the NFT owner OR the current target address
+			canEdit = connectedAddress === nftOwnerAddress || connectedAddress === CURRENT_ADDRESS;
+			updateEditButton();
+			renderWalletBar(); // Re-render to show primary name
+		}
+
+		// Update edit button state
+		function updateEditButton() {
+			const isAlreadySelf = connectedAddress && connectedAddress === CURRENT_ADDRESS;
+			const isOwner = connectedAddress && nftOwnerAddress && connectedAddress === nftOwnerAddress;
+
+			// Self button only visible to owner
+			if (isOwner) {
+				if (isAlreadySelf) {
+					setSelfBtn.disabled = true;
+					setSelfBtn.title = 'Already set to your address';
+					setSelfBtn.classList.add('already-set');
+				} else {
+					setSelfBtn.disabled = false;
+					setSelfBtn.title = connectedPrimaryName
+						? \`Set to \${connectedPrimaryName}\`
+						: \`Set to \${truncAddr(connectedAddress)}\`;
+					setSelfBtn.classList.remove('already-set');
+				}
+				setSelfBtn.classList.remove('hidden');
+			} else {
+				setSelfBtn.classList.add('hidden');
+			}
+
+			// Edit button
+			if (!connectedAddress) {
+				editBtn.disabled = false;
+				editBtn.title = 'Connect wallet to edit';
+			} else if (canEdit) {
+				editBtn.disabled = false;
+				editBtn.title = 'Edit target address';
+			} else {
+				editBtn.disabled = true;
+				editBtn.title = 'Only the NFT owner or target address can edit';
+			}
+		}
+
+		// Save wallet connection to localStorage
+		function saveWalletConnection() {
+			if (connectedWalletName && connectedAddress) {
+				localStorage.setItem(STORAGE_KEY, JSON.stringify({
+					walletName: connectedWalletName,
+					address: connectedAddress
+				}));
+			}
+		}
+
+		// Clear wallet connection from localStorage
+		function clearWalletConnection() {
+			localStorage.removeItem(STORAGE_KEY);
+		}
+
+		// Try to restore wallet connection from localStorage
+		async function restoreWalletConnection() {
+			try {
+				const saved = localStorage.getItem(STORAGE_KEY);
+				if (!saved) return false;
+
+				const { walletName, address } = JSON.parse(saved);
+				if (!walletName) return false;
+
+				const wallets = getSuiWallets();
+				const wallet = wallets.find(w => w.name === walletName);
+				if (!wallet) {
+					clearWalletConnection();
+					return false;
+				}
+
+				const connectFeature = wallet.features?.['standard:connect'];
+				if (!connectFeature) return false;
+
+				await connectFeature.connect();
+				const accounts = wallet.accounts;
+				if (!accounts || accounts.length === 0) return false;
+
+				connectedAccount = accounts[0];
+				connectedAddress = accounts[0].address;
+				connectedWallet = wallet;
+				connectedWalletName = walletName;
+
+				renderWalletBar();
+				await checkEditPermission();
+				return true;
+			} catch (e) {
+				console.log('Failed to restore wallet:', e.message);
+				clearWalletConnection();
+				return false;
+			}
+		}
+
+		// Connect wallet
+		async function connectWallet() {
+			try {
+				const wallets = getSuiWallets();
+				if (wallets.length === 0) {
+					alert('No Sui wallet found. Install Phantom or Sui Wallet.');
+					return;
+				}
+
+				const wallet = wallets[0];
+				const connectFeature = wallet.features?.['standard:connect'];
+				if (!connectFeature) throw new Error('Wallet does not support connection');
+
+				await connectFeature.connect();
+				const accounts = wallet.accounts;
+				if (!accounts || accounts.length === 0) throw new Error('No accounts found');
+
+				connectedAccount = accounts[0];
+				connectedAddress = accounts[0].address;
+				connectedWallet = wallet;
+				connectedWalletName = wallet.name;
+
+				saveWalletConnection();
+				renderWalletBar();
+				await checkEditPermission();
+			} catch (e) {
+				alert('Connection failed: ' + e.message);
+			}
+		}
+
+		// Disconnect wallet
+		function disconnectWallet() {
+			connectedWallet = null;
+			connectedAccount = null;
+			connectedAddress = null;
+			connectedWalletName = null;
+			canEdit = false;
+			clearWalletConnection();
+			renderWalletBar();
+			updateEditButton();
+		}
+
+		// Render wallet bar at top
+		function renderWalletBar() {
+			const networkBadge = '<span class="badge network">' + NETWORK + '</span>';
+			if (!connectedAddress) {
+				walletBar.innerHTML = networkBadge + '<button class="connect-btn" id="connect-wallet-btn">Connect Wallet</button>';
+				document.getElementById('connect-wallet-btn').addEventListener('click', connectWallet);
+			} else {
+				const displayName = connectedPrimaryName || truncAddr(connectedAddress);
+				walletBar.innerHTML = networkBadge + \`
+					<div class="wallet-status">
+						<span class="wallet-addr">\${displayName}</span>
+						\${connectedPrimaryName ? \`<span class="wallet-name">\${truncAddr(connectedAddress)}</span>\` : ''}
+						<button id="disconnect-wallet-btn">×</button>
+					</div>
+				\`;
+				document.getElementById('disconnect-wallet-btn').addEventListener('click', disconnectWallet);
+			}
+		}
+
+		// Copy address to clipboard
+		function copyAddress() {
+			navigator.clipboard.writeText(CURRENT_ADDRESS).then(() => {
+				copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+				setTimeout(() => {
+					copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+				}, 1500);
+			});
+		}
+
+		// ===== IDENTITY CARD (NFT + QR) =====
+		function normalizeImageUrl(url) {
+			if (!url) return '';
+			if (url.startsWith('ipfs://')) {
+				return 'https://ipfs.io/ipfs/' + url.slice(7);
+			}
+			return url;
+		}
+
+		function showIdentityQr() {
+			if (!identityVisual || !identityCanvas) return;
+			// Remove any NFT image
+			const existingImg = identityVisual.querySelector('img');
+			if (existingImg) existingImg.remove();
+			// Show canvas
+			identityCanvas.style.display = 'block';
+			showingQr = true;
+			if (qrToggle) qrToggle.classList.remove('active');
+		}
+
+		function showIdentityNft() {
+			if (!identityVisual || !nftImageUrl) return;
+			// Hide canvas
+			if (identityCanvas) identityCanvas.style.display = 'none';
+			// Add/update NFT image
+			let img = identityVisual.querySelector('img');
+			if (!img) {
+				img = document.createElement('img');
+				img.alt = FULL_NAME;
+				identityVisual.insertBefore(img, identityVisual.firstChild);
+			}
+			img.src = nftImageUrl;
+			showingQr = false;
+			if (qrToggle) qrToggle.classList.add('active');
+		}
+
+		function toggleIdentityView() {
+			if (!nftImageUrl) return; // No NFT image to toggle to
+			if (showingQr) {
+				showIdentityNft();
+			} else {
+				showIdentityQr();
+			}
+		}
+
+		async function loadNftImage() {
+			if (!NFT_ID) return;
+			if (nftDisplayLoaded) return;
+			try {
+				const suiClient = new SuiClient({ url: RPC_URL });
+				const response = await suiClient.getObject({
+					id: NFT_ID,
+					options: { showDisplay: true }
+				});
+				const display = response?.data?.display?.data;
+				if (display) {
+					const imgUrl = normalizeImageUrl(display.image_url || display.image);
+					if (imgUrl) {
+						nftImageUrl = imgUrl;
+						// Show toggle button since we have an NFT image
+						if (qrToggle) qrToggle.style.display = 'flex';
+						// Auto-show NFT instead of QR
+						showIdentityNft();
+						nftDisplayLoaded = true;
+					}
+				}
+			} catch (error) {
+				console.error('Failed to load NFT image:', error);
+			}
+		}
+
+		// Toggle button click
+		if (qrToggle) {
+			qrToggle.style.display = 'none'; // Hidden until NFT image loads
+			qrToggle.addEventListener('click', (e) => {
+				e.stopPropagation();
+				toggleIdentityView();
+			});
+		}
+
+		// ===== QR CODE =====
+		const qrExpanded = document.getElementById('qr-expanded');
+		const qrExpandedCanvas = document.getElementById('qr-expanded-canvas');
+		const qrCopyBtn = document.getElementById('qr-copy-btn');
+		const qrDownloadBtn = document.getElementById('qr-download-btn');
+
+		async function loadQRious() {
+			if (window.QRious) return;
+			await new Promise((resolve, reject) => {
+				const script = document.createElement('script');
+				script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js';
+				script.onload = resolve;
+				script.onerror = reject;
+				document.head.appendChild(script);
+			});
+		}
+
+		function renderQR(canvas, size) {
+			if (!canvas || !window.QRious) return;
+			new window.QRious({
+				element: canvas,
+				value: PROFILE_URL,
+				size: size,
+				level: 'H',
+				background: '#050818',
+				foreground: '#60a5fa'
+			});
+			canvas.style.background = '#050818';
+		}
+
+		async function initQR() {
+			await loadQRious();
+			if (identityCanvas) renderQR(identityCanvas, 320);
+			if (qrExpandedCanvas) renderQR(qrExpandedCanvas, 420);
+		}
+
+		function openQrOverlay() {
+			qrExpanded?.classList.add('active');
+		}
+
+		// Click identity visual to expand QR
+		if (identityVisual) {
+			identityVisual.addEventListener('click', (e) => {
+				// Don't expand if clicking toggle button
+				if (e.target.closest('.identity-qr-toggle')) return;
+				openQrOverlay();
+			});
+		}
+
+		// Click identity name to copy
+		if (identityName) {
+			identityName.addEventListener('click', async (e) => {
+				e.stopPropagation();
+				try {
+					await navigator.clipboard.writeText(PROFILE_URL);
+					const originalText = identityName.textContent;
+					identityName.textContent = 'Copied!';
+					identityName.classList.add('copied');
+					setTimeout(() => {
+						identityName.textContent = originalText;
+						identityName.classList.remove('copied');
+					}, 1500);
+				} catch (err) {
+					console.error('Copy failed:', err);
+				}
+			});
+		}
+
+		if (qrExpanded) {
+			qrExpanded.addEventListener('click', (e) => {
+				if (e.target === qrExpanded || e.target.id === 'qr-close') {
+					qrExpanded.classList.remove('active');
+				}
+			});
+		}
+
+		// Copy URL (expanded overlay)
+		if (qrCopyBtn) {
+			qrCopyBtn.addEventListener('click', async (e) => {
+				e.stopPropagation();
+				try {
+					await navigator.clipboard.writeText(PROFILE_URL);
+					qrCopyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+					setTimeout(() => {
+						qrCopyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy';
+					}, 1500);
+				} catch (err) {
+					console.error('Copy failed:', err);
+				}
+			});
+		}
+
+		// Download QR
+		if (qrDownloadBtn) {
+			qrDownloadBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				if (!qrExpandedCanvas) return;
+				const link = document.createElement('a');
+				link.download = NAME + '-qr.png';
+				link.href = qrExpandedCanvas.toDataURL('image/png');
+				link.click();
+			});
+		}
+
+		initQR().catch(console.error);
+		loadNftImage().catch((err) => console.error('NFT image error:', err));
+
+		// Set target address to connected wallet (direct transaction)
+		async function setToSelf() {
+			if (!connectedAddress) {
+				await connectWallet();
+				if (!connectedAddress || !canEdit) return;
+			}
+
+			if (!canEdit) {
+				alert('Only the NFT owner or target address can edit.');
+				return;
+			}
+
+			if (connectedAddress === CURRENT_ADDRESS) {
+				alert('Already set to your address.');
+				return;
+			}
+
+			if (!confirm(\`Set target address to \${connectedPrimaryName || truncAddr(connectedAddress)}?\`)) {
+				return;
+			}
+
+			try {
+				setSelfBtn.disabled = true;
+				setSelfBtn.textContent = '...';
+
+				const suiClient = new SuiClient({ url: RPC_URL });
+				const suinsClient = new SuinsClient({
+					client: suiClient,
+					network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+				});
+
+				const senderAddress = typeof connectedAccount.address === 'string'
+					? connectedAccount.address
+					: connectedAccount.address?.toString() || connectedAddress;
+
+				let nftId = NFT_ID;
+				if (!nftId) {
+					const nameRecord = await suinsClient.getNameRecord(FULL_NAME);
+					nftId = nameRecord?.nftId || '';
+				}
+
+				if (!nftId) throw new Error('Could not find NFT ID');
+
+				const tx = new Transaction();
+				const suinsTx = new SuinsTransaction(suinsClient, tx);
+
+				suinsTx.setTargetAddress({
+					nft: nftId,
+					address: connectedAddress,
+					isSubname: IS_SUBNAME
+				});
+
+				tx.setSender(senderAddress);
+
+				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+				const builtTxBytes = await tx.build({ client: suiClient });
+
+				const txWrapper = {
+					_bytes: builtTxBytes,
+					toJSON() { return btoa(String.fromCharCode.apply(null, this._bytes)); },
+					serialize() { return this._bytes; }
+				};
+
+				let result;
+				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+				const signFeature = connectedWallet.features?.['sui:signTransaction'];
+
+				if (signExecFeature?.signAndExecuteTransaction) {
+					try {
+						result = await signExecFeature.signAndExecuteTransaction({
+							transaction: txWrapper,
+							account: connectedAccount,
+							chain
+						});
+					} catch (e) {}
+				}
+
+				if (!result && signFeature?.signTransaction) {
+					const { signature } = await signFeature.signTransaction({
+						transaction: txWrapper,
+						account: connectedAccount,
+						chain
+					});
+					const executeResult = await suiClient.executeTransactionBlock({
+						transactionBlock: builtTxBytes,
+						signature: signature,
+						options: { showEffects: true }
+					});
+					result = { digest: executeResult.digest };
+				}
+
+				if (!result) throw new Error('Could not sign transaction');
+
+				// Update UI
+				document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
+				document.querySelector('.owner-name').innerHTML = formatSuiName(connectedPrimaryName);
+				alert(\`Updated! TX: \${result.digest}\`);
+
+			} catch (error) {
+				console.error('Set self error:', error);
+				alert('Failed: ' + (error.message || 'Unknown error'));
+			} finally {
+				setSelfBtn.disabled = false;
+				setSelfBtn.textContent = 'Self';
+			}
+		}
+
+		// Open edit modal
+		function openEditModal() {
+			if (!connectedAddress) {
+				connectWallet().then(() => {
+					if (connectedAddress && canEdit) {
+						editModal.classList.add('open');
+						targetAddressInput.value = CURRENT_ADDRESS;
+						resolvedAddressEl.textContent = '';
+						hideStatus(modalStatus);
+					}
+				});
+				return;
+			}
+
+			if (!canEdit) {
+				alert('Only the NFT owner or target address can edit.');
+				return;
+			}
+
+			editModal.classList.add('open');
+			targetAddressInput.value = CURRENT_ADDRESS;
+			resolvedAddressEl.textContent = '';
+			hideStatus(modalStatus);
+		}
+
+		// Close edit modal
+		function closeEditModal() {
+			editModal.classList.remove('open');
+			hideStatus(modalStatus);
+		}
+
+		// Save target address
+		async function saveTargetAddress() {
+			hideStatus(modalStatus);
+
+			if (!connectedWallet || !connectedAccount) {
+				showStatus(modalStatus, 'Please connect your wallet first.', 'error');
+				return;
+			}
+
+			const inputValue = targetAddressInput.value.trim();
+			if (!inputValue) {
+				showStatus(modalStatus, 'Please enter an address or SuiNS name', 'error');
+				return;
+			}
+
+			let newAddress = inputValue;
+			let resolvedFromName = null;
+
+			// If it looks like a SuiNS name, resolve it first
+			if (isSuiNSName(inputValue)) {
+				try {
+					showStatus(modalStatus, '<span class="loading"></span> Resolving...', 'info');
+					const resolved = await resolveSuiNSName(inputValue);
+					newAddress = resolved.address;
+					resolvedFromName = resolved.name;
+				} catch (e) {
+					showStatus(modalStatus, e.message || 'Could not resolve name', 'error');
+					return;
+				}
+			}
+
+			if (!newAddress || !newAddress.startsWith('0x') || newAddress.length < 10) {
+				showStatus(modalStatus, 'Invalid address format', 'error');
+				return;
+			}
+
+			if (newAddress === CURRENT_ADDRESS) {
+				showStatus(modalStatus, 'This is already the target address', 'info');
+				return;
+			}
+
+			try {
+				showStatus(modalStatus, '<span class="loading"></span> Building transaction...', 'info');
+				saveBtn.disabled = true;
+
+				const suiClient = new SuiClient({ url: RPC_URL });
+				const suinsClient = new SuinsClient({
+					client: suiClient,
+					network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+				});
+
+				const senderAddress = typeof connectedAccount.address === 'string'
+					? connectedAccount.address
+					: connectedAccount.address?.toString() || connectedAddress;
+
+				let nftId = NFT_ID;
+				if (!nftId) {
+					const nameRecord = await suinsClient.getNameRecord(FULL_NAME);
+					nftId = nameRecord?.nftId || '';
+				}
+
+				if (!nftId) {
+					throw new Error('Could not find NFT ID');
+				}
+
+				const tx = new Transaction();
+				const suinsTx = new SuinsTransaction(suinsClient, tx);
+
+				suinsTx.setTargetAddress({
+					nft: nftId,
+					address: newAddress,
+					isSubname: IS_SUBNAME
+				});
+
+				tx.setSender(senderAddress);
+
+				showStatus(modalStatus, '<span class="loading"></span> Approve in wallet...', 'info');
+
+				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+				const builtTxBytes = await tx.build({ client: suiClient });
+
+				const txWrapper = {
+					_bytes: builtTxBytes,
+					toJSON() {
+						return btoa(String.fromCharCode.apply(null, this._bytes));
+					},
+					serialize() {
+						return this._bytes;
+					}
+				};
+
+				let result;
+				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+				const signFeature = connectedWallet.features?.['sui:signTransaction'];
+
+				if (signExecFeature?.signAndExecuteTransaction) {
+					try {
+						result = await signExecFeature.signAndExecuteTransaction({
+							transaction: txWrapper,
+							account: connectedAccount,
+							chain
+						});
+					} catch (e) {
+						console.log('signAndExecuteTransaction failed:', e.message);
+					}
+				}
+
+				if (!result && signFeature?.signTransaction) {
+					const { signature } = await signFeature.signTransaction({
+						transaction: txWrapper,
+						account: connectedAccount,
+						chain
+					});
+
+					const executeResult = await suiClient.executeTransactionBlock({
+						transactionBlock: builtTxBytes,
+						signature: signature,
+						options: { showEffects: true }
+					});
+					result = { digest: executeResult.digest };
+				}
+
+				if (!result) {
+					throw new Error('Could not sign transaction');
+				}
+
+				showStatus(modalStatus, \`
+					<strong>Updated!</strong> <a href="https://suiscan.xyz/\${NETWORK}/tx/\${result.digest}" target="_blank">View tx →</a>
+				\`, 'success');
+
+				// Update displayed address and fetch new primary name
+				setTimeout(async () => {
+					document.querySelector('.owner-addr').textContent = newAddress.slice(0, 8) + '...' + newAddress.slice(-6);
+					const newName = await fetchPrimaryName(newAddress);
+					document.querySelector('.owner-name').innerHTML = formatSuiName(newName);
+					closeEditModal();
+				}, 2000);
+
+			} catch (error) {
+				console.error('Set address error:', error);
+				let msg = error.message || 'Unknown error';
+				if (msg.includes('not the owner')) {
+					msg = 'You are not the owner of this name';
+				}
+				showStatus(modalStatus, 'Failed: ' + msg, 'error');
+			} finally {
+				saveBtn.disabled = false;
+			}
+		}
+
+		// Event listeners
+		editBtn.addEventListener('click', openEditModal);
+		setSelfBtn.addEventListener('click', setToSelf);
+		copyBtn.addEventListener('click', copyAddress);
+		cancelBtn.addEventListener('click', closeEditModal);
+		saveBtn.addEventListener('click', saveTargetAddress);
+		editModal.addEventListener('click', (e) => {
+			if (e.target === editModal) closeEditModal();
+		});
+
+		// Format SuiNS name with gradient suffix
+		function formatSuiName(name) {
+			if (!name) return '';
+			const cleanName = name.replace(/\\.sui$/i, '');
+			return cleanName + '<span class="suffix">.sui</span>';
+		}
+
+		// Fetch and display target address primary name
+		async function fetchTargetPrimaryName() {
+			const name = await fetchPrimaryName(CURRENT_ADDRESS);
+			if (name) {
+				targetPrimaryName = name;
+				document.querySelector('.owner-name').innerHTML = formatSuiName(name);
+			}
+		}
+
+		// Initialize
+		renderWalletBar();
+		updateEditButton();
+		restoreWalletConnection();
+		fetchTargetPrimaryName();
+
+		// ===== TRADEPORT MARKETPLACE FUNCTIONALITY =====
+		const marketplaceLoading = document.getElementById('marketplace-loading');
+		const marketplaceContent = document.getElementById('marketplace-content');
+		const marketplaceError = document.getElementById('marketplace-error');
+		const listingValue = document.getElementById('listing-value');
+		const bidsCount = document.getElementById('bids-count');
+		const bidsList = document.getElementById('bids-list');
+		const placeBidBtn = document.getElementById('place-bid-btn');
+		const marketplaceBidAmount = document.getElementById('marketplace-bid-amount');
+		const bidStatusEl = document.getElementById('bid-status');
+		const retryMarketplace = document.getElementById('retry-marketplace');
+
+		let tradeportNftId = null;
+		let tradeportNft = null;
+
+		// Format SUI amount from MIST
+		function formatSui(mist) {
+			return (mist / 1_000_000_000).toFixed(2);
+		}
+
+		// Load marketplace data from Tradeport API
+		async function loadMarketplaceData() {
+			marketplaceLoading.style.display = 'flex';
+			marketplaceContent.style.display = 'none';
+			marketplaceError.style.display = 'none';
+
+			try {
+				const res = await fetch(\`/api/tradeport/name/\${NAME}\`);
+				if (!res.ok) throw new Error('API error');
+
+				const data = await res.json();
+
+				// Store NFT ID for bidding
+				if (data.nft) {
+					tradeportNftId = data.nft.id;
+					tradeportNft = data.nft;
+				}
+
+				// Update listing status
+				if (data.isListed && data.listing) {
+					listingValue.textContent = 'For Sale';
+					listingValue.classList.add('for-sale');
+					const listingDiv = document.getElementById('marketplace-listing');
+					listingDiv.innerHTML = \`
+						<div class="listing-status">
+							<span class="listing-label">Status</span>
+							<span class="listing-value for-sale">For Sale</span>
+						</div>
+						<div class="listing-price">
+							<span class="listing-price-label">Asking Price</span>
+							<span class="listing-price-value">\${formatSui(data.listing.price)} SUI</span>
+						</div>
+					\`;
+				} else {
+					listingValue.textContent = 'Not Listed';
+					listingValue.classList.remove('for-sale');
+				}
+
+				// Update bids
+				if (data.bids && data.bids.length > 0) {
+					bidsCount.textContent = data.bids.length;
+					bidsList.innerHTML = data.bids.map(bid => \`
+						<div class="bid-item">
+							<div class="bid-item-info">
+								<span class="bid-item-bidder">\${bid.bidder.slice(0, 6)}...\${bid.bidder.slice(-4)}</span>
+							</div>
+							<span class="bid-item-amount">\${formatSui(bid.price)} SUI</span>
+						</div>
+					\`).join('');
+				} else {
+					bidsCount.textContent = '0';
+					bidsList.innerHTML = '<div class="no-bids">No bids yet</div>';
+				}
+
+				// Update bid button state
+				updatePlaceBidButton();
+
+				marketplaceLoading.style.display = 'none';
+				marketplaceContent.style.display = 'flex';
+			} catch (error) {
+				console.error('Failed to load marketplace data:', error);
+				marketplaceLoading.style.display = 'none';
+				marketplaceError.style.display = 'block';
+			}
+		}
+
+		// Update place bid button state
+		function updatePlaceBidButton() {
+			if (connectedAddress && tradeportNftId) {
+				placeBidBtn.disabled = false;
+				placeBidBtn.querySelector('.btn-text').textContent = 'Place Bid';
+			} else if (!connectedAddress) {
+				placeBidBtn.disabled = false;
+				placeBidBtn.querySelector('.btn-text').textContent = 'Connect Wallet';
+			} else {
+				placeBidBtn.disabled = true;
+				placeBidBtn.querySelector('.btn-text').textContent = 'Unavailable';
+			}
+		}
+
+		// Show bid status
+		function showBidStatusMsg(msg, type) {
+			bidStatusEl.innerHTML = msg;
+			bidStatusEl.className = 'bid-status ' + type;
+		}
+
+		function hideBidStatusMsg() {
+			bidStatusEl.className = 'bid-status hidden';
+		}
+
+		// Place bid via server-side Tradeport SDK
+		async function placeBid() {
+			if (!connectedAddress) {
+				await connectWallet();
+				updatePlaceBidButton();
+				if (!connectedAddress) return;
+			}
+
+			if (!tradeportNftId) {
+				showBidStatusMsg('NFT not found on Tradeport', 'error');
+				return;
+			}
+
+			const amount = parseFloat(marketplaceBidAmount.value);
+			if (!amount || amount <= 0) {
+				showBidStatusMsg('Please enter a valid bid amount', 'error');
+				return;
+			}
+
+			const amountMist = Math.floor(amount * 1_000_000_000);
+
+			placeBidBtn.disabled = true;
+			placeBidBtn.querySelector('.btn-text').textContent = 'Building...';
+			hideBidStatusMsg();
+
+			try {
+				// Build transaction via server-side API
+				const buildRes = await fetch('/api/tradeport/bid', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						nftId: tradeportNftId,
+						bidAmountMist: amountMist,
+						walletAddress: connectedAddress,
+					}),
+				});
+
+				const buildData = await buildRes.json();
+
+				if (!buildRes.ok || !buildData.success) {
+					throw new Error(buildData.error || 'Failed to build transaction');
+				}
+
+				placeBidBtn.querySelector('.btn-text').textContent = 'Sign in wallet...';
+
+				// Decode transaction bytes
+				const txBytes = Uint8Array.from(atob(buildData.transaction), c => c.charCodeAt(0));
+
+				// Sign and execute with connected wallet
+				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
+					transaction: txBytes,
+					account: connectedAccount,
+					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+				});
+
+				showBidStatusMsg(\`Bid placed successfully! <a href="https://suivision.xyz/txblock/\${result.digest}" target="_blank">View transaction</a>\`, 'success');
+				marketplaceBidAmount.value = '';
+
+				// Refresh marketplace data
+				setTimeout(() => loadMarketplaceData(), 2000);
+
+			} catch (error) {
+				console.error('Failed to place bid:', error);
+				const msg = error.message || 'Failed to place bid';
+				showBidStatusMsg(msg + ' <a href="https://tradeport.xyz/sui/collection/suins?name=' + NAME + '.sui" target="_blank">Try on Tradeport</a>', 'error');
+			} finally {
+				updatePlaceBidButton();
+			}
+		}
+
+		// Event listeners
+		if (placeBidBtn) {
+			placeBidBtn.addEventListener('click', placeBid);
+		}
+		if (retryMarketplace) {
+			retryMarketplace.addEventListener('click', loadMarketplaceData);
+		}
+
+		// Load marketplace data on page load
+		loadMarketplaceData();
+
+		// ===== QUEUE BID FUNCTIONALITY =====
+		const queueBidSection = document.getElementById('queue-bid-section');
+		if (queueBidSection && EXPIRATION_MS > 0) {
+			const countdownEl = document.getElementById('countdown-timer');
+			const bidAmountInput = document.getElementById('bid-amount');
+			const queueBidBtn = document.getElementById('queue-bid-btn');
+			const queueBidStatus = document.getElementById('queue-bid-status');
+			const existingBidContainer = document.getElementById('existing-bid-container');
+			const queueBidForm = document.getElementById('queue-bid-form');
+
+			// Countdown timer
+			function updateCountdown() {
+				const now = Date.now();
+				const diff = AVAILABLE_AT - now;
+
+				if (diff <= 0) {
+					countdownEl.textContent = 'Available Now!';
+					countdownEl.style.color = 'var(--success)';
+					return;
+				}
+
+				const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+				const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+				const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+				const secs = Math.floor((diff % (60 * 1000)) / 1000);
+
+				if (days > 0) {
+					countdownEl.textContent = \`\${days}d \${hours}h \${mins}m\`;
+				} else if (hours > 0) {
+					countdownEl.textContent = \`\${hours}h \${mins}m \${secs}s\`;
+				} else {
+					countdownEl.textContent = \`\${mins}m \${secs}s\`;
+				}
+			}
+
+			updateCountdown();
+			setInterval(updateCountdown, 1000);
+
+			// Show bid status message
+			function showBidStatus(msg, type) {
+				queueBidStatus.innerHTML = msg;
+				queueBidStatus.className = 'queue-bid-status status ' + type;
+			}
+
+			function hideBidStatus() {
+				queueBidStatus.className = 'queue-bid-status hidden';
+			}
+
+			// Load existing bid for this name
+			async function loadExistingBid() {
+				if (!connectedAddress) return;
+
+				try {
+					const res = await fetch(\`/api/bids/\${NAME}?bidder=\${connectedAddress}\`);
+					if (res.ok) {
+						const data = await res.json();
+						if (data.bid) {
+							renderExistingBid(data.bid);
+						} else {
+							existingBidContainer.innerHTML = '';
+						}
+					}
+				} catch (e) {
+					console.log('Failed to load existing bid:', e);
+				}
+			}
+
+			// Render existing bid UI
+			function renderExistingBid(bid) {
+				existingBidContainer.innerHTML = \`
+					<div class="queue-bid-existing">
+						<div class="queue-bid-existing-info">
+							<div class="queue-bid-existing-label">Your Queued Bid</div>
+							<div class="queue-bid-existing-value">\${bid.amount} SUI</div>
+						</div>
+						<button class="queue-bid-cancel" id="cancel-bid-btn">Cancel</button>
+					</div>
+				\`;
+
+				document.getElementById('cancel-bid-btn').addEventListener('click', cancelBid);
+				queueBidForm.style.display = 'none';
+			}
+
+			// Submit a new bid
+			async function submitBid() {
+				if (!connectedAddress) {
+					await connectWallet();
+					if (!connectedAddress) return;
+				}
+
+				const amount = parseFloat(bidAmountInput.value);
+				if (!amount || amount <= 0) {
+					showBidStatus('Please enter a valid bid amount', 'error');
+					return;
+				}
+
+				try {
+					queueBidBtn.disabled = true;
+					queueBidBtn.textContent = 'Submitting...';
+					showBidStatus('<span class="loading"></span> Submitting bid...', 'info');
+
+					const res = await fetch('/api/bids', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							name: NAME,
+							bidder: connectedAddress,
+							amount: amount,
+							executeAt: AVAILABLE_AT
+						})
+					});
+
+					const data = await res.json();
+
+					if (res.ok) {
+						showBidStatus('Bid queued successfully!', 'success');
+						bidAmountInput.value = '';
+						loadExistingBid();
+					} else {
+						showBidStatus(data.error || 'Failed to submit bid', 'error');
+					}
+				} catch (e) {
+					showBidStatus('Failed to submit bid: ' + e.message, 'error');
+				} finally {
+					queueBidBtn.disabled = false;
+					queueBidBtn.textContent = 'Queue Bid';
+				}
+			}
+
+			// Cancel existing bid
+			async function cancelBid() {
+				if (!connectedAddress) return;
+
+				if (!confirm('Are you sure you want to cancel your bid?')) return;
+
+				try {
+					const res = await fetch(\`/api/bids/\${NAME}?bidder=\${connectedAddress}\`, {
+						method: 'DELETE'
+					});
+
+					if (res.ok) {
+						existingBidContainer.innerHTML = '';
+						queueBidForm.style.display = 'flex';
+						showBidStatus('Bid cancelled', 'success');
+						setTimeout(hideBidStatus, 2000);
+					} else {
+						const data = await res.json();
+						showBidStatus(data.error || 'Failed to cancel bid', 'error');
+					}
+				} catch (e) {
+					showBidStatus('Failed to cancel bid: ' + e.message, 'error');
+				}
+			}
+
+			// Event listeners
+			queueBidBtn.addEventListener('click', submitBid);
+			bidAmountInput.addEventListener('keypress', (e) => {
+				if (e.key === 'Enter') submitBid();
+			});
+
+			// Load existing bid when wallet connects
+			const originalRenderWalletBar = renderWalletBar;
+			renderWalletBar = function() {
+				originalRenderWalletBar();
+				if (connectedAddress) {
+					loadExistingBid();
+				}
+			};
+
+			// Initial load if already connected
+			if (connectedAddress) {
+				loadExistingBid();
+			}
+		}
+
+		// ===== KNOWLEDGE BASE (Dictionary + Encyclopedia) =====
+		function fetchWithTimeout(url, timeout = 5000) {
+			return Promise.race([
+				fetch(url),
+				new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout))
+			]);
+		}
+
+		async function fetchDictionary() {
+			const contentEl = document.getElementById('dictionary-content');
+			const badgeEl = document.getElementById('dictionary-badge');
+			const boxEl = document.getElementById('dictionary-box');
+
+			try {
+				const response = await fetchWithTimeout(\`https://api.dictionaryapi.dev/api/v2/entries/en/\${NAME}\`, 5000);
+				if (!response.ok) throw new Error('Not found');
+				const data = await response.json();
+
+				if (data && data[0]) {
+					const entry = data[0];
+					const phonetic = entry.phonetic || entry.phonetics?.find(p => p.text)?.text || '';
+
+					let meaningsHtml = '<div class="knowledge-meanings">';
+					for (const meaning of (entry.meanings || []).slice(0, 2)) {
+						const pos = meaning.partOfSpeech || 'unknown';
+						for (const def of (meaning.definitions || []).slice(0, 2)) {
+							meaningsHtml += \`<div class="knowledge-meaning">
+								<div class="knowledge-pos">\${pos}</div>
+								<div class="knowledge-def">\${def.definition}</div>
+								\${def.example ? \`<div class="knowledge-example">"\${def.example}"</div>\` : ''}
+							</div>\`;
+						}
+					}
+					meaningsHtml += '</div>';
+
+					contentEl.innerHTML = \`
+						<div class="knowledge-word">\${entry.word}</div>
+						\${phonetic ? \`<div class="knowledge-phonetic">\${phonetic}</div>\` : ''}
+						\${meaningsHtml}
+					\`;
+					badgeEl.textContent = 'Found';
+					badgeEl.className = 'knowledge-badge found';
+				} else {
+					throw new Error('No definition');
+				}
+			} catch (e) {
+				if (boxEl) boxEl.style.display = 'none';
+			}
+		}
+
+		async function fetchGrokipedia() {
+			const contentEl = document.getElementById('grokipedia-content');
+			const badgeEl = document.getElementById('grokipedia-badge');
+			const grokipediaUrl = \`https://grokipedia.com/wiki/\${encodeURIComponent(NAME)}\`;
+
+			try {
+				const apiUrl = \`\${window.location.origin}/api/grokipedia?name=\${encodeURIComponent(NAME)}\`;
+				const response = await fetchWithTimeout(apiUrl, 8000);
+				if (!response.ok) throw new Error('Not found');
+				const data = await response.json();
+
+				if (data && data.found && data.excerpt) {
+					const title = data.title || NAME;
+					const excerpt = data.excerpt;
+
+					contentEl.innerHTML = \`
+						<div class="knowledge-word">\${title}</div>
+						<div class="knowledge-def" style="margin-top: 12px; line-height: 1.6;">\${excerpt}\${excerpt.length >= 500 ? '...' : ''}</div>
+						<a href="\${grokipediaUrl}" target="_blank" class="knowledge-link" style="display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 10px 18px; background: linear-gradient(135deg, var(--accent), #06b6d4); color: white; border-radius: 10px; text-decoration: none; font-weight: 600;">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+							View full article on Grokipedia
+						</a>
+					\`;
+					badgeEl.textContent = 'Found';
+					badgeEl.className = 'knowledge-badge found';
+				} else {
+					throw new Error('No article');
+				}
+			} catch (e) {
+				// Show link to Grokipedia with prompt to explore
+				contentEl.innerHTML = \`
+					<div class="knowledge-article-title" style="text-transform: capitalize;">\${NAME}</div>
+					<div class="knowledge-article-extract" style="color: var(--text-muted);">
+						Grokipedia is an AI-powered encyclopedia. Click below to explore what Grok knows about this term.
+					</div>
+					<a href="\${grokipediaUrl}" target="_blank" class="knowledge-link" style="display: inline-flex; padding: 10px 18px; background: linear-gradient(135deg, var(--accent), #06b6d4); color: white; border-radius: 10px; margin-top: 8px;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+						Open in Grokipedia
+					</a>
+				\`;
+				badgeEl.textContent = 'Explore';
+				badgeEl.className = 'knowledge-badge found';
+			}
+		}
+
+		// Load knowledge base
+		fetchDictionary();
+		fetchGrokipedia();
+
+		// ===== QUICK SEARCH (Keyboard-activated + Button) =====
+		const searchOverlay = document.getElementById('search-overlay');
+		const searchInput = document.getElementById('search-input');
+		const searchFab = document.getElementById('search-fab');
+		let searchActive = false;
+
+		function openSearch(initialChar) {
+			if (searchActive) return;
+			searchActive = true;
+			searchOverlay.classList.add('active');
+			if (initialChar) {
+				searchInput.value = initialChar;
+			}
+			setTimeout(() => searchInput.focus(), 50);
+		}
+
+		function closeSearch() {
+			searchActive = false;
+			searchOverlay.classList.remove('active');
+			searchInput.value = '';
+		}
+
+		function navigateToName() {
+			let name = searchInput.value.trim().toLowerCase();
+			if (!name) return;
+			name = name.replace(/\\.sui$/i, '');
+			name = name.replace(/[^a-z0-9-]/g, '');
+			if (name && name.length >= 1) {
+				window.location.href = 'https://' + name + '.sui.ski';
+			}
+		}
+
+		// Click search button
+		searchFab.addEventListener('click', () => openSearch(''));
+
+		// Search input events
+		searchInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				navigateToName();
+			} else if (e.key === 'Escape') {
+				e.preventDefault();
+				closeSearch();
+			}
+		});
+
+		// Listen for any keypress on the page to open search
+		document.addEventListener('keydown', (e) => {
+			// Ignore if already in search or other input
+			if (searchActive) return;
+			if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+			// Ignore modifier keys
+			if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+			// Slash or Cmd+K opens search
+			if (e.key === '/' || e.key === 'k') {
+				e.preventDefault();
+				openSearch('');
+				return;
+			}
+
+			// If it's a letter or number, open search with that character
+			if (/^[a-zA-Z0-9]$/.test(e.key)) {
+				e.preventDefault();
+				openSearch(e.key.toLowerCase());
+			}
+		});
+
+		// Global escape to close
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape' && searchActive) {
+				closeSearch();
+			}
+		});
+
+		// Click outside closes search
+		searchOverlay.addEventListener('click', (e) => {
+			if (e.target === searchOverlay) {
+				closeSearch();
+			}
+		});
+
+		// ===== UPLOAD & CONTENT FUNCTIONALITY =====
+		const uploadSection = document.getElementById('upload-section');
+		const contentDisplay = document.getElementById('content-display');
+		const contentItems = document.getElementById('content-items');
+		const uploadDropzone = document.getElementById('upload-dropzone');
+		const fileInput = document.getElementById('file-input');
+		const recordKeySelect = document.getElementById('record-key');
+		const uploadProgress = document.getElementById('upload-progress');
+		const progressFill = document.getElementById('progress-fill');
+		const progressStatus = document.getElementById('progress-status');
+		const uploadStatusEl = document.getElementById('upload-status');
+		const uploadFileName = document.getElementById('upload-file-name');
+		const uploadFileType = document.getElementById('upload-file-type');
+		const uploadFileSize = document.getElementById('upload-file-size');
+
+		// Use proxy endpoint to avoid CORS issues
+		const UPLOAD_ENDPOINT = '/api/upload';
+		const MANIFEST_RECORD_KEY = 'content_manifest';
+
+		// Track current content
+		let currentAvatarBlobId = ${serializeJson(record.avatar || '')};
+		let currentContentHash = ${serializeJson(record.contentHash || '')};
+		let currentManifestBlobId = ${serializeJson(record.records?.content_manifest || '')};
+		let currentManifest = { version: 1, files: [] };
+
+		// Show upload section when user has edit permission
+		function updateUploadVisibility() {
+			if (canEdit && uploadSection) {
+				uploadSection.style.display = 'block';
+			}
+		}
+
+		// Extend the existing checkEditPermission to also show upload section
+		const originalCheckEditPermission = checkEditPermission;
+		checkEditPermission = async function() {
+			await originalCheckEditPermission();
+			updateUploadVisibility();
+		};
+
+		// Load existing content from records
+		async function loadExistingContent() {
+			currentManifest = await fetchManifest(currentManifestBlobId);
+			renderContent(currentAvatarBlobId, currentContentHash, currentManifest);
+		}
+
+		// Render content display
+		function renderContent(avatarBlobId, contentHashBlobId, manifest) {
+			currentAvatarBlobId = avatarBlobId || currentAvatarBlobId;
+			currentContentHash = contentHashBlobId || currentContentHash;
+
+			const items = [];
+			const seen = new Set();
+
+			// Avatar (stored directly in SuiNS)
+			if (avatarBlobId && avatarBlobId.length > 20) {
+				seen.add(avatarBlobId);
+				items.push({
+					blobId: avatarBlobId,
+					type: 'image',
+					name: 'Avatar',
+					isAvatar: true
+				});
+			}
+
+			// Content from contentHash record
+			if (contentHashBlobId && contentHashBlobId.length > 20) {
+				seen.add(contentHashBlobId);
+				items.push({
+					blobId: contentHashBlobId,
+					type: 'unknown',
+					name: 'Latest Content'
+				});
+			}
+
+			// Content manifest items
+			const manifestItems = Array.isArray(manifest?.files) ? manifest.files : [];
+			for (const item of manifestItems) {
+				if (!item?.blobId || seen.has(item.blobId)) continue;
+				seen.add(item.blobId);
+				items.push({
+					blobId: item.blobId,
+					type: item.type || 'application/octet-stream',
+					name: item.name || item.title || 'Untitled',
+					size: item.size,
+					uploadedAt: item.uploadedAt,
+					title: item.title,
+					artist: item.artist,
+				});
+			}
+
+			if (items.length === 0) {
+				contentDisplay.style.display = 'none';
+				return;
+			}
+
+			contentDisplay.style.display = 'block';
+			contentItems.innerHTML = items.map(item => renderContentItem(item)).join('');
+		}
+
+		function renderContentItem(item) {
+			const url = '/walrus/' + item.blobId;
+			const type = item.type || 'application/octet-stream';
+			const isImage = type.startsWith('image/') || item.isAvatar;
+			const isVideo = type.startsWith('video/');
+			const isAudio = type.startsWith('audio/');
+
+			let mediaHtml = '';
+			if (isImage) {
+				mediaHtml = \`<img src="\${url}" class="content-image" alt="\${item.name || 'Image'}">\`;
+			} else if (isVideo) {
+				mediaHtml = \`<video controls class="content-video"><source src="\${url}" type="\${type}"></video>\`;
+			} else if (isAudio) {
+				mediaHtml = \`<audio controls class="content-audio" src="\${url}"></audio>\`;
+			}
+
+			const playerLink = (isVideo || isAudio)
+				? \`<a href="https://play-\${item.blobId}.sui.ski" target="_blank">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+						Open in player
+					</a>\`
+				: '';
+
+			const metaParts = [];
+			if (item.isAvatar) {
+				metaParts.push('Avatar');
+			} else {
+				metaParts.push(type.split('/')[1] || 'file');
+			}
+			if (item.size) metaParts.push(formatBytes(item.size));
+			if (item.uploadedAt) {
+				const dateLabel = new Date(item.uploadedAt).toLocaleString();
+				metaParts.push(dateLabel);
+			}
+
+			return \`
+				<div class="content-item">
+					\${mediaHtml}
+					<div class="content-meta">
+						<div class="content-meta-main">
+							<span class="content-name">\${item.name || 'Untitled'}</span>
+							<span class="content-type">\${metaParts[0]}</span>
+						</div>
+						\${metaParts.length > 1 ? \`<div class="content-meta-secondary">\${metaParts.slice(1).join(' · ')}</div>\` : ''}
+					</div>
+					<div class="content-actions">
+						<a href="\${url}" target="_blank" rel="noopener noreferrer">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+							Open
+						</a>
+						\${playerLink}
+						<a href="\${url}" download="\${item.name || 'file'}">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+							Download
+						</a>
+					</div>
+				</div>
+			\`;
+		}
+
+		function formatBytes(bytes) {
+			if (!Number.isFinite(bytes) || bytes <= 0) return '-';
+			const units = ['B', 'KB', 'MB', 'GB'];
+			const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+			const size = (bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 2);
+			return size + ' ' + units[index];
+		}
+
+		function updateFileMeta(file) {
+			if (!uploadFileName || !uploadFileType || !uploadFileSize) return;
+			if (!file) {
+				uploadFileName.textContent = 'No file selected';
+				uploadFileType.textContent = '-';
+				uploadFileSize.textContent = '-';
+				return;
+			}
+			uploadFileName.textContent = file.name || 'Untitled';
+			uploadFileType.textContent = file.type || 'application/octet-stream';
+			uploadFileSize.textContent = formatBytes(file.size);
+		}
+
+		async function fetchManifest(blobId) {
+			if (!blobId) return { version: 1, files: [] };
+
+			try {
+				const response = await fetch('/walrus/' + blobId);
+				if (!response.ok) return { version: 1, files: [] };
+				const manifest = await response.json();
+				if (!manifest || manifest.version !== 1 || !Array.isArray(manifest.files)) {
+					return { version: 1, files: [] };
+				}
+				return manifest;
+			} catch (error) {
+				console.warn('Failed to load manifest:', error);
+				return { version: 1, files: [] };
+			}
+		}
+
+		async function updateManifestWithFile(file, blobId) {
+			const manifest = await fetchManifest(currentManifestBlobId);
+			const newItem = {
+				blobId,
+				type: file.type || 'application/octet-stream',
+				name: file.name || 'Untitled',
+				size: file.size || 0,
+				uploadedAt: new Date().toISOString(),
+			};
+
+			const existing = Array.isArray(manifest.files) ? manifest.files : [];
+			const filtered = existing.filter((item) => item?.blobId && item.blobId !== blobId);
+			const updatedManifest = {
+				version: 1,
+				files: [newItem, ...filtered],
+			};
+
+			const manifestFile = new File(
+				[JSON.stringify(updatedManifest)],
+				'content-manifest.json',
+				{ type: 'application/json' },
+			);
+
+			const manifestBlobId = await uploadToWalrus(manifestFile);
+			currentManifestBlobId = manifestBlobId;
+			currentManifest = updatedManifest;
+			return manifestBlobId;
+		}
+
+		// Upload file to Walrus via proxy
+		async function uploadToWalrus(file) {
+			const response = await fetch(UPLOAD_ENDPOINT, {
+				method: 'PUT',
+				body: await file.arrayBuffer(),
+				headers: {
+					'Content-Type': file.type || 'application/octet-stream',
+					'X-File-Name': file.name || 'upload',
+				},
+			});
+
+			const responseText = await response.text();
+			let data = null;
+			if (responseText) {
+				try {
+					data = JSON.parse(responseText);
+				} catch {
+					data = null;
+				}
+			}
+
+			if (!response.ok) {
+				const message = data?.error || data?.message || responseText || response.statusText;
+				throw new Error(message || 'Upload failed');
+			}
+
+			const dataObj = typeof data === 'object' && data !== null ? data : {};
+			const blobId = dataObj.newlyCreated?.blobObject?.blobId || dataObj.alreadyCertified?.blobId;
+			if (!blobId) {
+				throw new Error('Walrus did not return a blob ID');
+			}
+			return blobId;
+		}
+
+		// Set one or more SuiNS text records in a single transaction
+		async function setSuiNSRecords(entries) {
+			if (!connectedWallet || !connectedAccount) {
+				throw new Error('Wallet not connected');
+			}
+
+			const suiClient = new SuiClient({ url: RPC_URL });
+			const suinsClient = new SuinsClient({
+				client: suiClient,
+				network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+			});
+
+			const senderAddress = connectedAccount.address?.toString?.() || connectedAddress;
+
+			let nftId = NFT_ID;
+			if (!nftId) {
+				const nameRecord = await suinsClient.getNameRecord(FULL_NAME);
+				nftId = nameRecord?.nftId || '';
+			}
+
+			if (!nftId) throw new Error('Could not find NFT ID');
+
+			const tx = new Transaction();
+			const suinsTx = new SuinsTransaction(suinsClient, tx);
+
+			// Use setUserData for text records
+			for (const entry of entries) {
+				suinsTx.setUserData({
+					nft: nftId,
+					key: entry.key,
+					value: entry.value,
+					isSubname: IS_SUBNAME
+				});
+			}
+
+			tx.setSender(senderAddress);
+
+			const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+			const builtTxBytes = await tx.build({ client: suiClient });
+
+			const txWrapper = {
+				_bytes: builtTxBytes,
+				toJSON() { return btoa(String.fromCharCode.apply(null, this._bytes)); },
+				serialize() { return this._bytes; }
+			};
+
+			let result;
+			const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+			const signFeature = connectedWallet.features?.['sui:signTransaction'];
+
+			if (signExecFeature?.signAndExecuteTransaction) {
+				try {
+					result = await signExecFeature.signAndExecuteTransaction({
+						transaction: txWrapper,
+						account: connectedAccount,
+						chain
+					});
+				} catch (e) {
+					console.log('signAndExecuteTransaction failed:', e);
+				}
+			}
+
+			if (!result && signFeature?.signTransaction) {
+				const { signature } = await signFeature.signTransaction({
+					transaction: txWrapper,
+					account: connectedAccount,
+					chain
+				});
+				const executeResult = await suiClient.executeTransactionBlock({
+					transactionBlock: builtTxBytes,
+					signature: signature,
+					options: { showEffects: true }
+				});
+				result = { digest: executeResult.digest };
+			}
+
+			if (!result) throw new Error('Could not sign transaction');
+			return result;
+		}
+
+		// Handle file upload
+		async function handleFileUpload(file) {
+			const recordKey = recordKeySelect.value;
+
+			try {
+				updateFileMeta(file);
+
+				// Show progress
+				uploadProgress.style.display = 'block';
+				progressFill.style.width = '10%';
+				progressStatus.innerHTML = '<span class="loading"></span> Uploading to Walrus...';
+				hideStatus(uploadStatusEl);
+
+				// Upload to Walrus
+				const blobId = await uploadToWalrus(file);
+				progressFill.style.width = '45%';
+
+				const recordUpdates = [{ key: recordKey, value: blobId }];
+
+				if (recordKey !== 'avatar') {
+					progressStatus.innerHTML = '<span class="loading"></span> Updating media index...';
+					const manifestBlobId = await updateManifestWithFile(file, blobId);
+					recordUpdates.push({ key: MANIFEST_RECORD_KEY, value: manifestBlobId });
+					progressFill.style.width = '70%';
+				}
+
+				progressStatus.innerHTML = '<span class="loading"></span> Saving to SuiNS record...';
+				await setSuiNSRecords(recordUpdates);
+
+				progressFill.style.width = '100%';
+				progressStatus.textContent = 'Done!';
+
+				showStatus(uploadStatusEl, 'Content uploaded and saved!', 'success');
+
+				// Refresh content display with the new blob ID
+				if (recordKey === 'avatar') {
+					renderContent(blobId, currentContentHash, currentManifest);
+				} else {
+					currentContentHash = blobId;
+					renderContent(currentAvatarBlobId, blobId, currentManifest);
+				}
+
+				// Hide progress after a moment
+				setTimeout(() => {
+					uploadProgress.style.display = 'none';
+					progressFill.style.width = '0%';
+				}, 2000);
+
+			} catch (error) {
+				console.error('Upload error:', error);
+				uploadProgress.style.display = 'none';
+				showStatus(uploadStatusEl, 'Upload failed: ' + (error.message || 'Unknown error'), 'error');
+			}
+		}
+
+		// Dropzone event handlers
+		if (uploadDropzone) {
+			uploadDropzone.addEventListener('click', () => fileInput.click());
+
+			uploadDropzone.addEventListener('dragover', (e) => {
+				e.preventDefault();
+				uploadDropzone.classList.add('dragover');
+			});
+
+			uploadDropzone.addEventListener('dragleave', () => {
+				uploadDropzone.classList.remove('dragover');
+			});
+
+			uploadDropzone.addEventListener('drop', (e) => {
+				e.preventDefault();
+				uploadDropzone.classList.remove('dragover');
+				const file = e.dataTransfer.files[0];
+				if (file) handleFileUpload(file);
+			});
+
+			fileInput.addEventListener('change', (e) => {
+				const file = e.target.files[0];
+				if (file) handleFileUpload(file);
+				fileInput.value = '';
+			});
+		}
+
+		// Initialize content display
+		loadExistingContent();
+		updateFileMeta(null);
+
+		// Media player function
+		window.goToPlayer = function(e) {
+			e.preventDefault();
+			const input = document.getElementById('media-blob-input').value.trim();
+			const blobId = extractBlobId(input);
+			if (blobId) {
+				window.location.href = 'https://play-' + blobId + '.sui.ski';
+			}
+		};
+
+		function extractBlobId(input) {
+			if (!input) return null;
+			// Handle full URLs: play-xxx.sui.ski or walrus-xxx.sui.ski
+			let match = input.match(/(?:play|walrus)-([a-zA-Z0-9_-]+)(?:\\.sui\\.ski)?/);
+			if (match) return match[1];
+			// Handle /walrus/xxx paths
+			match = input.match(/\\/walrus\\/([a-zA-Z0-9_-]+)/);
+			if (match) return match[1];
+			// Handle raw blob ID (alphanumeric with - and _)
+			if (/^[a-zA-Z0-9_-]+$/.test(input)) return input;
+			return null;
+		}
+	</script>
+
+	<!-- Expanded QR Overlay -->
+	<div class="qr-expanded" id="qr-expanded">
+		<div class="qr-expanded-content">
+			<canvas id="qr-expanded-canvas"></canvas>
+			<div class="qr-expanded-url">${escapeHtml(cleanName)}.sui.ski</div>
+			<div class="qr-expanded-actions">
+				<button class="copy-btn" id="qr-copy-btn">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+					Copy
+				</button>
+				<button class="download-btn" id="qr-download-btn">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+					Save
+				</button>
+			</div>
+		</div>
+		<div class="qr-expanded-close" id="qr-close">Click anywhere to close</div>
+	</div>
+</body>
+</html>`
+}

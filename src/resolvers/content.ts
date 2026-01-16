@@ -1,5 +1,3 @@
-import { WalrusClient } from '@mysten/walrus'
-import { SuiClient } from '@mysten/sui/client'
 import type { Env, ResolverResult, SuiNSRecord } from '../types'
 import { proxyResponse } from '../utils/response'
 
@@ -9,6 +7,18 @@ const IPFS_GATEWAYS = [
 	'https://ipfs.io/ipfs/',
 	'https://dweb.link/ipfs/',
 ]
+
+// Walrus aggregator endpoints by network
+export const WALRUS_AGGREGATORS: Record<string, string[]> = {
+	mainnet: [
+		'https://aggregator.wal.app/v1/blobs/',
+		'https://walrus-mainnet-aggregator.nodes.guru/v1/blobs/',
+	],
+	testnet: [
+		'https://aggregator.walrus-testnet.walrus.space/v1/blobs/',
+		'https://wal-aggregator-testnet.staketab.org/v1/blobs/',
+	],
+}
 
 /**
  * Resolve and fetch content from decentralized storage
@@ -45,44 +55,46 @@ async function fetchIPFSContent(cid: string): Promise<Response> {
 			if (response.ok) {
 				return proxyResponse(response)
 			}
-		} catch {
-			// Try next gateway
-			continue
-		}
+		} catch {}
 	}
 
 	return new Response(`Failed to fetch IPFS content: ${cid}`, { status: 502 })
 }
 
 /**
- * Fetch content from Walrus decentralized storage
+ * Fetch content from Walrus decentralized storage via HTTP aggregators
  */
 async function fetchWalrusContent(blobId: string, env: Env): Promise<Response> {
-	try {
-		const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
-		const walrusClient = new WalrusClient({
-			network: env.WALRUS_NETWORK,
-			suiClient,
-		})
+	const aggregators = WALRUS_AGGREGATORS[env.WALRUS_NETWORK] || WALRUS_AGGREGATORS.testnet
 
-		// Fetch the blob from Walrus
-		const blob = await walrusClient.readBlob({ blobId })
+	// Try each aggregator in order
+	for (const aggregator of aggregators) {
+		try {
+			const response = await fetch(`${aggregator}${blobId}`, {
+				headers: {
+					'User-Agent': 'sui.ski-gateway/1.0',
+				},
+			})
 
-		// Determine content type from blob metadata or default to octet-stream
-		const contentType = detectContentType(blob)
+			if (response.ok) {
+				const blob = await response.arrayBuffer()
+				const contentType = detectContentType(blob)
 
-		return new Response(blob, {
-			status: 200,
-			headers: {
-				'Content-Type': contentType,
-				'Cache-Control': 'public, max-age=3600',
-				'X-Walrus-Blob-Id': blobId,
-			},
-		})
-	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Unknown error'
-		return new Response(`Failed to fetch Walrus content: ${message}`, { status: 502 })
+				return new Response(blob, {
+					status: 200,
+					headers: {
+						'Content-Type': contentType,
+						'Cache-Control': 'public, max-age=3600',
+						'Access-Control-Allow-Origin': '*',
+						'X-Walrus-Blob-Id': blobId,
+						'X-Walrus-Network': env.WALRUS_NETWORK,
+					},
+				})
+			}
+		} catch {}
 	}
+
+	return new Response(`Failed to fetch Walrus content: ${blobId}`, { status: 502 })
 }
 
 /**
@@ -106,7 +118,7 @@ async function fetchURLContent(url: string): Promise<Response> {
 /**
  * Detect content type from blob data
  */
-function detectContentType(data: Uint8Array | ArrayBuffer): string {
+export function detectContentType(data: Uint8Array | ArrayBuffer): string {
 	const bytes = new Uint8Array(data)
 
 	// Check magic bytes for common formats
@@ -135,6 +147,65 @@ function detectContentType(data: Uint8Array | ArrayBuffer): string {
 		return 'application/pdf'
 	}
 
+	// MP3 - MPEG audio Layer III sync bytes
+	if (
+		bytes[0] === 0xff &&
+		(bytes[1] === 0xfb || bytes[1] === 0xfa || bytes[1] === 0xf3 || bytes[1] === 0xf2)
+	) {
+		return 'audio/mpeg'
+	}
+
+	// MP3 with ID3 tag
+	if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+		// ID3 tag header
+		return 'audio/mpeg'
+	}
+
+	// MP4/M4A/MOV - check for 'ftyp' box at offset 4
+	if (
+		bytes.length > 8 &&
+		bytes[4] === 0x66 &&
+		bytes[5] === 0x74 &&
+		bytes[6] === 0x79 &&
+		bytes[7] === 0x70
+	) {
+		// Check the brand to distinguish video vs audio
+		const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11])
+		if (brand === 'M4A ' || brand === 'M4B ') {
+			return 'audio/mp4'
+		}
+		return 'video/mp4'
+	}
+
+	// WebM - EBML header
+	if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
+		return 'video/webm'
+	}
+
+	// OGG - 'OggS' magic
+	if (bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
+		return 'audio/ogg'
+	}
+
+	// WAV - 'RIFF....WAVE'
+	if (
+		bytes[0] === 0x52 &&
+		bytes[1] === 0x49 &&
+		bytes[2] === 0x46 &&
+		bytes[3] === 0x46 &&
+		bytes[8] === 0x57 &&
+		bytes[9] === 0x41 &&
+		bytes[10] === 0x56 &&
+		bytes[11] === 0x45
+	) {
+		return 'audio/wav'
+	}
+
+	// FLAC
+	if (bytes[0] === 0x66 && bytes[1] === 0x4c && bytes[2] === 0x61 && bytes[3] === 0x43) {
+		return 'audio/flac'
+	}
+
 	return 'application/octet-stream'
 }
 
@@ -143,10 +214,7 @@ function detectContentType(data: Uint8Array | ArrayBuffer): string {
  * - ipfs-{cid}.sui.ski -> IPFS content
  * - walrus-{blobId}.sui.ski -> Walrus content
  */
-export async function resolveDirectContent(
-	subdomain: string,
-	env: Env,
-): Promise<ResolverResult> {
+export async function resolveDirectContent(subdomain: string, env: Env): Promise<ResolverResult> {
 	if (subdomain.startsWith('ipfs-')) {
 		const cid = subdomain.slice(5)
 		const response = await fetchIPFSContent(cid)

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test'
-import { parseSubdomain, toSuiNSName, toMVRName } from './utils/subdomain'
+import { describe, expect, it } from 'bun:test'
+import { parseSubdomain, toMVRName, toSuiNSName } from './utils/subdomain'
 
 describe('parseSubdomain', () => {
 	it('parses root domain', () => {
@@ -43,7 +43,8 @@ describe('parseSubdomain', () => {
 	it('parses IPFS content subdomain', () => {
 		const result = parseSubdomain('ipfs-QmTest123.sui.ski')
 		expect(result.type).toBe('content')
-		expect(result.subdomain).toBe('ipfs-QmTest123')
+		// Hostname is normalized to lowercase (DNS is case-insensitive)
+		expect(result.subdomain).toBe('ipfs-qmtest123')
 	})
 
 	it('parses Walrus content subdomain', () => {

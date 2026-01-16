@@ -12,21 +12,33 @@ const CACHE_TTL = 300 // 5 minutes
 export async function resolveSuiNS(
 	name: string,
 	env: Env,
+	skipCache = false,
 ): Promise<ResolverResult> {
 	const suinsName = toSuiNSName(name)
 	const key = cacheKey('suins', env.SUI_NETWORK, suinsName)
 
-	// Check cache first
-	const cached = await getCached<SuiNSRecord>(env, key)
-	if (cached) {
-		return { found: true, data: cached, cacheTtl: CACHE_TTL }
+	// Check cache first, but also verify expiration
+	if (!skipCache) {
+		const cached = await getCached<SuiNSRecord & { expirationTimestampMs?: string }>(env, key)
+		if (cached) {
+			// Check if cached record has expired
+			if (cached.expirationTimestampMs) {
+				const expirationTime = Number(cached.expirationTimestampMs)
+				if (expirationTime < Date.now()) {
+					// Name has expired, clear cache and return not found
+					await env.CACHE.delete(key)
+					return { found: false, error: `Name "${suinsName}" has expired`, expired: true }
+				}
+			}
+			return { found: true, data: cached, cacheTtl: CACHE_TTL }
+		}
 	}
 
 	try {
 		const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
 		const suinsClient = new SuinsClient({
-			client: suiClient,
-			network: env.SUI_NETWORK,
+			client: suiClient as never,
+			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
 		})
 
 		// Get the name record
@@ -35,13 +47,31 @@ export async function resolveSuiNS(
 			return { found: false, error: `Name "${suinsName}" not found` }
 		}
 
+		// Check if the name has expired
+		if (nameRecord.expirationTimestampMs) {
+			const expirationTime = Number(nameRecord.expirationTimestampMs)
+			const now = Date.now()
+			if (expirationTime < now) {
+				return { found: false, error: `Name "${suinsName}" has expired`, expired: true }
+			}
+		}
+
 		// Get the resolved address
 		const address = nameRecord.targetAddress
 
 		// Fetch additional data if available
 		const record: SuiNSRecord = {
 			address: address || '',
-			records: {},
+			records: nameRecord.data || {},
+		}
+
+		// Store expiration for cache validation
+		if (nameRecord.expirationTimestampMs) {
+			record.expirationTimestampMs = String(nameRecord.expirationTimestampMs)
+		}
+
+		if (nameRecord.nftId) {
+			record.nftId = nameRecord.nftId
 		}
 
 		// Try to get avatar and content hash from name record data
@@ -53,6 +83,14 @@ export async function resolveSuiNS(
 			record.contentHash = nameRecord.contentHash
 			// Parse content hash to determine type
 			record.content = parseContentHash(nameRecord.contentHash)
+		}
+
+		if (nameRecord.walrusSiteId) {
+			record.walrusSiteId = nameRecord.walrusSiteId
+			// Prefer contentHash when present; fallback to walrusSiteId
+			if (!record.content) {
+				record.content = { type: 'walrus', value: nameRecord.walrusSiteId }
+			}
 		}
 
 		// Cache the result
@@ -91,15 +129,12 @@ function parseContentHash(hash: string): SuiNSRecord['content'] {
 /**
  * Get the owner address for a SuiNS name
  */
-export async function getSuiNSOwner(
-	name: string,
-	env: Env,
-): Promise<string | null> {
+export async function getSuiNSOwner(name: string, env: Env): Promise<string | null> {
 	try {
 		const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
 		const suinsClient = new SuinsClient({
-			client: suiClient,
-			network: env.SUI_NETWORK,
+			client: suiClient as never,
+			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
 		})
 
 		const suinsName = toSuiNSName(name)

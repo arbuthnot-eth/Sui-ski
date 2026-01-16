@@ -1,6 +1,7 @@
 name = "sui-ski-gateway"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
 
 # Wildcard route for *.sui.ski
 routes = [
@@ -13,9 +14,14 @@ routes = [
 SUI_NETWORK = "mainnet"
 SUI_RPC_URL = "https://fullnode.mainnet.sui.io:443"
 WALRUS_NETWORK = "mainnet"
+TRADEPORT_API_URL = "https://api.indexer.xyz/graphql"
+
+# Secrets are set via `wrangler secret put ...` for production or a local `.env`
+# for development. Required keys:
+#   TRADEPORT_USER
+#   TRADEPORT_API_KEY
 
 # KV namespace for caching resolved names
 [[kv_namespaces]]
 binding = "CACHE"
-id = "1118ef20efd84d7ca99de7e12f586ef4"
-preview_id = "fdae273a99134a7988a69db4a7a0da6c"
+id = "c0054cf22c6a4daa99cb36347fa5229c"

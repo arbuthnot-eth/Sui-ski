@@ -1,5 +1,5 @@
 import type { Env } from '../types'
-import { proxyResponse, jsonResponse, errorResponse } from '../utils/response'
+import { errorResponse, jsonResponse } from '../utils/response'
 
 // Allowed RPC methods - limit to read-only operations for public gateway
 const ALLOWED_METHODS = new Set([
@@ -47,10 +47,7 @@ const RATE_WINDOW = 60000 // 1 minute in ms
 /**
  * Handle RPC proxy requests
  */
-export async function handleRPCRequest(
-	request: Request,
-	env: Env,
-): Promise<Response> {
+export async function handleRPCRequest(request: Request, env: Env): Promise<Response> {
 	// Only allow POST for JSON-RPC
 	if (request.method !== 'POST') {
 		return errorResponse(
@@ -63,11 +60,7 @@ export async function handleRPCRequest(
 	// Rate limiting by IP
 	const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown'
 	if (!checkRateLimit(clientIP)) {
-		return errorResponse(
-			'Rate limit exceeded. Please try again later.',
-			'RATE_LIMITED',
-			429,
-		)
+		return errorResponse('Rate limit exceeded. Please try again later.', 'RATE_LIMITED', 429)
 	}
 
 	// Parse the JSON-RPC request
@@ -80,9 +73,7 @@ export async function handleRPCRequest(
 
 	// Handle batch requests
 	if (Array.isArray(rpcRequest)) {
-		const results = await Promise.all(
-			rpcRequest.map((req) => processRPCRequest(req, env)),
-		)
+		const results = await Promise.all(rpcRequest.map((req) => processRPCRequest(req, env)))
 		return jsonResponse(results)
 	}
 
@@ -112,10 +103,7 @@ interface JsonRpcResponse {
 /**
  * Process a single RPC request
  */
-async function processRPCRequest(
-	rpcRequest: JsonRpcRequest,
-	env: Env,
-): Promise<JsonRpcResponse> {
+async function processRPCRequest(rpcRequest: JsonRpcRequest, env: Env): Promise<JsonRpcResponse> {
 	const { jsonrpc, id, method, params } = rpcRequest
 
 	// Validate JSON-RPC version
@@ -149,7 +137,7 @@ async function processRPCRequest(
 			body: JSON.stringify({ jsonrpc, id, method, params }),
 		})
 
-		const result = await response.json() as JsonRpcResponse
+		const result = (await response.json()) as JsonRpcResponse
 		return result
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error'
@@ -212,8 +200,8 @@ export async function getNetworkStatus(env: Env): Promise<{
 		}),
 	])
 
-	const chainIdResult = await chainIdResponse.json() as JsonRpcResponse
-	const checkpointResult = await checkpointResponse.json() as JsonRpcResponse
+	const chainIdResult = (await chainIdResponse.json()) as JsonRpcResponse
+	const checkpointResult = (await checkpointResponse.json()) as JsonRpcResponse
 
 	return {
 		network: env.SUI_NETWORK,

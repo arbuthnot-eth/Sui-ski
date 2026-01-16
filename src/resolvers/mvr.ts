@@ -97,7 +97,8 @@ async function queryMVRRegistry(
 		}
 
 		const targetVersion = version ?? versions.length // Default to latest
-		const versionData = versions.find((v) => v.version === targetVersion) || versions[versions.length - 1]
+		const versionData =
+			versions.find((v) => v.version === targetVersion) || versions[versions.length - 1]
 
 		return {
 			name: `@${suinsName}/${packageName}`,
@@ -130,8 +131,7 @@ export function getMVRDocumentationUrl(pkg: MVRPackage): string {
  * Get explorer URL for the package address
  */
 export function getPackageExplorerUrl(address: string, network: string): string {
-	const baseUrl = network === 'mainnet'
-		? 'https://suiscan.xyz/mainnet'
-		: `https://suiscan.xyz/${network}`
+	const baseUrl =
+		network === 'mainnet' ? 'https://suiscan.xyz/mainnet' : `https://suiscan.xyz/${network}`
 	return `${baseUrl}/object/${address}`
 }
