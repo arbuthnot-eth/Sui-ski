@@ -18,10 +18,16 @@ export async function handleMessagingRequest(request: Request, env: Env): Promis
 
 	// API endpoint for messaging status
 	if (path === '/api/messaging/status') {
+		const isMainnet = env.SUI_NETWORK === 'mainnet'
+		const hasContract = !!env.MESSAGING_CONTRACT_ADDRESS
+		const isTestnetContract =
+			env.MESSAGING_CONTRACT_ADDRESS === '0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d'
+
 		return jsonResponse({
-			enabled: true,
+			enabled: hasContract,
 			network: env.SUI_NETWORK,
-			contractAddress: env.MESSAGING_CONTRACT_ADDRESS,
+			contractAddress: env.MESSAGING_CONTRACT_ADDRESS || 'Not configured',
+			deployment: isMainnet && hasContract && !isTestnetContract ? 'mainnet' : 'testnet',
 			features: {
 				oneToOne: true,
 				groupChat: true,
@@ -30,7 +36,7 @@ export async function handleMessagingRequest(request: Request, env: Env): Promis
 				eventDriven: true,
 			},
 			status: 'alpha',
-			testnetOnly: true,
+			warning: isMainnet && hasContract ? 'Self-deployed mainnet contract (alpha software)' : undefined,
 		})
 	}
 
@@ -55,7 +61,11 @@ export async function handleMessagingRequest(request: Request, env: Env): Promis
  * Generate messaging UI for SuiNS profile pages
  */
 export function generateMessagingUI(suinsName: string, ownerAddress: string, env: Env): string {
-	const isTestnet = env.SUI_NETWORK === 'testnet'
+	const isMainnet = env.SUI_NETWORK === 'mainnet'
+	const hasContract = !!env.MESSAGING_CONTRACT_ADDRESS
+	const isTestnetContract =
+		env.MESSAGING_CONTRACT_ADDRESS === '0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d'
+	const isMainnetDeployment = isMainnet && hasContract && !isTestnetContract
 
 	return `
 		<div class="messaging-section">
@@ -100,7 +110,9 @@ export function generateMessagingUI(suinsName: string, ownerAddress: string, env
 				</div>
 			</div>
 
-			${isTestnet ? `
+			${
+				hasContract && (isMainnetDeployment || !isMainnet)
+					? `
 			<div class="messaging-cta">
 				<button class="messaging-button primary" onclick="openMessaging('${suinsName}', '${ownerAddress}')">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -108,9 +120,10 @@ export function generateMessagingUI(suinsName: string, ownerAddress: string, env
 					</svg>
 					Send Message to @${suinsName}
 				</button>
-				<p class="network-badge-small">⚠️ Testnet Only</p>
+				<p class="network-badge-small">${isMainnetDeployment ? '🚀 Mainnet (Alpha)' : '⚠️ Testnet'}</p>
 			</div>
-			` : `
+			`
+					: `
 			<div class="messaging-cta">
 				<div class="info-box">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -118,13 +131,14 @@ export function generateMessagingUI(suinsName: string, ownerAddress: string, env
 						<line x1="12" y1="16" x2="12" y2="12"></line>
 						<line x1="12" y1="8" x2="12.01" y2="8"></line>
 					</svg>
-					<p>Sui Stack Messaging is currently in alpha on testnet. Switch to testnet to try encrypted messaging.</p>
-					<a href="https://github.com/MystenLabs/sui-stack-messaging-sdk" target="_blank" class="docs-link">
-						View SDK Docs →
+					<p>Sui Stack Messaging SDK contracts not configured. ${isMainnet ? 'Deploy to mainnet or configure contract address.' : 'Switch to testnet to try encrypted messaging.'}</p>
+					<a href="/messages" class="docs-link">
+						Learn More →
 					</a>
 				</div>
 			</div>
-			`}
+			`
+			}
 
 			<div class="messaging-links">
 				<a href="https://blog.sui.io/sui-stack-messaging-sdk/" target="_blank" class="link-button">
