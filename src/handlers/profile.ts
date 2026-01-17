@@ -1046,7 +1046,7 @@ export function generateProfilePage(
 		typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function'
 			? new Intl.NumberFormat('en-US')
 			: { format: (value) => String(value ?? 0) };
-	const PREMIUM_DECAY_CONSTANT = 5; // Controls exponential decay curve steepness
+	const PREMIUM_DECAY_CONSTANT = Math.log(SKILL_CREATOR_MAX_SUPPLY); // Ensures near-zero premium at grace end
 
 		let connectedWallet = null;
 		let connectedAccount = null;
@@ -4885,8 +4885,9 @@ export function generateProfilePage(
 		if (premiumGraphContainer) {
 			const handlePointer = (event) => {
 				const rect = premiumGraphContainer.getBoundingClientRect();
+				if (rect.width <= 0) return;
 				const progress = (event.clientX - rect.left) / rect.width;
-				if (Number.isNaN(progress)) return;
+				if (!Number.isFinite(progress)) return;
 				premiumHoverProgress = Math.max(0, Math.min(1, progress));
 				renderPremiumState(premiumHoverProgress, 'hover');
 			};
@@ -4894,6 +4895,10 @@ export function generateProfilePage(
 			premiumGraphContainer.addEventListener('pointermove', handlePointer);
 			premiumGraphContainer.addEventListener('pointerdown', handlePointer);
 			premiumGraphContainer.addEventListener('pointerleave', () => {
+				premiumHoverProgress = null;
+				updateGraceSkillCounter();
+			});
+			premiumGraphContainer.addEventListener('pointercancel', () => {
 				premiumHoverProgress = null;
 				updateGraceSkillCounter();
 			});
