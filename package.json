@@ -18,6 +18,7 @@
   "dependencies": {
     "@cetusprotocol/cetus-sui-clmm-sdk": "^5.4.0",
     "@cmdoss/walrus-site-builder": "^2.6.3",
+    "@ika.xyz/sdk": "^0.2.7",
     "@interest-protocol/sui-sdk": "^8.2.0",
     "@interest-protocol/vortex-sdk": "^11.2.0",
     "@mysten/messaging": "^0.1.0",

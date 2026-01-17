@@ -14,8 +14,8 @@ routes = [
 SUI_NETWORK = "mainnet"
 SUI_RPC_URL = "https://fullnode.mainnet.sui.io:443"
 WALRUS_NETWORK = "mainnet"
-# Sui Stack Messaging SDK contract (testnet)
-MESSAGING_CONTRACT_ADDRESS = "0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d"
+# Sui Stack Messaging SDK contract (mainnet)
+MESSAGING_CONTRACT_ADDRESS = "0x9a814ab4f67fff8ec2a8bb1ddcf188b26119ae6866eea9f3f5d5e7eaf7a9c862"
 
 # KV namespace for caching resolved names
 [[kv_namespaces]]

@@ -3977,9 +3977,11 @@ export function generateProfilePage(
 			}
 		}, 500);
 
-		targetAddressInput.addEventListener('input', (e) => {
-			previewResolvedAddress(e.target.value.trim());
-		});
+		if (targetAddressInput) {
+			targetAddressInput.addEventListener('input', (e) => {
+				previewResolvedAddress(e.target.value.trim());
+			});
+		}
 
 		// Get available Sui wallets with fallbacks
 		function getSuiWallets() {
@@ -4845,12 +4847,12 @@ export function generateProfilePage(
 		}
 
 		// Event listeners
-		editBtn.addEventListener('click', openEditModal);
-		setSelfBtn.addEventListener('click', setToSelf);
-		copyBtn.addEventListener('click', copyAddress);
-		cancelBtn.addEventListener('click', closeEditModal);
-		saveBtn.addEventListener('click', saveTargetAddress);
-		editModal.addEventListener('click', (e) => {
+		if (editBtn) editBtn.addEventListener('click', openEditModal);
+		if (setSelfBtn) setSelfBtn.addEventListener('click', setToSelf);
+		if (copyBtn) copyBtn.addEventListener('click', copyAddress);
+		if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
+		if (saveBtn) saveBtn.addEventListener('click', saveTargetAddress);
+		if (editModal) editModal.addEventListener('click', (e) => {
 			if (e.target === editModal) closeEditModal();
 		});
 
@@ -5403,18 +5405,20 @@ export function generateProfilePage(
 		}
 
 		// Click search button
-		searchBtn.addEventListener('click', () => openSearch(''));
+		if (searchBtn) searchBtn.addEventListener('click', () => openSearch(''));
 
 		// Search input events
-		searchInput.addEventListener('keydown', (e) => {
-			if (e.key === 'Enter') {
-				e.preventDefault();
-				navigateToName();
-			} else if (e.key === 'Escape') {
-				e.preventDefault();
-				closeSearch();
-			}
-		});
+		if (searchInput) {
+			searchInput.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					navigateToName();
+				} else if (e.key === 'Escape') {
+					e.preventDefault();
+					closeSearch();
+				}
+			});
+		}
 
 		// Listen for any keypress on the page to open search
 		document.addEventListener('keydown', (e) => {
@@ -5447,11 +5451,13 @@ export function generateProfilePage(
 		});
 
 		// Click outside closes search
-		searchOverlay.addEventListener('click', (e) => {
-			if (e.target === searchOverlay) {
-				closeSearch();
-			}
-		});
+		if (searchOverlay) {
+			searchOverlay.addEventListener('click', (e) => {
+				if (e.target === searchOverlay) {
+					closeSearch();
+				}
+			});
+		}
 
 		// ===== UPLOAD & CONTENT FUNCTIONALITY =====
 		const uploadSection = document.getElementById('upload-section');
