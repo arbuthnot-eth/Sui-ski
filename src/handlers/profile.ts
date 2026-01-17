@@ -239,17 +239,29 @@ export function generateProfilePage(
 
 		.profile-hero {
 			display: flex;
-			gap: 16px;
+			gap: 24px;
 			align-items: flex-start;
-			margin-bottom: 16px;
+			margin-bottom: 20px;
 		}
 		.identity-card {
-			width: 160px;
-			background: #050818;
-			border-radius: 16px;
+			width: 180px;
+			background: linear-gradient(145deg, #080c1a 0%, #050818 100%);
+			border-radius: 20px;
 			overflow: hidden;
-			box-shadow: 0 12px 32px rgba(59, 130, 246, 0.2);
+			box-shadow:
+				0 20px 50px rgba(59, 130, 246, 0.25),
+				0 0 0 1px rgba(96, 165, 250, 0.15),
+				inset 0 1px 0 rgba(255, 255, 255, 0.05);
 			position: relative;
+			flex-shrink: 0;
+			transition: transform 0.3s ease, box-shadow 0.3s ease;
+		}
+		.identity-card:hover {
+			transform: translateY(-4px);
+			box-shadow:
+				0 28px 60px rgba(59, 130, 246, 0.35),
+				0 0 0 1px rgba(96, 165, 250, 0.25),
+				inset 0 1px 0 rgba(255, 255, 255, 0.08);
 		}
 		.identity-visual {
 			position: relative;
@@ -258,16 +270,52 @@ export function generateProfilePage(
 			display: flex;
 			align-items: center;
 			justify-content: center;
+			overflow: hidden;
+			border-radius: 16px;
+			margin: 4px;
+		}
+		.identity-visual::before {
+			content: '';
+			position: absolute;
+			inset: -2px;
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.3), rgba(167, 139, 250, 0.3));
+			border-radius: 18px;
+			opacity: 0;
+			transition: opacity 0.3s ease;
+			z-index: -1;
+		}
+		.identity-card:hover .identity-visual::before {
+			opacity: 1;
 		}
 		.identity-visual img {
 			width: 100%;
 			height: 100%;
 			object-fit: cover;
+			position: absolute;
+			top: 0;
+			left: 0;
+			border-radius: 14px;
+			transition: transform 0.3s ease;
+		}
+		.identity-card:hover .identity-visual img {
+			transform: scale(1.02);
 		}
 		.identity-visual canvas {
 			width: 85%;
 			height: 85%;
-			border-radius: 8px;
+			border-radius: 10px;
+		}
+		/* Loading shimmer for identity visual */
+		.identity-visual.loading::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.1), transparent);
+			animation: shimmer 1.5s infinite;
+		}
+		@keyframes shimmer {
+			0% { transform: translateX(-100%); }
+			100% { transform: translateX(100%); }
 		}
 		.identity-description {
 			padding: 24px;
@@ -291,33 +339,39 @@ export function generateProfilePage(
 		}
 		.identity-qr-toggle {
 			position: absolute;
-			bottom: 8px;
-			left: 8px;
+			bottom: 10px;
+			left: 10px;
 			right: auto;
-			width: 32px;
-			height: 32px;
-			background: rgba(5, 8, 24, 0.9);
-			border: 1px solid rgba(96, 165, 250, 0.3);
-			border-radius: 8px;
+			width: 36px;
+			height: 36px;
+			background: rgba(5, 8, 24, 0.85);
+			border: 1px solid rgba(96, 165, 250, 0.35);
+			border-radius: 10px;
 			cursor: pointer;
-			display: flex;
+			display: none;
 			align-items: center;
 			justify-content: center;
-			transition: all 0.2s;
+			transition: all 0.25s ease;
 			z-index: 2;
+			backdrop-filter: blur(8px);
 		}
 		.identity-qr-toggle:hover {
-			background: rgba(96, 165, 250, 0.2);
+			background: rgba(96, 165, 250, 0.25);
 			border-color: var(--accent);
+			transform: scale(1.05);
 		}
 		.identity-qr-toggle svg {
-			width: 16px;
-			height: 16px;
+			width: 18px;
+			height: 18px;
 			color: var(--accent);
+			transition: transform 0.2s ease;
+		}
+		.identity-qr-toggle:hover svg {
+			transform: scale(1.1);
 		}
 		.identity-qr-toggle.active {
-			background: var(--accent);
-			border-color: var(--accent);
+			background: linear-gradient(135deg, var(--accent), #a78bfa);
+			border-color: transparent;
 		}
 		.identity-qr-toggle.active svg {
 			color: white;
@@ -356,24 +410,29 @@ export function generateProfilePage(
 			align-items: center;
 			justify-content: center;
 			gap: 8px;
-			padding: 10px;
+			padding: 12px 10px;
+			background: linear-gradient(to top, rgba(96, 165, 250, 0.08), transparent);
 			border-top: 1px solid rgba(96, 165, 250, 0.15);
 		}
 		.identity-name {
 			text-align: center;
 			font-family: ui-monospace, SFMono-Regular, monospace;
-			font-size: 0.75rem;
+			font-size: 0.7rem;
 			font-weight: 600;
 			color: var(--accent);
-			background: rgba(96, 165, 250, 0.08);
+			background: rgba(96, 165, 250, 0.1);
+			padding: 6px 10px;
+			border-radius: 6px;
 			cursor: pointer;
-			transition: all 0.2s;
+			transition: all 0.2s ease;
+			letter-spacing: 0.02em;
 		}
 		.identity-name:hover {
-			background: rgba(96, 165, 250, 0.15);
+			background: rgba(96, 165, 250, 0.2);
+			color: var(--accent-hover);
 		}
 		.identity-name.copied {
-			background: rgba(52, 211, 153, 0.15);
+			background: rgba(52, 211, 153, 0.2);
 			color: var(--success);
 		}
 		.hero-main {
@@ -404,62 +463,80 @@ export function generateProfilePage(
 		}
 
 		.header {
-			margin-bottom: 16px;
-			padding-bottom: 16px;
+			margin-bottom: 20px;
+			padding-bottom: 20px;
 			border-bottom: 1px solid var(--border);
 		}
 		.header-top {
 			display: flex;
 			align-items: center;
-			gap: 10px;
-			margin-bottom: 8px;
+			gap: 12px;
+			margin-bottom: 12px;
 			flex-wrap: wrap;
 		}
 		h1 {
-			font-size: 1.5rem;
-			font-weight: 700;
+			font-size: 1.75rem;
+			font-weight: 800;
 			color: var(--text);
-			letter-spacing: -0.03em;
+			letter-spacing: -0.04em;
 			margin: 0;
 			word-break: break-all;
+			line-height: 1.2;
 		}
 		h1 .suffix {
-			background: linear-gradient(135deg, #60a5fa, #a78bfa);
+			background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #60a5fa 100%);
+			background-size: 200% auto;
 			-webkit-background-clip: text;
 			-webkit-text-fill-color: transparent;
 			background-clip: text;
+			animation: gradient-shift 3s ease infinite;
+		}
+		@keyframes gradient-shift {
+			0%, 100% { background-position: 0% center; }
+			50% { background-position: 100% center; }
 		}
 		.badge {
 			display: inline-flex;
 			align-items: center;
-			gap: 4px;
-			padding: 4px 10px;
-			border-radius: 8px;
+			gap: 5px;
+			padding: 5px 12px;
+			border-radius: 20px;
 			font-size: 0.65rem;
-			font-weight: 600;
+			font-weight: 700;
 			text-transform: uppercase;
-			letter-spacing: 0.04em;
+			letter-spacing: 0.05em;
 			white-space: nowrap;
+			transition: all 0.2s ease;
 		}
 		.badge.network {
-			background: var(--accent-light);
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(139, 92, 246, 0.15));
 			color: var(--accent);
-			border: 1px solid var(--border);
+			border: 1px solid rgba(96, 165, 250, 0.25);
 		}
 		.badge.expiry {
-			background: rgba(34, 197, 94, 0.15);
+			background: rgba(34, 197, 94, 0.12);
 			color: #22c55e;
-			border: 1px solid rgba(34, 197, 94, 0.2);
+			border: 1px solid rgba(34, 197, 94, 0.25);
 		}
 		.badge.expiry.warning {
-			background: var(--warning-light);
-			color: var(--warning);
-			border: 1px solid rgba(245, 158, 11, 0.2);
+			background: rgba(251, 191, 36, 0.12);
+			color: #fbbf24;
+			border: 1px solid rgba(251, 191, 36, 0.25);
+			animation: pulse-warning 2s infinite;
+		}
+		@keyframes pulse-warning {
+			0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.3); }
+			50% { box-shadow: 0 0 12px 2px rgba(251, 191, 36, 0.2); }
 		}
 		.badge.expiry.danger {
-			background: var(--error-light);
-			color: var(--error);
-			border: 1px solid rgba(239, 68, 68, 0.2);
+			background: rgba(248, 113, 113, 0.12);
+			color: #f87171;
+			border: 1px solid rgba(248, 113, 113, 0.25);
+			animation: pulse-danger 1.5s infinite;
+		}
+		@keyframes pulse-danger {
+			0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.3); }
+			50% { box-shadow: 0 0 12px 2px rgba(248, 113, 113, 0.25); }
 		}
 		.badge.expiry.premium {
 			background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(167, 139, 250, 0.15));
@@ -1795,50 +1872,84 @@ export function generateProfilePage(
 		}
 		.nfts-grid {
 			display: grid;
-			grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-			gap: 16px;
+			grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+			gap: 20px;
 		}
 		.nft-card {
-			background: var(--card-bg);
-			border: 1px solid rgba(255, 255, 255, 0.1);
-			border-radius: 12px;
-			padding: 16px;
-			transition: all 0.2s;
+			background: linear-gradient(145deg, rgba(22, 22, 30, 0.95), rgba(15, 15, 22, 0.95));
+			border: 1px solid rgba(255, 255, 255, 0.08);
+			border-radius: 16px;
+			overflow: hidden;
+			transition: all 0.3s ease;
 			cursor: pointer;
 			position: relative;
-			overflow: hidden;
 		}
 		.nft-card:hover {
-			border-color: var(--accent);
-			transform: translateY(-2px);
-			box-shadow: 0 8px 24px rgba(96, 165, 250, 0.15);
+			border-color: rgba(96, 165, 250, 0.4);
+			transform: translateY(-6px) scale(1.02);
+			box-shadow:
+				0 20px 40px rgba(0, 0, 0, 0.4),
+				0 0 0 1px rgba(96, 165, 250, 0.2),
+				0 0 30px rgba(96, 165, 250, 0.15);
 		}
-		.nft-card-header {
-			display: flex;
-			align-items: center;
-			gap: 12px;
-			margin-bottom: 12px;
+		.nft-card.current {
+			border-color: rgba(96, 165, 250, 0.3);
+			box-shadow: 0 0 20px rgba(96, 165, 250, 0.1);
 		}
-		.nft-card-avatar {
-			width: 48px;
-			height: 48px;
-			border-radius: 8px;
-			background: linear-gradient(135deg, var(--accent), rgba(139, 92, 246, 0.8));
+		.nft-card-image-wrapper {
+			position: relative;
+			aspect-ratio: 1;
+			background: linear-gradient(135deg, #0a1628 0%, #050818 100%);
+			overflow: hidden;
+		}
+		.nft-card-image {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			transition: transform 0.3s ease;
+		}
+		.nft-card:hover .nft-card-image {
+			transform: scale(1.05);
+		}
+		.nft-card-fallback {
+			width: 100%;
+			height: 100%;
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			font-size: 1.25rem;
-			font-weight: 700;
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(139, 92, 246, 0.15));
+		}
+		.nft-card-initial {
+			font-size: 3rem;
+			font-weight: 800;
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.nft-card-current-badge {
+			position: absolute;
+			top: 10px;
+			right: 10px;
+			padding: 4px 10px;
+			background: rgba(96, 165, 250, 0.9);
 			color: white;
-			flex-shrink: 0;
+			border-radius: 6px;
+			font-size: 0.65rem;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			backdrop-filter: blur(8px);
+		}
+		.nft-card-info {
+			padding: 14px 16px;
 		}
 		.nft-card-name {
-			flex: 1;
-			min-width: 0;
+			margin-bottom: 10px;
 		}
 		.nft-card-name .domain {
-			font-size: 0.95rem;
-			font-weight: 600;
+			font-size: 1rem;
+			font-weight: 700;
 			color: var(--text);
 			display: block;
 			overflow: hidden;
@@ -1846,50 +1957,48 @@ export function generateProfilePage(
 			white-space: nowrap;
 		}
 		.nft-card-name .suffix {
-			color: var(--text-muted);
-			font-weight: 400;
-		}
-		.nft-card-meta {
-			display: flex;
-			flex-direction: column;
-			gap: 8px;
-			font-size: 0.875rem;
-		}
-		.nft-card-meta-item {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-		}
-		.nft-card-meta-label {
-			color: var(--text-muted);
-		}
-		.nft-card-meta-value {
-			color: var(--text);
-			font-weight: 500;
-			word-break: break-all;
-			text-align: right;
-		}
-		.nft-card-badge {
-			display: inline-block;
-			padding: 4px 8px;
-			border-radius: 6px;
-			font-size: 0.75rem;
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
 			font-weight: 600;
-			background: var(--accent-light);
-			color: var(--accent);
 		}
-		.nft-card-badge.current-tag {
-			background: var(--accent-light);
-			color: var(--accent);
+		.nft-card-details {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 8px;
 		}
-		.nft-card-arrow {
-			width: 16px;
-			height: 16px;
+		.nft-card-expiry {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+			font-size: 0.75rem;
 			color: var(--text-muted);
-			transition: transform 0.2s;
 		}
-		.nft-card:hover .nft-card-arrow {
-			transform: translateX(4px);
+		.nft-card-expiry svg {
+			opacity: 0.7;
+		}
+		.nft-card-expiry.warning {
+			color: var(--warning);
+		}
+		.nft-card-expiry.expired {
+			color: var(--error);
+		}
+		.nft-card-expiry.premium {
+			color: var(--accent);
+		}
+		.nft-card-explorer-link {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			text-decoration: none;
+			transition: color 0.2s;
+		}
+		.nft-card-explorer-link:hover {
+			color: var(--accent);
 		}
 
 		/* NFT Details Section */
@@ -1908,6 +2017,11 @@ export function generateProfilePage(
 			margin-bottom: 24px;
 			padding-bottom: 16px;
 			border-bottom: 1px solid rgba(96, 165, 250, 0.1);
+		}
+		.nft-details-header-actions {
+			display: flex;
+			align-items: center;
+			gap: 12px;
 		}
 		.nft-details-title {
 			display: flex;
@@ -1947,6 +2061,38 @@ export function generateProfilePage(
 		.nft-details-refresh svg {
 			width: 16px;
 			height: 16px;
+		}
+		.nft-details-toggle {
+			padding: 8px 16px;
+			background: rgba(96, 165, 250, 0.1);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 8px;
+			color: var(--accent);
+			cursor: pointer;
+			font-size: 0.875rem;
+			font-weight: 600;
+			transition: all 0.2s;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+		.nft-details-toggle:hover {
+			background: rgba(96, 165, 250, 0.2);
+			border-color: rgba(96, 165, 250, 0.4);
+		}
+		.nft-details-toggle svg {
+			width: 16px;
+			height: 16px;
+			transition: transform 0.2s;
+		}
+		.nft-details-toggle.expanded svg {
+			transform: rotate(180deg);
+		}
+		.nft-details-content {
+			display: none;
+		}
+		.nft-details-content.expanded {
+			display: block;
 		}
 		.nft-details-grid {
 			display: grid;
@@ -3931,16 +4077,24 @@ ${generatePasskeyWalletStyles()}
 						</svg>
 						<span>NFT Object Details</span>
 					</div>
-					<button class="nft-details-refresh" id="nft-details-refresh" title="Refresh NFT data">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<polyline points="23 4 23 10 17 10"></polyline>
-							<polyline points="1 20 1 14 7 14"></polyline>
-							<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-						</svg>
-						Refresh
-					</button>
+					<div class="nft-details-header-actions">
+						<button class="nft-details-toggle" id="nft-details-toggle" title="Toggle NFT details">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="6 9 12 15 18 9"></polyline>
+							</svg>
+							Show Details
+						</button>
+						<button class="nft-details-refresh" id="nft-details-refresh" title="Refresh NFT data">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="23 4 23 10 17 10"></polyline>
+								<polyline points="1 20 1 14 7 14"></polyline>
+								<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+							</svg>
+							Refresh
+						</button>
+					</div>
 				</div>
-				<div id="nft-details-content">
+				<div class="nft-details-content" id="nft-details-content">
 					<div class="nft-details-loading">
 						<span class="loading"></span>
 						<span>Loading comprehensive NFT data...</span>
@@ -4967,48 +5121,31 @@ ${generatePasskeyWalletStyles()}
 				selectedNft = allNFTs[0];
 			}
 
-			if (selectedNft && selectedNft.imageUrl) {
-				nftImageUrl = selectedNft.imageUrl;
+			// Build list of image URLs to try
+			const imageUrlsToTry = [];
 
-				// Create and load the NFT image
-				const img = new Image();
-				img.onload = () => {
-					// Remove any existing images
-					const existingImg = identityVisual.querySelector('img');
-					if (existingImg) {
-						existingImg.remove();
-					}
+			// 1. SuiNS API URL for the selected domain
+			const domainName = selectedNft?.domain || NAME;
+			imageUrlsToTry.push(getSuiNSImageUrl(domainName));
 
-					// Add the new image
-					img.style.width = '100%';
-					img.style.height = '100%';
-					img.style.objectFit = 'cover';
-					img.style.display = 'block'; // Show NFT by default
-					identityVisual.appendChild(img);
+			// 2. On-chain image URL from NFT data
+			if (selectedNft?.imageUrl) {
+				const normalizedUrl = normalizeImageUrl(selectedNft.imageUrl);
+				if (normalizedUrl && !imageUrlsToTry.includes(normalizedUrl)) {
+					imageUrlsToTry.push(normalizedUrl);
+				}
+			}
 
-					// Hide QR code and show toggle button
-					if (identityCanvas) {
-						identityCanvas.style.display = 'none';
-					}
-					if (qrToggle) {
-						qrToggle.style.display = 'block';
-					}
-
-					showingQr = false; // NFT is now showing
-					nftDisplayLoaded = true;
-				};
-				img.onerror = () => {
-					console.error('Failed to load NFT image:', nftImageUrl);
-					// Show QR code as fallback
+			// Try loading with fallbacks
+			loadNFTImageWithFallbacks(
+				imageUrlsToTry,
+				(img, url) => displayNFTImage(img, url),
+				() => {
+					console.log('All image URLs failed for identity card, showing QR');
 					showIdentityQr();
 					nftDisplayLoaded = true;
-				};
-				img.src = nftImageUrl;
-			} else {
-				// No image available, show QR code as fallback
-				showIdentityQr();
-				nftDisplayLoaded = true;
-			}
+				}
+			);
 		}
 
 		// Toggle button click
@@ -5133,6 +5270,149 @@ ${generatePasskeyWalletStyles()}
 		}).catch(console.error);
 		// Hide toggle button initially (will show when NFT loads)
 		if (qrToggle) qrToggle.style.display = 'none';
+
+		// Generate SuiNS API image URL as primary source (more reliable than on-chain display data)
+		function getSuiNSImageUrl(domainName) {
+			const cleanDomain = domainName.toLowerCase().replace(/\\.sui$/i, '');
+			// SuiNS API serves NFT images dynamically
+			return NETWORK === 'mainnet'
+				? \`https://api-mainnet.suins.io/nfts/image/\${cleanDomain}.sui\`
+				: \`https://api-testnet.suins.io/nfts/image/\${cleanDomain}.sui\`;
+		}
+
+		// Try to load an image with fallback URLs
+		function loadNFTImageWithFallbacks(imageUrls, onSuccess, onAllFailed) {
+			let currentIndex = 0;
+
+			function tryNextUrl() {
+				if (currentIndex >= imageUrls.length) {
+					onAllFailed();
+					return;
+				}
+
+				const url = imageUrls[currentIndex];
+				if (!url) {
+					currentIndex++;
+					tryNextUrl();
+					return;
+				}
+
+				const img = new Image();
+				img.crossOrigin = 'anonymous';
+				img.onload = () => onSuccess(img, url);
+				img.onerror = () => {
+					console.log('Failed to load image from:', url);
+					currentIndex++;
+					tryNextUrl();
+				};
+				img.src = url;
+			}
+
+			tryNextUrl();
+		}
+
+		// Normalize image URL (handle IPFS, etc.)
+		function normalizeImageUrl(url) {
+			if (!url || typeof url !== 'string') return null;
+
+			// Check if it's an IPFS CID (starts with Qm or bafy)
+			if (/^(Qm|bafy)[A-Za-z0-9]+/i.test(url)) {
+				return \`https://ipfs.io/ipfs/\${url}\`;
+			}
+			// Check if it starts with ipfs://
+			if (url.startsWith('ipfs://')) {
+				return \`https://ipfs.io/ipfs/\${url.slice(7)}\`;
+			}
+			// Already a full URL
+			if (url.startsWith('http://') || url.startsWith('https://')) {
+				return url;
+			}
+			return null;
+		}
+
+		// Display NFT image in identity card
+		function displayNFTImage(img, imageUrl) {
+			if (!identityVisual) return;
+
+			// Remove any existing images
+			const existingImg = identityVisual.querySelector('img');
+			if (existingImg) {
+				existingImg.remove();
+			}
+
+			// Add the new image with proper styling
+			img.style.width = '100%';
+			img.style.height = '100%';
+			img.style.objectFit = 'cover';
+			img.style.display = 'block';
+			img.style.position = 'absolute';
+			img.style.top = '0';
+			img.style.left = '0';
+			img.style.borderRadius = '12px';
+			identityVisual.appendChild(img);
+
+			// Hide QR code and show toggle button
+			if (identityCanvas) {
+				identityCanvas.style.display = 'none';
+			}
+			if (qrToggle) {
+				qrToggle.style.display = 'flex';
+			}
+
+			showingQr = false;
+			nftDisplayLoaded = true;
+			nftImageUrl = imageUrl;
+
+			console.log('NFT image loaded successfully:', imageUrl);
+		}
+
+		// Load NFT image - try SuiNS API first (most reliable), then on-chain display data
+		async function loadCurrentNFTImage() {
+			if (nftDisplayLoaded || !identityVisual) return;
+
+			// Build list of image URLs to try (in order of preference)
+			const imageUrlsToTry = [];
+
+			// 1. SuiNS API URL (most reliable for SuiNS NFTs)
+			imageUrlsToTry.push(getSuiNSImageUrl(NAME));
+
+			// 2. Try fetching from on-chain display data if NFT_ID is available
+			if (NFT_ID) {
+				try {
+					const response = await fetch(\`/api/nft-details?objectId=\${encodeURIComponent(NFT_ID)}\`);
+					if (response.ok) {
+						const data = await response.json();
+
+						// Extract image URL from display/content data
+						const displayUrl = data.display?.image_url || data.display?.image ||
+						                   data.display?.avatar_url || data.display?.avatar ||
+						                   data.content?.image_url;
+
+						if (displayUrl) {
+							const normalizedUrl = normalizeImageUrl(displayUrl);
+							if (normalizedUrl && !imageUrlsToTry.includes(normalizedUrl)) {
+								imageUrlsToTry.push(normalizedUrl);
+							}
+						}
+					}
+				} catch (error) {
+					console.log('Failed to fetch NFT details:', error);
+				}
+			}
+
+			// Try loading images with fallbacks
+			loadNFTImageWithFallbacks(
+				imageUrlsToTry,
+				(img, url) => displayNFTImage(img, url),
+				() => {
+					console.log('All image URLs failed, keeping QR code');
+					nftDisplayLoaded = true;
+				}
+			);
+		}
+
+		// Try to load NFT image immediately
+		loadCurrentNFTImage();
 
 		// Set target address to connected wallet (direct transaction)
 		async function setToSelf() {
@@ -7107,45 +7387,57 @@ ${generatePasskeyWalletStyles()}
 				const domain = nft.domain || '';
 				const cleanedName = domain ? domain.replace(/\\.sui$/i, '') : null;
 				const isCurrentName = cleanedName && cleanedName.toLowerCase() === NAME.toLowerCase();
-				const initial = cleanedName ? cleanedName.charAt(0).toUpperCase() : '?';
 				const profileUrl = cleanedName ? \`https://\${cleanedName}.sui.ski\` : null;
 				const explorerUrl = \`\${EXPLORER_BASE}/object/\${objectId}\`;
 
+				// Generate SuiNS API image URL for this NFT
+				const nftImageUrl = cleanedName ? getSuiNSImageUrl(cleanedName) : null;
+
 				// Extract expiration if available
 				let expirationText = '';
+				let daysRemaining = null;
 				try {
 					if (nft.expirationTimestampMs) {
 						const expMs = Number(nft.expirationTimestampMs);
 						if (expMs) {
 							const expDate = new Date(expMs);
 							expirationText = expDate.toLocaleDateString();
+							daysRemaining = Math.ceil((expMs - Date.now()) / (1000 * 60 * 60 * 24));
 						}
 					}
 				} catch (e) {}
 
+				// Determine expiry status for badge styling
+				let expiryClass = '';
+				if (daysRemaining !== null) {
+					if (daysRemaining <= 0) expiryClass = 'expired';
+					else if (daysRemaining <= 30) expiryClass = 'warning';
+					else if (daysRemaining > 365) expiryClass = 'premium';
+				}
+
 				return \`
-					<div class="nft-card" onclick="\${profileUrl ? \`window.location.href='\${profileUrl}'\` : ''}">
-						<div class="nft-card-header">
-							<div class="nft-card-avatar">\${initial}</div>
+					<div class="nft-card\${isCurrentName ? ' current' : ''}" onclick="\${profileUrl ? \`window.location.href='\${profileUrl}'\` : ''}">
+						<div class="nft-card-image-wrapper">
+							\${nftImageUrl ? \`<img src="\${nftImageUrl}" alt="\${cleanedName}.sui" class="nft-card-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">\` : ''}
+							<div class="nft-card-fallback"\${nftImageUrl ? ' style="display:none;"' : ''}>
+								<span class="nft-card-initial">\${cleanedName ? cleanedName.charAt(0).toUpperCase() : '?'}</span>
+							</div>
+							\${isCurrentName ? '<span class="nft-card-current-badge">Current</span>' : ''}
+						</div>
+						<div class="nft-card-info">
 							<div class="nft-card-name">
 								<span class="domain">\${cleanedName ? escapeHtmlJs(cleanedName) : 'Unknown'}<span class="suffix">.sui</span></span>
 							</div>
-							\${isCurrentName ? '<span class="nft-card-badge current-tag">Current</span>' : ''}
-						</div>
-						<div class="nft-card-meta">
-							<div class="nft-card-meta-item">
-								<span class="nft-card-meta-label">Object ID:</span>
-								<span class="nft-card-meta-value" style="font-family: monospace; font-size: 0.75rem;">\${objectId.slice(0, 8)}...</span>
-							</div>
-							\${expirationText ? \`
-								<div class="nft-card-meta-item">
-									<span class="nft-card-meta-label">Expires:</span>
-									<span class="nft-card-meta-value">\${expirationText}</span>
-								</div>
-							\` : ''}
-							<div class="nft-card-meta-item" style="margin-top: 8px;">
-								<a href="\${explorerUrl}" target="_blank" onclick="event.stopPropagation();" style="color: var(--accent); text-decoration: none; font-size: 0.875rem;">
-									View on Explorer →
+							<div class="nft-card-details">
+								\${expirationText ? \`
+									<div class="nft-card-expiry \${expiryClass}">
+										<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+										<span>\${daysRemaining !== null && daysRemaining <= 0 ? 'Expired' : expirationText}</span>
+									</div>
+								\` : ''}
+								<a href="\${explorerUrl}" target="_blank" onclick="event.stopPropagation();" class="nft-card-explorer-link">
+									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+									<span>Explorer</span>
 								</a>
 							</div>
 						</div>
@@ -7603,17 +7895,57 @@ ${generatePasskeyWalletStyles()}
 		const nftDetailsSection = document.getElementById('nft-details-section');
 		const nftDetailsContent = document.getElementById('nft-details-content');
 		const nftDetailsRefresh = document.getElementById('nft-details-refresh');
+		const nftDetailsToggle = document.getElementById('nft-details-toggle');
+
+		// Toggle NFT details visibility
+		if (nftDetailsToggle && nftDetailsContent) {
+			nftDetailsToggle.addEventListener('click', () => {
+				const isExpanded = nftDetailsContent.classList.contains('expanded');
+				if (isExpanded) {
+					nftDetailsContent.classList.remove('expanded');
+					nftDetailsToggle.classList.remove('expanded');
+					nftDetailsToggle.innerHTML = \`
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="6 9 12 15 18 9"></polyline>
+						</svg>
+						Show Details
+					\`;
+				} else {
+					nftDetailsContent.classList.add('expanded');
+					nftDetailsToggle.classList.add('expanded');
+					nftDetailsToggle.innerHTML = \`
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="6 9 12 15 18 9"></polyline>
+						</svg>
+						Hide Details
+					\`;
+				}
+			});
+		}
 
 		async function fetchNFTDetails() {
 			if (!NFT_ID || !nftDetailsContent) return;
 
 			try {
-				nftDetailsContent.innerHTML = \`
-					<div class="nft-details-loading">
-						<span class="loading"></span>
-						<span>Loading comprehensive NFT data...</span>
-					</div>
-				\`;
+				// Reset to collapsed state when loading
+				if (nftDetailsContent) {
+					nftDetailsContent.classList.remove('expanded');
+					nftDetailsContent.innerHTML = \`
+						<div class="nft-details-loading">
+							<span class="loading"></span>
+							<span>Loading comprehensive NFT data...</span>
+						</div>
+					\`;
+				}
+				if (nftDetailsToggle) {
+					nftDetailsToggle.classList.remove('expanded');
+					nftDetailsToggle.innerHTML = \`
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="6 9 12 15 18 9"></polyline>
+						</svg>
+						Show Details
+					\`;
+				}
 
 				if (nftDetailsRefresh) nftDetailsRefresh.disabled = true;
 
@@ -7657,6 +7989,7 @@ ${generatePasskeyWalletStyles()}
 					}
 				}
 
+				// Content is collapsed by default, so don't add 'expanded' class
 				nftDetailsContent.innerHTML = \`
 					<div class="nft-details-grid">
 						<div class="nft-detail-card">
