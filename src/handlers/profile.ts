@@ -4693,12 +4693,86 @@ ${generatePasskeyWalletStyles()}
 			});
 		}
 
-		// ===== IDENTITY CARD (QR CODE) =====
+		// ===== IDENTITY CARD (NFT + QR CODE) =====
 		function showIdentityQr() {
 			if (!identityVisual || !identityCanvas) return;
 			// Show canvas (for QR overlay)
 			identityCanvas.style.display = 'block';
+			// Hide NFT image if it exists
+			const nftImg = identityVisual.querySelector('img');
+			if (nftImg) nftImg.style.display = 'none';
 			showingQr = true;
+		}
+
+		function showIdentityNft() {
+			if (!identityVisual || !identityCanvas) return;
+			// Hide QR canvas
+			identityCanvas.style.display = 'none';
+			// Show NFT image if it exists
+			const nftImg = identityVisual.querySelector('img');
+			if (nftImg) nftImg.style.display = 'block';
+			showingQr = false;
+		}
+
+		function toggleIdentityView() {
+			if (showingQr) {
+				showIdentityNft();
+			} else {
+				showIdentityQr();
+			}
+		}
+
+		function loadIdentityCardNFT() {
+			if (nftDisplayLoaded || !allNFTs || allNFTs.length === 0) return;
+
+			// Find the current name's NFT, or use the first one
+			let selectedNft = allNFTs.find(nft => {
+				const domain = nft.domain || '';
+				const cleanedName = domain.replace(/\.sui$/i, '');
+				return cleanedName.toLowerCase() === NAME.toLowerCase();
+			});
+
+			// Fallback to first NFT if current name not found
+			if (!selectedNft) {
+				selectedNft = allNFTs[0];
+			}
+
+			if (selectedNft && selectedNft.imageUrl) {
+				nftImageUrl = selectedNft.imageUrl;
+
+				// Create and load the NFT image
+				const img = new Image();
+				img.onload = () => {
+					// Remove any existing images
+					const existingImg = identityVisual.querySelector('img');
+					if (existingImg) {
+						existingImg.remove();
+					}
+
+					// Add the new image
+					img.style.width = '100%';
+					img.style.height = '100%';
+					img.style.objectFit = 'cover';
+					img.style.display = 'none'; // Start hidden (QR is default)
+					identityVisual.appendChild(img);
+
+					// Show the toggle button
+					if (qrToggle) {
+						qrToggle.style.display = 'block';
+					}
+
+					nftDisplayLoaded = true;
+				};
+				img.onerror = () => {
+					console.error('Failed to load NFT image:', nftImageUrl);
+					// Keep QR code as fallback
+					nftDisplayLoaded = true;
+				};
+				img.src = nftImageUrl;
+			} else {
+				// No image available, keep QR code only
+				nftDisplayLoaded = true;
+			}
 		}
 
 		// Toggle button click
@@ -6610,20 +6684,33 @@ ${generatePasskeyWalletStyles()}
 					// Process each NFT object
 					const processedNFTs = response.data.map(item => {
 						if (!item.data) return null;
-						
+
 						const objectId = item.data.objectId;
 						const domain = extractDomainFromNFT(item.data);
 						const expirationTimestampMs = extractExpirationFromNFT(item.data);
-						
+
+						// Extract image URL from display data
+						let imageUrl = null;
+						if (item.data.display?.data) {
+							const display = item.data.display.data;
+							imageUrl = display.image_url || display.image || display.avatar || display.avatar_url || null;
+						}
+
 						return {
 							nftId: objectId,
 							domain: domain,
 							objectData: item.data,
-							expirationTimestampMs: expirationTimestampMs
+							expirationTimestampMs: expirationTimestampMs,
+							imageUrl: imageUrl
 						};
 					}).filter(nft => nft !== null);
 
 					allNFTs = cursor ? [...allNFTs, ...processedNFTs] : processedNFTs;
+
+					// Load the first NFT image (or the current one) into the identity card
+					if (!nftDisplayLoaded && allNFTs.length > 0) {
+						loadIdentityCardNFT();
+					}
 				}
 
 				nftsNextCursor = response.nextCursor;
@@ -6667,20 +6754,33 @@ ${generatePasskeyWalletStyles()}
 							return objectType.includes('SuinsRegistration') || objectType.includes('suins_registration');
 						}).map(item => {
 							if (!item.data) return null;
-							
+
 							const objectId = item.data.objectId;
 							const domain = extractDomainFromNFT(item.data);
 							const expirationTimestampMs = extractExpirationFromNFT(item.data);
-							
+
+							// Extract image URL from display data
+							let imageUrl = null;
+							if (item.data.display?.data) {
+								const display = item.data.display.data;
+								imageUrl = display.image_url || display.image || display.avatar || display.avatar_url || null;
+							}
+
 							return {
 								nftId: objectId,
 								domain: domain,
 								objectData: item.data,
-								expirationTimestampMs: expirationTimestampMs
+								expirationTimestampMs: expirationTimestampMs,
+								imageUrl: imageUrl
 							};
 						}).filter(nft => nft !== null);
 
 						allNFTs = cursor ? [...allNFTs, ...suinsNFTs] : suinsNFTs;
+
+						// Load the first NFT image (or the current one) into the identity card
+						if (!nftDisplayLoaded && allNFTs.length > 0) {
+							loadIdentityCardNFT();
+						}
 					}
 
 					nftsNextCursor = response.nextCursor;
@@ -6857,6 +6957,59 @@ ${generatePasskeyWalletStyles()}
 		if (activeTab === 'nfts' && !nftsLoaded) {
 			nftsLoaded = true;
 			setTimeout(() => fetchNFTs(), 100);
+		}
+
+		// Load NFTs on page load to populate the identity card (but don't render to tab yet)
+		// This allows the identity card to show the NFT image immediately
+		if (!nftsLoaded && activeTab !== 'nfts') {
+			setTimeout(async () => {
+				try {
+					const suiClient = new SuiClient({ url: RPC_URL });
+					const response = await suiClient.getOwnedObjects({
+						owner: CURRENT_ADDRESS,
+						filter: {
+							StructType: '0x2d0dee46d9f967ec56c2fb8d64f9b01bb3c5c8d11e8c03a42b149f2e90e8e9b::suins_registration::SuinsRegistration'
+						},
+						options: {
+							showType: true,
+							showContent: true,
+							showDisplay: true,
+							showOwner: true
+						},
+						limit: 10 // Only fetch first 10 for identity card
+					});
+
+					if (response.data && response.data.length > 0) {
+						const processedNFTs = response.data.map(item => {
+							if (!item.data) return null;
+
+							const objectId = item.data.objectId;
+							const domain = extractDomainFromNFT(item.data);
+							const expirationTimestampMs = extractExpirationFromNFT(item.data);
+
+							// Extract image URL from display data
+							let imageUrl = null;
+							if (item.data.display?.data) {
+								const display = item.data.display.data;
+								imageUrl = display.image_url || display.image || display.avatar || display.avatar_url || null;
+							}
+
+							return {
+								nftId: objectId,
+								domain: domain,
+								objectData: item.data,
+								expirationTimestampMs: expirationTimestampMs,
+								imageUrl: imageUrl
+							};
+						}).filter(nft => nft !== null);
+
+						allNFTs = processedNFTs;
+						loadIdentityCardNFT();
+					}
+				} catch (error) {
+					console.log('Could not pre-load NFTs for identity card:', error);
+				}
+			}, 500);
 		}
 
 		// ========== COUNTDOWN HERO ANIMATION ==========
