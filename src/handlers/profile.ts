@@ -6579,21 +6579,8 @@ ${generatePasskeyWalletStyles()}
 				nftsHasMore = false; // We fetched all domains at once
 				nftsNextCursor = null;
 
-				if (response.data && response.data.length > 0) {
-					allNFTs = cursor ? [...allNFTs, ...response.data] : response.data;
-				}
-
-				nftsNextCursor = response.nextCursor;
-				nftsHasMore = response.hasNextPage || false;
-
 				renderNFTs();
-
-				// Continue fetching if there are more
-				if (nftsHasMore && nftsNextCursor) {
-					await fetchNFTs(nftsNextCursor);
-				} else {
-					nftsCountEl.textContent = nftsHasMore ? \`\${allNFTs.length}+\` : String(allNFTs.length);
-				}
+				nftsCountEl.textContent = String(allNFTs.length);
 			} catch (error) {
 				console.error('Failed to fetch NFTs:', error);
 				renderNFTsError(error.message || 'Failed to load NFTs');
