@@ -1100,6 +1100,11 @@ export function generateProfilePage(
 			}
 
 			updateGraphMarker(clampedProgress, nsProgress);
+			updateHoverPaths(
+				clampedProgress,
+				nsProgress,
+				mode === 'hover' && premiumHoverProgress !== null,
+			);
 
 			if (premiumTimeDisplay) {
 				const prefix = mode === 'hover' ? 'Cursor estimate' : 'Live premium';
@@ -4634,6 +4639,8 @@ export function generateProfilePage(
 		const nsDecayMarker = document.getElementById('ns-decay-marker');
 		const nsDecayCurve = document.getElementById('ns-decay-curve');
 		const nsDecayArea = document.getElementById('ns-decay-area');
+		const decayHoverPath = document.getElementById('decay-hover-path');
+		const nsDecayHoverPath = document.getElementById('ns-decay-hover-path');
 		const premiumGraphContainer = document.getElementById('premium-graph-container');
 		const premiumTimeDisplay = document.getElementById('grace-premium-time');
 
@@ -4646,6 +4653,8 @@ export function generateProfilePage(
 		const GRACE_PERIOD_DAYS = 30;
 		const NS_DISCOUNT_PROGRESS = NS_DISCOUNT_DAYS / GRACE_PERIOD_DAYS; // 0.1 (10%)
 		let premiumHoverProgress: number | null = null;
+		let decayCurvePoints: { x: number; y: number }[] = [];
+		let nsDecayCurvePoints: { x: number; y: number }[] = [];
 
 		// Fetch SUI price from CoinGecko
 		async function fetchSuiPrice() {
@@ -4696,7 +4705,56 @@ export function generateProfilePage(
 			// Build area path (curve + bottom edge)
 			const areaPath = curvePath + ' L' + width + ',' + height + ' L0,' + height + ' Z';
 
-			return { curvePath, areaPath };
+			return { curvePath, areaPath, points };
+		}
+
+		function buildPartialPath(points, progress) {
+			if (!points || points.length === 0) return '';
+			const clamped = Math.max(0, Math.min(1, progress));
+			const totalSegments = points.length - 1;
+			const exactIndex = clamped * totalSegments;
+			const lowerIndex = Math.floor(exactIndex);
+			const upperIndex = Math.min(points.length - 1, lowerIndex + 1);
+			const t = exactIndex - lowerIndex;
+
+			const pathPoints = points.slice(0, upperIndex + 1);
+
+			if (upperIndex > lowerIndex) {
+				const start = points[lowerIndex];
+				const end = points[upperIndex];
+				const interp = {
+					x: start.x + (end.x - start.x) * t,
+					y: start.y + (end.y - start.y) * t,
+				};
+				pathPoints[pathPoints.length - 1] = interp;
+			}
+
+			let path = 'M' + pathPoints[0].x + ',' + pathPoints[0].y;
+			for (let i = 1; i < pathPoints.length; i++) {
+				path += ' L' + pathPoints[i].x + ',' + pathPoints[i].y;
+			}
+			return path;
+		}
+
+		function updateHoverPaths(progress, nsProgress, isHover) {
+			if (!decayHoverPath || !nsDecayHoverPath || decayCurvePoints.length === 0) return;
+
+			if (progress === null) {
+				decayHoverPath.setAttribute('d', '');
+				nsDecayHoverPath.setAttribute('d', '');
+				premiumGraphContainer?.classList.remove('hovering');
+				return;
+			}
+
+			const path = buildPartialPath(decayCurvePoints, progress);
+			const nsPath = buildPartialPath(nsDecayCurvePoints, nsProgress);
+			decayHoverPath.setAttribute('d', path);
+			nsDecayHoverPath.setAttribute('d', nsPath);
+			if (isHover) {
+				premiumGraphContainer?.classList.add('hovering');
+			} else {
+				premiumGraphContainer?.classList.remove('hovering');
+			}
 		}
 
 		// Update graph marker position based on progress
@@ -4737,16 +4795,18 @@ export function generateProfilePage(
 		function initDecayCurves() {
 			// SUI curve (no offset)
 			if (decayCurve && decayArea) {
-				const { curvePath, areaPath } = generateDecayCurvePath(0);
+				const { curvePath, areaPath, points } = generateDecayCurvePath(0);
 				decayCurve.setAttribute('d', curvePath);
 				decayArea.setAttribute('d', areaPath);
+				decayCurvePoints = points;
 			}
 
 			// NS curve (3-day offset = 10% progress offset)
 			if (nsDecayCurve && nsDecayArea) {
-				const { curvePath, areaPath } = generateDecayCurvePath(NS_DISCOUNT_PROGRESS);
+				const { curvePath, areaPath, points } = generateDecayCurvePath(NS_DISCOUNT_PROGRESS);
 				nsDecayCurve.setAttribute('d', curvePath);
 				nsDecayArea.setAttribute('d', areaPath);
+				nsDecayCurvePoints = points;
 			}
 		}
 

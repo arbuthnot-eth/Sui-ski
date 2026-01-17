@@ -2077,6 +2077,7 @@ export const profileStyles = `
 			stroke: var(--accent);
 			stroke-width: 2;
 			stroke-linecap: round;
+			stroke-linejoin: round;
 		}
 		.decay-marker {
 			fill: var(--accent);
@@ -2101,6 +2102,7 @@ export const profileStyles = `
 			stroke: #4DA2FF;
 			stroke-width: 2;
 			stroke-linecap: round;
+			stroke-linejoin: round;
 			stroke-dasharray: 6 3;
 		}
 		.ns-decay-marker {
@@ -2109,6 +2111,27 @@ export const profileStyles = `
 			stroke-width: 2;
 			filter: drop-shadow(0 0 4px #4DA2FF);
 			transition: cx 0.3s ease, cy 0.3s ease;
+		}
+		.decay-hover-path,
+		.ns-decay-hover-path {
+			fill: none;
+			stroke-width: 2.5;
+			stroke-linecap: round;
+			stroke-linejoin: round;
+			opacity: 0;
+			transition: opacity 0.15s ease;
+		}
+		.decay-hover-path {
+			stroke: var(--accent);
+			filter: drop-shadow(0 0 6px rgba(96, 165, 250, 0.45));
+		}
+		.ns-decay-hover-path {
+			stroke: #4DA2FF;
+			filter: drop-shadow(0 0 6px rgba(77, 162, 255, 0.4));
+		}
+		.premium-graph-container.hovering .decay-hover-path,
+		.premium-graph-container.hovering .ns-decay-hover-path {
+			opacity: 1;
 		}
 		.graph-labels {
 			display: flex;
@@ -2180,6 +2203,12 @@ export const profileStyles = `
 			color: #4DA2FF;
 			opacity: 0.8;
 			font-style: italic;
+		}
+		.premium-hover-time {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			margin-top: 8px;
+			font-family: var(--font-mono, SFMono-Regular, monospace);
 		}
 		.premium-hover-time {
 			font-size: 0.75rem;
