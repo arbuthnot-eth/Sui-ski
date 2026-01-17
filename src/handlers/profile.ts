@@ -4158,7 +4158,7 @@ ${generatePasskeyWalletStyles()}
 		const identityName = document.getElementById('identity-name');
 		const qrToggle = document.getElementById('qr-toggle');
 		let nftImageUrl = null;
-		let showingQr = true;
+		let showingQr = false; // Default to NFT display, QR is fallback
 		let nftDisplayLoaded = false;
 
 		// Tab navigation
@@ -4753,24 +4753,30 @@ ${generatePasskeyWalletStyles()}
 					img.style.width = '100%';
 					img.style.height = '100%';
 					img.style.objectFit = 'cover';
-					img.style.display = 'none'; // Start hidden (QR is default)
+					img.style.display = 'block'; // Show NFT by default
 					identityVisual.appendChild(img);
 
-					// Show the toggle button
+					// Hide QR code and show toggle button
+					if (identityCanvas) {
+						identityCanvas.style.display = 'none';
+					}
 					if (qrToggle) {
 						qrToggle.style.display = 'block';
 					}
 
+					showingQr = false; // NFT is now showing
 					nftDisplayLoaded = true;
 				};
 				img.onerror = () => {
 					console.error('Failed to load NFT image:', nftImageUrl);
-					// Keep QR code as fallback
+					// Show QR code as fallback
+					showIdentityQr();
 					nftDisplayLoaded = true;
 				};
 				img.src = nftImageUrl;
 			} else {
-				// No image available, keep QR code only
+				// No image available, show QR code as fallback
+				showIdentityQr();
 				nftDisplayLoaded = true;
 			}
 		}
@@ -4890,9 +4896,11 @@ ${generatePasskeyWalletStyles()}
 			});
 		}
 
-		// Show QR code by default
-		showIdentityQr();
-		initQR().catch(console.error);
+		// Initialize QR code - show it initially as placeholder until NFT loads
+		initQR().then(() => {
+			// Show QR code initially (will be hidden when NFT loads)
+			showIdentityQr();
+		}).catch(console.error);
 		// Hide toggle button initially (will show when NFT loads)
 		if (qrToggle) qrToggle.style.display = 'none';
 
@@ -6727,6 +6735,11 @@ ${generatePasskeyWalletStyles()}
 					// All pages fetched, render final results
 					renderNFTs();
 					nftsCountEl.textContent = String(allNFTs.length);
+					// If no NFT was loaded, show QR code as fallback
+					if (!nftDisplayLoaded && allNFTs.length === 0) {
+						showIdentityQr();
+						nftDisplayLoaded = true;
+					}
 				}
 			} catch (error) {
 				console.error('Failed to fetch NFTs with struct filter:', error);
@@ -6797,11 +6810,21 @@ ${generatePasskeyWalletStyles()}
 						// All pages fetched, render final results
 						renderNFTs();
 						nftsCountEl.textContent = String(allNFTs.length);
+						// If no NFT was loaded, show QR code as fallback
+						if (!nftDisplayLoaded && allNFTs.length === 0) {
+							showIdentityQr();
+							nftDisplayLoaded = true;
+						}
 					}
 				} catch (fallbackError) {
 					console.error('Fallback method also failed:', fallbackError);
 					renderNFTsError(fallbackError.message || error.message || 'Failed to load NFTs');
 					nftsLoading = false;
+					// Show QR code as fallback if NFT loading failed
+					if (!nftDisplayLoaded) {
+						showIdentityQr();
+						nftDisplayLoaded = true;
+					}
 				}
 			} finally {
 				// Only set loading to false when we're completely done (no more pages)
