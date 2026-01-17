@@ -1892,6 +1892,202 @@ export function generateProfilePage(
 			transform: translateX(4px);
 		}
 
+		/* NFT Details Section */
+		.nft-details-section {
+			margin-top: 32px;
+			padding: 24px;
+			background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.6) 100%);
+			border-radius: 16px;
+			border: 1px solid rgba(96, 165, 250, 0.1);
+			backdrop-filter: blur(10px);
+		}
+		.nft-details-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 24px;
+			padding-bottom: 16px;
+			border-bottom: 1px solid rgba(96, 165, 250, 0.1);
+		}
+		.nft-details-title {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			font-size: 1.5rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.nft-details-title svg {
+			width: 28px;
+			height: 28px;
+			color: var(--accent);
+		}
+		.nft-details-refresh {
+			padding: 8px 16px;
+			background: rgba(96, 165, 250, 0.1);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 8px;
+			color: var(--accent);
+			cursor: pointer;
+			font-size: 0.875rem;
+			font-weight: 600;
+			transition: all 0.2s;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+		.nft-details-refresh:hover {
+			background: rgba(96, 165, 250, 0.2);
+			border-color: rgba(96, 165, 250, 0.4);
+		}
+		.nft-details-refresh:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+		.nft-details-refresh svg {
+			width: 16px;
+			height: 16px;
+		}
+		.nft-details-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+			gap: 20px;
+			margin-bottom: 24px;
+		}
+		.nft-detail-card {
+			background: rgba(15, 23, 42, 0.6);
+			border: 1px solid rgba(96, 165, 250, 0.1);
+			border-radius: 12px;
+			padding: 20px;
+			transition: all 0.3s;
+		}
+		.nft-detail-card:hover {
+			border-color: rgba(96, 165, 250, 0.3);
+			background: rgba(15, 23, 42, 0.8);
+			transform: translateY(-2px);
+			box-shadow: 0 8px 24px rgba(96, 165, 250, 0.1);
+		}
+		.nft-detail-label {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			font-size: 0.75rem;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: var(--text-muted);
+			margin-bottom: 8px;
+		}
+		.nft-detail-label svg {
+			width: 14px;
+			height: 14px;
+			color: var(--accent);
+		}
+		.nft-detail-value {
+			font-size: 1rem;
+			font-weight: 600;
+			color: var(--text);
+			word-break: break-all;
+			line-height: 1.5;
+		}
+		.nft-detail-value.mono {
+			font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+			font-size: 0.875rem;
+		}
+		.nft-detail-value.link {
+			color: var(--accent);
+			text-decoration: none;
+			cursor: pointer;
+			transition: color 0.2s;
+		}
+		.nft-detail-value.link:hover {
+			color: var(--accent-light);
+			text-decoration: underline;
+		}
+		.nft-detail-value.badge {
+			display: inline-block;
+			padding: 4px 12px;
+			background: rgba(96, 165, 250, 0.15);
+			color: var(--accent);
+			border-radius: 6px;
+			font-size: 0.875rem;
+			font-weight: 600;
+		}
+		.nft-details-loading {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			padding: 48px 24px;
+			color: var(--text-muted);
+		}
+		.nft-details-loading .loading {
+			margin-bottom: 16px;
+		}
+		.nft-details-error {
+			padding: 24px;
+			background: rgba(239, 68, 68, 0.1);
+			border: 1px solid rgba(239, 68, 68, 0.2);
+			border-radius: 12px;
+			color: #fca5a5;
+			text-align: center;
+		}
+		.nft-details-raw {
+			margin-top: 24px;
+			padding: 20px;
+			background: rgba(0, 0, 0, 0.3);
+			border: 1px solid rgba(96, 165, 250, 0.1);
+			border-radius: 12px;
+		}
+		.nft-details-raw-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 16px;
+		}
+		.nft-details-raw-title {
+			font-size: 0.875rem;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: var(--text-muted);
+		}
+		.nft-details-raw-toggle {
+			padding: 4px 12px;
+			background: rgba(96, 165, 250, 0.1);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 6px;
+			color: var(--accent);
+			cursor: pointer;
+			font-size: 0.75rem;
+			font-weight: 600;
+			transition: all 0.2s;
+		}
+		.nft-details-raw-toggle:hover {
+			background: rgba(96, 165, 250, 0.2);
+		}
+		.nft-details-raw-content {
+			display: none;
+			font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+			font-size: 0.75rem;
+			line-height: 1.6;
+			color: var(--text-muted);
+			background: rgba(0, 0, 0, 0.4);
+			padding: 16px;
+			border-radius: 8px;
+			overflow-x: auto;
+			max-height: 400px;
+			overflow-y: auto;
+		}
+		.nft-details-raw-content.active {
+			display: block;
+		}
+		.nft-details-raw-content pre {
+			margin: 0;
+			white-space: pre-wrap;
+			word-wrap: break-word;
+		}
+
 		/* Messaging Section (Separate Tab - Legacy) */
 		.messaging-section {
 			padding: 8px;
@@ -3718,6 +3914,40 @@ ${generatePasskeyWalletStyles()}
 				</div>
 			</div>
 					`
+					: ''
+			}
+
+			${
+				record.nftId
+					? `
+			<!-- NFT Details Section -->
+			<div class="nft-details-section" id="nft-details-section">
+				<div class="nft-details-header">
+					<div class="nft-details-title">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+							<circle cx="8.5" cy="8.5" r="1.5"></circle>
+							<polyline points="21 15 16 10 5 21"></polyline>
+						</svg>
+						<span>NFT Object Details</span>
+					</div>
+					<button class="nft-details-refresh" id="nft-details-refresh" title="Refresh NFT data">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="23 4 23 10 17 10"></polyline>
+							<polyline points="1 20 1 14 7 14"></polyline>
+							<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+						</svg>
+						Refresh
+					</button>
+				</div>
+				<div id="nft-details-content">
+					<div class="nft-details-loading">
+						<span class="loading"></span>
+						<span>Loading comprehensive NFT data...</span>
+					</div>
+				</div>
+			</div>
+			`
 					: ''
 			}
 
@@ -6611,28 +6841,41 @@ ${generatePasskeyWalletStyles()}
 				// Try to get domain from content fields
 				if (nftData?.content?.dataType === 'moveObject' && nftData.content.fields) {
 					const fields = nftData.content.fields;
-					// Check various possible field names for domain
-					if (fields.domain) {
+					// Try domain_name field first (most direct)
+					if (fields.domain_name) {
+						return String(fields.domain_name);
+					}
+					// Try domain object with labels array
+					if (fields.domain && typeof fields.domain === 'object') {
+						const domainObj = fields.domain;
+						const labels = domainObj.fields?.labels || domainObj.labels;
+						if (Array.isArray(labels) && labels.length > 0) {
+							// Reverse labels and join with dots (e.g., ["sui", "agent"] -> "agent.sui")
+							return [...labels].reverse().join('.');
+						}
+					}
+					// Check various other possible field names for domain
+					if (fields.domain && typeof fields.domain === 'string') {
 						return fields.domain;
 					}
 					if (fields.name) {
-						return fields.name;
+						return String(fields.name);
 					}
 					// Check nested structures
 					if (fields.registration && typeof fields.registration === 'object') {
 						if (fields.registration.fields?.domain) {
-							return fields.registration.fields.domain;
+							return String(fields.registration.fields.domain);
 						}
 						if (fields.registration.fields?.name) {
-							return fields.registration.fields.name;
+							return String(fields.registration.fields.name);
 						}
 					}
 				}
 				// Try display data
 				if (nftData?.display?.data) {
 					const display = nftData.display.data;
-					if (display.name) return display.name;
-					if (display.domain) return display.domain;
+					if (display.name) return String(display.name);
+					if (display.domain) return String(display.domain);
 				}
 			} catch (e) {
 				console.error('Error extracting domain:', e);
@@ -7355,6 +7598,280 @@ ${generatePasskeyWalletStyles()}
 
 		// Initialize social edit visibility
 		updateSocialEditVisibility();
+
+		// ========== NFT DETAILS SECTION ==========
+		const nftDetailsSection = document.getElementById('nft-details-section');
+		const nftDetailsContent = document.getElementById('nft-details-content');
+		const nftDetailsRefresh = document.getElementById('nft-details-refresh');
+
+		async function fetchNFTDetails() {
+			if (!NFT_ID || !nftDetailsContent) return;
+
+			try {
+				nftDetailsContent.innerHTML = \`
+					<div class="nft-details-loading">
+						<span class="loading"></span>
+						<span>Loading comprehensive NFT data...</span>
+					</div>
+				\`;
+
+				if (nftDetailsRefresh) nftDetailsRefresh.disabled = true;
+
+				const response = await fetch(\`/api/nft-details?objectId=\${encodeURIComponent(NFT_ID)}\`);
+				if (!response.ok) {
+					throw new Error(\`HTTP \${response.status}: \${response.statusText}\`);
+				}
+
+				const data = await response.json();
+
+				// Format the data for display
+				const domain = data.content?.domain_name || 
+					(data.content?.domain?.fields?.labels ? 
+						[...data.content.domain.fields.labels].reverse().join('.') : 
+						data.display?.name || 'Unknown');
+				const expiration = data.content?.expiration_timestamp_ms ? 
+					new Date(Number(data.content.expiration_timestamp_ms)).toISOString() : 
+					'Not set';
+				const expirationTimestamp = data.content?.expiration_timestamp_ms || null;
+				const imageUrl = data.display?.image_url || data.content?.image_url || null;
+				const owner = data.owner?.AddressOwner || data.owner?.ObjectOwner || 
+					(data.owner?.Shared ? 'Shared' : data.owner?.Immutable ? 'Immutable' : 'Unknown');
+				const objectType = data.objectType || 'Unknown';
+				const version = data.version || 'Unknown';
+				const digest = data.digest || 'Unknown';
+				const previousTx = data.previousTransaction || null;
+				const description = data.display?.description || null;
+				const link = data.display?.link || null;
+				const projectUrl = data.display?.project_url || null;
+
+				// Calculate days until expiration
+				let expirationInfo = '';
+				if (expirationTimestamp) {
+					const expDate = new Date(Number(expirationTimestamp));
+					const now = new Date();
+					const daysLeft = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+					if (daysLeft > 0) {
+						expirationInfo = \` (\${daysLeft} day\${daysLeft !== 1 ? 's' : ''} remaining)\`;
+					} else {
+						expirationInfo = ' (Expired)';
+					}
+				}
+
+				nftDetailsContent.innerHTML = \`
+					<div class="nft-details-grid">
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+								</svg>
+								Domain Name
+							</div>
+							<div class="nft-detail-value">\${escapeHtmlJs(domain)}</div>
+						</div>
+
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="12" r="10"></circle>
+									<polyline points="12 6 12 12 16 14"></polyline>
+								</svg>
+								Expiration
+							</div>
+							<div class="nft-detail-value">
+								\${escapeHtmlJs(expiration.split('T')[0])}\${expirationInfo ? '<span style="color: var(--accent); margin-left: 8px;">' + escapeHtmlJs(expirationInfo) + '</span>' : ''}
+							</div>
+						</div>
+
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+									<circle cx="12" cy="7" r="4"></circle>
+								</svg>
+								Owner
+							</div>
+							<div class="nft-detail-value mono">
+								\${owner.startsWith('0x') ? 
+									\`<a href="\${EXPLORER_BASE}/account/\${owner}" target="_blank" class="link">\${owner.slice(0, 8)}...\${owner.slice(-6)}</a>\` : 
+									escapeHtmlJs(owner)}
+							</div>
+						</div>
+
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+									<circle cx="8.5" cy="8.5" r="1.5"></circle>
+									<polyline points="21 15 16 10 5 21"></polyline>
+								</svg>
+								Object ID
+							</div>
+							<div class="nft-detail-value mono">
+								<a href="\${NFT_EXPLORER_URL}" target="_blank" class="link">\${NFT_ID.slice(0, 10)}...\${NFT_ID.slice(-8)}</a>
+							</div>
+						</div>
+
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="9 11 12 14 22 4"></polyline>
+									<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+								</svg>
+								Version
+							</div>
+							<div class="nft-detail-value">\${escapeHtmlJs(String(version))}</div>
+						</div>
+
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+									<polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+									<line x1="12" y1="22.08" x2="12" y2="12"></line>
+								</svg>
+								Digest
+							</div>
+							<div class="nft-detail-value mono">\${escapeHtmlJs(digest)}</div>
+						</div>
+
+						\${previousTx ? \`
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="9 18 15 12 9 6"></polyline>
+								</svg>
+								Previous Transaction
+							</div>
+							<div class="nft-detail-value mono">
+								<a href="\${EXPLORER_BASE}/tx/\${previousTx}" target="_blank" class="link">\${previousTx.slice(0, 10)}...\${previousTx.slice(-8)}</a>
+							</div>
+						</div>
+						\` : ''}
+
+						\${description ? \`
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+									<polyline points="14 2 14 8 20 8"></polyline>
+									<line x1="16" y1="13" x2="8" y2="13"></line>
+									<line x1="16" y1="17" x2="8" y2="17"></line>
+									<polyline points="10 9 9 9 8 9"></polyline>
+								</svg>
+								Description
+							</div>
+							<div class="nft-detail-value">\${escapeHtmlJs(description)}</div>
+						</div>
+						\` : ''}
+
+						\${link ? \`
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+									<polyline points="15 3 21 3 21 9"></polyline>
+									<line x1="10" y1="14" x2="21" y2="3"></line>
+								</svg>
+								Link
+							</div>
+							<div class="nft-detail-value">
+								<a href="\${escapeHtmlJs(link)}" target="_blank" class="link" rel="noopener noreferrer">\${escapeHtmlJs(link)}</a>
+							</div>
+						</div>
+						\` : ''}
+
+						\${projectUrl ? \`
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="12" r="10"></circle>
+									<line x1="2" y1="12" x2="22" y2="12"></line>
+									<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+								</svg>
+								Project URL
+							</div>
+							<div class="nft-detail-value">
+								<a href="\${escapeHtmlJs(projectUrl)}" target="_blank" class="link" rel="noopener noreferrer">\${escapeHtmlJs(projectUrl)}</a>
+							</div>
+						</div>
+						\` : ''}
+
+						\${imageUrl ? \`
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+									<circle cx="8.5" cy="8.5" r="1.5"></circle>
+									<polyline points="21 15 16 10 5 21"></polyline>
+								</svg>
+								Image URL
+							</div>
+							<div class="nft-detail-value">
+								<a href="\${escapeHtmlJs(imageUrl)}" target="_blank" class="link" rel="noopener noreferrer">\${escapeHtmlJs(imageUrl.length > 50 ? imageUrl.slice(0, 50) + '...' : imageUrl)}</a>
+							</div>
+						</div>
+						\` : ''}
+
+						<div class="nft-detail-card">
+							<div class="nft-detail-label">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+								</svg>
+								Object Type
+							</div>
+							<div class="nft-detail-value mono" style="font-size: 0.75rem;">\${escapeHtmlJs(objectType)}</div>
+						</div>
+					</div>
+
+					<div class="nft-details-raw">
+						<div class="nft-details-raw-header">
+							<div class="nft-details-raw-title">Raw Object Data</div>
+							<button class="nft-details-raw-toggle" id="nft-details-raw-toggle">Show</button>
+						</div>
+						<div class="nft-details-raw-content" id="nft-details-raw-content">
+							<pre>\${escapeHtmlJs(JSON.stringify(data, null, 2))}</pre>
+						</div>
+					</div>
+				\`;
+
+				// Add toggle for raw data
+				const rawToggle = document.getElementById('nft-details-raw-toggle');
+				const rawContent = document.getElementById('nft-details-raw-content');
+				if (rawToggle && rawContent) {
+					rawToggle.addEventListener('click', () => {
+						const isActive = rawContent.classList.contains('active');
+						if (isActive) {
+							rawContent.classList.remove('active');
+							rawToggle.textContent = 'Show';
+						} else {
+							rawContent.classList.add('active');
+							rawToggle.textContent = 'Hide';
+						}
+					});
+				}
+
+			} catch (error) {
+				console.error('Failed to fetch NFT details:', error);
+				nftDetailsContent.innerHTML = \`
+					<div class="nft-details-error">
+						<p>Failed to load NFT details: \${escapeHtmlJs(error.message || 'Unknown error')}</p>
+						<button class="nft-details-refresh" onclick="fetchNFTDetails()" style="margin-top: 16px;">Try Again</button>
+					</div>
+				\`;
+			} finally {
+				if (nftDetailsRefresh) nftDetailsRefresh.disabled = false;
+			}
+		}
+
+		// Load NFT details on page load if NFT ID exists
+		if (NFT_ID && nftDetailsSection) {
+			fetchNFTDetails();
+		}
+
+		// Refresh button
+		if (nftDetailsRefresh) {
+			nftDetailsRefresh.addEventListener('click', fetchNFTDetails);
+		}
 
 		${generatePasskeyWalletScript(env)}
 	</script>

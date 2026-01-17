@@ -240,51 +240,20 @@ export async function fetchTransactionData(
 
 /**
  * Fetch object data (for SuiNS NFT details)
+ * @deprecated Use fetchSuiNSObjectData from utils/suins-object.ts instead
  */
 async function fetchObjectData(
 	objectId: string,
 	env: Env,
 ): Promise<{ expirationMs?: string; imageUrl?: string } | null> {
-	try {
-		const response = await fetch(env.SUI_RPC_URL, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				jsonrpc: '2.0',
-				id: 1,
-				method: 'sui_getObject',
-				params: [
-					objectId,
-					{
-						showContent: true,
-						showDisplay: true,
-					},
-				],
-			}),
-		})
+	const { fetchSuiNSObjectData, extractExpirationFromObjectData, extractImageUrlFromObjectData } =
+		await import('../utils/suins-object')
+	const objectData = await fetchSuiNSObjectData(objectId, env)
+	if (!objectData) return null
 
-		if (!response.ok) return null
-
-		const data = (await response.json()) as {
-			result?: {
-				data?: {
-					content?: {
-						fields?: {
-							expiration_timestamp_ms?: string
-							image_url?: string
-						}
-					}
-				}
-			}
-		}
-		const fields = data.result?.data?.content?.fields
-
-		return {
-			expirationMs: fields?.expiration_timestamp_ms,
-			imageUrl: fields?.image_url,
-		}
-	} catch {
-		return null
+	return {
+		expirationMs: extractExpirationFromObjectData(objectData) || undefined,
+		imageUrl: extractImageUrlFromObjectData(objectData) || undefined,
 	}
 }
 

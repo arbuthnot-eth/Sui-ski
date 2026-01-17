@@ -10,6 +10,7 @@ import { handleTransaction } from './handlers/transaction'
 import { handleUploadPage } from './handlers/upload'
 import { handleRegistrationSubmission } from './handlers/register'
 import { handleViewsRequest } from './handlers/views'
+import { fetchSuiNSObjectData } from './utils/suins-object'
 import { resolveContent, resolveDirectContent, WALRUS_AGGREGATORS } from './resolvers/content'
 import { getMVRDocumentationUrl, getPackageExplorerUrl, resolveMVRPackage } from './resolvers/mvr'
 import { handleRPCRequest } from './resolvers/rpc'
@@ -60,6 +61,11 @@ export default {
 		// View tracking API
 		if (url.pathname.startsWith('/api/views')) {
 			return handleViewsRequest(request, env)
+		}
+
+		// NFT details API
+		if (url.pathname.startsWith('/api/nft-details')) {
+			return handleNFTDetailsRequest(request, env)
 		}
 
 		// MVR package management UI
@@ -819,5 +825,35 @@ async function handleUploadProxy(request: Request, env: Env): Promise<Response> 
 				'Access-Control-Allow-Origin': '*',
 			},
 		})
+	}
+}
+
+/**
+ * Handle NFT details API requests
+ */
+async function handleNFTDetailsRequest(request: Request, env: Env): Promise<Response> {
+	try {
+		const url = new URL(request.url)
+		const objectId = url.searchParams.get('objectId')
+
+		if (!objectId) {
+			return jsonResponse({ error: 'objectId parameter is required' }, 400)
+		}
+
+		// Validate object ID format
+		if (!/^0x[a-fA-F0-9]{64}$/.test(objectId)) {
+			return jsonResponse({ error: 'Invalid object ID format' }, 400)
+		}
+
+		const objectData = await fetchSuiNSObjectData(objectId, env)
+
+		if (!objectData) {
+			return jsonResponse({ error: 'Object not found or failed to fetch' }, 404)
+		}
+
+		return jsonResponse(objectData)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch NFT details'
+		return jsonResponse({ error: message }, 500)
 	}
 }
