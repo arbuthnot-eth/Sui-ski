@@ -104,23 +104,43 @@ export async function handleSuinsManagerRequest(request: Request, env: Env): Pro
 		}
 	}
 
-	// Validate coupon code
-	if (path === '/validate-coupon' && request.method === 'POST') {
+	// Request gas sponsorship for a transaction
+	if (path === '/sponsor-tx' && request.method === 'POST') {
 		try {
-			const body = await request.json() as { code: string; domainLength: number; years: number }
-			const { code, domainLength, years } = body
-			if (!code) {
-				return errorResponse('Coupon code required', 'INVALID_REQUEST', 400)
+			const body = await request.json() as {
+				txBytes: string
+				sender: string
+				operation: 'register' | 'renew' | 'subdomain'
 			}
-			// TODO: Validate coupon on-chain
+			const { txBytes, sender, operation } = body
+			if (!txBytes || !sender) {
+				return errorResponse('Transaction bytes and sender required', 'INVALID_REQUEST', 400)
+			}
+			// TODO: Implement gas sponsorship
+			// 1. Verify the transaction is a valid SuiNS operation
+			// 2. Check sponsorship budget/limits
+			// 3. Sign the transaction as gas sponsor
+			// 4. Return sponsored transaction bytes
 			return jsonResponse({
-				valid: false,
-				discount: 0,
-				message: 'Coupon validation not yet implemented',
+				sponsored: false,
+				message: 'Gas sponsorship not yet configured. Contact admin to enable.',
+				sponsorAddress: null,
 			})
 		} catch (error) {
-			return errorResponse('Failed to validate coupon', 'COUPON_ERROR', 500)
+			return errorResponse('Failed to sponsor transaction', 'SPONSOR_ERROR', 500)
 		}
+	}
+
+	// Get sponsorship status/limits
+	if (path === '/sponsor-status') {
+		return jsonResponse({
+			enabled: false,
+			sponsorAddress: null,
+			dailyBudget: 0,
+			remainingBudget: 0,
+			eligibleOperations: ['register', 'renew', 'subdomain'],
+			message: 'Gas sponsorship is not yet configured',
+		})
 	}
 
 	// Get subdomains for a name
@@ -629,13 +649,11 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 				</svg>
 				Subdomains
 			</button>
-			<button class="tab" data-tab="coupons">
+			<button class="tab" data-tab="sponsor">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6"/>
-					<polyline points="12 3 12 15"/>
-					<path d="M18 9l-6-6-6 6"/>
+					<path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
 				</svg>
-				Coupons
+				Gas Sponsor
 			</button>
 			<button class="tab" data-tab="discounts">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

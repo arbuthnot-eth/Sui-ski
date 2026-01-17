@@ -1097,12 +1097,12 @@ export function generateProfilePage(
 
 			const days = progress * GRACE_PERIOD_DAYS;
 			const value = getDecayValue(progress);
-			premiumSliderValue.textContent = `${days.toFixed(2)}d → ${numberFormatter.format(
+			premiumSliderValue.textContent = days.toFixed(2) + 'd → ' + numberFormatter.format(
 				Math.max(0, Math.round(value)),
-			)} SUI`;
+			) + ' SUI';
 			const logValue = value > 0 ? Math.log10(value) : -Infinity;
 			premiumSliderLog.textContent =
-				logValue === -Infinity ? 'log₁₀ = -∞' : `log₁₀ = ${logValue.toFixed(2)}`;
+				logValue === -Infinity ? 'log₁₀ = -∞' : 'log₁₀ = ' + logValue.toFixed(2);
 		}
 
 		function syncPremiumSlider(progress) {
@@ -1149,9 +1149,9 @@ export function generateProfilePage(
 
 			if (progressNeeded > 1) {
 				const daysNeeded = progressNeeded * GRACE_PERIOD_DAYS;
-				premiumTargetResult.textContent = `The premium will not reach this target within the grace window (needs ~${daysNeeded.toFixed(
+				premiumTargetResult.textContent = 'The premium will not reach this target within the grace window (needs ~' + daysNeeded.toFixed(
 					1,
-				)} days).`;
+				) + ' days).';
 				return;
 			}
 
@@ -1162,7 +1162,7 @@ export function generateProfilePage(
 			const projectedSui = Math.max(1, Math.round(getDecayValue(progressNeeded)));
 			const projectedUsd = suiPriceUsd ? usdFormatter.format(projectedSui * suiPriceUsd) : null;
 
-			const usdLine = projectedUsd ? ` (~$${projectedUsd})` : '';
+			const usdLine = projectedUsd ? ' (~$' + projectedUsd + ')' : '';
 			const modeLine = usingUsd
 				? ''
 				: '<br><small>No USD price available; interpreted value as SUI.</small>';
@@ -1173,9 +1173,9 @@ export function generateProfilePage(
 				hour: 'numeric',
 				minute: '2-digit',
 			});
-			const baseLine = `≈ ${daysNeeded.toFixed(1)} days after expiry (<strong>${dateLabel}</strong>)`;
-			const premiumLine = `Projected premium: ${numberFormatter.format(projectedSui)} SUI${usdLine}`;
-			premiumTargetResult.innerHTML = `${baseLine}<br>${premiumLine}${modeLine}`;
+			const baseLine = '≈ ' + daysNeeded.toFixed(1) + ' days after expiry (<strong>' + dateLabel + '</strong>)';
+			const premiumLine = 'Projected premium: ' + numberFormatter.format(projectedSui) + ' SUI' + usdLine;
+			premiumTargetResult.innerHTML = baseLine + '<br>' + premiumLine + modeLine;
 		}
 
 		// DOM Elements
