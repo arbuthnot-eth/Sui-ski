@@ -19,7 +19,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>${escapeHtml(cleanName)}.sui available | sui.ski</title>
+	<title>\${escapeHtml(cleanName)}.sui available | sui.ski</title>
 	<style>
 		:root {
 			--bg: #05060c;
@@ -119,20 +119,82 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			list-style: none;
 		}
 		.bid-list li {
-			display: grid;
-			grid-template-columns: 2fr 1fr 1fr;
-			gap: 12px;
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
 			padding: 12px 16px;
 			border-bottom: 1px solid rgba(255,255,255,0.04);
 			font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 			font-size: 0.85rem;
 		}
 		.bid-list li:last-child { border-bottom: none; }
+		.bid-main {
+			display: grid;
+			grid-template-columns: 2fr 1fr 1fr;
+			gap: 12px;
+			align-items: center;
+		}
+		.bid-meta {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+			font-size: 0.75rem;
+			color: var(--muted);
+		}
+		.status-chip {
+			padding: 4px 10px;
+			border-radius: 999px;
+			background: rgba(96,165,250,0.15);
+			border: 1px solid rgba(96,165,250,0.25);
+			color: #c7d2fe;
+			font-family: 'Inter', system-ui, -apple-system, sans-serif;
+		}
+		.status-chip.auto {
+			background: rgba(16,185,129,0.15);
+			border-color: rgba(16,185,129,0.35);
+			color: var(--success);
+		}
+		.status-chip.submitted {
+			background: rgba(59,130,246,0.18);
+			border-color: rgba(59,130,246,0.35);
+			color: #bfdbfe;
+		}
+		.status-chip.failed {
+			background: rgba(248,113,113,0.15);
+			border-color: rgba(248,113,113,0.3);
+			color: var(--error);
+		}
+		.digest-chip {
+			background: rgba(255,255,255,0.04);
+			border-radius: 8px;
+			padding: 2px 8px;
+			font-size: 0.75rem;
+		}
 		.form {
 			display: flex;
 			flex-direction: column;
 			gap: 16px;
 			margin-top: 10px;
+		}
+		.attach-toggle {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			font-size: 0.85rem;
+			color: var(--muted);
+		}
+		.attach-toggle input {
+			width: auto;
+			accent-color: var(--accent);
+		}
+		.offline-attachment {
+			display: none;
+			flex-direction: column;
+			gap: 12px;
+			border: 1px dashed var(--border);
+			border-radius: 12px;
+			padding: 16px;
+			background: rgba(255,255,255,0.02);
 		}
 		label {
 			font-size: 0.8rem;
@@ -200,10 +262,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 		@media (max-width: 640px) {
 			.card { padding: 20px; }
-			.bid-list li {
-				grid-template-columns: 1fr;
-				font-size: 0.8rem;
-			}
+			.bid-main { grid-template-columns: 1fr; }
+			.bid-list li { font-size: 0.8rem; }
 		}
 	</style>
 </head>
@@ -212,10 +272,10 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		<div class="card">
 			<div class="header">
 				<div class="badge ${isRegisterable ? 'success' : 'warning'}">${isRegisterable ? 'Name available for registration' : 'Minimum length is 3 characters'}</div>
-				<h1>${escapeHtml(cleanName)}<span>.sui</span></h1>
+				<h1>\${escapeHtml(cleanName)}<span>.sui</span></h1>
 				<p style="color: var(--muted); font-size: 0.95rem;">Network: ${escapeHtml(network)}</p>
 			</div>
-			<p style="color: var(--muted); text-align: center;">Queue a post-expiration bid or relay your own signed SuiNS registration transaction without exposing your key material.</p>
+			<p style="color: var(--muted); text-align: center;">Queue a bid, attach offline-signed registrations for automatic relay, or broadcast your own transaction without exposing keys.</p>
 		</div>
 
 		<div class="card" id="queue-card">
@@ -235,6 +295,10 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				<div class="stat">
 					<div class="stat-label">Earliest Execute</div>
 					<div class="stat-value" id="stat-soon">—</div>
+				</div>
+				<div class="stat">
+					<div class="stat-label">Auto Relays</div>
+					<div class="stat-value" id="stat-auto">0</div>
 				</div>
 			</div>
 			<div class="bid-list" id="bid-list">
@@ -257,10 +321,25 @@ export function generateRegistrationPage(name: string, env: Env): string {
 						<input id="execute-input" type="datetime-local" value="${defaultExec}" />
 					</div>
 				</div>
+				<label class="attach-toggle">
+					<input type="checkbox" id="attach-offline-toggle" />
+					<span>Attach offline-signed registration transaction for automatic relay</span>
+				</label>
+				<div class="offline-attachment" id="offline-attachment">
+					<div>
+						<label for="offline-tx-bytes">Transaction Bytes (base64)</label>
+						<textarea id="offline-tx-bytes" placeholder="AAACAA..."></textarea>
+					</div>
+					<div>
+						<label for="offline-tx-signatures">Signatures (newline or comma separated)</label>
+						<textarea id="offline-tx-signatures" placeholder="AAQw..."></textarea>
+					</div>
+					<p class="instructions" style="margin-bottom:0;">Encrypted at rest and relayed automatically once the execution window opens.</p>
+				</div>
 				<button class="primary-btn" id="queue-submit">Queue Bid</button>
 				<div class="status-line" id="queue-status"></div>
 			</div>
-			<p class="instructions" style="margin-top:8px;">Queued bids are stored off-chain until the name expires. The highest bid at execution time is expected to broadcast first.</p>
+			<p class="instructions" style="margin-top:8px;">Queued bids are stored off-chain until the name expires. Attach offline bytes to have sui.ski relay your transaction automatically when the window opens.</p>
 		</div>
 
 		<div class="card">
@@ -268,7 +347,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"></path></svg>
 				Offline Registration Relay
 			</div>
-			<p class="instructions">Bring your own signed Sui transaction block (for example, produced via <code>sui client</code> or an air-gapped wallet). sui.ski forwards the signed payload to the network without ever touching your keys.</p>
+			<p class="instructions">Bring your own signed Sui transaction block (for example, produced via <code>sui client</code> or an air-gapped wallet). sui.ski forwards the signed payload immediately—use the queue above if you want us to hold it until the grace period.</p>
 			<ol class="instructions">
 				<li>Prepare a SuiNS registration transaction offline (choose package, calculate price, build tx bytes).</li>
 				<li>Sign the transaction bytes with every required signer.</li>
@@ -300,17 +379,28 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		const statCount = document.getElementById('stat-count');
 		const statHigh = document.getElementById('stat-high');
 		const statSoon = document.getElementById('stat-soon');
+		const statAuto = document.getElementById('stat-auto');
 		const queueStatus = document.getElementById('queue-status');
 		const queueSubmit = document.getElementById('queue-submit');
 		const bidderInput = document.getElementById('bidder-input');
 		const amountInput = document.getElementById('amount-input');
 		const executeInput = document.getElementById('execute-input');
+		const attachToggle = document.getElementById('attach-offline-toggle');
+		const offlineAttachment = document.getElementById('offline-attachment');
+		const offlineTxBytesInput = document.getElementById('offline-tx-bytes');
+		const offlineTxSignaturesInput = document.getElementById('offline-tx-signatures');
 
 		const txStatus = document.getElementById('tx-status');
 		const txResult = document.getElementById('tx-result');
 		const txSubmit = document.getElementById('tx-submit');
 		const txBytesInput = document.getElementById('tx-bytes');
 		const txSignaturesInput = document.getElementById('tx-signatures');
+
+		if (attachToggle && offlineAttachment) {
+			attachToggle.addEventListener('change', () => {
+				offlineAttachment.style.display = attachToggle.checked ? 'flex' : 'none';
+			});
+		}
 
 		function setQueueStatus(message, type = 'info') {
 			queueStatus.textContent = message || '';
@@ -341,6 +431,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			if (bids.length === 0) {
 				statHigh.textContent = '0';
 				statSoon.textContent = '—';
+				if (statAuto) statAuto.textContent = '0';
 				return;
 			}
 			const highest = bids.reduce((max, bid) => Math.max(max, Number(bid.amount) || 0), 0);
@@ -350,6 +441,16 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				return when && when < min ? when : min;
 			}, Number.MAX_SAFE_INTEGER);
 			statSoon.textContent = soonest === Number.MAX_SAFE_INTEGER ? '—' : formatDate(soonest);
+			if (statAuto) {
+				const autoCount = bids.filter(bid => bid.autoRelay).length;
+				statAuto.textContent = String(autoCount);
+			}
+		}
+
+		const HTML_ESCAPE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', ''': '&#39;' };
+
+		function escapeHtml(value) {
+			return String(value ?? '').replace(/[&<>\"']/g, (char) => HTML_ESCAPE[char] || char);
 		}
 
 		function renderBidList(bids) {
@@ -362,10 +463,33 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				.sort((a, b) => Number(b.amount) - Number(a.amount))
 				.slice(0, 10)
 				.map((bid) => {
-					const shortAddr = String(bid.bidder).slice(0, 8) + '…' + String(bid.bidder).slice(-4);
+					const shortAddr = formatBidder(bid.bidder);
 					const amt = Number(bid.amount).toFixed(2);
 					const eta = formatDate(Number(bid.executeAt));
-					return \`<li><span>\${shortAddr}</span><span>\${amt} SUI</span><span>\${eta}</span></li>\`;
+					const chips = [];
+					if (bid.autoRelay) {
+						chips.push('<span class=\"status-chip auto\">Auto Relay</span>');
+					}
+					const statusLabel = formatBidStatusLabel(bid);
+					if (statusLabel) {
+						const statusClass = (bid.status || '').toLowerCase();
+						chips.push('<span class=\"status-chip ' + statusClass + '\">' + escapeHtml(statusLabel) + '</span>');
+					}
+					if (bid.resultDigest) {
+						chips.push('<span class=\"digest-chip\">' + escapeHtml(shortDigest(bid.resultDigest)) + '</span>');
+					}
+					if (bid.lastError && bid.status === 'failed') {
+						chips.push('<span class=\"status-chip failed\">' + escapeHtml(limitText(bid.lastError, 40)) + '</span>');
+					}
+					const metaRow = chips.length ? '<div class=\"bid-meta\">' + chips.join('') + '</div>' : '';
+					return `<li>
+						<div class=\"bid-main\">
+							<span>\\${escapeHtml(shortAddr)}</span>
+							<span>\\${escapeHtml(amt)} SUI</span>
+							<span>\\${escapeHtml(eta)}</span>
+						</div>
+						${metaRow}
+					</li>`;
 				})
 				.join('');
 			bidListEl.innerHTML = '<ul>' + items + '</ul>';
@@ -379,6 +503,36 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			} catch {
 				return '—';
 			}
+		}
+
+		function formatBidder(value) {
+			const str = String(value || '');
+			return str.length > 12 ? str.slice(0, 8) + '…' + str.slice(-4) : str;
+		}
+
+		function formatBidStatusLabel(bid) {
+			switch (bid.status) {
+				case 'submitting':
+					return 'Relaying…';
+				case 'submitted':
+					return 'Submitted';
+				case 'failed':
+					return 'Retry soon';
+				case 'queued':
+					return bid.autoRelay ? 'Auto-ready' : 'Queued';
+				default:
+					return bid.autoRelay ? 'Auto-ready' : '';
+			}
+		}
+
+		function shortDigest(value) {
+			const str = String(value || '');
+			return str.length > 12 ? str.slice(0, 6) + '…' + str.slice(-4) : str;
+		}
+
+		function limitText(value, max) {
+			const str = String(value || '');
+			return str.length <= max ? str : str.slice(0, max - 1) + '…';
 		}
 
 		function parseExecuteAt(inputValue) {
@@ -410,20 +564,48 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				return;
 			}
 
+			let txBytes = '';
+			let txSignatures = [];
+			if (attachToggle?.checked) {
+				txBytes = offlineTxBytesInput?.value.trim() || '';
+				txSignatures = (offlineTxSignaturesInput?.value || '')
+					.split(/[,\\n]+/)
+					.map((entry) => entry.trim())
+					.filter(Boolean);
+				if (!txBytes) {
+					setQueueStatus('Provide transaction bytes or disable the attachment toggle.', 'error');
+					return;
+				}
+				if (txSignatures.length === 0) {
+					setQueueStatus('Provide signatures for the offline attachment.', 'error');
+					return;
+				}
+			}
+
 			queueSubmit.disabled = true;
 			setQueueStatus('Submitting bid...', 'info');
 
 			try {
+				const payload = { name: NAME, bidder, amount, executeAt };
+				if (txBytes) payload.txBytes = txBytes;
+				if (txSignatures.length) payload.signatures = txSignatures;
+
 				const res = await fetch('/api/bids', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ name: NAME, bidder, amount, executeAt }),
+					body: JSON.stringify(payload),
 				});
 				if (!res.ok) {
 					const data = await res.json().catch(() => ({}));
 					throw new Error(data.error || 'Queue failed');
 				}
 				setQueueStatus('Bid queued successfully.', 'success');
+				if (attachToggle) {
+					attachToggle.checked = false;
+					if (offlineAttachment) offlineAttachment.style.display = 'none';
+				}
+				if (offlineTxBytesInput) offlineTxBytesInput.value = '';
+				if (offlineTxSignaturesInput) offlineTxSignaturesInput.value = '';
 				await loadBids();
 			} catch (error) {
 				setQueueStatus(error.message || 'Failed to queue bid.', 'error');

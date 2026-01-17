@@ -17,6 +17,8 @@ interface QueuedBid {
 	resultDigest?: string
 }
 
+type PublicBid = Omit<QueuedBid, 'txBytes' | 'signatures'>
+
 /**
  * Handle bid queue API requests
  * POST /api/bids - Create a new bid
@@ -135,7 +137,7 @@ async function handleCreateBid(
 		})
 	}
 
-	return jsonResponse({ success: true, bid }, 201, corsHeaders)
+	return jsonResponse({ success: true, bid: toPublicBid(bid) }, 201, corsHeaders)
 }
 
 /**
@@ -152,14 +154,14 @@ async function handleGetBids(
 
 	// If bidder specified, return just their bid
 	if (bidder) {
-		const bidKey = `bid:${cleanName}:${bidder}`
+		const bidKey = buildBidKey(cleanName, bidder)
 		const bidData = await env.CACHE.get(bidKey)
 
 		if (!bidData) {
 			return jsonResponse({ bid: null }, 200, corsHeaders)
 		}
 
-		return jsonResponse({ bid: JSON.parse(bidData) }, 200, corsHeaders)
+		return jsonResponse({ bid: toPublicBid(JSON.parse(bidData)) }, 200, corsHeaders)
 	}
 
 	// Otherwise return all bids for this name
@@ -200,7 +202,8 @@ async function handleGetBids(
 	// Sort by amount descending (highest bid first)
 	bids.sort((a, b) => b.amount - a.amount)
 
-	return jsonResponse({ bids }, 200, corsHeaders)
+	const publicBids = bids.map((entry) => toPublicBid(entry))
+	return jsonResponse({ bids: publicBids }, 200, corsHeaders)
 }
 
 /**
@@ -257,7 +260,7 @@ function parseSignatureInput(value: unknown): string[] {
 	}
 	if (typeof value === 'string') {
 		return value
-			.split(/[,\\n]+/)
+			.split(/[,\n]+/)
 			.map((entry) => entry.trim())
 			.filter((entry) => entry.length > 0)
 	}
@@ -350,6 +353,11 @@ function extractDigest(response: unknown): string | undefined {
 		(nestedEffects?.transactionDigest as string | undefined) ||
 		(result.digest as string | undefined)
 	)
+}
+
+function toPublicBid(bid: QueuedBid): PublicBid {
+	const { txBytes, signatures, ...rest } = bid
+	return rest
 }
 
 function jsonResponse(

@@ -396,7 +396,8 @@ function formatByteSize(bytes?: number): string | undefined {
 }
 
 function resolveRootHostname(hostname: string): string {
-	return hostname.endsWith('staging.sui.ski') ? 'staging.sui.ski' : 'sui.ski'
+	const lower = hostname.toLowerCase()
+	return lower.endsWith('staging.sui.ski') ? 'staging.sui.ski' : 'sui.ski'
 }
 
 function contentPreviewHtml(meta: ContentPreviewMeta): string {

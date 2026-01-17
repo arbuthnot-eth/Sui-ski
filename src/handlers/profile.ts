@@ -5605,12 +5605,6 @@ ${generatePasskeyWalletStyles()}
 				mediaHtml = \`<audio controls class="content-audio" src="\${url}"></audio>\`;
 			}
 
-			const playerLink = (isVideo || isAudio)
-				? \`<a href="https://play-\${item.blobId}.sui.ski" target="_blank">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-						Open in player
-					</a>\`
-				: '';
 
 			const metaParts = [];
 			if (item.isAvatar) {
