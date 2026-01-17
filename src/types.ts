@@ -30,7 +30,10 @@ export interface ParsedSubdomain {
 }
 
 export interface SuiNSRecord {
+	/** Target address (where the name resolves to) */
 	address: string
+	/** NFT owner address (who owns the SuiNS NFT) */
+	ownerAddress?: string
 	avatar?: string
 	contentHash?: string
 	walrusSiteId?: string

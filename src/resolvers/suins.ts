@@ -66,6 +66,25 @@ export async function resolveSuiNS(
 			return { found: false, error: `Name "${suinsName}" not found` }
 		}
 
+		// Get the NFT owner (different from target address)
+		let ownerAddress: string | undefined
+		try {
+			const nameObject = await suinsClient.getNameObject(suinsName, { showOwner: true })
+			if (nameObject?.owner) {
+				// Owner can be AddressOwner or ObjectOwner
+				if (typeof nameObject.owner === 'string') {
+					ownerAddress = nameObject.owner
+				} else if ('AddressOwner' in nameObject.owner) {
+					ownerAddress = nameObject.owner.AddressOwner
+				} else if ('ObjectOwner' in nameObject.owner) {
+					ownerAddress = nameObject.owner.ObjectOwner
+				}
+			}
+		} catch (e) {
+			// Owner fetch is optional, continue without it
+			console.log('Could not fetch NFT owner:', e)
+		}
+
 		// Check expiration status
 		let expired = false
 		let inGracePeriod = false
@@ -95,6 +114,7 @@ export async function resolveSuiNS(
 		// Fetch additional data if available
 		const record: SuiNSRecord = {
 			address: address || '',
+			ownerAddress: ownerAddress,
 			records: nameRecord.data || {},
 		}
 
