@@ -4608,6 +4608,312 @@ export const profileStyles = `
 		.bounty-note strong {
 			color: var(--text);
 		}
+
+		/* Your Bounties Section */
+		.your-bounties-section {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.03), rgba(139, 92, 246, 0.03));
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 18px;
+			margin-top: 20px;
+			margin-bottom: 16px;
+		}
+		.your-bounties-section h4 {
+			font-size: 0.9rem;
+			font-weight: 700;
+			margin-bottom: 8px;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			color: var(--text);
+		}
+		.your-bounties-section h4 svg {
+			width: 18px;
+			height: 18px;
+			color: var(--accent);
+		}
+		.your-bounties-description {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			margin-bottom: 16px;
+		}
+
+		/* Connect wallet prompt */
+		.your-bounties-connect {
+			text-align: center;
+			padding: 20px;
+		}
+		.your-bounties-connect p {
+			font-size: 0.85rem;
+			color: var(--text-muted);
+			margin-bottom: 12px;
+		}
+		.your-bounties-connect-btn {
+			padding: 10px 20px;
+			background: linear-gradient(135deg, var(--accent), #3b82f6);
+			border: none;
+			border-radius: 8px;
+			color: #fff;
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			transition: all 0.2s ease;
+		}
+		.your-bounties-connect-btn:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 4px 12px rgba(96, 165, 250, 0.4);
+		}
+		.your-bounties-connect-btn svg {
+			width: 16px;
+			height: 16px;
+		}
+
+		/* Loading state */
+		.your-bounties-loading {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			padding: 20px;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+		}
+		.loading-spinner {
+			width: 16px;
+			height: 16px;
+			border: 2px solid var(--border);
+			border-top-color: var(--accent);
+			border-radius: 50%;
+			animation: spin 1s linear infinite;
+		}
+
+		/* Empty state */
+		.your-bounties-empty {
+			text-align: center;
+			padding: 20px;
+		}
+		.your-bounties-empty p {
+			font-size: 0.85rem;
+			color: var(--text-muted);
+		}
+
+		/* Error state */
+		.your-bounties-error {
+			text-align: center;
+			padding: 16px;
+			color: var(--error);
+			font-size: 0.85rem;
+		}
+		.your-bounties-retry {
+			margin-left: 8px;
+			padding: 4px 10px;
+			background: transparent;
+			border: 1px solid var(--error);
+			border-radius: 6px;
+			color: var(--error);
+			font-size: 0.8rem;
+			cursor: pointer;
+			transition: all 0.2s ease;
+		}
+		.your-bounties-retry:hover {
+			background: var(--error-light);
+		}
+
+		/* Bounty item card */
+		.your-bounty-item {
+			background: rgba(22, 22, 30, 0.6);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 14px;
+			margin-bottom: 12px;
+		}
+		.your-bounty-item:last-child {
+			margin-bottom: 0;
+		}
+		.your-bounty-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 12px;
+		}
+		.your-bounty-amount {
+			font-size: 1.1rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.your-bounty-status {
+			font-size: 0.75rem;
+			font-weight: 600;
+			padding: 4px 10px;
+			border-radius: 20px;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+		}
+		.your-bounty-status.needs-signature {
+			background: var(--warning-light);
+			color: var(--warning);
+		}
+		.your-bounty-status.pending {
+			background: var(--accent-light);
+			color: var(--accent);
+		}
+		.your-bounty-status.ready {
+			background: var(--success-light);
+			color: var(--success);
+		}
+		.your-bounty-status.executing {
+			background: var(--accent-light);
+			color: var(--accent);
+		}
+		.your-bounty-status.completed {
+			background: var(--success-light);
+			color: var(--success);
+		}
+		.your-bounty-status.failed {
+			background: var(--error-light);
+			color: var(--error);
+		}
+		.your-bounty-status.cancelled {
+			background: rgba(113, 113, 122, 0.15);
+			color: var(--text-muted);
+		}
+
+		.your-bounty-details {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 8px;
+			margin-bottom: 14px;
+			padding-bottom: 14px;
+			border-bottom: 1px solid var(--border);
+		}
+		.your-bounty-detail {
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+		}
+		.your-bounty-detail .detail-label {
+			font-size: 0.7rem;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+		}
+		.your-bounty-detail .detail-value {
+			font-size: 0.85rem;
+			font-weight: 600;
+			color: var(--text);
+		}
+
+		/* Bounty actions */
+		.your-bounty-actions {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			flex-wrap: wrap;
+		}
+		.your-bounty-sign-btn {
+			flex: 1;
+			padding: 10px 16px;
+			background: linear-gradient(135deg, var(--success), #10b981);
+			border: none;
+			border-radius: 8px;
+			color: #fff;
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			transition: all 0.2s ease;
+		}
+		.your-bounty-sign-btn:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+		}
+		.your-bounty-sign-btn svg {
+			width: 16px;
+			height: 16px;
+		}
+		.your-bounty-cancel-btn {
+			padding: 10px 16px;
+			background: transparent;
+			border: 1px solid var(--border-strong);
+			border-radius: 8px;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s ease;
+		}
+		.your-bounty-cancel-btn:hover {
+			border-color: var(--error);
+			color: var(--error);
+			background: var(--error-light);
+		}
+
+		/* Signed state */
+		.your-bounty-signed {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			color: var(--success);
+			font-size: 0.85rem;
+			font-weight: 600;
+		}
+		.your-bounty-signed svg {
+			width: 16px;
+			height: 16px;
+		}
+
+		/* Signing/loading state */
+		.your-bounty-signing {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+			padding: 10px 0;
+		}
+
+		/* Error state in actions */
+		.your-bounty-error {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			color: var(--error);
+			font-size: 0.85rem;
+		}
+		.your-bounty-retry-btn {
+			padding: 4px 10px;
+			background: transparent;
+			border: 1px solid var(--error);
+			border-radius: 6px;
+			color: var(--error);
+			font-size: 0.8rem;
+			cursor: pointer;
+			transition: all 0.2s ease;
+		}
+		.your-bounty-retry-btn:hover {
+			background: var(--error-light);
+		}
+
+		@media (max-width: 480px) {
+			.your-bounty-details {
+				grid-template-columns: 1fr 1fr;
+			}
+			.your-bounty-actions {
+				flex-direction: column;
+			}
+			.your-bounty-sign-btn,
+			.your-bounty-cancel-btn {
+				width: 100%;
+			}
+		}
+
 		@media (max-width: 480px) {
 			.bounty-amount-row {
 				flex-direction: column;

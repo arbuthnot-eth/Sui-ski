@@ -968,6 +968,42 @@ export function generateProfilePage(
 							</button>
 						</div>
 
+						<!-- Your Bounties Section -->
+						<div class="your-bounties-section" id="your-bounties-section">
+							<h4>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+									<polyline points="14 2 14 8 20 8"></polyline>
+									<line x1="16" y1="13" x2="8" y2="13"></line>
+									<line x1="16" y1="17" x2="8" y2="17"></line>
+								</svg>
+								Your Bounties
+							</h4>
+							<p class="your-bounties-description">Bounties you've created. Sign pending transactions to enable automatic execution.</p>
+
+							<div class="your-bounties-connect hidden" id="your-bounties-connect">
+								<p>Connect your wallet to see your bounties.</p>
+								<button class="your-bounties-connect-btn" id="your-bounties-connect-btn">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<rect x="2" y="6" width="20" height="12" rx="2"></rect>
+										<circle cx="12" cy="12" r="2"></circle>
+									</svg>
+									Connect Wallet
+								</button>
+							</div>
+
+							<div class="your-bounties-list hidden" id="your-bounties-list">
+								<div class="your-bounties-loading">
+									<span class="loading-spinner"></span>
+									Loading your bounties...
+								</div>
+							</div>
+
+							<div class="your-bounties-empty hidden" id="your-bounties-empty">
+								<p>You haven't created any bounties for this name yet.</p>
+							</div>
+						</div>
+
 						<div class="bounty-note">
 							<strong>How it works:</strong> Your funds are deposited into an on-chain escrow contract.
 							When the grace period ends, anyone can execute the bounty to register the name for you and claim the executor reward.
@@ -1791,6 +1827,7 @@ export function generateProfilePage(
 
 				renderWalletBar();
 				await checkEditPermission();
+				updateBountiesSectionVisibility();
 				return true;
 			} catch (e) {
 				console.log('Failed to restore wallet:', e.message);
@@ -1839,6 +1876,7 @@ export function generateProfilePage(
 				saveWalletConnection();
 				renderWalletBar();
 				await checkEditPermission();
+				updateBountiesSectionVisibility();
 			} catch (e) {
 				console.error('Connection error:', e);
 				walletList.innerHTML = \`
@@ -5093,6 +5131,292 @@ export function generateProfilePage(
 				console.error('Failed to fetch top offers:', error);
 				offersContainer.innerHTML = '<div class="grace-offers-empty">Failed to load offers</div>';
 			}
+		}
+
+		// ========== YOUR BOUNTIES FUNCTIONALITY ==========
+		const yourBountiesSection = document.getElementById('your-bounties-section');
+		const yourBountiesConnect = document.getElementById('your-bounties-connect');
+		const yourBountiesConnectBtn = document.getElementById('your-bounties-connect-btn');
+		const yourBountiesList = document.getElementById('your-bounties-list');
+		const yourBountiesEmpty = document.getElementById('your-bounties-empty');
+
+		// Store for user's bounties
+		let userBounties = [];
+
+		// Connect button handler
+		if (yourBountiesConnectBtn) {
+			yourBountiesConnectBtn.addEventListener('click', connectWallet);
+		}
+
+		// Update bounties section visibility based on wallet connection
+		function updateBountiesSectionVisibility() {
+			if (!yourBountiesSection) return;
+
+			if (!connectedAddress) {
+				yourBountiesConnect?.classList.remove('hidden');
+				yourBountiesList?.classList.add('hidden');
+				yourBountiesEmpty?.classList.add('hidden');
+			} else {
+				yourBountiesConnect?.classList.add('hidden');
+				refreshUserBounties();
+			}
+		}
+
+		// Fetch bounties created by the connected wallet for this name
+		async function refreshUserBounties() {
+			if (!connectedAddress || !yourBountiesList) return;
+
+			yourBountiesList.classList.remove('hidden');
+			yourBountiesEmpty?.classList.add('hidden');
+			yourBountiesList.innerHTML = \`
+				<div class="your-bounties-loading">
+					<span class="loading-spinner"></span>
+					Loading your bounties...
+				</div>
+			\`;
+
+			try {
+				const res = await fetch('/api/bounties/' + NAME + '?creator=' + connectedAddress);
+				if (!res.ok) throw new Error('Failed to fetch bounties');
+
+				const data = await res.json();
+				userBounties = data.bounties || [];
+
+				if (userBounties.length === 0) {
+					yourBountiesList.classList.add('hidden');
+					yourBountiesEmpty?.classList.remove('hidden');
+					return;
+				}
+
+				renderUserBounties();
+			} catch (error) {
+				console.error('Failed to fetch user bounties:', error);
+				yourBountiesList.innerHTML = \`
+					<div class="your-bounties-error">
+						Failed to load bounties. <button class="your-bounties-retry" onclick="refreshUserBounties()">Retry</button>
+					</div>
+				\`;
+			}
+		}
+
+		// Render the user's bounties list
+		function renderUserBounties() {
+			if (!yourBountiesList) return;
+
+			const formatAmount = (mist) => (Number(mist) / 1e9).toFixed(2);
+			const formatStatus = (status, hasTx) => {
+				if (status === 'pending' && !hasTx) return 'Needs Signature';
+				if (status === 'pending' && hasTx) return 'Awaiting Execution';
+				if (status === 'ready') return 'Ready to Execute';
+				if (status === 'executing') return 'Executing...';
+				if (status === 'completed') return 'Completed';
+				if (status === 'failed') return 'Failed';
+				if (status === 'cancelled') return 'Cancelled';
+				return status;
+			};
+			const getStatusClass = (status, hasTx) => {
+				if (status === 'pending' && !hasTx) return 'needs-signature';
+				if (status === 'completed') return 'completed';
+				if (status === 'failed') return 'failed';
+				if (status === 'cancelled') return 'cancelled';
+				return status;
+			};
+
+			yourBountiesList.innerHTML = userBounties.map(bounty => \`
+				<div class="your-bounty-item" data-bounty-id="\${bounty.id}">
+					<div class="your-bounty-header">
+						<div class="your-bounty-amount">\${formatAmount(bounty.totalAmountMist)} SUI</div>
+						<div class="your-bounty-status \${getStatusClass(bounty.status, bounty.txBytes)}">\${formatStatus(bounty.status, bounty.txBytes)}</div>
+					</div>
+					<div class="your-bounty-details">
+						<div class="your-bounty-detail">
+							<span class="detail-label">Executor Reward:</span>
+							<span class="detail-value">\${formatAmount(bounty.executorRewardMist)} SUI</span>
+						</div>
+						<div class="your-bounty-detail">
+							<span class="detail-label">Duration:</span>
+							<span class="detail-value">\${bounty.years} year\${bounty.years > 1 ? 's' : ''}</span>
+						</div>
+						<div class="your-bounty-detail">
+							<span class="detail-label">Created:</span>
+							<span class="detail-value">\${new Date(bounty.createdAt).toLocaleDateString()}</span>
+						</div>
+					</div>
+					<div class="your-bounty-actions">
+						\${bounty.status === 'pending' && !bounty.txBytes ? \`
+							<button class="your-bounty-sign-btn" onclick="signBountyTransaction('\${bounty.id}')">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+								</svg>
+								Sign Transaction
+							</button>
+						\` : ''}
+						\${bounty.status === 'pending' && bounty.txBytes ? \`
+							<div class="your-bounty-signed">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="20 6 9 17 4 12"></polyline>
+								</svg>
+								Signed - awaiting grace period end
+							</div>
+						\` : ''}
+						\${bounty.status === 'pending' || bounty.status === 'ready' ? \`
+							<button class="your-bounty-cancel-btn" onclick="cancelBounty('\${bounty.id}')">Cancel</button>
+						\` : ''}
+					</div>
+				</div>
+			\`).join('');
+		}
+
+		// Sign a bounty transaction offline
+		async function signBountyTransaction(bountyId) {
+			if (!connectedWallet || !connectedAddress) {
+				connectWallet();
+				return;
+			}
+
+			const bounty = userBounties.find(b => b.id === bountyId);
+			if (!bounty) {
+				alert('Bounty not found');
+				return;
+			}
+
+			// Update UI to show signing in progress
+			const bountyEl = document.querySelector(\`[data-bounty-id="\${bountyId}"]\`);
+			const actionsEl = bountyEl?.querySelector('.your-bounty-actions');
+			if (actionsEl) {
+				actionsEl.innerHTML = \`
+					<div class="your-bounty-signing">
+						<span class="loading-spinner"></span>
+						Building transaction...
+					</div>
+				\`;
+			}
+
+			try {
+				// Step 1: Build the transaction bytes
+				const buildRes = await fetch('/api/bounties/' + NAME + '/' + bountyId + '/build-tx', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ executorAddress: connectedAddress })
+				});
+
+				if (!buildRes.ok) {
+					const error = await buildRes.json();
+					throw new Error(error.error || 'Failed to build transaction');
+				}
+
+				const { txBytes, digest } = await buildRes.json();
+
+				if (actionsEl) {
+					actionsEl.innerHTML = \`
+						<div class="your-bounty-signing">
+							<span class="loading-spinner"></span>
+							Sign in your wallet...
+						</div>
+					\`;
+				}
+
+				// Step 2: Sign the transaction with the connected wallet
+				const signFeature = connectedWallet.features?.['sui:signTransaction'];
+				if (!signFeature) {
+					throw new Error('Wallet does not support transaction signing');
+				}
+
+				const txBytesUint8 = Uint8Array.from(atob(txBytes), c => c.charCodeAt(0));
+				const signResult = await signFeature.signTransaction({
+					transaction: txBytesUint8,
+					account: connectedAccount,
+				});
+
+				if (actionsEl) {
+					actionsEl.innerHTML = \`
+						<div class="your-bounty-signing">
+							<span class="loading-spinner"></span>
+							Saving signature...
+						</div>
+					\`;
+				}
+
+				// Step 3: Attach the signature to the bounty
+				const attachRes = await fetch('/api/bounties/' + NAME + '/' + bountyId + '/attach-tx', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						txBytes: txBytes,
+						signature: signResult.signature,
+					})
+				});
+
+				if (!attachRes.ok) {
+					const error = await attachRes.json();
+					throw new Error(error.error || 'Failed to attach signature');
+				}
+
+				// Refresh the bounties list
+				await refreshUserBounties();
+
+			} catch (error) {
+				console.error('Failed to sign bounty transaction:', error);
+				if (actionsEl) {
+					actionsEl.innerHTML = \`
+						<div class="your-bounty-error">
+							Failed: \${error.message || 'Unknown error'}
+							<button class="your-bounty-retry-btn" onclick="signBountyTransaction('\${bountyId}')">Retry</button>
+						</div>
+					\`;
+				}
+			}
+		}
+
+		// Cancel a bounty
+		async function cancelBounty(bountyId) {
+			if (!confirm('Are you sure you want to cancel this bounty? Funds will be returned to your wallet.')) {
+				return;
+			}
+
+			const bountyEl = document.querySelector(\`[data-bounty-id="\${bountyId}"]\`);
+			const actionsEl = bountyEl?.querySelector('.your-bounty-actions');
+			if (actionsEl) {
+				actionsEl.innerHTML = \`
+					<div class="your-bounty-signing">
+						<span class="loading-spinner"></span>
+						Cancelling...
+					</div>
+				\`;
+			}
+
+			try {
+				const res = await fetch('/api/bounties/' + NAME + '/' + bountyId, {
+					method: 'DELETE',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ creator: connectedAddress })
+				});
+
+				if (!res.ok) {
+					const error = await res.json();
+					throw new Error(error.error || 'Failed to cancel bounty');
+				}
+
+				// Refresh the bounties list
+				await refreshUserBounties();
+				// Also refresh the top offers
+				fetchTopOffers();
+
+			} catch (error) {
+				console.error('Failed to cancel bounty:', error);
+				alert('Failed to cancel bounty: ' + (error.message || 'Unknown error'));
+				renderUserBounties(); // Re-render to restore buttons
+			}
+		}
+
+		// Make functions globally available
+		window.signBountyTransaction = signBountyTransaction;
+		window.cancelBounty = cancelBounty;
+		window.refreshUserBounties = refreshUserBounties;
+
+		// Initialize bounties section if in grace period
+		if (IS_IN_GRACE_PERIOD) {
+			updateBountiesSectionVisibility();
 		}
 
 		if (premiumGraphContainer) {
