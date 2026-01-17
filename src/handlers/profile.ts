@@ -4890,9 +4890,10 @@ ${generatePasskeyWalletStyles()}
 			});
 		}
 
+		// Show QR code by default
+		showIdentityQr();
 		initQR().catch(console.error);
-		// Hide QR canvas initially
-		if (identityCanvas) identityCanvas.style.display = 'none';
+		// Hide toggle button initially (will show when NFT loads)
 		if (qrToggle) qrToggle.style.display = 'none';
 
 		// Set target address to connected wallet (direct transaction)
