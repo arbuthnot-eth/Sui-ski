@@ -1029,7 +1029,9 @@ export function generateProfilePage(
 		const NETWORK = ${serializeJson(network)};
 		const RPC_URL = ${serializeJson(env.SUI_RPC_URL)};
 	const NFT_ID = ${serializeJson(record.nftId || '')};
-	const CURRENT_ADDRESS = ${serializeJson(record.address)};
+	const TARGET_ADDRESS = ${serializeJson(record.address)};
+	const OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
+	const CURRENT_ADDRESS = TARGET_ADDRESS || OWNER_ADDRESS;
 	const PROFILE_URL = ${serializeJson(`https://${cleanName}.sui.ski`)};
 	const NFT_EXPLORER_URL = ${serializeJson(nftExplorerUrl)};
 	const EXPLORER_BASE = ${serializeJson(explorerBase)};
