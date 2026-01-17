@@ -3508,6 +3508,10 @@ ${generatePasskeyWalletStyles()}
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
 						<span>Names</span>
 					</button>
+					<button class="sidebar-tab" data-tab="passkey">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+						<span>Passkey</span>
+					</button>
 				</nav>
 			</div>
 			<div class="main-content">
@@ -3579,8 +3583,6 @@ ${generatePasskeyWalletStyles()}
 					</div>
 				</div>
 			</div>
-			${generatePasskeyWalletHTML()}
-			${generateSocialLinksHTML(record)}
 
 			${
 				record.contentHash || record.walrusSiteId
@@ -3792,6 +3794,8 @@ ${generatePasskeyWalletStyles()}
 				</tbody>
 			</table>
 					</div>
+					
+					${generateSocialLinksHTML(record)}
 				</div><!-- end tab-records -->
 
 				<div class="tab-panel" id="tab-upload">
@@ -4018,6 +4022,10 @@ ${generatePasskeyWalletStyles()}
 					</div>
 				</div><!-- end tab-names -->
 
+				<div class="tab-panel" id="tab-passkey">
+					${generatePasskeyWalletHTML()}
+				</div><!-- end tab-passkey -->
+
 				<div class="links">
 			<a href="${escapeHtml(explorerUrl)}" target="_blank">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
@@ -4110,9 +4118,9 @@ ${generatePasskeyWalletStyles()}
 
 	<script type="module">
 		import { getWallets } from 'https://esm.sh/@mysten/wallet-standard@0.13.8';
-		import { SuiClient } from 'https://esm.sh/@mysten/sui@1.27.0/client';
-		import { Transaction } from 'https://esm.sh/@mysten/sui@1.27.0/transactions';
-		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.7.2';
+		import { SuiClient } from 'https://esm.sh/@mysten/sui@1.45.2/client';
+		import { Transaction } from 'https://esm.sh/@mysten/sui@1.45.2/transactions';
+		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.9.13';
 
 		const NAME = '${cleanName}';
 		const FULL_NAME = ${serializeJson(fullName)};
@@ -5503,14 +5511,14 @@ ${generatePasskeyWalletStyles()}
 					if (bid.resultDigest) {
 						chips.push('<span class="queue-bid-chip">' + shortDigest(bid.resultDigest) + '</span>');
 					}
-					return `
+					return \`
 						<div class="queue-bid-row">
-							<div><strong>${shortAddr(bid.bidder)}</strong></div>
-							<div>${Number(bid.amount || 0).toFixed(2)} SUI</div>
-							<div>${formatExecuteTime(bid.executeAt)}</div>
-							<div>${chips.join(' ')}</div>
+							<div><strong>\${shortAddr(bid.bidder)}</strong></div>
+							<div>\${Number(bid.amount || 0).toFixed(2)} SUI</div>
+							<div>\${formatExecuteTime(bid.executeAt)}</div>
+							<div>\${chips.join(' ')}</div>
 						</div>
-					`;
+					\`;
 				});
 
 				queueBidList.innerHTML = rows.join('');
@@ -5519,7 +5527,7 @@ ${generatePasskeyWalletStyles()}
 			async function loadQueueBoard() {
 				if (!queueBidList) return;
 				try {
-					const res = await fetch(`/api/bids/${NAME}`);
+					const res = await fetch(\`/api/bids/\${NAME}\`);
 					if (!res.ok) throw new Error('Queue fetch failed');
 					const data = await res.json();
 					renderQueueBoard(Array.isArray(data.bids) ? data.bids : []);
@@ -6216,8 +6224,8 @@ ${generatePasskeyWalletStyles()}
 				showMessageStatus('Initializing encrypted channel...', 'info', true);
 
 				// Import Sui SDK
-				const { Transaction } = await import('https://esm.sh/@mysten/sui@1.27.0/transactions');
-				const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.27.0/client');
+				const { Transaction } = await import('https://esm.sh/@mysten/sui@1.45.2/transactions');
+				const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.45.2/client');
 
 				const suiClient = new SuiClient({ url: RPC_URL });
 				const tx = new Transaction();
