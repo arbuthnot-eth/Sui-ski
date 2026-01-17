@@ -1207,13 +1207,17 @@ export function generateProfilePage(
 			if (nftOwnerAddress) {
 				// Try to get the owner's primary name
 				const ownerPrimaryName = await fetchPrimaryName(nftOwnerAddress);
-				const truncatedAddr = nftOwnerAddress.slice(0, 6) + '...' + nftOwnerAddress.slice(-4);
+				const truncatedAddr = truncAddr(nftOwnerAddress);
 
 				if (ownerPrimaryName) {
-					ownerInfoEl.innerHTML = \`<a href="https://\${ownerPrimaryName.replace(/\\.sui$/i, '')}.sui.ski" target="_blank" style="color: var(--accent); text-decoration: none;">\${ownerPrimaryName}</a> (<code style="font-size: 0.85em;">\${truncatedAddr}</code>)\`;
+					const cleanedName = ownerPrimaryName.replace(/\\.sui$/i, '');
+					ownerInfoEl.innerHTML = \`<a href="https://\${cleanedName}.sui.ski" target="_blank">\${ownerPrimaryName}</a> (<code>\${truncatedAddr}</code>)\`;
 				} else {
-					ownerInfoEl.innerHTML = \`<code style="font-size: 0.85em;">\${truncatedAddr}</code>\`;
+					ownerInfoEl.innerHTML = \`<code>\${truncatedAddr}</code>\`;
 				}
+			} else {
+				// No NFT owner found - show unknown
+				ownerInfoEl.textContent = 'Unknown owner';
 			}
 		}
 
@@ -2091,12 +2095,19 @@ export function generateProfilePage(
 
 		// Fetch and display target address primary name
 		async function fetchTargetPrimaryName() {
+			const ownerNameEl = document.querySelector('.owner-name');
+			const ownerAddrEl = document.querySelector('.owner-addr');
+			const ownerInfo = document.getElementById('owner-info');
+			const visitArrow = ownerInfo?.querySelector('.visit-arrow');
+
+			// Always ensure address is displayed
+			if (ownerAddrEl && CURRENT_ADDRESS) {
+				ownerAddrEl.textContent = truncAddr(CURRENT_ADDRESS);
+			}
+
 			const name = await fetchPrimaryName(CURRENT_ADDRESS);
 			if (name) {
 				targetPrimaryName = name;
-				const ownerNameEl = document.querySelector('.owner-name');
-				const ownerInfo = document.getElementById('owner-info');
-				const visitArrow = ownerInfo?.querySelector('.visit-arrow');
 
 				if (ownerNameEl) {
 					ownerNameEl.innerHTML = formatSuiName(name);
@@ -2123,6 +2134,16 @@ export function generateProfilePage(
 						if (e.target.closest('button')) return;
 						window.location.href = ownerProfileUrl;
 					});
+				}
+			} else {
+				// No primary name found - hide the name element and make address more prominent
+				if (ownerNameEl) {
+					ownerNameEl.style.display = 'none';
+				}
+				if (ownerAddrEl) {
+					ownerAddrEl.style.fontSize = '0.95rem';
+					ownerAddrEl.style.fontWeight = '600';
+					ownerAddrEl.style.color = 'var(--text)';
 				}
 			}
 		}
