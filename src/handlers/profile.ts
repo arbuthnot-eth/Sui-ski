@@ -374,76 +374,193 @@ export function generateProfilePage(
 					: ''
 			}
 
-			<!-- Countdown Hero -->
+			<!-- Bid Queue & Bounty Section -->
 			${
 				expiresMs
 					? `
-			<div class="countdown-hero" id="countdown-hero">
-				<svg style="position:absolute;width:0;height:0;">
-					<defs>
-						<linearGradient id="countdown-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-							<stop offset="0%" stop-color="#3b82f6"/>
-							<stop offset="100%" stop-color="#8b5cf6"/>
-						</linearGradient>
-					</defs>
-				</svg>
-				<div class="countdown-content">
-					<div class="countdown-ring">
-						<svg viewBox="0 0 100 100">
-							<circle class="countdown-ring-bg" cx="50" cy="50" r="42"/>
-							<circle class="countdown-ring-progress" id="countdown-ring-progress" cx="50" cy="50" r="42"
-								stroke-dasharray="263.89" stroke-dashoffset="0"/>
+			<div class="bid-bounty-hero" id="bid-bounty-hero">
+				<div class="bid-bounty-header">
+					<div class="bid-bounty-title">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
 						</svg>
-						<div class="countdown-ring-center">
-							<div class="countdown-ring-percent" id="countdown-percent">--</div>
-							<div class="countdown-ring-label">score</div>
+						<span>Bids & Bounties</span>
+					</div>
+					<div class="bid-bounty-status-bar">
+						<span class="bid-bounty-status-badge ${options.inGracePeriod ? 'warning' : 'active'}" id="bid-bounty-badge">
+							${
+								options.inGracePeriod
+									? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`
+									: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`
+							}
+							<span>${options.inGracePeriod ? 'Grace Period' : 'Active'}</span>
+						</span>
+						<span class="bid-bounty-timer">
+							Available in: <span id="bid-bounty-countdown">--d --h --m</span>
+						</span>
+					</div>
+				</div>
+
+				<div class="bid-bounty-content">
+					<!-- Bid Queue Section -->
+					<div class="bid-queue-section">
+						<div class="bid-queue-header">
+							<h4>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+									<line x1="16" y1="2" x2="16" y2="6"></line>
+									<line x1="8" y1="2" x2="8" y2="6"></line>
+									<line x1="3" y1="10" x2="21" y2="10"></line>
+								</svg>
+								Bid Queue
+							</h4>
+							<button class="bid-refresh-btn" id="bid-refresh-btn" title="Refresh bids">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="23 4 23 10 17 10"></polyline>
+									<polyline points="1 20 1 14 7 14"></polyline>
+									<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+								</svg>
+							</button>
+						</div>
+						<div class="bid-queue-list" id="bid-queue-list">
+							<div class="bid-queue-loading">
+								<span class="loading-spinner"></span>
+								Loading bids...
+							</div>
+						</div>
+						<div class="bid-queue-empty hidden" id="bid-queue-empty">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<circle cx="12" cy="12" r="10"></circle>
+								<line x1="8" y1="12" x2="16" y2="12"></line>
+							</svg>
+							<span>No bids yet. Be the first!</span>
+						</div>
+
+						<!-- Create Bid Form -->
+						<div class="create-bid-form" id="create-bid-form">
+							<div class="create-bid-header">
+								<span>Place a Bid</span>
+							</div>
+							<div class="create-bid-row">
+								<div class="create-bid-input-group">
+									<input type="number" id="bid-amount-input" min="1" step="0.1" placeholder="Amount" />
+									<span class="bid-input-suffix">SUI</span>
+								</div>
+								<button class="create-bid-btn" id="create-bid-btn">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<line x1="12" y1="5" x2="12" y2="19"></line>
+										<line x1="5" y1="12" x2="19" y2="12"></line>
+									</svg>
+									Place Bid
+								</button>
+							</div>
+							<div class="create-bid-info">
+								<span class="create-bid-usd" id="bid-usd-estimate">≈ $--</span>
+								<span class="create-bid-note">Bid will execute when grace period ends</span>
+							</div>
+							<div class="create-bid-status hidden" id="create-bid-status"></div>
 						</div>
 					</div>
-					<div class="countdown-details">
-						<div class="countdown-status">
-							<span class="countdown-status-badge ${options.inGracePeriod ? 'warning' : 'active'}" id="countdown-badge">
-								${
-									options.inGracePeriod
-										? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`
-										: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`
-								}
-								<span id="countdown-status-text">${options.inGracePeriod ? 'Grace Period' : 'Active'}</span>
-							</span>
+
+					<!-- Bounty Section -->
+					<div class="bounty-queue-section">
+						<div class="bounty-queue-header">
+							<h4>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="8" r="7"></circle>
+									<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+								</svg>
+								Bounties
+							</h4>
+							<button class="bounty-refresh-btn" id="bounty-refresh-btn" title="Refresh bounties">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="23 4 23 10 17 10"></polyline>
+									<polyline points="1 20 1 14 7 14"></polyline>
+									<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+								</svg>
+							</button>
 						</div>
-						<div class="countdown-timer" id="countdown-timer-display">
-							<div class="countdown-unit">
-								<div class="countdown-value" id="countdown-days">--</div>
-								<div class="countdown-label">Days</div>
-							</div>
-							<span class="countdown-separator">:</span>
-							<div class="countdown-unit">
-								<div class="countdown-value" id="countdown-hours">--</div>
-								<div class="countdown-label">Hours</div>
-							</div>
-							<span class="countdown-separator">:</span>
-							<div class="countdown-unit">
-								<div class="countdown-value" id="countdown-mins">--</div>
-								<div class="countdown-label">Minutes</div>
-							</div>
-							<span class="countdown-separator">:</span>
-							<div class="countdown-unit">
-								<div class="countdown-value" id="countdown-secs">--</div>
-								<div class="countdown-label">Seconds</div>
+						<div class="bounty-queue-list" id="bounty-queue-list">
+							<div class="bounty-queue-loading">
+								<span class="loading-spinner"></span>
+								Loading bounties...
 							</div>
 						</div>
-						<div class="countdown-info">
-							<div class="countdown-info-item">
-								<span class="countdown-info-label">Expires</span>
-								<span class="countdown-info-value">${new Date(expiresMs).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+						<div class="bounty-queue-empty hidden" id="bounty-queue-empty">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<circle cx="12" cy="12" r="10"></circle>
+								<line x1="8" y1="12" x2="16" y2="12"></line>
+							</svg>
+							<span>No bounties yet</span>
+						</div>
+
+						<!-- Quick Create Bounty -->
+						<div class="create-bounty-quick" id="create-bounty-quick">
+							<div class="create-bounty-header">
+								<span>Create Bounty</span>
 							</div>
-							<div class="countdown-info-item">
-								<span class="countdown-info-label">Grace Period Ends</span>
-								<span class="countdown-info-value">${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+							<div class="create-bounty-row">
+								<div class="create-bounty-inputs">
+									<div class="create-bounty-input-group">
+										<label>Total Amount</label>
+										<div class="create-bounty-input-row">
+											<input type="number" id="quick-bounty-amount" min="5" step="1" value="10" />
+											<span class="bounty-input-suffix">SUI</span>
+										</div>
+									</div>
+									<div class="create-bounty-input-group">
+										<label>Executor Reward</label>
+										<div class="create-bounty-input-row">
+											<input type="number" id="quick-executor-reward" min="1" step="0.5" value="1" />
+											<span class="bounty-input-suffix">SUI</span>
+										</div>
+									</div>
+									<div class="create-bounty-input-group">
+										<label>Duration</label>
+										<select id="quick-bounty-years">
+											<option value="1">1 Year</option>
+											<option value="2">2 Years</option>
+											<option value="3">3 Years</option>
+											<option value="5">5 Years</option>
+										</select>
+									</div>
+								</div>
+								<button class="create-bounty-btn" id="quick-bounty-btn">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<circle cx="12" cy="8" r="7"></circle>
+										<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+									</svg>
+									Create Bounty
+								</button>
 							</div>
-							<div class="countdown-info-item">
-								<span class="countdown-info-label">Available</span>
-								<span class="countdown-info-value" id="countdown-available-date">${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+							<div class="create-bounty-summary">
+								<div class="create-bounty-summary-row">
+									<span>Est. Registration Cost:</span>
+									<span id="quick-bounty-reg-cost">-- SUI</span>
+								</div>
+								<div class="create-bounty-summary-row total">
+									<span>Total Escrow:</span>
+									<span id="quick-bounty-total">-- SUI</span>
+								</div>
 							</div>
+							<div class="create-bounty-status hidden" id="create-bounty-status"></div>
+						</div>
+					</div>
+				</div>
+
+				<div class="bid-bounty-footer">
+					<div class="bid-bounty-info-row">
+						<div class="bid-bounty-info-item">
+							<span class="bid-bounty-info-label">Expires</span>
+							<span class="bid-bounty-info-value">${new Date(expiresMs).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+						</div>
+						<div class="bid-bounty-info-item">
+							<span class="bid-bounty-info-label">Grace Period Ends</span>
+							<span class="bid-bounty-info-value">${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+						</div>
+						<div class="bid-bounty-info-item">
+							<span class="bid-bounty-info-label">Available</span>
+							<span class="bid-bounty-info-value" id="bid-bounty-available-date">${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
 						</div>
 					</div>
 				</div>
@@ -4622,158 +4739,361 @@ export function generateProfilePage(
 			}, 500);
 		}
 
-		// ========== COUNTDOWN HERO ANIMATION ==========
-		const countdownHero = document.getElementById('countdown-hero');
-		const countdownRingProgress = document.getElementById('countdown-ring-progress');
-		const countdownPercent = document.getElementById('countdown-percent');
-		const countdownBadge = document.getElementById('countdown-badge');
-		const countdownStatusText = document.getElementById('countdown-status-text');
-		const countdownDays = document.getElementById('countdown-days');
-		const countdownHours = document.getElementById('countdown-hours');
-		const countdownMins = document.getElementById('countdown-mins');
-		const countdownSecs = document.getElementById('countdown-secs');
+		// ========== BID & BOUNTY HERO SECTION ==========
+		const bidBountyCountdown = document.getElementById('bid-bounty-countdown');
+		const bidQueueList = document.getElementById('bid-queue-list');
+		const bidQueueEmpty = document.getElementById('bid-queue-empty');
+		const bountyQueueList = document.getElementById('bounty-queue-list');
+		const bountyQueueEmpty = document.getElementById('bounty-queue-empty');
+		const bidRefreshBtn = document.getElementById('bid-refresh-btn');
+		const bountyRefreshBtn = document.getElementById('bounty-refresh-btn');
+		const bidAmountInput = document.getElementById('bid-amount-input');
+		const bidUsdEstimate = document.getElementById('bid-usd-estimate');
+		const createBidBtn = document.getElementById('create-bid-btn');
+		const createBidStatus = document.getElementById('create-bid-status');
+		const quickBountyAmount = document.getElementById('quick-bounty-amount');
+		const quickExecutorReward = document.getElementById('quick-executor-reward');
+		const quickBountyYears = document.getElementById('quick-bounty-years');
+		const quickBountyRegCost = document.getElementById('quick-bounty-reg-cost');
+		const quickBountyTotal = document.getElementById('quick-bounty-total');
+		const quickBountyBtn = document.getElementById('quick-bounty-btn');
+		const createBountyStatus = document.getElementById('create-bounty-status');
 
-		// Calculate total registration period (assume 1 year = 365 days for progress)
-		const REGISTRATION_PERIOD = 365 * 24 * 60 * 60 * 1000;
-		const CIRCLE_CIRCUMFERENCE = 263.89; // 2 * PI * 42
-		
-		// View score tracking
-		let currentViewScore = 0;
-		const MAX_SCORE_FOR_RING = 1000; // Max score for 100% ring fill
+		// Track bids and bounties
+		let currentBids = [];
+		let currentBounties = [];
+		let bidBountySuiPrice = null;
 
-		// Fetch and update view score
-		async function fetchViewScore() {
+		// Format address for display
+		function formatAddress(addr) {
+			if (!addr) return 'Unknown';
+			return addr.slice(0, 6) + '...' + addr.slice(-4);
+		}
+
+		// Format amount with K/M suffix
+		function formatAmount(amount) {
+			if (amount >= 1000000) return (amount / 1000000).toFixed(1) + 'M';
+			if (amount >= 1000) return (amount / 1000).toFixed(1) + 'K';
+			return amount.toFixed(2);
+		}
+
+		// Get USD value string
+		function getUsdValue(suiAmount) {
+			if (!bidBountySuiPrice) return '';
+			const usd = suiAmount * bidBountySuiPrice;
+			return '$' + usd.toLocaleString('en-US', { maximumFractionDigits: 0 });
+		}
+
+		// Fetch SUI price for bid/bounty section
+		async function fetchBidBountySuiPrice() {
 			try {
-				const response = await fetch(\`/api/views/\${NAME}\`);
-				if (response.ok) {
-					const data = await response.json();
-					currentViewScore = data.score || 0;
-					updateViewScoreDisplay();
+				const res = await fetch('/api/sui-price');
+				if (res.ok) {
+					const data = await res.json();
+					if (data.price) {
+						bidBountySuiPrice = data.price;
+						updateBidUsdEstimate();
+						updateBountyEstimates();
+					}
 				}
-			} catch (error) {
-				console.error('Failed to fetch view score:', error);
+			} catch (e) {
+				console.warn('Failed to fetch SUI price for bids:', e);
 			}
 		}
 
-		// Increment view score when page loads
-		async function incrementViewScore() {
-			try {
-				const response = await fetch(\`/api/views/\${NAME}\`, {
-					method: 'POST',
-				});
-				if (response.ok) {
-					const data = await response.json();
-					currentViewScore = data.score || 0;
-					updateViewScoreDisplay();
-				}
-			} catch (error) {
-				console.error('Failed to increment view score:', error);
-			}
-		}
-
-		// Update the score display
-		function updateViewScoreDisplay() {
-			if (countdownPercent) {
-				countdownPercent.textContent = String(currentViewScore);
-			}
-			
-			// Update ring progress based on score (0-1000 score = 0-100% ring)
-			if (countdownRingProgress) {
-				const scorePercent = Math.min(100, Math.round((currentViewScore / MAX_SCORE_FOR_RING) * 100));
-				const offset = CIRCLE_CIRCUMFERENCE * (1 - scorePercent / 100);
-				countdownRingProgress.style.strokeDashoffset = offset;
-			}
-		}
-
-		// Initialize view score tracking
-		incrementViewScore(); // Increment on page load
-		setInterval(fetchViewScore, 30000); // Refresh every 30 seconds
-
-		function updateCountdownHero() {
-			if (!EXPIRATION_MS) return;
+		// Update the bid/bounty countdown timer
+		function updateBidBountyCountdown() {
+			if (!bidBountyCountdown || !AVAILABLE_AT) return;
 
 			const now = Date.now();
-			const diff = EXPIRATION_MS - now;
-			const graceDiff = AVAILABLE_AT - now;
+			const diff = AVAILABLE_AT - now;
 
-			// Update countdown values
 			if (diff <= 0) {
-				// Expired - in grace period or available
-				if (graceDiff <= 0) {
-					// Available now
-					if (countdownDays) countdownDays.textContent = '00';
-					if (countdownHours) countdownHours.textContent = '00';
-					if (countdownMins) countdownMins.textContent = '00';
-					if (countdownSecs) countdownSecs.textContent = '00';
-					if (countdownPercent) countdownPercent.textContent = String(currentViewScore || 0);
-					if (countdownRingProgress) countdownRingProgress.style.strokeDashoffset = CIRCLE_CIRCUMFERENCE;
-					if (countdownHero) countdownHero.className = 'countdown-hero expired';
-					if (countdownBadge) {
-						countdownBadge.className = 'countdown-status-badge danger';
-						countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg><span>Available</span>';
-					}
-				} else {
-					// Grace period - show dashes since detailed timer lives in the grace banner
-					if (countdownDays) countdownDays.textContent = '--';
-					if (countdownHours) countdownHours.textContent = '--';
-					if (countdownMins) countdownMins.textContent = '--';
-					if (countdownSecs) countdownSecs.textContent = '--';
-					if (countdownPercent) countdownPercent.textContent = String(currentViewScore || 0);
-					if (countdownRingProgress) {
-						const scorePercent = Math.min(100, Math.round((currentViewScore / MAX_SCORE_FOR_RING) * 100));
-						const offset = CIRCLE_CIRCUMFERENCE * (1 - scorePercent / 100);
-						countdownRingProgress.style.strokeDashoffset = offset;
-						countdownRingProgress.style.stroke = '#fbbf24';
-					}
-					if (countdownHero) countdownHero.className = 'countdown-hero grace';
-					if (countdownBadge) {
-						countdownBadge.className = 'countdown-status-badge warning';
-						countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span>Grace Period</span>';
-					}
-					if (countdownStatusText) {
-						countdownStatusText.textContent = 'Grace Period';
-					}
-				}
+				bidBountyCountdown.textContent = 'Available now!';
 				return;
 			}
 
-			// Active - calculate countdown
 			const days = Math.floor(diff / (24 * 60 * 60 * 1000));
 			const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
 			const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
-			const secs = Math.floor((diff % (60 * 1000)) / 1000);
 
-			if (countdownDays) countdownDays.textContent = String(days).padStart(2, '0');
-			if (countdownHours) countdownHours.textContent = String(hours).padStart(2, '0');
-			if (countdownMins) countdownMins.textContent = String(mins).padStart(2, '0');
-			if (countdownSecs) countdownSecs.textContent = String(secs).padStart(2, '0');
+			bidBountyCountdown.textContent = days + 'd ' + hours + 'h ' + mins + 'm';
+		}
 
-			// Score is now managed by view tracking, not percentage
-			// The score display is updated by updateViewScoreDisplay()
+		// Fetch and display bids
+		async function fetchBidQueue() {
+			if (!bidQueueList) return;
 
-			// Update status badge based on days remaining
-			if (days <= 7) {
-				if (countdownHero) countdownHero.className = 'countdown-hero grace';
-				if (countdownBadge) {
-					countdownBadge.className = 'countdown-status-badge danger';
-					countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span>Expiring Soon</span>';
+			try {
+				const res = await fetch('/api/bids/' + NAME);
+				if (!res.ok) throw new Error('Failed to fetch bids');
+
+				const data = await res.json();
+				currentBids = data.bids || [];
+
+				if (currentBids.length === 0) {
+					bidQueueList.innerHTML = '';
+					if (bidQueueEmpty) bidQueueEmpty.classList.remove('hidden');
+					return;
 				}
-			} else if (days <= 30) {
-				if (countdownBadge) {
-					countdownBadge.className = 'countdown-status-badge warning';
-					countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span>Renew Soon</span>';
-				}
-			} else {
-				if (countdownBadge) {
-					countdownBadge.className = 'countdown-status-badge active';
-					countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg><span>Active</span>';
-				}
+
+				if (bidQueueEmpty) bidQueueEmpty.classList.add('hidden');
+
+				// Sort by amount (highest first)
+				currentBids.sort((a, b) => b.amount - a.amount);
+
+				bidQueueList.innerHTML = currentBids.map((bid, index) => {
+					const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+					const isOwnBid = connectedAddress && bid.bidder === connectedAddress;
+					return \`
+						<div class="bid-queue-item \${isOwnBid ? 'own-bid' : ''}">
+							<div class="bid-item-left">
+								<div class="bid-item-rank \${rankClass}">\${index + 1}</div>
+								<div class="bid-item-info">
+									<div class="bid-item-amount">\${formatAmount(bid.amount)} SUI</div>
+									<div class="bid-item-bidder">\${formatAddress(bid.bidder)}\${isOwnBid ? ' (you)' : ''}</div>
+								</div>
+							</div>
+							<div class="bid-item-right">
+								<div class="bid-item-usd">\${getUsdValue(bid.amount)}</div>
+								<div class="bid-item-status \${bid.status || 'pending'}">\${bid.status || 'pending'}</div>
+							</div>
+						</div>
+					\`;
+				}).join('');
+			} catch (error) {
+				console.error('Failed to fetch bid queue:', error);
+				bidQueueList.innerHTML = '<div class="bid-queue-loading">Failed to load bids</div>';
 			}
 		}
 
+		// Fetch and display bounties
+		async function fetchBountyQueue() {
+			if (!bountyQueueList) return;
+
+			try {
+				const res = await fetch('/api/bounties/' + NAME);
+				if (!res.ok) throw new Error('Failed to fetch bounties');
+
+				const data = await res.json();
+				currentBounties = data.bounties || [];
+
+				if (currentBounties.length === 0) {
+					bountyQueueList.innerHTML = '';
+					if (bountyQueueEmpty) bountyQueueEmpty.classList.remove('hidden');
+					return;
+				}
+
+				if (bountyQueueEmpty) bountyQueueEmpty.classList.add('hidden');
+
+				// Sort by total amount (highest first)
+				currentBounties.sort((a, b) => Number(b.totalAmountMist) - Number(a.totalAmountMist));
+
+				bountyQueueList.innerHTML = currentBounties.map(bounty => {
+					const totalSui = Number(bounty.totalAmountMist) / 1e9;
+					const rewardSui = Number(bounty.executorRewardMist) / 1e9;
+					return \`
+						<div class="bounty-queue-item">
+							<div class="bounty-item-left">
+								<div class="bounty-item-icon">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<circle cx="12" cy="8" r="7"></circle>
+										<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+									</svg>
+								</div>
+								<div class="bounty-item-info">
+									<div class="bounty-item-amount">\${formatAmount(totalSui)} SUI</div>
+									<div class="bounty-item-reward">Reward: \${rewardSui} SUI</div>
+								</div>
+							</div>
+							<div class="bounty-item-right">
+								<div class="bounty-item-beneficiary">\${formatAddress(bounty.beneficiary)}</div>
+								<div class="bounty-item-status \${bounty.status}">\${bounty.status}</div>
+							</div>
+						</div>
+					\`;
+				}).join('');
+			} catch (error) {
+				console.error('Failed to fetch bounty queue:', error);
+				bountyQueueList.innerHTML = '<div class="bounty-queue-loading">Failed to load bounties</div>';
+			}
+		}
+
+		// Update bid USD estimate
+		function updateBidUsdEstimate() {
+			if (!bidAmountInput || !bidUsdEstimate) return;
+			const amount = parseFloat(bidAmountInput.value) || 0;
+			bidUsdEstimate.textContent = getUsdValue(amount) || '≈ $--';
+		}
+
+		// Update bounty estimates
+		function updateBountyEstimates() {
+			if (!quickBountyAmount || !quickExecutorReward || !quickBountyRegCost || !quickBountyTotal) return;
+
+			const totalAmount = parseFloat(quickBountyAmount.value) || 0;
+			const executorReward = parseFloat(quickExecutorReward.value) || 0;
+
+			// Estimate registration cost (this is a rough estimate based on grace period position)
+			const now = Date.now();
+			const gracePeriodEnd = AVAILABLE_AT;
+			const gracePeriodStart = EXPIRATION_MS;
+			const progress = gracePeriodStart && gracePeriodEnd
+				? Math.max(0, Math.min(1, (now - gracePeriodStart) / (gracePeriodEnd - gracePeriodStart)))
+				: 0;
+
+			// Simple estimation - actual would need on-chain data
+			const estimatedRegCost = Math.max(1, totalAmount - executorReward);
+
+			quickBountyRegCost.textContent = '~' + estimatedRegCost.toFixed(1) + ' SUI';
+			quickBountyTotal.textContent = totalAmount.toFixed(2) + ' SUI';
+		}
+
+		// Create a new bid
+		async function createBid() {
+			if (!connectedAddress) {
+				showStatus(createBidStatus, 'Please connect your wallet first', 'error');
+				return;
+			}
+
+			const amount = parseFloat(bidAmountInput?.value) || 0;
+			if (amount <= 0) {
+				showStatus(createBidStatus, 'Please enter a valid bid amount', 'error');
+				return;
+			}
+
+			if (createBidBtn) createBidBtn.disabled = true;
+			showStatus(createBidStatus, 'Creating bid...', 'loading');
+
+			try {
+				const res = await fetch('/api/bids', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						name: NAME,
+						bidder: connectedAddress,
+						amount: amount,
+						executeAt: AVAILABLE_AT,
+					}),
+				});
+
+				const data = await res.json();
+				if (!res.ok) throw new Error(data.error || 'Failed to create bid');
+
+				showStatus(createBidStatus, 'Bid created successfully!', 'success');
+				if (bidAmountInput) bidAmountInput.value = '';
+				fetchBidQueue();
+
+				setTimeout(() => hideStatus(createBidStatus), 3000);
+			} catch (error) {
+				showStatus(createBidStatus, error.message || 'Failed to create bid', 'error');
+			} finally {
+				if (createBidBtn) createBidBtn.disabled = false;
+			}
+		}
+
+		// Create a new bounty
+		async function createQuickBounty() {
+			if (!connectedAddress) {
+				showStatus(createBountyStatus, 'Please connect your wallet first', 'error');
+				return;
+			}
+
+			const totalAmount = parseFloat(quickBountyAmount?.value) || 0;
+			const executorReward = parseFloat(quickExecutorReward?.value) || 0;
+			const years = parseInt(quickBountyYears?.value) || 1;
+
+			if (totalAmount < 5) {
+				showStatus(createBountyStatus, 'Minimum bounty amount is 5 SUI', 'error');
+				return;
+			}
+
+			if (executorReward < 1) {
+				showStatus(createBountyStatus, 'Minimum executor reward is 1 SUI', 'error');
+				return;
+			}
+
+			if (quickBountyBtn) quickBountyBtn.disabled = true;
+			showStatus(createBountyStatus, 'Creating bounty...', 'loading');
+
+			try {
+				// For now, create the bounty record (actual escrow would need wallet signing)
+				const res = await fetch('/api/bounties', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						name: NAME,
+						beneficiary: connectedAddress,
+						creator: connectedAddress,
+						escrowObjectId: 'pending', // Would be set after actual escrow creation
+						totalAmountMist: String(Math.floor(totalAmount * 1e9)),
+						executorRewardMist: String(Math.floor(executorReward * 1e9)),
+						availableAt: AVAILABLE_AT,
+						years: years,
+					}),
+				});
+
+				const data = await res.json();
+				if (!res.ok) throw new Error(data.error || 'Failed to create bounty');
+
+				showStatus(createBountyStatus, 'Bounty created! Connect wallet to deposit funds.', 'success');
+				fetchBountyQueue();
+
+				setTimeout(() => hideStatus(createBountyStatus), 5000);
+			} catch (error) {
+				showStatus(createBountyStatus, error.message || 'Failed to create bounty', 'error');
+			} finally {
+				if (quickBountyBtn) quickBountyBtn.disabled = false;
+			}
+		}
+
+		// Show status message
+		function showStatus(element, message, type) {
+			if (!element) return;
+			element.textContent = message;
+			element.className = 'create-bid-status ' + type;
+			element.classList.remove('hidden');
+		}
+
+		// Hide status message
+		function hideStatus(element) {
+			if (!element) return;
+			element.classList.add('hidden');
+		}
+
+		// Event listeners for bid/bounty section
+		if (bidRefreshBtn) {
+			bidRefreshBtn.addEventListener('click', fetchBidQueue);
+		}
+		if (bountyRefreshBtn) {
+			bountyRefreshBtn.addEventListener('click', fetchBountyQueue);
+		}
+		if (bidAmountInput) {
+			bidAmountInput.addEventListener('input', updateBidUsdEstimate);
+		}
+		if (createBidBtn) {
+			createBidBtn.addEventListener('click', createBid);
+		}
+		if (quickBountyAmount) {
+			quickBountyAmount.addEventListener('input', updateBountyEstimates);
+		}
+		if (quickExecutorReward) {
+			quickExecutorReward.addEventListener('input', updateBountyEstimates);
+		}
+		if (quickBountyBtn) {
+			quickBountyBtn.addEventListener('click', createQuickBounty);
+		}
+
+		// Initialize bid/bounty section
 		if (EXPIRATION_MS) {
-			updateCountdownHero();
-			setInterval(updateCountdownHero, 1000); // Update every second for smooth animation
+			fetchBidBountySuiPrice();
+			setInterval(fetchBidBountySuiPrice, 60000);
+			fetchBidQueue();
+			fetchBountyQueue();
+			setInterval(fetchBidQueue, 30000);
+			setInterval(fetchBountyQueue, 30000);
+			updateBidBountyCountdown();
+			setInterval(updateBidBountyCountdown, 60000);
+			updateBountyEstimates();
 		}
 
 		// ========== GRACE PERIOD BANNER COUNTDOWN ==========
