@@ -44,7 +44,9 @@ src/
 ├── index.ts              # Worker entry point, request routing by subdomain type
 ├── types.ts              # Shared TypeScript types (Env, ParsedSubdomain, etc.)
 ├── handlers/
-│   └── landing.ts        # Root domain handler (sui.ski), API endpoints
+│   ├── landing.ts        # Root domain handler (sui.ski), API endpoints
+│   ├── mvr-management.ts # MVR package management API endpoints
+│   └── mvr-ui.ts         # MVR package management web UI
 ├── resolvers/
 │   ├── suins.ts          # SuiNS name resolution using @mysten/suins SDK
 │   ├── mvr.ts            # Move Registry package lookup via on-chain registry
@@ -53,7 +55,8 @@ src/
 └── utils/
     ├── subdomain.ts      # Subdomain parsing logic (pattern matching)
     ├── cache.ts          # KV-backed caching utilities
-    └── response.ts       # HTTP response helpers (JSON, HTML, CORS)
+    ├── response.ts       # HTTP response helpers (JSON, HTML, CORS)
+    └── mvr-transactions.ts # MVR transaction builders for offline signing
 ```
 
 ## Subdomain Routing Patterns
@@ -106,3 +109,27 @@ MVR names follow the format `@{suins_name}/{package_name}`. The gateway translat
 - `nft--myname--v2.sui.ski` → `@myname/nft/2`
 
 The MVR registry object IDs in `src/resolvers/mvr.ts` need to be updated with actual mainnet/testnet addresses.
+
+### MVR Package Management
+
+The gateway now includes comprehensive package management capabilities:
+
+**Management UI** (`/mvr`):
+- Web interface for package registration, versioning, and metadata updates
+- Generate unsigned transactions for offline signing
+- Browse and search packages
+
+**API Endpoints**:
+- `POST /api/mvr/register` - Register new package
+- `POST /api/mvr/publish-version` - Publish new version
+- `POST /api/mvr/update-metadata` - Update package metadata
+- `POST /api/mvr/transfer` - Transfer package ownership
+- `GET /api/mvr/packages/{suinsName}` - List packages for a SuiNS name
+- `GET /api/mvr/search?q={query}` - Search packages
+
+**Transaction Building** (`src/utils/mvr-transactions.ts`):
+- Utilities to generate unsigned transactions for all package operations
+- Support for offline signing workflows
+- Transaction serialization and digest generation
+
+See `docs/MVR_IMPROVEMENTS.md` for detailed documentation.

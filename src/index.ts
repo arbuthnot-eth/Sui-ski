@@ -2,6 +2,8 @@ import { handleAIRequest } from './handlers/ai'
 import { handleBidsRequest } from './handlers/bids'
 import { handleLandingPage } from './handlers/landing'
 import { handleMessagingPage, handleMessagingRequest } from './handlers/messaging'
+import { handleMVRManagementRequest } from './handlers/mvr-management'
+import { handleMVRManagementPage } from './handlers/mvr-ui'
 import { generateProfilePage } from './handlers/profile'
 import { handlePWARequest } from './handlers/pwa'
 import { handleTransaction } from './handlers/transaction'
@@ -58,6 +60,16 @@ export default {
 		// View tracking API
 		if (url.pathname.startsWith('/api/views')) {
 			return handleViewsRequest(request, env)
+		}
+
+		// MVR package management UI
+		if (url.pathname === '/mvr' || url.pathname === '/mvr/') {
+			return handleMVRManagementPage(env)
+		}
+
+		// MVR package management API
+		if (url.pathname.startsWith('/api/mvr')) {
+			return handleMVRManagementRequest(request, env)
 		}
 
 		// Messaging page
@@ -701,6 +713,10 @@ function mvrPackagePage(pkg: MVRPackage, network: string): string {
 				</a>`
 						: ''
 				}
+				<a href="/mvr" style="background: rgba(96, 165, 250, 0.15); border-color: rgba(96, 165, 250, 0.3);">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+					Manage Package
+				</a>
 			</div>
 		</div>
 		<div class="footer">
