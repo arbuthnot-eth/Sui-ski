@@ -2717,59 +2717,226 @@ export function generateProfilePage(
 			cursor: not-allowed;
 		}
 
-		/* ===== EXPIRATION SECTION ===== */
-		.expiration-section {
-			background: linear-gradient(135deg, rgba(251, 191, 36, 0.08), rgba(245, 158, 11, 0.08));
-			border: 1px solid rgba(251, 191, 36, 0.25);
-			border-radius: 16px;
-			padding: 20px;
-			margin-bottom: 20px;
+		/* ===== COUNTDOWN HERO SECTION ===== */
+		.countdown-hero {
+			background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+			border: 1px solid rgba(96, 165, 250, 0.3);
+			border-radius: 24px;
+			padding: 32px;
+			margin-bottom: 24px;
+			position: relative;
+			overflow: hidden;
 		}
-		.expiration-header {
+		.countdown-hero::before {
+			content: '';
+			position: absolute;
+			top: -50%;
+			left: -50%;
+			width: 200%;
+			height: 200%;
+			background: radial-gradient(circle at 30% 30%, rgba(59, 130, 246, 0.15), transparent 50%),
+						radial-gradient(circle at 70% 70%, rgba(139, 92, 246, 0.15), transparent 50%);
+			animation: shimmer 8s ease-in-out infinite;
+			pointer-events: none;
+		}
+		@keyframes shimmer {
+			0%, 100% { transform: translate(0, 0) rotate(0deg); }
+			50% { transform: translate(5%, 5%) rotate(5deg); }
+		}
+		.countdown-hero.expired {
+			background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
+			border-color: rgba(239, 68, 68, 0.3);
+		}
+		.countdown-hero.expired::before {
+			background: radial-gradient(circle at 30% 30%, rgba(239, 68, 68, 0.15), transparent 50%);
+		}
+		.countdown-hero.grace {
+			background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(245, 158, 11, 0.1));
+			border-color: rgba(251, 191, 36, 0.3);
+		}
+		.countdown-hero.grace::before {
+			background: radial-gradient(circle at 30% 30%, rgba(251, 191, 36, 0.15), transparent 50%);
+		}
+
+		.countdown-content {
 			display: flex;
 			align-items: center;
-			justify-content: space-between;
-			margin-bottom: 16px;
+			gap: 32px;
+			position: relative;
+			z-index: 1;
 		}
-		.expiration-title {
+		@media (max-width: 600px) {
+			.countdown-content {
+				flex-direction: column;
+				text-align: center;
+			}
+		}
+
+		/* Progress Ring */
+		.countdown-ring {
+			flex-shrink: 0;
+			width: 140px;
+			height: 140px;
+			position: relative;
+		}
+		.countdown-ring svg {
+			width: 100%;
+			height: 100%;
+			transform: rotate(-90deg);
+		}
+		.countdown-ring-bg {
+			fill: none;
+			stroke: rgba(255, 255, 255, 0.1);
+			stroke-width: 8;
+		}
+		.countdown-ring-progress {
+			fill: none;
+			stroke: url(#countdown-gradient);
+			stroke-width: 8;
+			stroke-linecap: round;
+			transition: stroke-dashoffset 0.5s ease;
+		}
+		.countdown-ring-center {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			text-align: center;
+		}
+		.countdown-ring-percent {
+			font-size: 1.75rem;
+			font-weight: 800;
+			color: var(--text);
+			line-height: 1;
+		}
+		.countdown-ring-label {
+			font-size: 0.65rem;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			margin-top: 4px;
+		}
+
+		/* Countdown Details */
+		.countdown-details {
+			flex: 1;
+		}
+		.countdown-status {
 			display: flex;
 			align-items: center;
 			gap: 10px;
-			font-size: 0.95rem;
+			margin-bottom: 12px;
+		}
+		.countdown-status-badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 6px 14px;
+			border-radius: 20px;
+			font-size: 0.75rem;
 			font-weight: 700;
-			color: var(--text);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
 		}
-		.expiration-title svg {
-			width: 20px;
-			height: 20px;
+		.countdown-status-badge.active {
+			background: rgba(34, 197, 94, 0.2);
+			color: #22c55e;
+			border: 1px solid rgba(34, 197, 94, 0.3);
+		}
+		.countdown-status-badge.warning {
+			background: rgba(251, 191, 36, 0.2);
 			color: #fbbf24;
+			border: 1px solid rgba(251, 191, 36, 0.3);
 		}
-		.expiration-content {
+		.countdown-status-badge.danger {
+			background: rgba(239, 68, 68, 0.2);
+			color: #ef4444;
+			border: 1px solid rgba(239, 68, 68, 0.3);
+		}
+		.countdown-status-badge svg {
+			width: 14px;
+			height: 14px;
+		}
+
+		/* Large Countdown Display */
+		.countdown-timer {
+			display: flex;
+			gap: 16px;
+			margin-bottom: 16px;
+		}
+		@media (max-width: 600px) {
+			.countdown-timer {
+				justify-content: center;
+				gap: 12px;
+			}
+		}
+		.countdown-unit {
 			display: flex;
 			flex-direction: column;
-			gap: 12px;
-		}
-		.expiration-item {
-			display: flex;
 			align-items: center;
-			justify-content: space-between;
-			padding: 12px 16px;
+		}
+		.countdown-value {
+			font-size: 2.5rem;
+			font-weight: 800;
+			font-family: ui-monospace, monospace;
+			color: var(--text);
+			line-height: 1;
+			min-width: 70px;
+			text-align: center;
 			background: rgba(30, 30, 40, 0.6);
 			border: 1px solid var(--border);
-			border-radius: 10px;
+			border-radius: 12px;
+			padding: 12px 8px;
 		}
-		.expiration-label {
-			font-size: 0.8rem;
+		@media (max-width: 600px) {
+			.countdown-value {
+				font-size: 1.75rem;
+				min-width: 55px;
+				padding: 10px 6px;
+			}
+		}
+		.countdown-label {
+			font-size: 0.65rem;
 			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			margin-top: 8px;
 		}
-		.expiration-value {
+		.countdown-separator {
+			font-size: 2rem;
+			font-weight: 700;
+			color: var(--text-muted);
+			align-self: flex-start;
+			padding-top: 16px;
+		}
+		@media (max-width: 600px) {
+			.countdown-separator { display: none; }
+		}
+
+		/* Expiration Info */
+		.countdown-info {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 20px;
+		}
+		@media (max-width: 600px) {
+			.countdown-info { justify-content: center; }
+		}
+		.countdown-info-item {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+		}
+		.countdown-info-label {
+			font-size: 0.7rem;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+		}
+		.countdown-info-value {
 			font-size: 0.9rem;
 			font-weight: 600;
 			color: var(--text);
-		}
-		.expiration-countdown {
-			color: #fbbf24;
-			font-family: ui-monospace, monospace;
 		}
 
 		/* ===== OWNER NAMES SECTION ===== */
@@ -3390,32 +3557,76 @@ ${generatePasskeyWalletStyles()}
 					: ''
 			}
 
-			<!-- Name Status & Expiration -->
+			<!-- Countdown Hero -->
 			${
 				expiresMs
 					? `
-			<div class="expiration-section">
-				<div class="expiration-header">
-					<div class="expiration-title">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<circle cx="12" cy="12" r="10"></circle>
-							<polyline points="12 6 12 12 16 14"></polyline>
+			<div class="countdown-hero" id="countdown-hero">
+				<svg style="position:absolute;width:0;height:0;">
+					<defs>
+						<linearGradient id="countdown-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+							<stop offset="0%" stop-color="#3b82f6"/>
+							<stop offset="100%" stop-color="#8b5cf6"/>
+						</linearGradient>
+					</defs>
+				</svg>
+				<div class="countdown-content">
+					<div class="countdown-ring">
+						<svg viewBox="0 0 100 100">
+							<circle class="countdown-ring-bg" cx="50" cy="50" r="42"/>
+							<circle class="countdown-ring-progress" id="countdown-ring-progress" cx="50" cy="50" r="42"
+								stroke-dasharray="263.89" stroke-dashoffset="0"/>
 						</svg>
-						<span>Name Status</span>
+						<div class="countdown-ring-center">
+							<div class="countdown-ring-percent" id="countdown-percent">--</div>
+							<div class="countdown-ring-label">remaining</div>
+						</div>
 					</div>
-				</div>
-				<div class="expiration-content">
-					<div class="expiration-item">
-						<span class="expiration-label">Expires</span>
-						<span class="expiration-value">${new Date(expiresMs).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-					</div>
-					<div class="expiration-item">
-						<span class="expiration-label">Time Remaining</span>
-						<span class="expiration-value expiration-countdown" id="overview-countdown"></span>
-					</div>
-					<div class="expiration-item">
-						<span class="expiration-label">Available After Grace</span>
-						<span class="expiration-value">${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+					<div class="countdown-details">
+						<div class="countdown-status">
+							<span class="countdown-status-badge active" id="countdown-badge">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="12" r="10"></circle>
+									<polyline points="12 6 12 12 16 14"></polyline>
+								</svg>
+								<span id="countdown-status-text">Active</span>
+							</span>
+						</div>
+						<div class="countdown-timer" id="countdown-timer-display">
+							<div class="countdown-unit">
+								<div class="countdown-value" id="countdown-days">--</div>
+								<div class="countdown-label">Days</div>
+							</div>
+							<span class="countdown-separator">:</span>
+							<div class="countdown-unit">
+								<div class="countdown-value" id="countdown-hours">--</div>
+								<div class="countdown-label">Hours</div>
+							</div>
+							<span class="countdown-separator">:</span>
+							<div class="countdown-unit">
+								<div class="countdown-value" id="countdown-mins">--</div>
+								<div class="countdown-label">Minutes</div>
+							</div>
+							<span class="countdown-separator">:</span>
+							<div class="countdown-unit">
+								<div class="countdown-value" id="countdown-secs">--</div>
+								<div class="countdown-label">Seconds</div>
+							</div>
+						</div>
+						<div class="countdown-info">
+							<div class="countdown-info-item">
+								<span class="countdown-info-label">Expires</span>
+								<span class="countdown-info-value">${new Date(expiresMs).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+							</div>
+							<div class="countdown-info-item">
+								<span class="countdown-info-label">Grace Period Ends</span>
+								<span class="countdown-info-value">${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+							</div>
+							<div class="countdown-info-item">
+								<span class="countdown-info-label">Available</span>
+								<span class="countdown-info-value" id="countdown-available-date">${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+							</div>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -6289,48 +6500,116 @@ ${generatePasskeyWalletStyles()}
 			setTimeout(() => fetchOwnedNames(), 100);
 		}
 
-		// ========== OVERVIEW COUNTDOWN & NAMES ==========
-		const overviewCountdown = document.getElementById('overview-countdown');
+		// ========== COUNTDOWN HERO ANIMATION ==========
+		const countdownHero = document.getElementById('countdown-hero');
+		const countdownRingProgress = document.getElementById('countdown-ring-progress');
+		const countdownPercent = document.getElementById('countdown-percent');
+		const countdownBadge = document.getElementById('countdown-badge');
+		const countdownStatusText = document.getElementById('countdown-status-text');
+		const countdownDays = document.getElementById('countdown-days');
+		const countdownHours = document.getElementById('countdown-hours');
+		const countdownMins = document.getElementById('countdown-mins');
+		const countdownSecs = document.getElementById('countdown-secs');
 		const overviewNamesGrid = document.getElementById('overview-names-grid');
 		const overviewNamesCount = document.getElementById('overview-names-count');
 
-		// Update overview countdown
-		function updateOverviewCountdown() {
-			if (!overviewCountdown || !EXPIRATION_MS) return;
+		// Calculate total registration period (assume 1 year = 365 days for progress)
+		const REGISTRATION_PERIOD = 365 * 24 * 60 * 60 * 1000;
+		const CIRCLE_CIRCUMFERENCE = 263.89; // 2 * PI * 42
+
+		function updateCountdownHero() {
+			if (!EXPIRATION_MS) return;
 
 			const now = Date.now();
 			const diff = EXPIRATION_MS - now;
+			const graceDiff = AVAILABLE_AT - now;
 
+			// Update countdown values
 			if (diff <= 0) {
-				const graceDiff = AVAILABLE_AT - now;
+				// Expired - in grace period or available
 				if (graceDiff <= 0) {
-					overviewCountdown.textContent = 'Available Now';
-					overviewCountdown.style.color = 'var(--success)';
+					// Available now
+					if (countdownDays) countdownDays.textContent = '00';
+					if (countdownHours) countdownHours.textContent = '00';
+					if (countdownMins) countdownMins.textContent = '00';
+					if (countdownSecs) countdownSecs.textContent = '00';
+					if (countdownPercent) countdownPercent.textContent = '0%';
+					if (countdownRingProgress) countdownRingProgress.style.strokeDashoffset = CIRCLE_CIRCUMFERENCE;
+					if (countdownHero) countdownHero.className = 'countdown-hero expired';
+					if (countdownBadge) {
+						countdownBadge.className = 'countdown-status-badge danger';
+						countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg><span>Available</span>';
+					}
 				} else {
-					const days = Math.floor(graceDiff / (24 * 60 * 60 * 1000));
-					const hours = Math.floor((graceDiff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-					overviewCountdown.textContent = 'Grace: ' + days + 'd ' + hours + 'h';
-					overviewCountdown.style.color = 'var(--error)';
+					// Grace period
+					const gDays = Math.floor(graceDiff / (24 * 60 * 60 * 1000));
+					const gHours = Math.floor((graceDiff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+					const gMins = Math.floor((graceDiff % (60 * 60 * 1000)) / (60 * 1000));
+					const gSecs = Math.floor((graceDiff % (60 * 1000)) / 1000);
+					if (countdownDays) countdownDays.textContent = String(gDays).padStart(2, '0');
+					if (countdownHours) countdownHours.textContent = String(gHours).padStart(2, '0');
+					if (countdownMins) countdownMins.textContent = String(gMins).padStart(2, '0');
+					if (countdownSecs) countdownSecs.textContent = String(gSecs).padStart(2, '0');
+					const gracePercent = Math.round((graceDiff / (30 * 24 * 60 * 60 * 1000)) * 100);
+					if (countdownPercent) countdownPercent.textContent = gracePercent + '%';
+					if (countdownRingProgress) {
+						const offset = CIRCLE_CIRCUMFERENCE * (1 - gracePercent / 100);
+						countdownRingProgress.style.strokeDashoffset = offset;
+						countdownRingProgress.style.stroke = '#fbbf24';
+					}
+					if (countdownHero) countdownHero.className = 'countdown-hero grace';
+					if (countdownBadge) {
+						countdownBadge.className = 'countdown-status-badge warning';
+						countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span>Grace Period</span>';
+					}
 				}
 				return;
 			}
 
+			// Active - calculate countdown
 			const days = Math.floor(diff / (24 * 60 * 60 * 1000));
 			const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
 			const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+			const secs = Math.floor((diff % (60 * 1000)) / 1000);
 
-			if (days > 0) {
-				overviewCountdown.textContent = days + 'd ' + hours + 'h ' + mins + 'm';
-			} else if (hours > 0) {
-				overviewCountdown.textContent = hours + 'h ' + mins + 'm';
+			if (countdownDays) countdownDays.textContent = String(days).padStart(2, '0');
+			if (countdownHours) countdownHours.textContent = String(hours).padStart(2, '0');
+			if (countdownMins) countdownMins.textContent = String(mins).padStart(2, '0');
+			if (countdownSecs) countdownSecs.textContent = String(secs).padStart(2, '0');
+
+			// Calculate percentage - use time remaining vs 1 year as baseline
+			const percentRemaining = Math.min(100, Math.round((diff / REGISTRATION_PERIOD) * 100));
+			if (countdownPercent) countdownPercent.textContent = percentRemaining + '%';
+
+			// Update ring
+			if (countdownRingProgress) {
+				const offset = CIRCLE_CIRCUMFERENCE * (1 - percentRemaining / 100);
+				countdownRingProgress.style.strokeDashoffset = offset;
+			}
+
+			// Update status badge based on days remaining
+			if (days <= 7) {
+				if (countdownHero) countdownHero.className = 'countdown-hero grace';
+				if (countdownBadge) {
+					countdownBadge.className = 'countdown-status-badge danger';
+					countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span>Expiring Soon</span>';
+				}
+			} else if (days <= 30) {
+				if (countdownBadge) {
+					countdownBadge.className = 'countdown-status-badge warning';
+					countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span>Renew Soon</span>';
+				}
 			} else {
-				overviewCountdown.textContent = mins + 'm';
+				if (countdownBadge) {
+					countdownBadge.className = 'countdown-status-badge active';
+					countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg><span>Active</span>';
+				}
 			}
 		}
 
 		if (EXPIRATION_MS) {
-			updateOverviewCountdown();
-			setInterval(updateOverviewCountdown, 60000);
+			updateCountdownHero();
+			setInterval(updateCountdownHero, 1000); // Update every second for smooth animation
 		}
 
 		// Load owner's names for overview section
