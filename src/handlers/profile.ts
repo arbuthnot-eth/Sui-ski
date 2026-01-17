@@ -2859,15 +2859,183 @@ export function generateProfilePage(
 			cursor: not-allowed;
 		}
 
-		${generatePasskeyWalletStyles()}
-
-		/* ===== SOCIAL LINKS ===== */
-		.social-links-section {
-			background: linear-gradient(135deg, rgba(29, 155, 240, 0.08), rgba(96, 165, 250, 0.08));
-			border: 1px solid rgba(29, 155, 240, 0.2);
+		/* ===== EXPIRATION SECTION ===== */
+		.expiration-section {
+			background: linear-gradient(135deg, rgba(251, 191, 36, 0.08), rgba(245, 158, 11, 0.08));
+			border: 1px solid rgba(251, 191, 36, 0.25);
 			border-radius: 16px;
 			padding: 20px;
 			margin-bottom: 20px;
+		}
+		.expiration-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 16px;
+		}
+		.expiration-title {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			font-size: 0.95rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.expiration-title svg {
+			width: 20px;
+			height: 20px;
+			color: #fbbf24;
+		}
+		.expiration-content {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+		.expiration-item {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 12px 16px;
+			background: rgba(30, 30, 40, 0.6);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+		}
+		.expiration-label {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+		}
+		.expiration-value {
+			font-size: 0.9rem;
+			font-weight: 600;
+			color: var(--text);
+		}
+		.expiration-countdown {
+			color: #fbbf24;
+			font-family: ui-monospace, monospace;
+		}
+
+		/* ===== OWNER NAMES SECTION ===== */
+		.owner-names-section {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(139, 92, 246, 0.08));
+			border: 1px solid rgba(96, 165, 250, 0.25);
+			border-radius: 16px;
+			padding: 20px;
+			margin-bottom: 20px;
+		}
+		.owner-names-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 16px;
+		}
+		.owner-names-title {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			font-size: 0.95rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.owner-names-title svg {
+			width: 20px;
+			height: 20px;
+			color: #60a5fa;
+		}
+		.owner-names-count {
+			font-size: 0.7rem;
+			padding: 3px 10px;
+			background: rgba(96, 165, 250, 0.2);
+			color: #60a5fa;
+			border-radius: 12px;
+			font-weight: 600;
+		}
+		.owner-names-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+			gap: 10px;
+		}
+		.owner-names-loading {
+			grid-column: 1 / -1;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			padding: 24px;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+		}
+		.owner-name-card {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 12px;
+			background: rgba(30, 30, 40, 0.6);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			text-decoration: none;
+			transition: all 0.2s;
+		}
+		.owner-name-card:hover {
+			border-color: var(--accent);
+			background: rgba(96, 165, 250, 0.1);
+		}
+		.owner-name-card.current {
+			border-color: rgba(96, 165, 250, 0.4);
+			background: rgba(96, 165, 250, 0.1);
+		}
+		.owner-name-avatar {
+			width: 32px;
+			height: 32px;
+			border-radius: 8px;
+			background: linear-gradient(135deg, var(--accent), #a78bfa);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 0.85rem;
+			font-weight: 700;
+			color: white;
+			flex-shrink: 0;
+		}
+		.owner-name-text {
+			flex: 1;
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			font-size: 0.85rem;
+			font-weight: 600;
+			color: var(--text);
+		}
+		.owner-name-text .suffix {
+			background: linear-gradient(135deg, var(--accent), #a78bfa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.owner-names-empty {
+			grid-column: 1 / -1;
+			text-align: center;
+			padding: 24px;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+		}
+		.owner-names-more {
+			grid-column: 1 / -1;
+			text-align: center;
+			padding: 10px;
+		}
+		.owner-names-more a {
+			color: var(--accent);
+			font-size: 0.85rem;
+			text-decoration: none;
+		}
+		.owner-names-more a:hover {
+			text-decoration: underline;
+		}
+
+		/* Hide unused sections */
+		.social-links-section {
+			display: none;
 		}
 		.social-links-header {
 			display: flex;
@@ -3368,59 +3536,58 @@ export function generateProfilePage(
 					: ''
 			}
 
-			<!-- Passkey Wallet Section -->
-			${generatePasskeyWalletHTML()}
-
-			<!-- Social Links Section -->
-			${generateSocialLinksHTML(record)}
-
-			<!-- Quick Message Section -->
-			<div class="quick-message-section">
-				<div class="quick-message-header">
-					<div class="quick-message-title">
+			<!-- Name Status & Expiration -->
+			${
+				expiresMs
+					? `
+			<div class="expiration-section">
+				<div class="expiration-header">
+					<div class="expiration-title">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+							<circle cx="12" cy="12" r="10"></circle>
+							<polyline points="12 6 12 12 16 14"></polyline>
 						</svg>
-						<span>Send Message</span>
-						<span class="encrypted-badge">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-								<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-							</svg>
-							Encrypted
-						</span>
+						<span>Name Status</span>
 					</div>
-					<a href="https://blog.sui.io/sui-stack-messaging-sdk/" target="_blank" class="powered-by">
-						Powered by Sui Stack
-					</a>
 				</div>
-				<div class="quick-message-body">
-					<div class="message-recipient">
-						<span class="to-label">To:</span>
-						<span class="to-name">@${escapeHtml(cleanName)}</span>
-						<span class="to-address">${escapeHtml(record.address.slice(0, 8))}...${escapeHtml(record.address.slice(-6))}</span>
+				<div class="expiration-content">
+					<div class="expiration-item">
+						<span class="expiration-label">Expires</span>
+						<span class="expiration-value">${new Date(expiresMs).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
 					</div>
-					<textarea id="message-input" class="quick-message-input" placeholder="Write an encrypted message..." rows="3"></textarea>
-					<div class="quick-message-footer">
-						<div class="message-features">
-							<span class="feature-tag">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-								Seal
-							</span>
-							<span class="feature-tag">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-								Walrus
-							</span>
-						</div>
-						<button class="send-btn" id="send-message-btn">
-							<span class="btn-text">Connect Wallet</span>
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<line x1="22" y1="2" x2="11" y2="13"></line>
-								<polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-							</svg>
-						</button>
+					<div class="expiration-item">
+						<span class="expiration-label">Time Remaining</span>
+						<span class="expiration-value expiration-countdown" id="overview-countdown"></span>
 					</div>
-					<div id="message-status" class="message-status hidden"></div>
+					<div class="expiration-item">
+						<span class="expiration-label">Available After Grace</span>
+						<span class="expiration-value">${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+					</div>
+				</div>
+			</div>
+					`
+					: ''
+			}
+
+			<!-- Owner's Other Names -->
+			<div class="owner-names-section">
+				<div class="owner-names-header">
+					<div class="owner-names-title">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+							<circle cx="9" cy="7" r="4"></circle>
+							<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+							<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+						</svg>
+						<span>Owner's Names</span>
+						<span class="owner-names-count" id="overview-names-count">...</span>
+					</div>
+				</div>
+				<div class="owner-names-grid" id="overview-names-grid">
+					<div class="owner-names-loading">
+						<span class="loading"></span>
+						<span>Loading names...</span>
+					</div>
 				</div>
 			</div>
 					</div>
@@ -6287,7 +6454,126 @@ export function generateProfilePage(
 			setTimeout(() => fetchOwnedNames(), 100);
 		}
 
-		// ========== SOCIAL LINKS FUNCTIONALITY ==========
+		// ========== OVERVIEW COUNTDOWN & NAMES ==========
+		const overviewCountdown = document.getElementById('overview-countdown');
+		const overviewNamesGrid = document.getElementById('overview-names-grid');
+		const overviewNamesCount = document.getElementById('overview-names-count');
+
+		// Update overview countdown
+		function updateOverviewCountdown() {
+			if (!overviewCountdown || !EXPIRATION_MS) return;
+
+			const now = Date.now();
+			const diff = EXPIRATION_MS - now;
+
+			if (diff <= 0) {
+				const graceDiff = AVAILABLE_AT - now;
+				if (graceDiff <= 0) {
+					overviewCountdown.textContent = 'Available Now';
+					overviewCountdown.style.color = 'var(--success)';
+				} else {
+					const days = Math.floor(graceDiff / (24 * 60 * 60 * 1000));
+					const hours = Math.floor((graceDiff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+					overviewCountdown.textContent = 'Grace: ' + days + 'd ' + hours + 'h';
+					overviewCountdown.style.color = 'var(--error)';
+				}
+				return;
+			}
+
+			const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+			const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+			const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+
+			if (days > 0) {
+				overviewCountdown.textContent = days + 'd ' + hours + 'h ' + mins + 'm';
+			} else if (hours > 0) {
+				overviewCountdown.textContent = hours + 'h ' + mins + 'm';
+			} else {
+				overviewCountdown.textContent = mins + 'm';
+			}
+		}
+
+		if (EXPIRATION_MS) {
+			updateOverviewCountdown();
+			setInterval(updateOverviewCountdown, 60000);
+		}
+
+		// Load owner's names for overview section
+		async function loadOverviewNames() {
+			if (!overviewNamesGrid) return;
+
+			try {
+				const suiClient = new SuiClient({ url: RPC_URL });
+
+				// First, get the NFT owner address if we don't have it yet
+				let ownerAddress = nftOwnerAddress;
+				if (!ownerAddress && NFT_ID) {
+					const obj = await suiClient.getObject({
+						id: NFT_ID,
+						options: { showOwner: true }
+					});
+					if (obj?.data?.owner && typeof obj.data.owner === 'object') {
+						if ('AddressOwner' in obj.data.owner) {
+							ownerAddress = obj.data.owner.AddressOwner;
+						} else if ('ObjectOwner' in obj.data.owner) {
+							ownerAddress = obj.data.owner.ObjectOwner;
+						}
+					}
+					if (ownerAddress) {
+						nftOwnerAddress = ownerAddress;
+					}
+				}
+
+				// Fallback to target address if we can't get owner
+				const addressToQuery = ownerAddress || CURRENT_ADDRESS;
+
+				const response = await suiClient.resolveNameServiceNames({
+					address: addressToQuery,
+					limit: 12
+				});
+
+				if (!response.data || response.data.length === 0) {
+					overviewNamesGrid.innerHTML = '<div class="owner-names-empty">No names found for this owner</div>';
+					if (overviewNamesCount) overviewNamesCount.textContent = '0';
+					return;
+				}
+
+				const names = response.data;
+				const hasMore = response.hasNextPage;
+				const totalCount = hasMore ? names.length + '+' : String(names.length);
+
+				if (overviewNamesCount) overviewNamesCount.textContent = totalCount;
+
+				let html = names.map(name => {
+					const cleanedName = name.replace(/\\.sui$/i, '');
+					const isCurrentName = cleanedName.toLowerCase() === NAME.toLowerCase();
+					const initial = cleanedName.charAt(0).toUpperCase();
+					const profileUrl = 'https://' + cleanedName + '.sui.ski';
+
+					return \`
+						<a href="\${profileUrl}" class="owner-name-card\${isCurrentName ? ' current' : ''}" title="\${cleanedName}.sui">
+							<div class="owner-name-avatar">\${initial}</div>
+							<div class="owner-name-text">\${escapeHtmlJs(cleanedName)}<span class="suffix">.sui</span></div>
+						</a>
+					\`;
+				}).join('');
+
+				if (hasMore) {
+					html += '<div class="owner-names-more"><a href="#" onclick="switchTab(\\'names\\'); return false;">View all names →</a></div>';
+				}
+
+				overviewNamesGrid.innerHTML = html;
+
+			} catch (error) {
+				console.error('Failed to load overview names:', error);
+				overviewNamesGrid.innerHTML = '<div class="owner-names-empty">Failed to load names</div>';
+			}
+		}
+
+		// Load overview names immediately
+		loadOverviewNames();
+
+		// ========== SOCIAL LINKS FUNCTIONALITY (HIDDEN) ==========
 		const CURRENT_X_USERNAME = ${serializeJson(getXUsername(record) || '')};
 		const socialModal = document.getElementById('social-modal');
 		const xUsernameInput = document.getElementById('x-username-input');
