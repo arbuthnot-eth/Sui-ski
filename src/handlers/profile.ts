@@ -301,7 +301,7 @@ export function generateProfilePage(
 									<line id="decay-marker-line" class="decay-marker-line" x1="0" y1="10" x2="0" y2="80"/>
 								</svg>
 								<div class="graph-labels">
-									<span class="graph-label-start" id="graph-max-label">$100M</span>
+									<span class="graph-label-start" id="graph-max-label">$10M</span>
 									<span class="graph-label-end">0</span>
 								</div>
 								<div class="graph-time-labels">
@@ -313,12 +313,13 @@ export function generateProfilePage(
 							<div class="premium-values-grid">
 								<div class="premium-value-row sui-row">
 									<span class="premium-currency-badge sui-badge">SUI</span>
-									<span class="premium-value" id="grace-skill-value">100,000,000</span>
+									<span class="premium-value" id="grace-skill-value">10,000,000</span>
 									<span class="premium-usd">≈ $<span id="grace-skill-usd">--</span></span>
 								</div>
 								<div class="premium-value-row ns-row">
 									<span class="premium-currency-badge ns-badge">$NS</span>
 									<span class="premium-value" id="grace-ns-value">--</span>
+									<span class="premium-usd">≈ $<span id="grace-ns-usd">--</span></span>
 									<span class="premium-discount">3-day discount</span>
 								</div>
 							</div>
@@ -1043,7 +1044,7 @@ export function generateProfilePage(
 	const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
 	const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
 	const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
-	const USD_TARGET_VALUE = 100_000_000; // $100M USD target
+	const USD_TARGET_VALUE = 10_000_000; // $10M USD target
 	const DEFAULT_SUI_PRICE = 1; // Fallback price if CoinGecko fails
 	const numberFormatter =
 		typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function'
@@ -1110,6 +1111,10 @@ export function generateProfilePage(
 
 			if (graceSkillUsd && suiPriceUsd !== null) {
 				graceSkillUsd.textContent = usdFormatter.format(suiValue * suiPriceUsd);
+			}
+
+			if (graceNsUsd && suiPriceUsd !== null) {
+				graceNsUsd.textContent = usdFormatter.format(nsValue * suiPriceUsd);
 			}
 
 			updateGraphMarker(clampedProgress, nsProgress);
@@ -4645,6 +4650,7 @@ export function generateProfilePage(
 		const graceSkillValue = document.getElementById('grace-skill-value');
 		const graceSkillUsd = document.getElementById('grace-skill-usd');
 		const graceNsValue = document.getElementById('grace-ns-value');
+		const graceNsUsd = document.getElementById('grace-ns-usd');
 		const decayMarker = document.getElementById('decay-marker');
 		const decayMarkerLine = document.getElementById('decay-marker-line');
 		const decayCurve = document.getElementById('decay-curve');
