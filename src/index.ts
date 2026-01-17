@@ -191,7 +191,11 @@ async function handleSuiNSRequest(
 	const hostname = options.originalHostname || url.hostname
 	const normalizedPath = url.pathname || '/'
 	const canonicalUrl = `${url.protocol}//${hostname}${normalizedPath}`
-	const profileOptions = { canonicalUrl, hostname }
+	const profileOptions = {
+		canonicalUrl,
+		hostname,
+		inGracePeriod: result.inGracePeriod || false,
+	}
 	const shouldServeProfileForTwitter = Boolean(options.isTwitterBot) && normalizedPath === '/'
 	let cachedProfileHtml: string | null = null
 	const renderProfilePage = () => {

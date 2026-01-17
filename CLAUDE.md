@@ -133,3 +133,22 @@ The gateway now includes comprehensive package management capabilities:
 - Transaction serialization and digest generation
 
 See `docs/MVR_IMPROVEMENTS.md` for detailed documentation.
+
+## Sui Transaction Building
+
+For building Sui blockchain transactions, this project uses the `Transaction` class from `@mysten/sui/transactions`. Quick reference:
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+const [coin] = tx.splitCoins(tx.gas, [100]);
+tx.transferObjects([coin], '0xRecipientAddress');
+```
+
+See `docs/SUI_TRANSACTION_BUILDING.md` for comprehensive documentation on:
+- Transaction commands (SplitCoins, MergeCoins, TransferObjects, MoveCall, Publish)
+- Input types (pure values, object references, transaction results)
+- Gas configuration and optimization
+- Transaction serialization and offline building
+- Sponsored transactions and advanced features

@@ -1906,6 +1906,148 @@ export const profileStyles = `
 			color: var(--accent);
 		}
 
+		/* Grace Period Banner */
+		.grace-period-banner {
+			display: flex;
+			align-items: flex-start;
+			gap: 16px;
+			margin-top: 24px;
+			padding: 20px;
+			background: linear-gradient(135deg, rgba(248, 113, 113, 0.08) 0%, rgba(251, 191, 36, 0.06) 100%);
+			border: 1px solid rgba(248, 113, 113, 0.25);
+			border-radius: 12px;
+			animation: pulse-danger 2s infinite;
+		}
+		.grace-period-icon {
+			flex-shrink: 0;
+			width: 40px;
+			height: 40px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: rgba(248, 113, 113, 0.15);
+			border-radius: 10px;
+		}
+		.grace-period-icon svg {
+			width: 22px;
+			height: 22px;
+			color: var(--error);
+		}
+		.grace-period-content {
+			flex: 1;
+			min-width: 0;
+		}
+		.grace-period-title {
+			font-size: 1rem;
+			font-weight: 600;
+			color: var(--error);
+			margin-bottom: 6px;
+		}
+		.grace-period-text {
+			font-size: 0.875rem;
+			color: var(--text-muted);
+			line-height: 1.5;
+		}
+		.grace-period-text strong {
+			color: var(--text);
+		}
+		.grace-period-countdown {
+			margin-top: 16px;
+			padding-top: 16px;
+			border-top: 1px solid rgba(248, 113, 113, 0.15);
+		}
+		.grace-countdown-label {
+			font-size: 0.75rem;
+			font-weight: 600;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			margin-bottom: 8px;
+		}
+		.grace-countdown-timer {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+		}
+		.grace-countdown-unit {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			min-width: 48px;
+		}
+		.grace-countdown-value {
+			font-size: 1.5rem;
+			font-weight: 700;
+			color: var(--error);
+			font-family: var(--font-mono, monospace);
+			line-height: 1;
+		}
+		.grace-countdown-unit-label {
+			font-size: 0.65rem;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.03em;
+			margin-top: 2px;
+		}
+		.grace-countdown-separator {
+			font-size: 1.25rem;
+			font-weight: 700;
+			color: var(--text-muted);
+			opacity: 0.5;
+			line-height: 1;
+			margin-bottom: 14px;
+		}
+		.grace-period-actions {
+			flex-shrink: 0;
+			display: flex;
+			gap: 10px;
+		}
+		.grace-period-btn {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			padding: 10px 18px;
+			border-radius: 8px;
+			font-size: 0.875rem;
+			font-weight: 600;
+			text-decoration: none;
+			transition: all 0.2s;
+			cursor: pointer;
+			border: none;
+		}
+		.grace-period-btn svg {
+			width: 16px;
+			height: 16px;
+		}
+		.grace-period-btn.renew {
+			background: linear-gradient(135deg, #22c55e, #16a34a);
+			color: white;
+			box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
+		}
+		.grace-period-btn.renew:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 6px 16px rgba(34, 197, 94, 0.35);
+		}
+		@media (max-width: 640px) {
+			.grace-period-banner {
+				flex-direction: column;
+				gap: 12px;
+			}
+			.grace-period-actions {
+				width: 100%;
+			}
+			.grace-period-btn {
+				flex: 1;
+				justify-content: center;
+			}
+			.grace-countdown-unit {
+				min-width: 40px;
+			}
+			.grace-countdown-value {
+				font-size: 1.25rem;
+			}
+		}
+
 		/* NFT Details Section */
 		.nft-details-section {
 			margin-top: 32px;

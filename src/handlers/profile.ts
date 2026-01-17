@@ -7,6 +7,8 @@ export interface ProfilePageOptions {
 	hostname?: string
 	description?: string
 	image?: string
+	/** Whether the name is in grace period (expired but not yet available for registration) */
+	inGracePeriod?: boolean
 }
 
 const DESCRIPTION_RECORD_KEYS = ['description', 'bio', 'about', 'summary', 'tagline', 'note']
@@ -217,6 +219,63 @@ export function generateProfilePage(
 			</div>
 
 			${
+				options.inGracePeriod
+					? `
+			<!-- Grace Period Banner -->
+			<div class="grace-period-banner" id="grace-period-banner">
+				<div class="grace-period-icon">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10"></circle>
+						<line x1="12" y1="8" x2="12" y2="12"></line>
+						<line x1="12" y1="16" x2="12.01" y2="16"></line>
+					</svg>
+				</div>
+				<div class="grace-period-content">
+					<div class="grace-period-title">This name has expired</div>
+					<div class="grace-period-text">
+						The name <strong>${escapeHtml(cleanName)}.sui</strong> is currently in its 30-day grace period.
+						The owner can renew it until <strong>${expiresAt ? new Date(expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong>.
+					</div>
+					<div class="grace-period-countdown">
+						<div class="grace-countdown-label">Time left to renew:</div>
+						<div class="grace-countdown-timer" id="grace-countdown-timer">
+							<div class="grace-countdown-unit">
+								<span class="grace-countdown-value" id="grace-days">--</span>
+								<span class="grace-countdown-unit-label">days</span>
+							</div>
+							<span class="grace-countdown-separator">:</span>
+							<div class="grace-countdown-unit">
+								<span class="grace-countdown-value" id="grace-hours">--</span>
+								<span class="grace-countdown-unit-label">hrs</span>
+							</div>
+							<span class="grace-countdown-separator">:</span>
+							<div class="grace-countdown-unit">
+								<span class="grace-countdown-value" id="grace-mins">--</span>
+								<span class="grace-countdown-unit-label">min</span>
+							</div>
+							<span class="grace-countdown-separator">:</span>
+							<div class="grace-countdown-unit">
+								<span class="grace-countdown-value" id="grace-secs">--</span>
+								<span class="grace-countdown-unit-label">sec</span>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="grace-period-actions" id="grace-period-actions">
+					<a href="https://suins.io/name/${escapeHtml(cleanName)}" target="_blank" class="grace-period-btn renew" id="renew-name-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="23 4 23 10 17 10"></polyline>
+							<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+						</svg>
+						Renew on SuiNS
+					</a>
+				</div>
+			</div>
+					`
+					: ''
+			}
+
+			${
 				record.contentHash || record.walrusSiteId
 					? `
 			<div class="profile-grid">
@@ -272,12 +331,13 @@ export function generateProfilePage(
 					</div>
 					<div class="countdown-details">
 						<div class="countdown-status">
-							<span class="countdown-status-badge active" id="countdown-badge">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<circle cx="12" cy="12" r="10"></circle>
-									<polyline points="12 6 12 12 16 14"></polyline>
-								</svg>
-								<span id="countdown-status-text">Active</span>
+							<span class="countdown-status-badge ${options.inGracePeriod ? 'warning' : 'active'}" id="countdown-badge">
+								${
+									options.inGracePeriod
+										? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`
+										: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`
+								}
+								<span id="countdown-status-text">${options.inGracePeriod ? 'Grace Period' : 'Active'}</span>
 							</span>
 						</div>
 						<div class="countdown-timer" id="countdown-timer-display">
@@ -763,6 +823,7 @@ export function generateProfilePage(
 		const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
 		const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
 		const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
+		const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
 
 		let connectedWallet = null;
 		let connectedAccount = null;
@@ -1109,6 +1170,25 @@ export function generateProfilePage(
 			} else {
 				editBtn.disabled = true;
 				editBtn.title = 'Only the NFT owner or target address can edit';
+			}
+
+			// Update grace period banner visibility
+			updateGracePeriodActions();
+		}
+
+		// Update grace period actions visibility (show renew button if owner is connected)
+		function updateGracePeriodActions() {
+			if (!IS_IN_GRACE_PERIOD) return;
+
+			const gracePeriodActions = document.getElementById('grace-period-actions');
+			if (!gracePeriodActions) return;
+
+			const isOwner = connectedAddress && nftOwnerAddress && connectedAddress === nftOwnerAddress;
+
+			if (isOwner) {
+				gracePeriodActions.style.display = 'flex';
+			} else {
+				gracePeriodActions.style.display = 'none';
 			}
 		}
 
@@ -3993,6 +4073,52 @@ export function generateProfilePage(
 			setInterval(updateCountdownHero, 1000); // Update every second for smooth animation
 		}
 
+		// ========== GRACE PERIOD BANNER COUNTDOWN ==========
+		const graceDays = document.getElementById('grace-days');
+		const graceHours = document.getElementById('grace-hours');
+		const graceMins = document.getElementById('grace-mins');
+		const graceSecs = document.getElementById('grace-secs');
+		const graceBanner = document.getElementById('grace-period-banner');
+
+		function updateGracePeriodCountdown() {
+			if (!EXPIRATION_MS || !IS_IN_GRACE_PERIOD) return;
+
+			const now = Date.now();
+			const gracePeriodEnd = AVAILABLE_AT;
+			const diff = gracePeriodEnd - now;
+
+			if (diff <= 0) {
+				// Grace period has ended - name is now available
+				if (graceDays) graceDays.textContent = '00';
+				if (graceHours) graceHours.textContent = '00';
+				if (graceMins) graceMins.textContent = '00';
+				if (graceSecs) graceSecs.textContent = '00';
+				if (graceBanner) {
+					const title = graceBanner.querySelector('.grace-period-title');
+					const text = graceBanner.querySelector('.grace-period-text');
+					const countdownLabel = graceBanner.querySelector('.grace-countdown-label');
+					if (title) title.textContent = 'This name is now available!';
+					if (text) text.innerHTML = 'The grace period has ended. This name can now be registered by anyone.';
+					if (countdownLabel) countdownLabel.textContent = 'Available now';
+				}
+				return;
+			}
+
+			const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+			const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+			const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+			const secs = Math.floor((diff % (60 * 1000)) / 1000);
+
+			if (graceDays) graceDays.textContent = String(days).padStart(2, '0');
+			if (graceHours) graceHours.textContent = String(hours).padStart(2, '0');
+			if (graceMins) graceMins.textContent = String(mins).padStart(2, '0');
+			if (graceSecs) graceSecs.textContent = String(secs).padStart(2, '0');
+		}
+
+		if (IS_IN_GRACE_PERIOD && EXPIRATION_MS) {
+			updateGracePeriodCountdown();
+			setInterval(updateGracePeriodCountdown, 1000);
+		}
 
 		// ========== SOCIAL LINKS FUNCTIONALITY (HIDDEN) ==========
 		const CURRENT_X_USERNAME = ${serializeJson(getXUsername(record) || '')};

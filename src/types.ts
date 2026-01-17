@@ -63,8 +63,10 @@ export interface ResolverResult {
 	error?: string
 	/** Cache TTL in seconds */
 	cacheTtl?: number
-	/** Whether the name has expired (available for re-registration) */
+	/** Whether the name has expired */
 	expired?: boolean
+	/** Whether the name is in the grace period (expired but not yet available for registration) */
+	inGracePeriod?: boolean
 }
 
 /** Standard gateway error response */

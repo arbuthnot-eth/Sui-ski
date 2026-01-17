@@ -5,9 +5,11 @@ import { cacheKey, getCached, setCache } from '../utils/cache'
 import { toSuiNSName } from '../utils/subdomain'
 
 const CACHE_TTL = 300 // 5 minutes
+const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 /**
  * Resolve a SuiNS name to its on-chain records
+ * Returns data even for expired names that are still in grace period
  */
 export async function resolveSuiNS(
 	name: string,
@@ -17,17 +19,24 @@ export async function resolveSuiNS(
 	const suinsName = toSuiNSName(name)
 	const key = cacheKey('suins', env.SUI_NETWORK, suinsName)
 
-	// Check cache first, but also verify expiration
+	// Check cache first, but also verify expiration status
 	if (!skipCache) {
 		const cached = await getCached<SuiNSRecord & { expirationTimestampMs?: string }>(env, key)
 		if (cached) {
-			// Check if cached record has expired
+			// Check expiration status
 			if (cached.expirationTimestampMs) {
 				const expirationTime = Number(cached.expirationTimestampMs)
-				if (expirationTime < Date.now()) {
-					// Name has expired, clear cache and return not found
+				const now = Date.now()
+				const gracePeriodEnd = expirationTime + GRACE_PERIOD_MS
+
+				if (now >= gracePeriodEnd) {
+					// Past grace period - name is available for registration
 					await env.CACHE.delete(key)
-					return { found: false, error: `Name "${suinsName}" has expired`, expired: true }
+					return { found: false, error: `Name "${suinsName}" has expired and is available`, expired: true }
+				}
+				if (now >= expirationTime) {
+					// In grace period - return data but mark as expired
+					return { found: true, data: cached, cacheTtl: CACHE_TTL, expired: true, inGracePeriod: true }
 				}
 			}
 			return { found: true, data: cached, cacheTtl: CACHE_TTL }
@@ -47,12 +56,22 @@ export async function resolveSuiNS(
 			return { found: false, error: `Name "${suinsName}" not found` }
 		}
 
-		// Check if the name has expired
+		// Check expiration status
+		let expired = false
+		let inGracePeriod = false
 		if (nameRecord.expirationTimestampMs) {
 			const expirationTime = Number(nameRecord.expirationTimestampMs)
 			const now = Date.now()
-			if (expirationTime < now) {
-				return { found: false, error: `Name "${suinsName}" has expired`, expired: true }
+			const gracePeriodEnd = expirationTime + GRACE_PERIOD_MS
+
+			if (now >= gracePeriodEnd) {
+				// Past grace period - name is available for registration
+				return { found: false, error: `Name "${suinsName}" has expired and is available`, expired: true }
+			}
+			if (now >= expirationTime) {
+				// In grace period - continue to fetch data but mark as expired
+				expired = true
+				inGracePeriod = true
 			}
 		}
 
@@ -93,10 +112,12 @@ export async function resolveSuiNS(
 			}
 		}
 
-		// Cache the result
-		await setCache(env, key, record, CACHE_TTL)
+		// Cache the result (only cache non-expired names)
+		if (!expired) {
+			await setCache(env, key, record, CACHE_TTL)
+		}
 
-		return { found: true, data: record, cacheTtl: CACHE_TTL }
+		return { found: true, data: record, cacheTtl: CACHE_TTL, expired, inGracePeriod }
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error'
 		return { found: false, error: message }
