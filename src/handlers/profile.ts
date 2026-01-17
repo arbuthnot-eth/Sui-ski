@@ -830,12 +830,12 @@ export function generateProfilePage(
 		.wallet-bar {
 			display: flex;
 			align-items: center;
-			justify-content: space-between;
 			gap: 10px;
 			margin-bottom: 12px;
 			font-size: 0.75rem;
 		}
 		.wallet-bar .wallet-status {
+			margin-left: auto;
 			display: flex;
 			align-items: center;
 			gap: 10px;
@@ -864,6 +864,7 @@ export function generateProfilePage(
 		}
 		.wallet-bar button:hover { color: var(--error); }
 		.wallet-bar .connect-btn {
+			margin-left: auto;
 			padding: 10px 18px;
 			background: linear-gradient(135deg, #3b82f6, #8b5cf6);
 			border: none;
