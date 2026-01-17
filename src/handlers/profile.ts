@@ -274,35 +274,50 @@ export function generateProfilePage(
 											<stop offset="0%" style="stop-color:var(--accent);stop-opacity:0.3"/>
 											<stop offset="100%" style="stop-color:var(--accent);stop-opacity:0.05"/>
 										</linearGradient>
+										<linearGradient id="nsDecayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+											<stop offset="0%" style="stop-color:#4DA2FF;stop-opacity:0.25"/>
+											<stop offset="100%" style="stop-color:#4DA2FF;stop-opacity:0.03"/>
+										</linearGradient>
 									</defs>
 									<!-- Grid lines -->
 									<line x1="0" y1="20" x2="300" y2="20" class="graph-grid"/>
 									<line x1="0" y1="40" x2="300" y2="40" class="graph-grid"/>
 									<line x1="0" y1="60" x2="300" y2="60" class="graph-grid"/>
-									<!-- Exponential decay curve (filled area) -->
+									<!-- SUI exponential decay curve (filled area) -->
 									<path id="decay-area" class="decay-area" d="M0,10 Q75,12 150,30 T300,70 L300,80 L0,80 Z"/>
-									<!-- Exponential decay curve (line) -->
+									<!-- SUI exponential decay curve (line) -->
 									<path id="decay-curve" class="decay-curve" d="M0,10 Q75,12 150,30 T300,70"/>
-									<!-- Current position marker -->
+									<!-- NS decay curve - 3 day discount (filled area) -->
+									<path id="ns-decay-area" class="ns-decay-area" d="M0,10 Q75,12 150,30 T300,70 L300,80 L0,80 Z"/>
+									<!-- NS decay curve (line) -->
+									<path id="ns-decay-curve" class="ns-decay-curve" d="M0,10 Q75,12 150,30 T300,70"/>
+									<!-- SUI current position marker -->
 									<circle id="decay-marker" class="decay-marker" cx="0" cy="10" r="5"/>
-									<!-- Vertical line from marker to bottom -->
+									<!-- NS current position marker -->
+									<circle id="ns-decay-marker" class="ns-decay-marker" cx="0" cy="10" r="4"/>
+									<!-- Vertical line from SUI marker -->
 									<line id="decay-marker-line" class="decay-marker-line" x1="0" y1="10" x2="0" y2="80"/>
 								</svg>
 								<div class="graph-labels">
-									<span class="graph-label-start">100M SUI</span>
-									<span class="graph-label-end">0 SUI</span>
+									<span class="graph-label-start">100M</span>
+									<span class="graph-label-end">0</span>
 								</div>
 								<div class="graph-time-labels">
 									<span>Day 0</span>
 									<span>Day 30</span>
 								</div>
 							</div>
-							<div class="grace-skill-value">
-								<span id="grace-skill-value">100,000,000</span>
-								<span class="grace-skill-unit">SUI</span>
-							</div>
-							<div class="grace-skill-usd">
-								≈ $<span id="grace-skill-usd">--</span> USD
+							<div class="premium-values-grid">
+								<div class="premium-value-row sui-row">
+									<span class="premium-currency-badge sui-badge">SUI</span>
+									<span class="premium-value" id="grace-skill-value">100,000,000</span>
+									<span class="premium-usd">≈ $<span id="grace-skill-usd">--</span></span>
+								</div>
+								<div class="premium-value-row ns-row">
+									<span class="premium-currency-badge ns-badge">$NS</span>
+									<span class="premium-value" id="grace-ns-value">--</span>
+									<span class="premium-discount">3-day discount</span>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -4513,14 +4528,23 @@ export function generateProfilePage(
 		const graceBanner = document.getElementById('grace-period-banner');
 		const graceSkillValue = document.getElementById('grace-skill-value');
 		const graceSkillUsd = document.getElementById('grace-skill-usd');
+		const graceNsValue = document.getElementById('grace-ns-value');
 		const decayMarker = document.getElementById('decay-marker');
 		const decayMarkerLine = document.getElementById('decay-marker-line');
 		const decayCurve = document.getElementById('decay-curve');
 		const decayArea = document.getElementById('decay-area');
+		const nsDecayMarker = document.getElementById('ns-decay-marker');
+		const nsDecayCurve = document.getElementById('ns-decay-curve');
+		const nsDecayArea = document.getElementById('ns-decay-area');
 
 		// SUI price state
 		let suiPriceUsd = null;
 		const usdFormatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+		// NS discount: 3 days expressed as fraction of 30-day window
+		const NS_DISCOUNT_DAYS = 3;
+		const GRACE_PERIOD_DAYS = 30;
+		const NS_DISCOUNT_PROGRESS = NS_DISCOUNT_DAYS / GRACE_PERIOD_DAYS; // 0.1 (10%)
 
 		// Fetch SUI price from CoinGecko
 		async function fetchSuiPrice() {
@@ -4543,8 +4567,8 @@ export function generateProfilePage(
 			return SKILL_CREATOR_MAX_SUPPLY * Math.exp(-k * progress);
 		}
 
-		// Generate SVG path for exponential decay curve
-		function generateDecayCurvePath() {
+		// Generate SVG path for exponential decay curve with optional progress offset
+		function generateDecayCurvePath(progressOffset = 0) {
 			const width = 300;
 			const height = 80;
 			const padding = 10;
@@ -4552,7 +4576,9 @@ export function generateProfilePage(
 
 			for (let i = 0; i <= 100; i++) {
 				const progress = i / 100;
-				const value = getDecayValue(progress);
+				// Apply offset for NS curve (shifted forward in time = lower values)
+				const adjustedProgress = Math.min(1, progress + progressOffset);
+				const value = getDecayValue(adjustedProgress);
 				const x = progress * width;
 				// Map value (0 to 100M) to y (height-padding to padding)
 				const normalizedValue = value / SKILL_CREATOR_MAX_SUPPLY;
@@ -4573,32 +4599,54 @@ export function generateProfilePage(
 		}
 
 		// Update graph marker position based on progress
-		function updateGraphMarker(progress) {
-			if (!decayMarker || !decayMarkerLine) return;
-
+		function updateGraphMarker(progress, nsProgress) {
 			const width = 300;
 			const height = 80;
 			const padding = 10;
 
-			const clampedProgress = Math.max(0, Math.min(1, progress));
-			const value = getDecayValue(clampedProgress);
-			const x = clampedProgress * width;
-			const normalizedValue = value / SKILL_CREATOR_MAX_SUPPLY;
-			const y = padding + (1 - normalizedValue) * (height - padding * 2);
+			// Update SUI marker
+			if (decayMarker && decayMarkerLine) {
+				const clampedProgress = Math.max(0, Math.min(1, progress));
+				const value = getDecayValue(clampedProgress);
+				const x = clampedProgress * width;
+				const normalizedValue = value / SKILL_CREATOR_MAX_SUPPLY;
+				const y = padding + (1 - normalizedValue) * (height - padding * 2);
 
-			decayMarker.setAttribute('cx', x.toString());
-			decayMarker.setAttribute('cy', y.toString());
-			decayMarkerLine.setAttribute('x1', x.toString());
-			decayMarkerLine.setAttribute('y1', y.toString());
-			decayMarkerLine.setAttribute('x2', x.toString());
+				decayMarker.setAttribute('cx', x.toString());
+				decayMarker.setAttribute('cy', y.toString());
+				decayMarkerLine.setAttribute('x1', x.toString());
+				decayMarkerLine.setAttribute('y1', y.toString());
+				decayMarkerLine.setAttribute('x2', x.toString());
+			}
+
+			// Update NS marker (same x position, but y on the NS curve)
+			if (nsDecayMarker) {
+				const clampedProgress = Math.max(0, Math.min(1, progress));
+				const nsValue = getDecayValue(Math.min(1, nsProgress));
+				const x = clampedProgress * width;
+				const normalizedNsValue = nsValue / SKILL_CREATOR_MAX_SUPPLY;
+				const nsY = padding + (1 - normalizedNsValue) * (height - padding * 2);
+
+				nsDecayMarker.setAttribute('cx', x.toString());
+				nsDecayMarker.setAttribute('cy', nsY.toString());
+			}
 		}
 
-		// Initialize the decay curve
-		function initDecayCurve() {
-			if (!decayCurve || !decayArea) return;
-			const { curvePath, areaPath } = generateDecayCurvePath();
-			decayCurve.setAttribute('d', curvePath);
-			decayArea.setAttribute('d', areaPath);
+		// Initialize both decay curves
+		function initDecayCurves() {
+			// SUI curve (no offset)
+			if (decayCurve && decayArea) {
+				const { curvePath, areaPath } = generateDecayCurvePath(0);
+				decayCurve.setAttribute('d', curvePath);
+				decayArea.setAttribute('d', areaPath);
+			}
+
+			// NS curve (3-day offset = 10% progress offset)
+			if (nsDecayCurve && nsDecayArea) {
+				const { curvePath, areaPath } = generateDecayCurvePath(NS_DISCOUNT_PROGRESS);
+				nsDecayCurve.setAttribute('d', curvePath);
+				nsDecayArea.setAttribute('d', areaPath);
+			}
 		}
 
 		function updateGraceSkillCounter(currentTime = Date.now()) {
@@ -4608,7 +4656,8 @@ export function generateProfilePage(
 			if (totalWindow <= 0) {
 				graceSkillValue.textContent = '0';
 				if (graceSkillUsd) graceSkillUsd.textContent = '0';
-				updateGraphMarker(1);
+				if (graceNsValue) graceNsValue.textContent = '0';
+				updateGraphMarker(1, 1);
 				return;
 			}
 
@@ -4616,18 +4665,25 @@ export function generateProfilePage(
 			const elapsed = clampedTime - EXPIRATION_MS;
 			const progress = elapsed / totalWindow;
 
-			// Calculate remaining value using same exponential decay
-			const remainingValue = Math.max(0, Math.round(getDecayValue(progress)));
-			graceSkillValue.textContent = numberFormatter.format(remainingValue);
+			// Calculate SUI premium (current position on decay curve)
+			const suiValue = Math.max(0, Math.round(getDecayValue(progress)));
+			graceSkillValue.textContent = numberFormatter.format(suiValue);
 
-			// Update USD value if price is available
+			// Calculate NS premium (3-day discount = position + 10% on decay curve)
+			const nsProgress = Math.min(1, progress + NS_DISCOUNT_PROGRESS);
+			const nsValue = Math.max(0, Math.round(getDecayValue(nsProgress)));
+			if (graceNsValue) {
+				graceNsValue.textContent = numberFormatter.format(nsValue);
+			}
+
+			// Update USD value if price is available (for SUI)
 			if (graceSkillUsd && suiPriceUsd !== null) {
-				const usdValue = remainingValue * suiPriceUsd;
+				const usdValue = suiValue * suiPriceUsd;
 				graceSkillUsd.textContent = usdFormatter.format(usdValue);
 			}
 
-			// Update graph marker
-			updateGraphMarker(progress);
+			// Update graph markers
+			updateGraphMarker(progress, nsProgress);
 		}
 
 		function updateGracePeriodCountdown() {
@@ -4668,8 +4724,8 @@ export function generateProfilePage(
 		}
 
 		if (IS_IN_GRACE_PERIOD && EXPIRATION_MS) {
-			// Initialize decay curve visualization
-			initDecayCurve();
+			// Initialize both decay curves (SUI and NS)
+			initDecayCurves();
 			// Fetch SUI price initially and every 60 seconds
 			fetchSuiPrice();
 			setInterval(fetchSuiPrice, 60000);

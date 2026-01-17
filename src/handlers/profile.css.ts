@@ -2092,6 +2092,24 @@ export const profileStyles = `
 			opacity: 0.5;
 			transition: x1 0.3s ease, y1 0.3s ease, x2 0.3s ease;
 		}
+		/* NS (SuiNS) decay curve styles */
+		.ns-decay-area {
+			fill: url(#nsDecayGradient);
+		}
+		.ns-decay-curve {
+			fill: none;
+			stroke: #4DA2FF;
+			stroke-width: 2;
+			stroke-linecap: round;
+			stroke-dasharray: 6 3;
+		}
+		.ns-decay-marker {
+			fill: #4DA2FF;
+			stroke: var(--bg);
+			stroke-width: 2;
+			filter: drop-shadow(0 0 4px #4DA2FF);
+			transition: cx 0.3s ease, cy 0.3s ease;
+		}
 		.graph-labels {
 			display: flex;
 			justify-content: space-between;
@@ -2107,6 +2125,61 @@ export const profileStyles = `
 			color: var(--text-muted);
 			opacity: 0.7;
 			padding: 0 2px;
+		}
+		/* Premium values grid */
+		.premium-values-grid {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+			margin-top: 12px;
+		}
+		.premium-value-row {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.premium-currency-badge {
+			font-size: 0.7rem;
+			font-weight: 700;
+			padding: 3px 8px;
+			border-radius: 4px;
+			text-transform: uppercase;
+			letter-spacing: 0.03em;
+			min-width: 42px;
+			text-align: center;
+		}
+		.sui-badge {
+			background: rgba(96, 165, 250, 0.2);
+			color: var(--accent);
+			border: 1px solid rgba(96, 165, 250, 0.3);
+		}
+		.ns-badge {
+			background: rgba(77, 162, 255, 0.2);
+			color: #4DA2FF;
+			border: 1px solid rgba(77, 162, 255, 0.3);
+		}
+		.premium-value {
+			font-family: var(--font-mono, SFMono-Regular, monospace);
+			font-size: 1.1rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.sui-row .premium-value {
+			color: var(--accent);
+		}
+		.ns-row .premium-value {
+			color: #4DA2FF;
+		}
+		.premium-usd {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			font-family: var(--font-mono, SFMono-Regular, monospace);
+		}
+		.premium-discount {
+			font-size: 0.7rem;
+			color: #4DA2FF;
+			opacity: 0.8;
+			font-style: italic;
 		}
 		.grace-period-actions {
 			flex-shrink: 0;
