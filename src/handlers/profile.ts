@@ -359,6 +359,57 @@ export function generateProfilePage(
 			padding: 10px;
 			border-top: 1px solid rgba(96, 165, 250, 0.15);
 		}
+		.name-description-card {
+			margin-top: 20px;
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.08) 0%, rgba(139, 92, 246, 0.06) 100%);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 16px;
+			padding: 24px;
+			position: relative;
+			overflow: hidden;
+		}
+		.name-description-card::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			height: 2px;
+			background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.5), transparent);
+		}
+		.name-description-content {
+			position: relative;
+			z-index: 1;
+		}
+		.name-description-content p {
+			margin: 0;
+			color: rgba(228, 228, 231, 0.95);
+			font-size: 1rem;
+			line-height: 1.7;
+			font-style: italic;
+			text-align: center;
+		}
+		.name-description-loading {
+			color: rgba(161, 161, 170, 0.7);
+			font-style: normal;
+			text-align: center;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+		}
+		.name-description-loading::after {
+			content: '';
+			width: 16px;
+			height: 16px;
+			border: 2px solid rgba(96, 165, 250, 0.3);
+			border-top-color: var(--accent);
+			border-radius: 50%;
+			animation: spin 0.8s linear infinite;
+		}
+		@keyframes spin {
+			to { transform: rotate(360deg); }
+		}
 		.identity-name {
 			text-align: center;
 			font-family: ui-monospace, SFMono-Regular, monospace;
@@ -3414,11 +3465,11 @@ ${generatePasskeyWalletStyles()}
 					</div>
 					<div class="identity-name-wrapper">
 						<div class="identity-name" id="identity-name" title="Click to copy">${escapeHtml(cleanName)}.sui.ski</div>
-						<button class="ai-generate-btn" id="ai-generate-btn" title="View Grokipedia article">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M9 21h6M12 3a6 6 0 0 1 6 6c0 2.5-1.5 4.5-3 6l-3 3-3-3c-1.5-1.5-3-3.5-3-6a6 6 0 0 1 6-6z"></path>
-							</svg>
-						</button>
+					</div>
+				</div>
+				<div class="name-description-card" id="name-description-card">
+					<div class="name-description-content" id="name-description-content">
+						<div class="name-description-loading">Loading inspiration...</div>
 					</div>
 				</div>
 				<div class="hero-main">
@@ -4531,45 +4582,28 @@ ${generatePasskeyWalletStyles()}
 			});
 		}
 
-		// ===== IDENTITY CARD (DESCRIPTION) =====
+		// ===== NAME DESCRIPTION CARD =====
 		let nameDescription = null;
 		let descriptionLoaded = false;
+		const nameDescriptionCard = document.getElementById('name-description-card');
+		const nameDescriptionContent = document.getElementById('name-description-content');
 
-		function showIdentityDescription() {
-			if (!identityVisual) return;
-			// Hide QR canvas
-			if (identityCanvas) identityCanvas.style.display = 'none';
-			// Hide toggle button (not needed for descriptions)
-			if (qrToggle) qrToggle.style.display = 'none';
-			// Remove any existing description
-			const existingDesc = identityVisual.querySelector('.identity-description');
-			if (existingDesc) existingDesc.remove();
+		function showNameDescription() {
+			if (!nameDescriptionContent) return;
 			
-			// Create and show description
-			const descEl = document.createElement('div');
-			descEl.className = 'identity-description';
 			if (nameDescription) {
-				descEl.innerHTML = \`<p>\${nameDescription}</p>\`;
+				nameDescriptionContent.innerHTML = \`<p>\${nameDescription}</p>\`;
 			} else {
-				descEl.className += ' loading';
-				descEl.textContent = 'Loading inspiration...';
+				nameDescriptionContent.innerHTML = '<div class="name-description-loading">Loading inspiration...</div>';
 			}
-			identityVisual.appendChild(descEl);
-		}
-
-		function showIdentityQr() {
-			if (!identityVisual || !identityCanvas) return;
-			// Remove description
-			const existingDesc = identityVisual.querySelector('.identity-description');
-			if (existingDesc) existingDesc.remove();
-			// Show canvas (for QR overlay, not main view)
-			identityCanvas.style.display = 'block';
-			showingQr = true;
 		}
 
 		async function loadNameDescription() {
 			if (descriptionLoaded) return;
 			descriptionLoaded = true;
+			
+			// Show loading state immediately
+			showNameDescription();
 			
 			try {
 				const response = await fetch('/api/ai/generate-description', {
@@ -4582,20 +4616,34 @@ ${generatePasskeyWalletStyles()}
 					const data = await response.json();
 					if (data.success && data.description) {
 						nameDescription = data.description;
-						showIdentityDescription();
+						showNameDescription();
 					} else {
-						// Fallback to QR if description fails
-						showIdentityQr();
+						// Hide card if description fails
+						if (nameDescriptionCard) {
+							nameDescriptionCard.style.display = 'none';
+						}
 					}
 				} else {
-					// Fallback to QR if API fails
-					showIdentityQr();
+					// Hide card if API fails
+					if (nameDescriptionCard) {
+						nameDescriptionCard.style.display = 'none';
+					}
 				}
 			} catch (error) {
 				console.error('Failed to load name description:', error);
-				// Fallback to QR on error
-				showIdentityQr();
+				// Hide card on error
+				if (nameDescriptionCard) {
+					nameDescriptionCard.style.display = 'none';
+				}
 			}
+		}
+
+		// ===== IDENTITY CARD (QR CODE) =====
+		function showIdentityQr() {
+			if (!identityVisual || !identityCanvas) return;
+			// Show canvas (for QR overlay)
+			identityCanvas.style.display = 'block';
+			showingQr = true;
 		}
 
 		// Toggle button click
@@ -4656,198 +4704,8 @@ ${generatePasskeyWalletStyles()}
 			});
 		}
 
-		// AI Image Generation with Payment Transaction
-		const aiGenerateBtn = document.getElementById('ai-generate-btn');
-		if (aiGenerateBtn) {
-			aiGenerateBtn.addEventListener('click', async () => {
-				// Require wallet connection
-				if (!connectedWallet || !connectedAccount || !connectedAddress) {
-					await connectWallet();
-					if (!connectedWallet || !connectedAccount || !connectedAddress) {
-						alert('Please connect your wallet to generate images');
-						return;
-					}
-				}
-				
-				// Use SuiNS name to search Grokipedia (no prompt needed)
-				// The name will be used to search Grokipedia automatically
-				
-				aiGenerateBtn.classList.add('loading');
-				aiGenerateBtn.disabled = true;
-				
-				try {
-					// Step 1: Get payment transaction details (payment goes to alias.sui address)
-					const paymentInfoResponse = await fetch('/api/ai/create-payment-tx', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ 
-							walletAddress: connectedAddress,
-							name: NAME, // Pass the SuiNS name to resolve target address
-						}),
-					});
-					
-					if (!paymentInfoResponse.ok) {
-						throw new Error('Failed to create payment transaction');
-					}
-					
-					const paymentInfo = await paymentInfoResponse.json();
-					
-					// Step 2: Build and sign payment transaction
-					const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.45.2/client');
-					const { Transaction } = await import('https://esm.sh/@mysten/sui@1.45.2/transactions');
-					
-					const suiClient = new SuiClient({ url: RPC_URL });
-					const tx = new Transaction();
-					
-					// Transfer SUI to payment recipient
-					const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(paymentInfo.amount)]);
-					tx.transferObjects([coin], paymentInfo.recipient);
-					tx.setSender(connectedAddress);
-					
-					const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
-					const builtTxBytes = await tx.build({ client: suiClient });
-					
-					const txWrapper = {
-						_bytes: builtTxBytes,
-						toJSON() { return btoa(String.fromCharCode.apply(null, this._bytes)); },
-						serialize() { return this._bytes; }
-					};
-					
-					// Step 3: Sign and execute transaction
-					const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-					const signFeature = connectedWallet.features?.['sui:signTransaction'];
-					
-					let result;
-					if (signExecFeature?.signAndExecuteTransaction) {
-						result = await signExecFeature.signAndExecuteTransaction({
-							transaction: txWrapper,
-							account: connectedAccount,
-							chain
-						});
-					} else if (signFeature?.signTransaction) {
-						const { signature } = await signFeature.signTransaction({
-							transaction: txWrapper,
-							account: connectedAccount,
-							chain
-						});
-						const executeResult = await suiClient.executeTransactionBlock({
-							transactionBlock: builtTxBytes,
-							signature: signature,
-							options: { showEffects: true }
-						});
-						result = { digest: executeResult.digest };
-					} else {
-						throw new Error('Wallet does not support transaction signing');
-					}
-					
-					if (!result?.digest) {
-						throw new Error('Transaction failed');
-					}
-					
-					// Step 4: Wait for transaction confirmation (with timeout)
-					try {
-						await suiClient.waitForTransaction({ 
-							digest: result.digest,
-							timeout: 30000, // 30 second timeout
-							pollInterval: 1000, // Check every second
-						});
-					} catch (waitError) {
-						console.warn('Transaction wait timeout, proceeding anyway:', waitError);
-						// Continue anyway - transaction might still be processing
-					}
-					
-					// Step 5: Retrieve Grokipedia article after payment confirmed (x402 protocol)
-					const articleResponse = await fetch('/api/ai/generate-image', {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'Authorization': \`Bearer \${connectedAddress}\`,
-							'X-Payment-Tx-Digest': result.digest, // x402 payment proof header
-						},
-						body: JSON.stringify({
-							name: NAME, // SuiNS name to search on Grokipedia
-							walletAddress: connectedAddress,
-						}),
-					});
-					
-					// Handle x402 Payment Required response
-					if (articleResponse.status === 402) {
-						const paymentInfo = await articleResponse.json();
-						let errorMsg = paymentInfo.error || 'Payment verification failed';
-						
-						// Include debug info if available
-						if (paymentInfo.debug) {
-							console.error('Payment verification debug:', paymentInfo.debug);
-							errorMsg += '\\n\\nDebug info logged to console.';
-							if (paymentInfo.debug.totalReceivedSui !== undefined) {
-								errorMsg += \`\\nReceived: \${paymentInfo.debug.totalReceivedSui} SUI, Required: \${paymentInfo.debug.requiredAmountSui} SUI\`;
-							}
-						}
-						
-						throw new Error(errorMsg);
-					}
-					
-					const articleData = await articleResponse.json();
-					
-					if (!articleResponse.ok) {
-						throw new Error(articleData.error || 'Failed to retrieve Grokipedia article');
-					}
-					
-					if (articleData.success && articleData.article) {
-						// Display the Grokipedia article in a modal
-						const articleModal = document.createElement('div');
-						articleModal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto;';
-						
-						const articleContainer = document.createElement('div');
-						articleContainer.style.cssText = 'position: relative; max-width: 800px; max-height: 90vh; background: var(--card-bg, #1a1a2e); border-radius: 12px; padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); overflow-y: auto;';
-						
-						// Title
-						const title = document.createElement('h2');
-						title.textContent = articleData.title || FULL_NAME;
-						title.style.cssText = 'margin: 0 0 16px 0; color: var(--accent, #60a5fa); font-size: 1.5rem;';
-						
-						// Article content
-						const content = document.createElement('div');
-						content.textContent = articleData.article;
-						content.style.cssText = 'color: var(--text, #e0e0e0); line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 16px; max-height: 60vh; overflow-y: auto;';
-						
-						// Link to Grokipedia
-						const link = document.createElement('a');
-						link.href = articleData.url || '#';
-						link.target = '_blank';
-						link.textContent = 'View on Grokipedia →';
-						link.style.cssText = 'color: var(--accent, #60a5fa); text-decoration: none; display: inline-block; margin-top: 16px;';
-						
-						// Close button
-						const closeBtn = document.createElement('button');
-						closeBtn.textContent = '×';
-						closeBtn.style.cssText = 'position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.1); border: none; color: var(--text, #e0e0e0); font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center;';
-						closeBtn.addEventListener('click', () => articleModal.remove());
-						
-						articleContainer.appendChild(closeBtn);
-						articleContainer.appendChild(title);
-						articleContainer.appendChild(content);
-						articleContainer.appendChild(link);
-						articleModal.appendChild(articleContainer);
-						
-						articleModal.addEventListener('click', (e) => {
-							if (e.target === articleModal) articleModal.remove();
-						});
-						
-						document.body.appendChild(articleModal);
-					} else {
-						throw new Error(imageData.error || 'No article in response');
-					}
-				} catch (error) {
-					console.error('AI image generation error:', error);
-					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-					alert('Failed to generate image: ' + errorMessage);
-				} finally {
-					aiGenerateBtn.classList.remove('loading');
-					aiGenerateBtn.disabled = false;
-				}
-			});
-		}
+		// AI Image Generation removed - replaced with automatic description display
+		// The description is now automatically loaded and displayed in the name-description-card
 
 		// Click identity name to copy
 		if (identityName) {
@@ -4905,10 +4763,10 @@ ${generatePasskeyWalletStyles()}
 		}
 
 		initQR().catch(console.error);
-		// Hide QR canvas initially, show description loading state
+		// Hide QR canvas initially
 		if (identityCanvas) identityCanvas.style.display = 'none';
 		if (qrToggle) qrToggle.style.display = 'none';
-		showIdentityDescription(); // Show loading state immediately
+		// Load and display name description automatically
 		loadNameDescription().catch((err) => console.error('Name description error:', err));
 
 		// Set target address to connected wallet (direct transaction)
