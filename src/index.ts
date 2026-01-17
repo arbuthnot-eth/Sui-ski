@@ -835,7 +835,8 @@ async function handleUploadProxy(request: Request, env: Env): Promise<Response> 
 
 /**
  * Proxy SuiNS NFT images to avoid CORS issues
- * Endpoint: /api/suins-image/{domain}.sui
+ * Endpoint: /api/suins-image/{domain}.sui?exp={expirationTimestamp}
+ * The expiration timestamp is required as it's part of the SuiNS API URL
  */
 async function handleSuiNSImageProxy(request: Request, env: Env): Promise<Response> {
 	try {
@@ -847,6 +848,7 @@ async function handleSuiNSImageProxy(request: Request, env: Env): Promise<Respon
 		}
 
 		const domain = decodeURIComponent(pathMatch[1])
+		const expirationTs = url.searchParams.get('exp')
 
 		// Validate domain format (basic check)
 		if (!domain || !domain.includes('.sui')) {
@@ -859,18 +861,42 @@ async function handleSuiNSImageProxy(request: Request, env: Env): Promise<Respon
 				? 'https://api-mainnet.suins.io'
 				: 'https://api-testnet.suins.io'
 
-		const imageUrl = `${suinsApiBase}/nfts/image/${domain}`
+		// SuiNS API format: /nfts/{domain}/{expirationTimestamp}
+		const imageUrl = expirationTs
+			? `${suinsApiBase}/nfts/${domain}/${expirationTs}`
+			: `${suinsApiBase}/nfts/${domain}`
 
 		// Fetch the image from SuiNS API
 		const response = await fetch(imageUrl, {
 			headers: {
-				Accept: 'image/*',
+				Accept: 'image/*,*/*',
 				'User-Agent': 'sui.ski-gateway/1.0',
 			},
 		})
 
 		if (!response.ok) {
-			// Return a placeholder or error
+			// Try alternative endpoint without timestamp
+			if (expirationTs) {
+				const altUrl = `${suinsApiBase}/nfts/${domain}`
+				const altResponse = await fetch(altUrl, {
+					headers: {
+						Accept: 'image/*,*/*',
+						'User-Agent': 'sui.ski-gateway/1.0',
+					},
+				})
+				if (altResponse.ok) {
+					const imageData = await altResponse.arrayBuffer()
+					const contentType = altResponse.headers.get('Content-Type') || 'image/svg+xml'
+					return new Response(imageData, {
+						status: 200,
+						headers: {
+							'Content-Type': contentType,
+							'Access-Control-Allow-Origin': '*',
+							'Cache-Control': 'public, max-age=3600',
+						},
+					})
+				}
+			}
 			return new Response(`Failed to fetch image: ${response.status}`, {
 				status: response.status,
 				headers: {
@@ -881,7 +907,7 @@ async function handleSuiNSImageProxy(request: Request, env: Env): Promise<Respon
 
 		// Get the image data
 		const imageData = await response.arrayBuffer()
-		const contentType = response.headers.get('Content-Type') || 'image/png'
+		const contentType = response.headers.get('Content-Type') || 'image/svg+xml'
 
 		// Return the image with CORS headers
 		return new Response(imageData, {

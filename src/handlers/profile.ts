@@ -5124,9 +5124,10 @@ ${generatePasskeyWalletStyles()}
 			// Build list of image URLs to try
 			const imageUrlsToTry = [];
 
-			// 1. SuiNS API URL for the selected domain
+			// 1. SuiNS API URL for the selected domain (with expiration timestamp)
 			const domainName = selectedNft?.domain || NAME;
-			imageUrlsToTry.push(getSuiNSImageUrl(domainName));
+			const expTs = selectedNft?.expirationTimestampMs || EXPIRATION_MS;
+			imageUrlsToTry.push(getSuiNSImageUrl(domainName, expTs));
 
 			// 2. On-chain image URL from NFT data
 			if (selectedNft?.imageUrl) {
@@ -5272,10 +5273,14 @@ ${generatePasskeyWalletStyles()}
 		if (qrToggle) qrToggle.style.display = 'none';
 
 		// Generate SuiNS image URL via our proxy (to avoid CORS issues)
-		function getSuiNSImageUrl(domainName) {
+		function getSuiNSImageUrl(domainName, expirationMs = null) {
 			const cleanDomain = domainName.toLowerCase().replace(/\\.sui$/i, '');
 			// Use our proxy endpoint to fetch SuiNS NFT images
-			return \`/api/suins-image/\${encodeURIComponent(cleanDomain)}.sui\`;
+			// Include expiration timestamp if available (required for SuiNS API)
+			const baseUrl = \`/api/suins-image/\${encodeURIComponent(cleanDomain)}.sui\`;
+			// Check for valid expiration timestamp (must be a positive number)
+			const hasValidExp = typeof expirationMs === 'number' && expirationMs > 0;
+			return hasValidExp ? \`\${baseUrl}?exp=\${expirationMs}\` : baseUrl;
 		}
 
 		// Try to load an image with fallback URLs
@@ -5371,8 +5376,8 @@ ${generatePasskeyWalletStyles()}
 			// Build list of image URLs to try (in order of preference)
 			const imageUrlsToTry = [];
 
-			// 1. SuiNS API URL (most reliable for SuiNS NFTs)
-			imageUrlsToTry.push(getSuiNSImageUrl(NAME));
+			// 1. SuiNS API URL (most reliable for SuiNS NFTs) - include expiration timestamp
+			imageUrlsToTry.push(getSuiNSImageUrl(NAME, EXPIRATION_MS));
 
 			// 2. Try fetching from on-chain display data if NFT_ID is available
 			if (NFT_ID) {
@@ -7388,15 +7393,13 @@ ${generatePasskeyWalletStyles()}
 				const profileUrl = cleanedName ? \`https://\${cleanedName}.sui.ski\` : null;
 				const explorerUrl = \`\${EXPLORER_BASE}/object/\${objectId}\`;
 
-				// Generate SuiNS API image URL for this NFT
-				const nftImageUrl = cleanedName ? getSuiNSImageUrl(cleanedName) : null;
-
-				// Extract expiration if available
+				// Extract expiration if available (need this first for image URL)
 				let expirationText = '';
 				let daysRemaining = null;
+				let expMs = null;
 				try {
 					if (nft.expirationTimestampMs) {
-						const expMs = Number(nft.expirationTimestampMs);
+						expMs = Number(nft.expirationTimestampMs);
 						if (expMs) {
 							const expDate = new Date(expMs);
 							expirationText = expDate.toLocaleDateString();
@@ -7404,6 +7407,9 @@ ${generatePasskeyWalletStyles()}
 						}
 					}
 				} catch (e) {}
+
+				// Generate SuiNS API image URL for this NFT (with expiration timestamp)
+				const nftImageUrl = cleanedName ? getSuiNSImageUrl(cleanedName, expMs) : null;
 
 				// Determine expiry status for badge styling
 				let expiryClass = '';
