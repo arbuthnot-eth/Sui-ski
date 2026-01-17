@@ -6,6 +6,7 @@ import { handleMVRManagementPage } from './handlers/mvr-ui'
 import { generateProfilePage } from './handlers/profile'
 import { handlePWARequest } from './handlers/pwa'
 import { handleRegistrationSubmission } from './handlers/register'
+import { handleSuinsManagerRequest, generateSuinsManagerPage } from './handlers/suins-manager'
 import {
 	handleNautilusCallback,
 	handleNautilusQueue,
@@ -76,6 +77,15 @@ export default {
 		// Vortex UI page
 		if (url.pathname === '/vortex' || url.pathname === '/vortex/') {
 			return htmlResponse(generateVortexPage(env))
+		}
+
+		// SuiNS Manager API
+		if (url.pathname.startsWith('/api/suins')) {
+			return handleSuinsManagerRequest(request, env)
+		}
+		// SuiNS Manager UI page
+		if (url.pathname === '/suins' || url.pathname === '/suins/') {
+			return htmlResponse(generateSuinsManagerPage(env))
 		}
 
 		// Renewal API (x402 payment-gated, Nautilus TEE)
