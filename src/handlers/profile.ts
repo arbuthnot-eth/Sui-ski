@@ -877,6 +877,109 @@ export function generateProfilePage(
 							<div class="queue-bid-empty">No queued bids yet.</div>
 						</div>
 					</div>
+
+					<!-- Bounty Section -->
+					<div class="bounty-section" id="bounty-section">
+						<h3>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<circle cx="12" cy="8" r="7"></circle>
+								<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+							</svg>
+							Place Bounty
+						</h3>
+						<p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px;">
+							Offer a reward to have this name registered for you when it becomes available.
+							Funds are held in escrow until execution.
+						</p>
+
+						<!-- Active Bounties List -->
+						<div class="bounty-list" id="bounty-list">
+							<div class="bounty-empty">No active bounties for this name.</div>
+						</div>
+
+						<!-- Create Bounty Form -->
+						<div class="bounty-form" id="bounty-form">
+							<div class="bounty-amount-row">
+								<div class="bounty-input-group">
+									<label for="bounty-amount">Bounty Amount</label>
+									<div class="bounty-amount-input">
+										<input type="number" id="bounty-amount" min="1" step="0.1" value="10" />
+										<select id="bounty-currency">
+											<option value="sui">SUI</option>
+											<option value="ns">$NS</option>
+										</select>
+									</div>
+								</div>
+								<div class="bounty-usd-display">
+									<span class="bounty-usd-label">≈ $</span>
+									<span id="bounty-usd-value">--</span>
+								</div>
+							</div>
+
+							<div class="bounty-input-group">
+								<label for="executor-reward">Executor Reward</label>
+								<div class="bounty-reward-input">
+									<input type="number" id="executor-reward" min="1" step="0.1" value="1" />
+									<span class="bounty-reward-unit">SUI (min 1 SUI)</span>
+								</div>
+							</div>
+
+							<div class="bounty-input-group">
+								<label for="bounty-years">Registration Duration</label>
+								<select id="bounty-years">
+									<option value="1">1 Year</option>
+									<option value="2">2 Years</option>
+									<option value="3">3 Years</option>
+									<option value="5">5 Years</option>
+								</select>
+							</div>
+
+							<div class="bounty-cost-breakdown" id="bounty-cost-breakdown">
+								<div class="bounty-cost-row">
+									<span>Registration Premium (estimated)</span>
+									<span id="bounty-premium-cost">-- SUI</span>
+								</div>
+								<div class="bounty-cost-row">
+									<span>Base Registration (1 year)</span>
+									<span id="bounty-base-cost">-- SUI</span>
+								</div>
+								<div class="bounty-cost-row">
+									<span>Executor Reward</span>
+									<span id="bounty-reward-display">1 SUI</span>
+								</div>
+								<div class="bounty-cost-row total">
+									<span>Total Escrow Required</span>
+									<span id="bounty-total-cost">-- SUI</span>
+								</div>
+							</div>
+
+							<button class="bounty-create-btn" id="bounty-create-btn">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+								</svg>
+								Create Bounty & Deposit to Escrow
+							</button>
+							<div class="bounty-status hidden" id="bounty-status"></div>
+						</div>
+
+						<!-- Pre-sign Section (shown after bounty created) -->
+						<div class="bounty-presign hidden" id="bounty-presign">
+							<h4>Pre-sign Registration Transaction</h4>
+							<p>Sign this transaction now. It will be broadcast automatically the moment the grace period ends.</p>
+							<button class="bounty-sign-btn" id="bounty-sign-btn">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+								</svg>
+								Sign Transaction
+							</button>
+						</div>
+
+						<div class="bounty-note">
+							<strong>How it works:</strong> Your funds are deposited into an on-chain escrow contract.
+							When the grace period ends, anyone can execute the bounty to register the name for you and claim the executor reward.
+							The name NFT is transferred to you atomically - no registration, no reward.
+						</div>
+					</div>
 					`
 							: ''
 					}

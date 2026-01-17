@@ -1,4 +1,5 @@
 import { handleBidsRequest } from './handlers/bids'
+import { handleBountiesRequest, executeReadyBounties } from './handlers/bounties'
 import { handleLandingPage, getSUIPrice } from './handlers/landing'
 import { handleMessagingPage, handleMessagingRequest } from './handlers/messaging'
 import { handleMVRManagementRequest } from './handlers/mvr-management'
@@ -69,6 +70,11 @@ export default {
 
 		if (url.pathname.startsWith('/api/bids')) {
 			return handleBidsRequest(request, env)
+		}
+
+		// Bounty system API
+		if (url.pathname.startsWith('/api/bounties')) {
+			return handleBountiesRequest(request, env)
 		}
 
 		// Vortex privacy protocol API
@@ -249,7 +255,7 @@ export default {
 	},
 
 	/**
-	 * Scheduled handler for processing claim queue
+	 * Scheduled handler for processing claim queue and bounties
 	 * Runs on cron trigger (every minute)
 	 */
 	async scheduled(
@@ -258,8 +264,9 @@ export default {
 		ctx: ExecutionContext,
 	): Promise<void> {
 		const now = Date.now()
-		console.log(`[Scheduled] Processing claims at ${new Date(now).toISOString()}`)
+		console.log(`[Scheduled] Processing claims and bounties at ${new Date(now).toISOString()}`)
 
+		// Process claims
 		try {
 			// Get all claims ready for processing
 			const readyClaims = await getReadyClaims(env, now)
@@ -277,6 +284,21 @@ export default {
 			}
 		} catch (error) {
 			console.error('[Scheduled] Error processing claims:', error)
+		}
+
+		// Process bounties
+		try {
+			ctx.waitUntil(
+				executeReadyBounties(env).then((result) => {
+					if (result.executed > 0 || result.failed > 0) {
+						console.log(`[Scheduled] Bounties: ${result.executed} executed, ${result.failed} failed`)
+					}
+				}).catch((error) => {
+					console.error('[Scheduled] Error processing bounties:', error)
+				}),
+			)
+		} catch (error) {
+			console.error('[Scheduled] Error starting bounty processing:', error)
 		}
 	},
 }

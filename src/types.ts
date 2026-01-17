@@ -155,3 +155,51 @@ export interface ScheduledClaim {
 	/** Nautilus job ID for tracking */
 	nautilusJobId?: string
 }
+
+/** Bounty status for name sniping */
+export type BountyStatus = 'pending' | 'ready' | 'executing' | 'completed' | 'failed' | 'cancelled'
+
+/** Bounty for sniping expired SuiNS names */
+export interface Bounty {
+	/** Unique identifier (format: "bounty_{timestamp}_{random}") */
+	id: string
+	/** Name without .sui suffix */
+	name: string
+	/** Address that will receive the registered name NFT */
+	beneficiary: string
+	/** Address that created the bounty */
+	creator: string
+	/** On-chain escrow object ID */
+	escrowObjectId: string
+	/** Total escrowed amount in MIST (stored as string for JSON) */
+	totalAmountMist: string
+	/** Executor reward in MIST (minimum 1 SUI) */
+	executorRewardMist: string
+	/** Estimated registration cost in MIST */
+	registrationCostMist: string
+	/** Payment currency preference */
+	paymentCurrency: 'sui' | 'ns'
+	/** When name becomes available (grace period end timestamp in ms) */
+	availableAt: number
+	/** Registration duration in years (1-5) */
+	years: number
+	/** Pre-signed transaction bytes (base64) */
+	txBytes?: string
+	/** Signatures for the transaction */
+	signatures?: string[]
+	/** Current status */
+	status: BountyStatus
+	/** When this bounty was created */
+	createdAt: number
+	/** Last status update timestamp */
+	updatedAt: number
+	/** Transaction digest of successful execution */
+	resultDigest?: string
+	/** Last error message */
+	lastError?: string
+	/** Number of execution attempts */
+	attempts: number
+}
+
+/** Public bounty info (without sensitive tx data) */
+export type PublicBounty = Omit<Bounty, 'txBytes' | 'signatures'>
