@@ -1,6 +1,7 @@
 import type { Env, Bounty, PublicBounty } from '../types'
 import { relaySignedTransaction } from '../utils/transactions'
-import { buildExecuteBountyTx, serializeTransaction } from '../utils/bounty-transactions'
+import { buildExecuteBountyTx, buildCreateBountyTx, serializeTransaction } from '../utils/bounty-transactions'
+import { jsonResponse } from '../utils/response'
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -32,6 +33,11 @@ export async function handleBountiesRequest(request: Request, env: Env): Promise
 	const pathParts = url.pathname.replace('/api/bounties', '').split('/').filter(Boolean)
 
 	try {
+		// POST /api/bounties/build-create - Build create bounty transaction
+		if (request.method === 'POST' && pathParts[0] === 'build-create') {
+			return handleBuildCreateBountyTx(request, env)
+		}
+
 		// POST /api/bounties - Create bounty
 		if (request.method === 'POST' && pathParts.length === 0) {
 			return handleCreateBounty(request, env)
@@ -77,6 +83,65 @@ export async function handleBountiesRequest(request: Request, env: Env): Promise
 	} catch (error) {
 		console.error('Bounty API error:', error)
 		const message = error instanceof Error ? error.message : 'Unknown error'
+		return jsonResponse({ error: message }, 500)
+	}
+}
+
+/**
+ * Build create bounty escrow transaction
+ */
+async function handleBuildCreateBountyTx(request: Request, env: Env): Promise<Response> {
+	const body = (await request.json()) as {
+		name?: string
+		beneficiary?: string
+		coinObjectId?: string
+		totalAmountMist?: string
+		executorRewardMist?: string
+		availableAt?: number
+		years?: number
+	}
+
+	const {
+		name,
+		beneficiary,
+		coinObjectId,
+		totalAmountMist,
+		executorRewardMist,
+		availableAt,
+		years = 1,
+	} = body
+
+	if (!name || !beneficiary || !coinObjectId || !totalAmountMist || !executorRewardMist || !availableAt) {
+		return jsonResponse(
+			{
+				error: 'Missing required fields: name, beneficiary, coinObjectId, totalAmountMist, executorRewardMist, availableAt',
+			},
+			400,
+		)
+	}
+
+	try {
+		const tx = buildCreateBountyTx(
+			{
+				name: name.toLowerCase().replace(/\.sui$/i, ''),
+				beneficiary,
+				coinObjectId,
+				totalAmountMist,
+				executorRewardMist,
+				availableAt,
+				years,
+			},
+			env,
+		)
+
+		const { txBytes } = await serializeTransaction(tx, env, beneficiary)
+
+		return jsonResponse({
+			success: true,
+			transaction: txBytes,
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to build transaction'
 		return jsonResponse({ error: message }, 500)
 	}
 }

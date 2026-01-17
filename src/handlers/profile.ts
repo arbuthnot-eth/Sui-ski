@@ -5050,7 +5050,7 @@ export function generateProfilePage(
 			}
 		}
 
-		// Create a new bounty
+		// Create a new bounty with one-click SUI transaction
 		async function createQuickBounty() {
 			if (!connectedAddress) {
 				showBidBountyStatus(createBountyStatus, 'Please connect your wallet first', 'error');
@@ -5072,10 +5072,118 @@ export function generateProfilePage(
 			}
 
 			if (quickBountyBtn) quickBountyBtn.disabled = true;
-			showBidBountyStatus(createBountyStatus, 'Creating bounty...', 'loading');
+			showBidBountyStatus(createBountyStatus, 'Preparing escrow transaction...', 'loading');
 
 			try {
-				// For now, create the bounty record (actual escrow would need wallet signing)
+				// Build escrow creation transaction using SUI SDK
+				const { Transaction } = await import('https://esm.sh/@mysten/sui@1.45.2/transactions');
+				const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.45.2/client');
+				
+				const suiClient = new SuiClient({ url: RPC_URL });
+				const tx = new Transaction();
+				
+				// Get gas coins
+				const coins = await suiClient.getCoins({
+					owner: connectedAddress,
+					coinType: '0x2::sui::SUI',
+				});
+				
+				if (coins.data.length === 0) {
+					throw new Error('No SUI coins found in wallet');
+				}
+				
+				const totalAmountMist = BigInt(Math.floor(totalAmount * 1_000_000_000));
+				const executorRewardMist = BigInt(Math.floor(executorReward * 1_000_000_000));
+				
+				// Merge coins if needed
+				const primaryCoin = coins.data[0].coinObjectId;
+				if (coins.data.length > 1) {
+					tx.mergeCoins(tx.object(primaryCoin), coins.data.slice(1).map(c => tx.object(c.coinObjectId)));
+				}
+				
+				// Split the escrow amount
+				const [depositCoin] = tx.splitCoins(tx.object(primaryCoin), [totalAmountMist]);
+				
+				// Build escrow creation transaction via API (needs package ID from server)
+				showBidBountyStatus(createBountyStatus, 'Building escrow transaction...', 'loading');
+				
+				const buildRes = await fetch('/api/bounties/build-create', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						name: NAME,
+						beneficiary: connectedAddress,
+						coinObjectId: primaryCoin,
+						totalAmountMist: totalAmountMist.toString(),
+						executorRewardMist: executorRewardMist.toString(),
+						availableAt: AVAILABLE_AT,
+						years: years,
+					}),
+				});
+				
+				if (!buildRes.ok) {
+					const errorData = await buildRes.json().catch(() => ({ error: 'Failed to build transaction' }));
+					throw new Error(errorData.error || 'Failed to build escrow transaction');
+				}
+				
+				const buildData = await buildRes.json();
+				if (!buildData.transaction) {
+					throw new Error('Invalid transaction response from server');
+				}
+				
+				// Decode transaction bytes
+				const txBytes = Uint8Array.from(atob(buildData.transaction), c => c.charCodeAt(0));
+				
+				// Sign and execute transaction
+				showBidBountyStatus(createBountyStatus, 'Sign transaction in wallet...', 'loading');
+				
+				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
+					transaction: txBytes,
+					account: connectedAccount,
+					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+				});
+				
+				// Extract escrow object ID from transaction effects
+				// Query the transaction to get object changes
+				showBidBountyStatus(createBountyStatus, 'Extracting escrow object ID...', 'loading');
+				
+				const txDetails = await suiClient.getTransactionBlock({
+					digest: result.digest,
+					options: { showEffects: true, showObjectChanges: true },
+				});
+				
+				let escrowObjectId = null;
+				
+				// Look for created shared objects (bounty escrow is shared)
+				if (txDetails.objectChanges) {
+					for (const change of txDetails.objectChanges) {
+						if (change.type === 'created' && 'objectId' in change) {
+							// Check if it's a shared object (bounty escrow)
+							if ('owner' in change && change.owner && typeof change.owner === 'object' && 'Shared' in change.owner) {
+								escrowObjectId = change.objectId;
+								break;
+							}
+						}
+					}
+				}
+				
+				// Fallback: check effects.created for shared objects
+				if (!escrowObjectId && txDetails.effects?.created) {
+					for (const ref of txDetails.effects.created) {
+						if (ref.owner && typeof ref.owner === 'object' && 'Shared' in ref.owner) {
+							escrowObjectId = ref.reference?.objectId || ref.objectId;
+							break;
+						}
+					}
+				}
+				
+				if (!escrowObjectId) {
+					throw new Error('Failed to extract escrow object ID from transaction. Please check the transaction manually.');
+				}
+				
+				// Create bounty record with the actual escrow object ID
+				showBidBountyStatus(createBountyStatus, 'Saving bounty record...', 'loading');
+				
 				const res = await fetch('/api/bounties', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -5083,22 +5191,27 @@ export function generateProfilePage(
 						name: NAME,
 						beneficiary: connectedAddress,
 						creator: connectedAddress,
-						escrowObjectId: 'pending', // Would be set after actual escrow creation
-						totalAmountMist: String(Math.floor(totalAmount * 1e9)),
-						executorRewardMist: String(Math.floor(executorReward * 1e9)),
+						escrowObjectId: escrowObjectId,
+						totalAmountMist: totalAmountMist.toString(),
+						executorRewardMist: executorRewardMist.toString(),
 						availableAt: AVAILABLE_AT,
 						years: years,
 					}),
 				});
 
 				const data = await res.json();
-				if (!res.ok) throw new Error(data.error || 'Failed to create bounty');
-
-				showBidBountyStatus(createBountyStatus, 'Bounty created! Connect wallet to deposit funds.', 'success');
+				if (!res.ok) {
+					console.warn('Escrow created but bounty record creation failed:', data.error);
+					showBidBountyStatus(createBountyStatus, \`Escrow created! <a href="https://suivision.xyz/txblock/\${result.digest}" target="_blank">View tx</a> (Note: Bounty record may not be saved)\`, 'success');
+				} else {
+					showBidBountyStatus(createBountyStatus, \`Bounty created! <a href="https://suivision.xyz/txblock/\${result.digest}" target="_blank">View tx</a>\`, 'success');
+				}
+				
 				fetchBountyQueue();
 
 				setTimeout(() => hideBidBountyStatus(createBountyStatus), 5000);
 			} catch (error) {
+				console.error('Failed to create bounty:', error);
 				showBidBountyStatus(createBountyStatus, error.message || 'Failed to create bounty', 'error');
 			} finally {
 				if (quickBountyBtn) quickBountyBtn.disabled = false;
