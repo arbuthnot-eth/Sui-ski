@@ -450,7 +450,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		const HTML_ESCAPE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
 		function escapeHtml(value) {
-			return String(value ?? '').replace(/[&<>\"']/g, (char) => HTML_ESCAPE[char] || char);
+			return String(value ?? '').replace(/[&<>"']/g, (char) => HTML_ESCAPE[char] || char);
 		}
 
 		function renderBidList(bids) {
@@ -468,22 +468,22 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					const eta = formatDate(Number(bid.executeAt));
 					const chips = [];
 					if (bid.autoRelay) {
-						chips.push('<span class=\"status-chip auto\">Auto Relay</span>');
+						chips.push('<span class="status-chip auto">Auto Relay</span>');
 					}
 					const statusLabel = formatBidStatusLabel(bid);
 					if (statusLabel) {
 						const statusClass = (bid.status || '').toLowerCase();
-						chips.push('<span class=\"status-chip ' + statusClass + '\">' + escapeHtml(statusLabel) + '</span>');
+						chips.push('<span class="status-chip ' + statusClass + '">' + escapeHtml(statusLabel) + '</span>');
 					}
 					if (bid.resultDigest) {
-						chips.push('<span class=\"digest-chip\">' + escapeHtml(shortDigest(bid.resultDigest)) + '</span>');
+						chips.push('<span class="digest-chip">' + escapeHtml(shortDigest(bid.resultDigest)) + '</span>');
 					}
 					if (bid.lastError && bid.status === 'failed') {
-						chips.push('<span class=\"status-chip failed\">' + escapeHtml(limitText(bid.lastError, 40)) + '</span>');
+						chips.push('<span class="status-chip failed">' + escapeHtml(limitText(bid.lastError, 40)) + '</span>');
 					}
-					const metaRow = chips.length ? '<div class=\"bid-meta\">' + chips.join('') + '</div>' : '';
+					const metaRow = chips.length ? '<div class="bid-meta">' + chips.join('') + '</div>' : '';
 					let row = '<li>';
-					row += '<div class=\"bid-main\">';
+					row += '<div class="bid-main">';
 					row += '<span>' + escapeHtml(shortAddr) + '</span>';
 					row += '<span>' + escapeHtml(amt) + ' SUI</span>';
 					row += '<span>' + escapeHtml(eta) + '</span>';
@@ -678,7 +678,12 @@ export async function handleRegistrationSubmission(request: Request, env: Env): 
 		return jsonResponse({ error: 'Method not allowed' }, 405, CORS_HEADERS)
 	}
 
-	let payload: { txBytes?: string; signatures?: unknown; options?: Record<string, unknown>; requestType?: string }
+	let payload: {
+		txBytes?: string
+		signatures?: unknown
+		options?: Record<string, unknown>
+		requestType?: string
+	}
 	try {
 		payload = (await request.json()) as typeof payload
 	} catch {

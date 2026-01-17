@@ -32,11 +32,21 @@ export async function resolveSuiNS(
 				if (now >= gracePeriodEnd) {
 					// Past grace period - name is available for registration
 					await env.CACHE.delete(key)
-					return { found: false, error: `Name "${suinsName}" has expired and is available`, expired: true }
+					return {
+						found: false,
+						error: `Name "${suinsName}" has expired and is available`,
+						expired: true,
+					}
 				}
 				if (now >= expirationTime) {
 					// In grace period - return data but mark as expired
-					return { found: true, data: cached, cacheTtl: CACHE_TTL, expired: true, inGracePeriod: true }
+					return {
+						found: true,
+						data: cached,
+						cacheTtl: CACHE_TTL,
+						expired: true,
+						inGracePeriod: true,
+					}
 				}
 			}
 			return { found: true, data: cached, cacheTtl: CACHE_TTL }
@@ -66,7 +76,11 @@ export async function resolveSuiNS(
 
 			if (now >= gracePeriodEnd) {
 				// Past grace period - name is available for registration
-				return { found: false, error: `Name "${suinsName}" has expired and is available`, expired: true }
+				return {
+					found: false,
+					error: `Name "${suinsName}" has expired and is available`,
+					expired: true,
+				}
 			}
 			if (now >= expirationTime) {
 				// In grace period - continue to fetch data but mark as expired

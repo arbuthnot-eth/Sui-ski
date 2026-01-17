@@ -27,7 +27,8 @@ function generateMVRManagementHTML(env: Env): string {
 	const network = env.SUI_NETWORK
 	const socialMeta = renderSocialMeta({
 		title: 'Move Registry Manager - sui.ski',
-		description: 'Manage your Move packages in the Move Registry. Register packages, publish versions, and generate transactions for offline signing.',
+		description:
+			'Manage your Move packages in the Move Registry. Register packages, publish versions, and generate transactions for offline signing.',
 		url: 'https://sui.ski/mvr',
 		siteName: 'sui.ski',
 	})

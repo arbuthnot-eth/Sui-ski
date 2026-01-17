@@ -1,6 +1,6 @@
-import type { Env } from '../types'
-import { getNetworkStatus } from '../resolvers/rpc'
 import { getMoveRegistryParentId } from '../resolvers/mvr'
+import { getNetworkStatus } from '../resolvers/rpc'
+import type { Env } from '../types'
 import { getIkaConfig } from './ika'
 
 interface JsonRpcObjectResponse {

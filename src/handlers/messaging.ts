@@ -21,7 +21,8 @@ export async function handleMessagingRequest(request: Request, env: Env): Promis
 		const isMainnet = env.SUI_NETWORK === 'mainnet'
 		const hasContract = !!env.MESSAGING_CONTRACT_ADDRESS
 		const isTestnetContract =
-			env.MESSAGING_CONTRACT_ADDRESS === '0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d'
+			env.MESSAGING_CONTRACT_ADDRESS ===
+			'0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d'
 
 		return jsonResponse({
 			enabled: hasContract,
@@ -36,7 +37,8 @@ export async function handleMessagingRequest(request: Request, env: Env): Promis
 				eventDriven: true,
 			},
 			status: 'alpha',
-			warning: isMainnet && hasContract ? 'Self-deployed mainnet contract (alpha software)' : undefined,
+			warning:
+				isMainnet && hasContract ? 'Self-deployed mainnet contract (alpha software)' : undefined,
 		})
 	}
 
@@ -64,7 +66,8 @@ export function generateMessagingUI(suinsName: string, ownerAddress: string, env
 	const isMainnet = env.SUI_NETWORK === 'mainnet'
 	const hasContract = !!env.MESSAGING_CONTRACT_ADDRESS
 	const isTestnetContract =
-		env.MESSAGING_CONTRACT_ADDRESS === '0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d'
+		env.MESSAGING_CONTRACT_ADDRESS ===
+		'0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d'
 	const isMainnetDeployment = isMainnet && hasContract && !isTestnetContract
 
 	return `

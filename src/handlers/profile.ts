@@ -73,7 +73,9 @@ export function generateProfilePage(
 		.filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
 		.sort(([a], [b]) => a.localeCompare(b))
 	const canonicalUrl = options.canonicalUrl
-	const canonicalTag = canonicalUrl ? `\n\t<link rel="canonical" href="${escapeHtml(canonicalUrl)}">` : ''
+	const canonicalTag = canonicalUrl
+		? `\n\t<link rel="canonical" href="${escapeHtml(canonicalUrl)}">`
+		: ''
 	const canonicalOrigin = getOriginFromCanonical(canonicalUrl, options.hostname)
 	const metaDescription =
 		(options.description && options.description.trim().length > 0
@@ -179,7 +181,11 @@ export function generateProfilePage(
 							${
 								daysToExpire !== null
 									? `<span class="badge expiry${daysToExpire <= 0 ? ' danger' : daysToExpire <= 7 ? ' danger' : daysToExpire <= 90 ? ' warning' : daysToExpire > 365 ? ' premium' : ''}">${
-											daysToExpire <= 0 ? 'Expired' : daysToExpire > 365 ? `${Math.floor(daysToExpire / 365)}y ${daysToExpire % 365}d` : `${daysToExpire}d left`
+											daysToExpire <= 0
+												? 'Expired'
+												: daysToExpire > 365
+													? `${Math.floor(daysToExpire / 365)}y ${daysToExpire % 365}d`
+													: `${daysToExpire}d left`
 										}</span>`
 									: ''
 							}
@@ -1643,7 +1649,7 @@ export function generateProfilePage(
 			// Find the current name's NFT, or use the first one
 			let selectedNft = allNFTs.find(nft => {
 				const domain = nft.domain || '';
-				const cleanedName = domain.replace(/\.sui$/i, '');
+				const cleanedName = domain.replace(/.sui$/i, '');
 				return cleanedName.toLowerCase() === NAME.toLowerCase();
 			});
 
@@ -4262,16 +4268,11 @@ export function generateProfilePage(
 						countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg><span>Available</span>';
 					}
 				} else {
-					// Grace period
-					const gDays = Math.floor(graceDiff / (24 * 60 * 60 * 1000));
-					const gHours = Math.floor((graceDiff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-					const gMins = Math.floor((graceDiff % (60 * 60 * 1000)) / (60 * 1000));
-					const gSecs = Math.floor((graceDiff % (60 * 1000)) / 1000);
-					if (countdownDays) countdownDays.textContent = String(gDays).padStart(2, '0');
-					if (countdownHours) countdownHours.textContent = String(gHours).padStart(2, '0');
-					if (countdownMins) countdownMins.textContent = String(gMins).padStart(2, '0');
-					if (countdownSecs) countdownSecs.textContent = String(gSecs).padStart(2, '0');
-					// Score is managed by view tracking
+					// Grace period - show dashes since detailed timer lives in the grace banner
+					if (countdownDays) countdownDays.textContent = '--';
+					if (countdownHours) countdownHours.textContent = '--';
+					if (countdownMins) countdownMins.textContent = '--';
+					if (countdownSecs) countdownSecs.textContent = '--';
 					if (countdownPercent) countdownPercent.textContent = String(currentViewScore || 0);
 					if (countdownRingProgress) {
 						const scorePercent = Math.min(100, Math.round((currentViewScore / MAX_SCORE_FOR_RING) * 100));
@@ -4283,6 +4284,9 @@ export function generateProfilePage(
 					if (countdownBadge) {
 						countdownBadge.className = 'countdown-status-badge warning';
 						countdownBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span>Grace Period</span>';
+					}
+					if (countdownStatusText) {
+						countdownStatusText.textContent = 'Grace Period';
 					}
 				}
 				return;
@@ -4956,10 +4960,7 @@ function getOriginFromCanonical(canonicalUrl?: string, hostname?: string): strin
 	return `https://${fallbackHost}`
 }
 
-function selectProfileImage(
-	record: SuiNSRecord,
-	hostname?: string,
-): string | undefined {
+function selectProfileImage(record: SuiNSRecord, hostname?: string): string | undefined {
 	const candidates = [record.avatar, pickRecordValue(record, IMAGE_RECORD_KEYS)]
 	for (const candidate of candidates) {
 		if (!candidate) continue
@@ -5002,7 +5003,7 @@ function getXUsername(record: SuiNSRecord): string | undefined {
  */
 function extractXUsername(value: string): string {
 	// Remove @ prefix
-	let cleaned = value.replace(/^@/, '')
+	const cleaned = value.replace(/^@/, '')
 
 	// Extract from URL
 	const urlMatch = cleaned.match(/(?:x\.com|twitter\.com)\/([a-zA-Z0-9_]+)/i)
@@ -5073,12 +5074,15 @@ function generateSocialLinksHTML(record: SuiNSRecord): string {
 				<button class="social-links-edit-btn" id="edit-social-btn">Edit</button>
 			</div>
 			<div class="social-links-list" id="social-links-list">
-				${linksHtml || `
+				${
+					linksHtml ||
+					`
 					<div class="social-links-empty">
 						<p>No social links set</p>
 						<p class="social-links-empty-hint">Connect your X profile to let visitors find you</p>
 					</div>
-				`}
+				`
+				}
 			</div>
 			<button class="social-links-add-btn" id="add-social-btn" style="${xUsername ? 'display:none;' : ''}">
 				${plusIcon}

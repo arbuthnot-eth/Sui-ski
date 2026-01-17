@@ -1,4 +1,3 @@
-import { handleAIRequest } from './handlers/ai'
 import { handleBidsRequest } from './handlers/bids'
 import { handleLandingPage } from './handlers/landing'
 import { handleMessagingPage, handleMessagingRequest } from './handlers/messaging'
@@ -6,26 +5,36 @@ import { handleMVRManagementRequest } from './handlers/mvr-management'
 import { handleMVRManagementPage } from './handlers/mvr-ui'
 import { generateProfilePage } from './handlers/profile'
 import { handlePWARequest } from './handlers/pwa'
+import { handleRegistrationSubmission } from './handlers/register'
 import {
-	handleRenewalRequest,
-	handleRenewalStatus,
 	handleNautilusCallback,
 	handleNautilusQueue,
+	handleRenewalRequest,
+	handleRenewalStatus,
 } from './handlers/renewal'
+import {
+	handleClaimSchedule,
+	handleClaimStatus,
+	handleClaimCancel,
+	handleNautilusClaimCallback,
+	handleNautilusClaimQueue,
+	getReadyClaims,
+	processClaim,
+} from './handlers/claim'
 import { handleTransaction } from './handlers/transaction'
 import { handleUploadPage } from './handlers/upload'
-import { handleRegistrationSubmission } from './handlers/register'
 import { handleViewsRequest } from './handlers/views'
-import { fetchSuiNSObjectData } from './utils/suins-object'
+import { generateVortexPage, handleVortexRequest } from './handlers/vortex'
 import { resolveContent, resolveDirectContent, WALRUS_AGGREGATORS } from './resolvers/content'
 import { getMVRDocumentationUrl, getPackageExplorerUrl, resolveMVRPackage } from './resolvers/mvr'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
 import { isWalrusSiteId, resolveWalrusSite } from './resolvers/walrus-site'
 import type { Env, MVRPackage, SuiNSRecord } from './types'
-import { isTwitterPreviewBot, renderSocialMeta } from './utils/social'
 import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils/response'
+import { isTwitterPreviewBot, renderSocialMeta } from './utils/social'
 import { parseSubdomain } from './utils/subdomain'
+import { fetchSuiNSObjectData } from './utils/suins-object'
 
 export default {
 	async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
@@ -59,9 +68,14 @@ export default {
 			return handleBidsRequest(request, env)
 		}
 
-		// AI-powered features (name generation, avatar creation)
-		if (url.pathname.startsWith('/api/ai')) {
-			return handleAIRequest(request, env)
+		// Vortex privacy protocol API
+		if (url.pathname.startsWith('/api/vortex')) {
+			return handleVortexRequest(request, env)
+		}
+
+		// Vortex UI page
+		if (url.pathname === '/vortex' || url.pathname === '/vortex/') {
+			return htmlResponse(generateVortexPage(env))
 		}
 
 		// Renewal API (x402 payment-gated, Nautilus TEE)
@@ -76,6 +90,24 @@ export default {
 		}
 		if (url.pathname === '/api/renewal/nautilus-queue') {
 			return handleNautilusQueue(request, env)
+		}
+
+		// Scheduled Claim API (x402 payment-gated, Nautilus TEE)
+		if (url.pathname === '/api/claim/schedule') {
+			return handleClaimSchedule(request, env)
+		}
+		if (url.pathname.startsWith('/api/claim/status/')) {
+			return handleClaimStatus(request, env)
+		}
+		if (url.pathname === '/api/claim/nautilus-callback') {
+			return handleNautilusClaimCallback(request, env)
+		}
+		if (url.pathname === '/api/claim/nautilus-queue') {
+			return handleNautilusClaimQueue(request, env)
+		}
+		// Claim cancellation (DELETE /api/claim/:id)
+		if (request.method === 'DELETE' && url.pathname.match(/^\/api\/claim\/[^/]+$/)) {
+			return handleClaimCancel(request, env)
 		}
 
 		// View tracking API
@@ -182,6 +214,38 @@ export default {
 			console.error('Gateway error:', error)
 			const message = error instanceof Error ? error.message : 'Unknown error'
 			return errorResponse(`Gateway error: ${message}`, 'GATEWAY_ERROR', 500)
+		}
+	},
+
+	/**
+	 * Scheduled handler for processing claim queue
+	 * Runs on cron trigger (every minute)
+	 */
+	async scheduled(
+		_controller: ScheduledController,
+		env: Env,
+		ctx: ExecutionContext,
+	): Promise<void> {
+		const now = Date.now()
+		console.log(`[Scheduled] Processing claims at ${new Date(now).toISOString()}`)
+
+		try {
+			// Get all claims ready for processing
+			const readyClaims = await getReadyClaims(env, now)
+			console.log(`[Scheduled] Found ${readyClaims.length} claims ready for processing`)
+
+			// Process up to 10 claims per run (avoid timeout)
+			const claimsToProcess = readyClaims.slice(0, 10)
+
+			for (const claim of claimsToProcess) {
+				ctx.waitUntil(
+					processClaim(env, claim).catch((error) => {
+						console.error(`[Scheduled] Failed to process claim ${claim.id}:`, error)
+					}),
+				)
+			}
+		} catch (error) {
+			console.error('[Scheduled] Error processing claims:', error)
 		}
 	},
 }
@@ -420,7 +484,8 @@ async function inspectWalrusMetadata(blobId: string, env: Env): Promise<WalrusMe
 			if (headResponse.ok) {
 				return {
 					contentType: headResponse.headers.get('content-type') || undefined,
-					contentLength: parseInt(headResponse.headers.get('content-length') || '', 10) || undefined,
+					contentLength:
+						parseInt(headResponse.headers.get('content-length') || '', 10) || undefined,
 				}
 			}
 		} catch {}
@@ -434,7 +499,8 @@ async function inspectWalrusMetadata(blobId: string, env: Env): Promise<WalrusMe
 				peekResponse.body?.cancel()
 				return {
 					contentType: peekResponse.headers.get('content-type') || undefined,
-					contentLength: parseInt(peekResponse.headers.get('content-length') || '', 10) || undefined,
+					contentLength:
+						parseInt(peekResponse.headers.get('content-length') || '', 10) || undefined,
 				}
 			}
 		} catch {}
@@ -990,7 +1056,11 @@ async function handleImageProxy(request: Request): Promise<Response> {
 			'cloudflare-ipfs.com',
 		]
 
-		if (!allowedDomains.some((domain) => parsedUrl.hostname === domain || parsedUrl.hostname.endsWith(`.${domain}`))) {
+		if (
+			!allowedDomains.some(
+				(domain) => parsedUrl.hostname === domain || parsedUrl.hostname.endsWith(`.${domain}`),
+			)
+		) {
 			return new Response('Domain not allowed', { status: 403 })
 		}
 

@@ -8,12 +8,8 @@ export interface Env {
 	// Messaging SDK contract addresses (testnet/mainnet)
 	MESSAGING_CONTRACT_ADDRESS?: string
 	MOVE_REGISTRY_PARENT_ID?: string
-	// AI features (OpenRouter integration)
-	OPENROUTER_API_KEY?: string
-	// Optional: Wallet address or object ID (NFT) that controls access to AI features
-	// If not set, anyone can use the features (payment still required)
-	CONTROLLING_WALLET_ADDRESS?: string
-	// Note: Payments automatically go to the alias.sui address (target address of the SuiNS name)
+	// Vortex privacy protocol API URL
+	VORTEX_API_URL?: string
 }
 
 export type RouteType = 'suins' | 'mvr' | 'content' | 'rpc' | 'root'
@@ -109,4 +105,47 @@ export interface ContentManifest {
 	version: 1
 	media?: ManifestItem
 	files: ManifestItem[]
+}
+
+/** Scheduled claim status */
+export type ClaimStatus = 'pending' | 'ready' | 'processing' | 'completed' | 'failed' | 'cancelled'
+
+/** Scheduled claim for SuiNS name registration after grace period ends */
+export interface ScheduledClaim {
+	/** Unique identifier (format: "claim_{timestamp}_{random}") */
+	id: string
+	/** Name without .sui suffix */
+	name: string
+	/** Target address (resolved from alias.sui) */
+	targetAddress: string
+	/** Original name expiration timestamp in ms */
+	expirationMs: number
+	/** When name becomes available (expirationMs + 30 days) */
+	availableAt: number
+	/** When to attempt claim (availableAt + 60s buffer) */
+	scheduledAt: number
+	/** Transaction digest proving payment */
+	paymentDigest: string
+	/** Amount paid in MIST (stored as string for JSON serialization) */
+	paymentAmount: string
+	/** Address that paid for the claim */
+	paidBy: string
+	/** Registration duration in years */
+	years: number
+	/** Current status */
+	status: ClaimStatus
+	/** Number of execution attempts */
+	attempts: number
+	/** When this claim was created */
+	createdAt: number
+	/** Timestamp of last execution attempt */
+	lastAttemptAt?: number
+	/** Last error message */
+	lastError?: string
+	/** Transaction digest of successful registration */
+	registrationTxDigest?: string
+	/** Resulting NFT object ID */
+	nftObjectId?: string
+	/** Nautilus job ID for tracking */
+	nautilusJobId?: string
 }

@@ -3,7 +3,6 @@
  * Provides manifest.json and service worker for installable app experience
  */
 
-
 /**
  * Generate the web app manifest
  */
@@ -11,61 +10,66 @@ export function getManifest(suinsName?: string): string {
 	const name = suinsName ? `${suinsName}.sui` : 'sui.ski'
 	const shortName = suinsName || 'sui.ski'
 
-	return JSON.stringify({
-		name: name,
-		short_name: shortName,
-		description: 'Sui blockchain gateway - SuiNS profiles, encrypted messaging, and decentralized content',
-		start_url: '/',
-		display: 'standalone',
-		background_color: '#0a0a0f',
-		theme_color: '#60a5fa',
-		orientation: 'portrait-primary',
-		categories: ['social', 'utilities', 'finance'],
-		icons: [
-			{
-				src: '/icon-192.png',
-				sizes: '192x192',
-				type: 'image/png',
-				purpose: 'any maskable'
+	return JSON.stringify(
+		{
+			name: name,
+			short_name: shortName,
+			description:
+				'Sui blockchain gateway - SuiNS profiles, encrypted messaging, and decentralized content',
+			start_url: '/',
+			display: 'standalone',
+			background_color: '#0a0a0f',
+			theme_color: '#60a5fa',
+			orientation: 'portrait-primary',
+			categories: ['social', 'utilities', 'finance'],
+			icons: [
+				{
+					src: '/icon-192.png',
+					sizes: '192x192',
+					type: 'image/png',
+					purpose: 'any maskable',
+				},
+				{
+					src: '/icon-512.png',
+					sizes: '512x512',
+					type: 'image/png',
+					purpose: 'any maskable',
+				},
+			],
+			screenshots: [],
+			shortcuts: [
+				{
+					name: 'Send Message',
+					short_name: 'Message',
+					description: 'Send encrypted message',
+					url: '/?action=message',
+					icons: [{ src: '/icon-192.png', sizes: '192x192' }],
+				},
+			],
+			related_applications: [],
+			prefer_related_applications: false,
+			// Deep linking for wallet connections
+			protocol_handlers: [
+				{
+					protocol: 'web+sui',
+					url: '/?sui=%s',
+				},
+			],
+			// Share target for receiving shared content
+			share_target: {
+				action: '/?action=share',
+				method: 'GET',
+				enctype: 'application/x-www-form-urlencoded',
+				params: {
+					title: 'title',
+					text: 'text',
+					url: 'url',
+				},
 			},
-			{
-				src: '/icon-512.png',
-				sizes: '512x512',
-				type: 'image/png',
-				purpose: 'any maskable'
-			}
-		],
-		screenshots: [],
-		shortcuts: [
-			{
-				name: 'Send Message',
-				short_name: 'Message',
-				description: 'Send encrypted message',
-				url: '/?action=message',
-				icons: [{ src: '/icon-192.png', sizes: '192x192' }]
-			}
-		],
-		related_applications: [],
-		prefer_related_applications: false,
-		// Deep linking for wallet connections
-		protocol_handlers: [
-			{
-				protocol: 'web+sui',
-				url: '/?sui=%s'
-			}
-		],
-		// Share target for receiving shared content
-		share_target: {
-			action: '/?action=share',
-			method: 'GET',
-			enctype: 'application/x-www-form-urlencoded',
-			params: {
-				title: 'title',
-				text: 'text',
-				url: 'url'
-			}
-		}
-	}, null, 2)
+		},
+		null,
+		2,
+	)
 }
 
 /**
@@ -250,8 +254,8 @@ export function getIcon(size: number): Response {
 	return new Response(svg, {
 		headers: {
 			'Content-Type': 'image/svg+xml',
-			'Cache-Control': 'public, max-age=31536000'
-		}
+			'Cache-Control': 'public, max-age=31536000',
+		},
 	})
 }
 
@@ -263,8 +267,8 @@ export function handlePWARequest(pathname: string, suinsName?: string): Response
 		return new Response(getManifest(suinsName), {
 			headers: {
 				'Content-Type': 'application/manifest+json',
-				'Cache-Control': 'public, max-age=86400'
-			}
+				'Cache-Control': 'public, max-age=86400',
+			},
 		})
 	}
 
@@ -273,8 +277,8 @@ export function handlePWARequest(pathname: string, suinsName?: string): Response
 			headers: {
 				'Content-Type': 'application/javascript',
 				'Cache-Control': 'public, max-age=0',
-				'Service-Worker-Allowed': '/'
-			}
+				'Service-Worker-Allowed': '/',
+			},
 		})
 	}
 

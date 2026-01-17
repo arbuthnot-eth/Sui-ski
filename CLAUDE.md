@@ -45,6 +45,8 @@ src/
 ├── types.ts              # Shared TypeScript types (Env, ParsedSubdomain, etc.)
 ├── handlers/
 │   ├── landing.ts        # Root domain handler (sui.ski), API endpoints
+│   ├── profile.ts        # SuiNS profile page with grace period support
+│   ├── vortex.ts         # Vortex privacy protocol API and UI
 │   ├── mvr-management.ts # MVR package management API endpoints
 │   └── mvr-ui.ts         # MVR package management web UI
 ├── resolvers/
@@ -78,6 +80,7 @@ The gateway parses hostnames to determine routing:
 - **@mysten/sui** - Sui TypeScript SDK for RPC calls
 - **@mysten/suins** - SuiNS client for name resolution
 - **@mysten/walrus** - Walrus client for blob storage
+- **@interest-protocol/vortex-sdk** - Vortex privacy protocol SDK
 - **wrangler** - Cloudflare Workers CLI
 
 ## Environment Configuration
@@ -152,3 +155,45 @@ See `docs/SUI_TRANSACTION_BUILDING.md` for comprehensive documentation on:
 - Gas configuration and optimization
 - Transaction serialization and offline building
 - Sponsored transactions and advanced features
+
+## Vortex Privacy Protocol Integration
+
+The gateway integrates with [Vortex](https://github.com/interest-protocol/vortex), a privacy protocol for confidential transactions on Sui using zero-knowledge proofs.
+
+**How Vortex Works:**
+- Breaks the on-chain link between deposit and withdrawal addresses
+- Uses 2-input/2-output UTXO model with Groth16 proofs
+- Deposits go into a shared pool; withdrawals prove note ownership without revealing source
+
+**UI Page** (`/vortex`):
+- Dashboard showing protocol status, pools, and relayer info
+- Real-time health monitoring of Vortex services
+
+**API Endpoints** (`/api/vortex/*`):
+- `GET /api/vortex/info` - Protocol overview and status
+- `GET /api/vortex/health` - Service health check
+- `GET /api/vortex/pools` - List available privacy pools
+- `GET /api/vortex/pools/{coinType}` - Get pool details
+- `GET /api/vortex/relayer` - Get relayer information
+- `GET /api/vortex/commitments?coinType=...&index=0` - Get commitments
+- `POST /api/vortex/merkle-path` - Get merkle path for proof generation
+- `GET /api/vortex/accounts?hashedSecret=...` - Get accounts by hashed secret
+
+**Environment Variables:**
+- `VORTEX_API_URL` - Optional custom Vortex API URL (defaults to `https://api.vortexfi.xyz`)
+
+**SDK Usage:**
+```typescript
+import { VortexAPI, Vortex, VORTEX_PACKAGE_ID } from '@interest-protocol/vortex-sdk';
+
+// API client for indexer data
+const api = new VortexAPI({ apiUrl: 'https://api.vortexfi.xyz' });
+const health = await api.health();
+const pools = await api.getPools({ coinType: '0x2::sui::SUI' });
+
+// On-chain interactions
+const vortex = new Vortex({
+  packageId: VORTEX_PACKAGE_ID,
+  // ... other config
+});
+```

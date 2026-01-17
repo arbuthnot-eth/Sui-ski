@@ -46,7 +46,10 @@ function inferBaseDomain(hostname?: string | null): string {
 	return DEFAULT_DOMAIN
 }
 
-export function normalizeMediaUrl(value?: string | null, hostname?: string | null): string | undefined {
+export function normalizeMediaUrl(
+	value?: string | null,
+	hostname?: string | null,
+): string | undefined {
 	if (!value) {
 		return undefined
 	}

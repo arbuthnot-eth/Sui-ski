@@ -272,7 +272,12 @@ function buildBidKey(name: string, bidder: string): string {
 }
 
 function shouldAttemptAutoRelay(bid: QueuedBid): boolean {
-	if (!bid.autoRelay || !bid.txBytes || !Array.isArray(bid.signatures) || bid.signatures.length === 0) {
+	if (
+		!bid.autoRelay ||
+		!bid.txBytes ||
+		!Array.isArray(bid.signatures) ||
+		bid.signatures.length === 0
+	) {
 		return false
 	}
 	if (bid.status === 'submitted') {

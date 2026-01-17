@@ -62,8 +62,7 @@ export function getIkaConfig(network: SupportedNetwork): IkaNetworkConfig {
 			ikaSystemPackage: '0xde05f49e5f1ee13ed06c1e243c0a8e8fe858e1d8689476fdb7009af8ddc3c38b',
 			ikaDwallet2pcMpcOriginalPackage:
 				'0xf02f5960c94fce1899a3795b5d11fd076bc70a8d0e20a2b19923d990ed490730',
-			ikaDwallet2pcMpcPackage:
-				'0x6573a6c13daf26a64eb8a37d3c7a4391b353031e223072ca45b1ff9366f59293',
+			ikaDwallet2pcMpcPackage: '0x6573a6c13daf26a64eb8a37d3c7a4391b353031e223072ca45b1ff9366f59293',
 		},
 		objects: {
 			ikaSystemObject: {

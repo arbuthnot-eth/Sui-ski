@@ -111,7 +111,10 @@ async function verifyPayment(
 
 		const receivedAmount = BigInt(recipientChange.amount)
 		if (receivedAmount < expectedAmount) {
-			return { valid: false, error: `Insufficient payment: expected ${expectedAmount}, got ${receivedAmount}` }
+			return {
+				valid: false,
+				error: `Insufficient payment: expected ${expectedAmount}, got ${receivedAmount}`,
+			}
 		}
 
 		return { valid: true }
@@ -155,10 +158,7 @@ async function getNftId(env: Env, name: string): Promise<string | null> {
  * })
  * ```
  */
-async function encryptRenewalRequest(
-	_env: Env,
-	request: RenewalRequest,
-): Promise<Uint8Array> {
+async function encryptRenewalRequest(_env: Env, request: RenewalRequest): Promise<Uint8Array> {
 	// For development: return JSON-encoded data without encryption
 	// In production, this would use Seal's encrypt method with Nautilus policy
 	const data = new TextEncoder().encode(JSON.stringify(request))
@@ -185,10 +185,7 @@ async function encryptRenewalRequest(
  * For now, we use KV storage as the primary storage mechanism.
  * Walrus integration requires a signer which should be handled by Nautilus TEE.
  */
-async function storeInQueue(
-	_env: Env,
-	_queueItem: QueueItem,
-): Promise<string | null> {
+async function storeInQueue(_env: Env, _queueItem: QueueItem): Promise<string | null> {
 	// For development: skip Walrus storage
 	// KV storage is used as primary storage (see storeInKVQueue)
 	// In production, Nautilus TEE would handle Walrus uploads with its own signer

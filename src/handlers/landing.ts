@@ -91,15 +91,18 @@ async function getSuiNSPricing(env: Env): Promise<Record<string, number>> {
  */
 async function getSUIPrice(): Promise<number> {
 	try {
-		const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd', {
-			headers: {
-				'Accept': 'application/json',
+		const response = await fetch(
+			'https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd',
+			{
+				headers: {
+					Accept: 'application/json',
+				},
 			},
-		})
+		)
 		if (!response.ok) {
 			throw new Error(`CoinGecko API error: ${response.status}`)
 		}
-		const data = await response.json() as { sui?: { usd?: number } }
+		const data = (await response.json()) as { sui?: { usd?: number } }
 		if (!data.sui?.usd) {
 			throw new Error('Invalid price data from CoinGecko')
 		}

@@ -1,6 +1,6 @@
 import type { Env } from '../types'
-import { jsonResponse } from '../utils/response'
 import { cacheKey } from '../utils/cache'
+import { jsonResponse } from '../utils/response'
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -48,11 +48,11 @@ export async function handleViewsRequest(request: Request, env: Env): Promise<Re
  */
 async function handleGetViews(name: string, env: Env): Promise<Response> {
 	const viewKey = cacheKey('views', env.SUI_NETWORK, name)
-	
+
 	try {
 		const cached = await env.CACHE.get(viewKey, 'text')
 		const score = cached ? parseInt(cached, 10) : 0
-		
+
 		return jsonResponse(
 			{
 				name,
@@ -72,18 +72,18 @@ async function handleGetViews(name: string, env: Env): Promise<Response> {
  */
 async function handleIncrementViews(name: string, env: Env): Promise<Response> {
 	const viewKey = cacheKey('views', env.SUI_NETWORK, name)
-	
+
 	try {
 		// Get current score
 		const cached = await env.CACHE.get(viewKey, 'text')
 		const currentScore = cached ? parseInt(cached, 10) : 0
-		
+
 		// Increment score
 		const newScore = currentScore + 1
-		
+
 		// Store in KV (no expiration - permanent storage)
 		await env.CACHE.put(viewKey, String(newScore))
-		
+
 		return jsonResponse(
 			{
 				name,
