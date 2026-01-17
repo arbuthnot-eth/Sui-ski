@@ -22,6 +22,7 @@
     "@interest-protocol/sui-sdk": "^8.2.0",
     "@interest-protocol/vortex-sdk": "^11.2.0",
     "@mysten/messaging": "^0.1.0",
+    "@mysten/payment-kit": "^0.0.20",
     "@mysten/seal": "^0.9.6",
     "@mysten/sui": "^1.45.2",
     "@mysten/suins": "0.9.13",

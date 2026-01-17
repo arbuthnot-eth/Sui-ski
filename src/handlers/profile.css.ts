@@ -2011,6 +2011,43 @@ export const profileStyles = `
 			line-height: 1;
 			margin-bottom: 14px;
 		}
+		.grace-skill-counter {
+			margin-top: 14px;
+			padding: 12px 14px;
+			background: rgba(96, 165, 250, 0.08);
+			border: 1px dashed rgba(96, 165, 250, 0.3);
+			border-radius: 10px;
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+		.grace-skill-label {
+			font-size: 0.75rem;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: var(--accent);
+		}
+		.grace-skill-value {
+			display: flex;
+			align-items: baseline;
+			gap: 6px;
+			font-family: var(--font-mono, SFMono-Regular, monospace);
+			font-size: 1.35rem;
+			font-weight: 700;
+			color: var(--accent);
+		}
+		.grace-skill-unit {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+		.grace-skill-hint {
+			font-size: 0.7rem;
+			color: var(--text-muted);
+			line-height: 1.4;
+		}
 		.grace-period-actions {
 			flex-shrink: 0;
 			display: flex;
@@ -2041,6 +2078,47 @@ export const profileStyles = `
 		.grace-period-btn.renew:hover {
 			transform: translateY(-2px);
 			box-shadow: 0 6px 16px rgba(34, 197, 94, 0.35);
+		}
+		.grace-period-btn.gift {
+			background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+			color: white;
+			box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+		}
+		.grace-period-btn.gift:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
+		}
+		.grace-period-btn.gift:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+			transform: none;
+		}
+		.grace-period-status {
+			display: none;
+			margin-top: 12px;
+			padding: 10px 14px;
+			border-radius: 8px;
+			font-size: 0.85rem;
+			line-height: 1.4;
+		}
+		.grace-period-status.success {
+			background: rgba(34, 197, 94, 0.12);
+			border: 1px solid rgba(34, 197, 94, 0.3);
+			color: #22c55e;
+		}
+		.grace-period-status.error {
+			background: rgba(248, 113, 113, 0.12);
+			border: 1px solid rgba(248, 113, 113, 0.3);
+			color: #f87171;
+		}
+		.grace-period-status a {
+			color: inherit;
+			text-decoration: underline;
+		}
+		.grace-period-status small {
+			display: block;
+			margin-top: 4px;
+			opacity: 0.8;
 		}
 		@media (max-width: 640px) {
 			.grace-period-banner {
@@ -3909,4 +3987,3 @@ export const profileStyles = `
 			.ai-generate-btn svg { width: 14px; height: 14px; }
 		}
 `
-

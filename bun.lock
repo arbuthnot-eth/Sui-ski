@@ -11,6 +11,7 @@
         "@interest-protocol/sui-sdk": "^8.2.0",
         "@interest-protocol/vortex-sdk": "^11.2.0",
         "@mysten/messaging": "^0.1.0",
+        "@mysten/payment-kit": "^0.0.20",
         "@mysten/seal": "^0.9.6",
         "@mysten/sui": "^1.45.2",
         "@mysten/suins": "0.9.13",
@@ -202,6 +203,8 @@
     "@mysten/bcs": ["@mysten/bcs@1.9.2", "", { "dependencies": { "@mysten/utils": "0.2.0", "@scure/base": "^1.2.6" } }, "sha512-kBk5xrxV9OWR7i+JhL/plQrgQ2/KJhB2pB5gj+w6GXhbMQwS3DPpOvi/zN0Tj84jwPvHMllpEl0QHj6ywN7/eQ=="],
 
     "@mysten/messaging": ["@mysten/messaging@0.1.0", "", { "dependencies": { "@mysten/bcs": "^1.9.1", "@mysten/seal": "^0.9.1", "@mysten/sui": "^1.43.1", "@mysten/walrus": "^0.8.1" } }, "sha512-/B8Lsv6BVzXyunKtVeBB4MJ6rNpSUhKndILTeOxTqIuSEWRQDp8LM/U8E+P3bxni8kPNvWG8p1rYWLtbf5zkCA=="],
+
+    "@mysten/payment-kit": ["@mysten/payment-kit@0.0.20", "", { "dependencies": { "@mysten/bcs": "1.9.2", "@mysten/sui": "1.45.2" } }, "sha512-nouYDzjRCVm1w4SByJHe/3F6/UGXznPfVM66mZQ/aPPyx7S7pFECqKz/66pWc9a2V/iDf5W4NGjC+Tkk/wzxAQ=="],
 
     "@mysten/seal": ["@mysten/seal@0.9.6", "", { "dependencies": { "@mysten/bcs": "1.9.2", "@mysten/sui": "1.45.2", "@noble/curves": "=1.9.4", "@noble/hashes": "^1.8.0" } }, "sha512-qw4JiEL8NibuAASWTbYC9xbtMMIAgbfNNopZomiCZqIgJFA/q6lWCzBqVhzU5POB7UCwLZjskwZJ+kME80wsCg=="],
 

@@ -259,10 +259,28 @@ export function generateProfilePage(
 								<span class="grace-countdown-unit-label">sec</span>
 							</div>
 						</div>
+						<div class="grace-skill-counter">
+							<div class="grace-skill-label">$skill-creator decay</div>
+							<div class="grace-skill-value">
+								<span id="grace-skill-value">100,000,000</span>
+								<span class="grace-skill-unit">of 100,000,000 remaining</span>
+							</div>
+							<div class="grace-skill-hint">Linearly burns across the full grace/premium window.</div>
+						</div>
 					</div>
 				</div>
 				<div class="grace-period-actions" id="grace-period-actions">
-					<a href="https://suins.io/name/${escapeHtml(cleanName)}" target="_blank" class="grace-period-btn renew" id="renew-name-btn">
+					<button class="grace-period-btn gift" id="gift-renewal-btn" style="display:none;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="20 12 20 22 4 22 4 12"></polyline>
+							<rect x="2" y="7" width="20" height="5"></rect>
+							<line x1="12" y1="22" x2="12" y2="7"></line>
+							<path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
+							<path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
+						</svg>
+						<span id="gift-renewal-text">Gift 1 Month (10 SUI)</span>
+					</button>
+					<a href="https://suins.io/name/${escapeHtml(cleanName)}" target="_blank" class="grace-period-btn renew" id="renew-name-btn" style="display:none;">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<polyline points="23 4 23 10 17 10"></polyline>
 							<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
@@ -270,6 +288,7 @@ export function generateProfilePage(
 						Renew on SuiNS
 					</a>
 				</div>
+				<div class="grace-period-status" id="grace-period-status"></div>
 			</div>
 					`
 					: ''
@@ -824,8 +843,11 @@ export function generateProfilePage(
 	const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
 	const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
 	const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
-	const SKILL_CREATOR_MAX_SUPPLY = 100000000;
-	const numberFormatter = new Intl.NumberFormat('en-US');
+	const SKILL_CREATOR_MAX_SUPPLY = 100_000_000;
+	const numberFormatter =
+		typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function'
+			? new Intl.NumberFormat('en-US')
+			: { format: (value) => String(value ?? 0) };
 
 		let connectedWallet = null;
 		let connectedAccount = null;
@@ -836,6 +858,7 @@ export function generateProfilePage(
 		let nftOwnerAddress = null;
 		let targetPrimaryName = null;
 		let canEdit = false;
+		let ownerDisplayAddress = CURRENT_ADDRESS;
 
 		try {
 			walletsApi = getWallets();
@@ -1178,21 +1201,69 @@ export function generateProfilePage(
 			updateGracePeriodActions();
 		}
 
-		// Update grace period actions visibility (show renew button if owner is connected)
+		// Update grace period actions visibility
 		function updateGracePeriodActions() {
 			if (!IS_IN_GRACE_PERIOD) return;
-
-			const gracePeriodActions = document.getElementById('grace-period-actions');
-			if (!gracePeriodActions) return;
-
+			const giftBtn = document.getElementById('gift-renewal-btn');
+			const renewBtn = document.getElementById('renew-name-btn');
 			const isOwner = connectedAddress && nftOwnerAddress && connectedAddress === nftOwnerAddress;
+			if (giftBtn) giftBtn.style.display = connectedAddress ? 'inline-flex' : 'none';
+			if (renewBtn) renewBtn.style.display = isOwner ? 'inline-flex' : 'none';
+		}
 
-			if (isOwner) {
-				gracePeriodActions.style.display = 'flex';
-			} else {
-				gracePeriodActions.style.display = 'none';
+		// Renewal relay: 10 SUI for 1 month, sent to atlas.sui
+		const RENEWAL_COST_MIST = 10 * 1_000_000_000;
+
+		async function getRelayAddress() {
+			const suiClient = new SuiClient({ url: RPC_URL });
+			const suinsClient = new SuinsClient({ client: suiClient, network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet' });
+			const rec = await suinsClient.getNameRecord('atlas.sui');
+			return rec?.targetAddress || null;
+		}
+
+		async function handleGiftRenewal() {
+			if (!connectedAddress || !connectedWallet) { showGracePeriodStatus('Connect wallet first', 'error'); return; }
+			const btn = document.getElementById('gift-renewal-btn');
+			const txt = document.getElementById('gift-renewal-text');
+			const orig = txt?.textContent || 'Gift 1 Month (10 SUI)';
+			try {
+				if (btn) btn.disabled = true;
+				if (txt) txt.textContent = 'Resolving...';
+				const relay = await getRelayAddress();
+				if (!relay) throw new Error('Could not resolve atlas.sui');
+				if (txt) txt.textContent = 'Building...';
+				const tx = new Transaction();
+				const [coin] = tx.splitCoins(tx.gas, [RENEWAL_COST_MIST]);
+				tx.transferObjects([coin], relay);
+				if (txt) txt.textContent = 'Approve...';
+				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
+					transaction: tx, account: connectedAccount, chain: \`sui:\${NETWORK}\`
+				});
+				if (result?.digest) {
+					showGracePeriodStatus(\`Sent! <a href="\${EXPLORER_BASE}/tx/\${result.digest}" target="_blank">View</a><br><small>Relay will renew \${FULL_NAME} for 1 month.</small>\`, 'success');
+				} else throw new Error('No digest');
+			} catch (e) {
+				const m = e.message || '';
+				if (m.includes('rejected') || m.includes('cancelled')) showGracePeriodStatus('Cancelled', 'error');
+				else if (m.includes('Insufficient')) showGracePeriodStatus('Need 10 SUI + gas', 'error');
+				else showGracePeriodStatus('Error: ' + m, 'error');
+			} finally {
+				if (btn) btn.disabled = false;
+				if (txt) txt.textContent = orig;
 			}
 		}
+
+		function showGracePeriodStatus(msg, type) {
+			const el = document.getElementById('grace-period-status');
+			if (!el) return;
+			el.innerHTML = msg;
+			el.className = 'grace-period-status ' + type;
+			el.style.display = 'block';
+			if (type !== 'success') setTimeout(() => { el.style.display = 'none'; }, 15000);
+		}
+
+		const giftBtnEl = document.getElementById('gift-renewal-btn');
+		if (giftBtnEl) giftBtnEl.addEventListener('click', handleGiftRenewal);
 
 		// Update grace period owner info display
 		async function updateGracePeriodOwnerInfo() {
@@ -1433,9 +1504,15 @@ export function generateProfilePage(
 			}
 		}
 
-		// Copy address to clipboard
+		// Copy address to clipboard (uses NFT owner during grace period)
 		function copyAddress() {
-			navigator.clipboard.writeText(CURRENT_ADDRESS).then(() => {
+			const addressToCopy = ownerDisplayAddress || CURRENT_ADDRESS;
+			if (!addressToCopy) {
+				console.warn('No owner address available to copy.');
+				return;
+			}
+
+			navigator.clipboard.writeText(addressToCopy).then(() => {
 				copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
 				setTimeout(() => {
 					copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
@@ -1886,6 +1963,7 @@ export function generateProfilePage(
 				// Update UI
 				document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
 				document.querySelector('.owner-name').innerHTML = formatSuiName(connectedPrimaryName);
+				ownerDisplayAddress = connectedAddress;
 				alert(\`Updated! TX: \${result.digest}\`);
 
 			} catch (error) {
@@ -2063,6 +2141,7 @@ export function generateProfilePage(
 					document.querySelector('.owner-addr').textContent = newAddress.slice(0, 8) + '...' + newAddress.slice(-6);
 					const newName = await fetchPrimaryName(newAddress);
 					document.querySelector('.owner-name').innerHTML = formatSuiName(newName);
+					ownerDisplayAddress = newAddress;
 					closeEditModal();
 				}, 2000);
 
@@ -2106,15 +2185,15 @@ export function generateProfilePage(
 
 			let displayAddress = CURRENT_ADDRESS;
 			let displayName = null;
+			let labelOverridden = false;
 
 			// For grace period names, show the NFT owner instead of target address
 			if (IS_IN_GRACE_PERIOD && NFT_ID) {
-				// Update label to clarify this is the NFT owner
 				if (ownerLabelEl) {
 					ownerLabelEl.textContent = 'NFT Owner';
+					labelOverridden = true;
 				}
 
-				// Fetch NFT owner if not already fetched
 				if (!nftOwnerAddress) {
 					nftOwnerAddress = await fetchNftOwner();
 				}
@@ -2123,18 +2202,31 @@ export function generateProfilePage(
 					displayAddress = nftOwnerAddress;
 					displayName = await fetchPrimaryName(nftOwnerAddress);
 				}
-			} else {
-				// For active names, show the target address
+			}
+
+			if (!IS_IN_GRACE_PERIOD && ownerLabelEl && !labelOverridden) {
+				ownerLabelEl.textContent = 'Owner';
+			}
+
+			// For active names, show the target address (targetPrimaryName is used elsewhere)
+			if (!IS_IN_GRACE_PERIOD) {
 				displayName = await fetchPrimaryName(CURRENT_ADDRESS);
 				if (displayName) {
 					targetPrimaryName = displayName;
 				}
 			}
 
-			// Always ensure address is displayed
+			ownerDisplayAddress = displayAddress || '';
+
 			if (ownerAddrEl && displayAddress) {
 				ownerAddrEl.textContent = truncAddr(displayAddress);
-				ownerAddrEl.title = displayAddress; // Full address on hover
+				ownerAddrEl.title = displayAddress;
+				ownerAddrEl.style.removeProperty('font-size');
+				ownerAddrEl.style.removeProperty('font-weight');
+				ownerAddrEl.style.removeProperty('color');
+			} else if (ownerAddrEl) {
+				ownerAddrEl.textContent = 'Unknown';
+				ownerAddrEl.title = 'Unknown owner';
 			}
 
 			if (displayName) {
@@ -2143,30 +2235,27 @@ export function generateProfilePage(
 					ownerNameEl.style.display = '';
 				}
 
-				// Make the owner info clickable to visit their profile
 				if (ownerInfo) {
 					const cleanedName = displayName.replace(/\\.sui$/i, '');
 					const ownerProfileUrl = \`https://\${cleanedName}.sui.ski\`;
 
-					// Add the link styling class
 					ownerInfo.classList.add('owner-info-link');
 					ownerInfo.style.cursor = 'pointer';
 					ownerInfo.title = \`Visit \${displayName} profile\`;
 
-					// Show the arrow
 					if (visitArrow) {
 						visitArrow.style.display = 'block';
 					}
 
-					// Add click handler
-					ownerInfo.addEventListener('click', (e) => {
-						// Don't navigate if clicking on a button inside
-						if (e.target.closest('button')) return;
-						window.location.href = ownerProfileUrl;
-					});
+					if (!ownerInfo.dataset.visitBound) {
+						ownerInfo.addEventListener('click', (e) => {
+							if (e.target.closest('button')) return;
+							window.location.href = ownerProfileUrl;
+						});
+						ownerInfo.dataset.visitBound = 'true';
+					}
 				}
 			} else {
-				// No primary name found - hide the name element and make address more prominent
 				if (ownerNameEl) {
 					ownerNameEl.style.display = 'none';
 				}
@@ -4151,12 +4240,28 @@ export function generateProfilePage(
 		}
 
 		// ========== GRACE PERIOD BANNER COUNTDOWN ==========
-	const graceDays = document.getElementById('grace-days');
-	const graceHours = document.getElementById('grace-hours');
-	const graceMins = document.getElementById('grace-mins');
-	const graceSecs = document.getElementById('grace-secs');
-	const graceBanner = document.getElementById('grace-period-banner');
-	const graceSkillValue = document.getElementById('grace-skill-value');
+		const graceDays = document.getElementById('grace-days');
+		const graceHours = document.getElementById('grace-hours');
+		const graceMins = document.getElementById('grace-mins');
+		const graceSecs = document.getElementById('grace-secs');
+		const graceBanner = document.getElementById('grace-period-banner');
+		const graceSkillValue = document.getElementById('grace-skill-value');
+
+		function updateGraceSkillCounter(currentTime = Date.now()) {
+			if (!graceSkillValue || !EXPIRATION_MS) return;
+
+			const totalWindow = AVAILABLE_AT - EXPIRATION_MS;
+			if (totalWindow <= 0) {
+				graceSkillValue.textContent = '0';
+				return;
+			}
+
+			const clampedTime = Math.min(Math.max(currentTime, EXPIRATION_MS), AVAILABLE_AT);
+			const elapsed = clampedTime - EXPIRATION_MS;
+			const remainingFraction = Math.max(0, 1 - elapsed / totalWindow);
+			const remainingValue = Math.max(0, Math.round(SKILL_CREATOR_MAX_SUPPLY * remainingFraction));
+			graceSkillValue.textContent = numberFormatter.format(remainingValue);
+		}
 
 		function updateGracePeriodCountdown() {
 			if (!EXPIRATION_MS || !IS_IN_GRACE_PERIOD) return;
@@ -4171,6 +4276,7 @@ export function generateProfilePage(
 				if (graceHours) graceHours.textContent = '00';
 				if (graceMins) graceMins.textContent = '00';
 				if (graceSecs) graceSecs.textContent = '00';
+				updateGraceSkillCounter(AVAILABLE_AT);
 				if (graceBanner) {
 					const title = graceBanner.querySelector('.grace-period-title');
 					const text = graceBanner.querySelector('.grace-period-text');
@@ -4191,6 +4297,7 @@ export function generateProfilePage(
 			if (graceHours) graceHours.textContent = String(hours).padStart(2, '0');
 			if (graceMins) graceMins.textContent = String(mins).padStart(2, '0');
 			if (graceSecs) graceSecs.textContent = String(secs).padStart(2, '0');
+			updateGraceSkillCounter(now);
 		}
 
 		if (IS_IN_GRACE_PERIOD && EXPIRATION_MS) {
