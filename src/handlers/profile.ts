@@ -899,6 +899,14 @@ export function generateProfilePage(
 			background: var(--accent-light);
 			border: 1px solid var(--border);
 			border-radius: 10px;
+			transition: background 0.2s, border-color 0.2s;
+		}
+		.wallet-bar .wallet-status:hover {
+			background: var(--accent);
+			border-color: var(--accent);
+		}
+		.wallet-bar .wallet-status:hover .wallet-addr {
+			color: var(--bg);
 		}
 		.wallet-bar .wallet-addr {
 			font-family: ui-monospace, SFMono-Regular, monospace;
@@ -4456,14 +4464,40 @@ ${generatePasskeyWalletStyles()}
 				const displayName = connectedPrimaryName || truncAddr(connectedAddress);
 				const walletStatus = document.createElement('div');
 				walletStatus.className = 'wallet-status';
+				walletStatus.style.cursor = 'pointer';
+				walletStatus.title = connectedPrimaryName 
+					? \`Go to \${connectedPrimaryName} profile\`
+					: 'Disconnect wallet';
 				walletStatus.innerHTML = \`
 					<span class="wallet-addr">\${displayName}</span>
 					\${connectedPrimaryName ? \`<span class="wallet-name">\${truncAddr(connectedAddress)}</span>\` : ''}
 					<button id="disconnect-wallet-btn">×</button>
 				\`;
 				walletBar.appendChild(walletStatus);
+				
+				// Handle click on wallet status (but not the disconnect button)
+				walletStatus.addEventListener('click', (e) => {
+					// Don't handle if clicking the disconnect button
+					if (e.target.closest('#disconnect-wallet-btn')) return;
+					
+					if (connectedPrimaryName) {
+						// Navigate to the primary name's profile
+						const cleanedName = connectedPrimaryName.replace(/\\.sui$/i, '');
+						window.location.href = \`https://\${cleanedName}.sui.ski\`;
+					} else {
+						// No primary name, disconnect wallet
+						disconnectWallet();
+					}
+				});
+				
+				// Disconnect button handler
 				const disconnectBtn = document.getElementById('disconnect-wallet-btn');
-				if (disconnectBtn) disconnectBtn.addEventListener('click', disconnectWallet);
+				if (disconnectBtn) {
+					disconnectBtn.addEventListener('click', (e) => {
+						e.stopPropagation(); // Prevent triggering wallet status click
+						disconnectWallet();
+					});
+				}
 			}
 		}
 
