@@ -219,7 +219,7 @@ async function handleCancelBid(
 	}
 
 	const cleanName = name.toLowerCase().replace(/\.sui$/i, '')
-	const bidKey = `bid:${cleanName}:${bidder}`
+	const bidKey = buildBidKey(cleanName, bidder)
 
 	// Check if bid exists
 	const existingBid = await env.CACHE.get(bidKey)
@@ -246,6 +246,110 @@ async function handleCancelBid(
 	}
 
 	return jsonResponse({ success: true }, 200, corsHeaders)
+}
+
+function parseSignatureInput(value: unknown): string[] {
+	if (!value) return []
+	if (Array.isArray(value)) {
+		return value
+			.map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+			.filter((entry) => entry.length > 0)
+	}
+	if (typeof value === 'string') {
+		return value
+			.split(/[,\\n]+/)
+			.map((entry) => entry.trim())
+			.filter((entry) => entry.length > 0)
+	}
+	return []
+}
+
+function buildBidKey(name: string, bidder: string): string {
+	return `bid:${name}:${bidder}`
+}
+
+function shouldAttemptAutoRelay(bid: QueuedBid): boolean {
+	if (!bid.autoRelay || !bid.txBytes || !Array.isArray(bid.signatures) || bid.signatures.length === 0) {
+		return false
+	}
+	if (bid.status === 'submitted') {
+		return false
+	}
+	if (Date.now() < bid.executeAt) {
+		return false
+	}
+
+	const retryDelay = bid.status === 'failed' ? 60_000 : 15_000
+	if (bid.lastAttemptAt && Date.now() - bid.lastAttemptAt < retryDelay) {
+		return false
+	}
+	return true
+}
+
+async function maybeAutoSubmitBid(
+	env: Env,
+	name: string,
+	bidder: string,
+	bid: QueuedBid,
+): Promise<QueuedBid> {
+	if (!bid.txBytes || !Array.isArray(bid.signatures) || bid.signatures.length === 0) {
+		return bid
+	}
+
+	const bidKey = buildBidKey(name, bidder)
+	const workingCopy: QueuedBid = {
+		...bid,
+		status: 'submitting',
+		lastAttemptAt: Date.now(),
+	}
+
+	await saveBidRecord(env, bidKey, workingCopy)
+
+	const relay = await relaySignedTransaction(env, workingCopy.txBytes, workingCopy.signatures)
+
+	if (relay.ok) {
+		workingCopy.status = 'submitted'
+		workingCopy.submittedAt = Date.now()
+		workingCopy.resultDigest = extractDigest(relay.response)
+		delete workingCopy.lastError
+	} else {
+		workingCopy.status = 'failed'
+		workingCopy.lastError = relay.error || 'Relay failed'
+	}
+
+	await saveBidRecord(env, bidKey, workingCopy)
+	return workingCopy
+}
+
+async function saveBidRecord(env: Env, bidKey: string, bid: QueuedBid) {
+	await env.CACHE.put(bidKey, JSON.stringify(bid), { expirationTtl: getBidTtl(bid) })
+}
+
+function getBidTtl(bid: QueuedBid): number {
+	const secondsUntilExecute = Math.max(Math.ceil((bid.executeAt - Date.now()) / 1000), 0)
+	const buffer = bid.status === 'submitted' ? 7 * 86400 : 86400
+	return secondsUntilExecute + buffer
+}
+
+function extractDigest(response: unknown): string | undefined {
+	if (!response || typeof response !== 'object') {
+		return undefined
+	}
+
+	const root = response as { result?: Record<string, unknown> }
+	const result = root.result
+	if (!result) {
+		return undefined
+	}
+
+	const effects = result.effects as Record<string, unknown> | undefined
+	const nestedEffects = effects?.effects as Record<string, unknown> | undefined
+
+	return (
+		(effects?.transactionDigest as string | undefined) ||
+		(nestedEffects?.transactionDigest as string | undefined) ||
+		(result.digest as string | undefined)
+	)
 }
 
 function jsonResponse(

@@ -6,13 +6,13 @@ import { handlePWARequest } from './handlers/pwa'
 import { handleTransaction } from './handlers/transaction'
 import { handleUploadPage } from './handlers/upload'
 import { handleRegistrationSubmission } from './handlers/register'
-import { resolveContent, resolveDirectContent } from './resolvers/content'
+import { resolveContent, resolveDirectContent, WALRUS_AGGREGATORS } from './resolvers/content'
 import { getMVRDocumentationUrl, getPackageExplorerUrl, resolveMVRPackage } from './resolvers/mvr'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
 import { isWalrusSiteId, resolveWalrusSite } from './resolvers/walrus-site'
 import type { Env, MVRPackage, SuiNSRecord } from './types'
-import { isTwitterPreviewBot } from './utils/social'
+import { isTwitterPreviewBot, renderSocialMeta } from './utils/social'
 import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils/response'
 import { parseSubdomain } from './utils/subdomain'
 
@@ -83,7 +83,10 @@ export default {
 				const pathMatch = url.pathname.match(/^\/(walrus|ipfs)\/(.+)$/)
 				if (pathMatch) {
 					const [, type, id] = pathMatch
-					return handlePathContentRequest(type, id, env)
+					return handlePathContentRequest(type, id, env, {
+						isTwitterBot: isTwitterPreviewBot(userAgent),
+						url,
+					})
 				}
 			}
 
@@ -107,7 +110,10 @@ export default {
 					return handleMVRRequest(parsed.subdomain, parsed.packageName, parsed.version, url, env)
 
 				case 'content':
-					return handleContentRequest(parsed.subdomain, env)
+					return handleContentRequest(parsed.subdomain, env, {
+						isTwitterBot: isTwitterPreviewBot(userAgent),
+						url,
+					})
 
 				default:
 					return errorResponse('Unknown route type', 'UNKNOWN_ROUTE', 400)
@@ -226,7 +232,23 @@ async function handleMVRRequest(
 /**
  * Handle direct content requests (ipfs-*, walrus-*)
  */
-async function handleContentRequest(subdomain: string, env: Env): Promise<Response> {
+interface ContentRequestOptions {
+	isTwitterBot?: boolean
+	url?: URL
+}
+
+async function handleContentRequest(
+	subdomain: string,
+	env: Env,
+	options: ContentRequestOptions = {},
+): Promise<Response> {
+	if (options.isTwitterBot && options.url) {
+		const preview = await buildContentPreview(subdomain, options.url, env)
+		if (preview) {
+			return htmlResponse(preview)
+		}
+	}
+
 	const result = await resolveDirectContent(subdomain, env)
 
 	if (!result.found) {
@@ -240,7 +262,19 @@ async function handleContentRequest(subdomain: string, env: Env): Promise<Respon
  * Handle path-based content requests (preserves case sensitivity)
  * /walrus/{blobId} or /ipfs/{cid}
  */
-async function handlePathContentRequest(type: string, id: string, env: Env): Promise<Response> {
+async function handlePathContentRequest(
+	type: string,
+	id: string,
+	env: Env,
+	options: ContentRequestOptions = {},
+): Promise<Response> {
+	if (options.isTwitterBot && options.url) {
+		const preview = await buildContentPreview(`${type}-${id}`, options.url, env)
+		if (preview) {
+			return htmlResponse(preview)
+		}
+	}
+
 	const subdomain = `${type}-${id}`
 	const result = await resolveDirectContent(subdomain, env)
 
@@ -249,6 +283,176 @@ async function handlePathContentRequest(type: string, id: string, env: Env): Pro
 	}
 
 	return result.data as Response
+}
+
+interface ContentPreviewMeta {
+	title: string
+	description: string
+	canonicalUrl: string
+	imageUrl?: string
+	imageAlt?: string
+}
+
+interface WalrusMetadata {
+	contentType?: string
+	contentLength?: number
+}
+
+async function buildContentPreview(subdomain: string, url: URL, env: Env): Promise<string | null> {
+	const canonicalUrl = `${url.origin}${url.pathname}${url.search}`
+	if (subdomain.startsWith('walrus-')) {
+		const blobId = subdomain.slice(7)
+		const metadata = await inspectWalrusMetadata(blobId, env)
+		const rootHost = resolveRootHostname(url.hostname)
+		const isImage = isImageType(metadata.contentType)
+		const imageUrl = isImage
+			? `${url.protocol}//${rootHost}/walrus/${blobId}`
+			: `${url.protocol}//${rootHost}/icon-512.png`
+		const infoBits = []
+		if (metadata.contentType) {
+			infoBits.push(`Type: ${metadata.contentType}`)
+		}
+		const sizeLabel = formatByteSize(metadata.contentLength)
+		if (sizeLabel) {
+			infoBits.push(`Size: ${sizeLabel}`)
+		}
+		const description = ['Walrus blob served via sui.ski gateway.', ...infoBits].join(' ')
+
+		return contentPreviewHtml({
+			title: `Walrus blob ${blobId.slice(0, 10)}…`,
+			description,
+			canonicalUrl,
+			imageUrl,
+			imageAlt: isImage ? `Walrus blob ${blobId}` : 'sui.ski preview',
+		})
+	}
+
+	if (subdomain.startsWith('ipfs-')) {
+		const cid = subdomain.slice(5)
+		const rootHost = resolveRootHostname(url.hostname)
+		const description = 'IPFS content delivered through the sui.ski wildcard gateway.'
+		return contentPreviewHtml({
+			title: `IPFS content ${cid.slice(0, 10)}…`,
+			description,
+			canonicalUrl,
+			imageUrl: `${url.protocol}//${rootHost}/icon-512.png`,
+			imageAlt: 'sui.ski preview',
+		})
+	}
+
+	return null
+}
+
+async function inspectWalrusMetadata(blobId: string, env: Env): Promise<WalrusMetadata> {
+	const aggregators = WALRUS_AGGREGATORS[env.WALRUS_NETWORK] || WALRUS_AGGREGATORS.testnet
+
+	for (const aggregator of aggregators) {
+		const endpoint = `${aggregator}${blobId}`
+		try {
+			const headResponse = await fetch(endpoint, {
+				method: 'HEAD',
+				headers: { 'User-Agent': 'sui.ski-preview/1.0' },
+			})
+			if (headResponse.ok) {
+				return {
+					contentType: headResponse.headers.get('content-type') || undefined,
+					contentLength: parseInt(headResponse.headers.get('content-length') || '', 10) || undefined,
+				}
+			}
+		} catch {}
+
+		try {
+			const peekResponse = await fetch(endpoint, {
+				method: 'GET',
+				headers: { 'User-Agent': 'sui.ski-preview/1.0', Range: 'bytes=0-0' },
+			})
+			if (peekResponse.ok) {
+				peekResponse.body?.cancel()
+				return {
+					contentType: peekResponse.headers.get('content-type') || undefined,
+					contentLength: parseInt(peekResponse.headers.get('content-length') || '', 10) || undefined,
+				}
+			}
+		} catch {}
+	}
+
+	return {}
+}
+
+function isImageType(contentType?: string): boolean {
+	return Boolean(contentType && contentType.startsWith('image/'))
+}
+
+function formatByteSize(bytes?: number): string | undefined {
+	if (!bytes || !Number.isFinite(bytes) || bytes <= 0) {
+		return undefined
+	}
+	const kb = bytes / 1024
+	if (kb < 1024) {
+		return `${kb.toFixed(2)} KB`
+	}
+	const mb = kb / 1024
+	return `${mb.toFixed(2)} MB`
+}
+
+function resolveRootHostname(hostname: string): string {
+	return hostname.endsWith('staging.sui.ski') ? 'staging.sui.ski' : 'sui.ski'
+}
+
+function contentPreviewHtml(meta: ContentPreviewMeta): string {
+	const socialMeta = renderSocialMeta({
+		title: meta.title,
+		description: meta.description,
+		url: meta.canonicalUrl,
+		siteName: 'sui.ski',
+		image: meta.imageUrl,
+		imageAlt: meta.imageAlt,
+	})
+
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="robots" content="noindex">
+	<title>${escapeHtml(meta.title)}</title>
+	<link rel="canonical" href="${escapeHtml(meta.canonicalUrl)}">
+${socialMeta}
+	<style>
+		body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #05060c; color: #e4e6f1; min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; padding: 20px; }
+		.preview-card { max-width: 520px; width: 100%; background: rgba(15, 18, 32, 0.92); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; padding: 28px; box-shadow: 0 25px 60px rgba(5, 6, 12, 0.7); text-align: center; }
+		.preview-card h1 { font-size: 1.2rem; margin-bottom: 12px; }
+		.preview-card p { color: #a1a6c5; font-size: 0.95rem; line-height: 1.6; }
+		.preview-card a { margin-top: 16px; display: inline-flex; align-items: center; gap: 8px; color: #60a5fa; text-decoration: none; font-weight: 600; }
+	</style>
+</head>
+<body>
+	<div class="preview-card">
+		<h1>${escapeHtml(meta.title)}</h1>
+		<p>${escapeHtml(meta.description)}</p>
+		<a href="${escapeHtml(meta.canonicalUrl)}" rel="noopener">Open content</a>
+	</div>
+</body>
+</html>`
+}
+
+function escapeHtml(value: string): string {
+	return value.replace(/[&<>"']/g, (char) => {
+		switch (char) {
+			case '&':
+				return '&amp;'
+			case '<':
+				return '&lt;'
+			case '>':
+				return '&gt;'
+			case '"':
+				return '&quot;'
+			case "'":
+				return '&#39;'
+			default:
+				return char
+		}
+	})
 }
 
 /**
