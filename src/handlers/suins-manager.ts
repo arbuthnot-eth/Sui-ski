@@ -506,31 +506,28 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 			color: var(--success);
 		}
 
-		/* Coupon Input */
-		.coupon-input-group {
-			display: flex;
-			gap: 12px;
+		/* Sponsor Operation Badges */
+		.sponsor-op-badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 8px 14px;
+			border-radius: 20px;
+			font-size: 0.8rem;
+			font-weight: 600;
+			background: rgba(255,255,255,0.05);
+			border: 1px solid var(--border);
+			color: var(--text-muted);
+			transition: all 0.2s;
 		}
-		.coupon-input-group .form-input {
-			flex: 1;
-			text-transform: uppercase;
-			letter-spacing: 0.1em;
+		.sponsor-op-badge.active {
+			background: rgba(52,211,153,0.15);
+			border-color: rgba(52,211,153,0.3);
+			color: var(--success);
 		}
-		.coupon-result {
-			margin-top: 16px;
-			padding: 16px;
-			border-radius: 12px;
-			display: none;
-		}
-		.coupon-result.valid {
-			display: block;
-			background: rgba(52,211,153,0.1);
-			border: 1px solid rgba(52,211,153,0.3);
-		}
-		.coupon-result.invalid {
-			display: block;
-			background: rgba(248,113,113,0.1);
-			border: 1px solid rgba(248,113,113,0.3);
+		.sponsor-op-badge.disabled {
+			opacity: 0.5;
+			text-decoration: line-through;
 		}
 
 		/* Status Messages */
@@ -838,52 +835,99 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 			</div>
 		</section>
 
-		<!-- Coupons Section -->
-		<section class="section" id="coupons-section">
+		<!-- Gas Sponsorship Section -->
+		<section class="section" id="sponsor-section">
 			<div class="card">
 				<h2 class="card-title">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6"/>
-						<polyline points="12 3 12 15"/>
-						<path d="M18 9l-6-6-6 6"/>
+						<path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
 					</svg>
-					Coupon Redemption
+					Gas Sponsorship
 				</h2>
 				<p style="color: var(--text-muted); margin-bottom: 20px;">
-					Enter a coupon code to get a discount on your SuiNS registration.
+					Get your SuiNS transactions sponsored - no SUI needed for gas fees. Perfect for new users or bulk operations.
 				</p>
 
-				<div class="form-group">
-					<label class="form-label">Coupon Code</label>
-					<div class="coupon-input-group">
-						<input type="text" class="form-input" id="coupon-input" placeholder="ENTER-CODE-HERE">
-						<button class="btn btn-secondary" id="apply-coupon-btn">Apply</button>
-					</div>
-				</div>
-
-				<div class="coupon-result" id="coupon-result">
-					<div style="display: flex; align-items: center; gap: 12px;">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;">
-							<path d="M20 6L9 17l-5-5"/>
-						</svg>
-						<div>
-							<div style="font-weight: 600;">Coupon Applied!</div>
-							<div style="font-size: 0.9rem; opacity: 0.8;" id="coupon-discount">20% off registration</div>
+				<div class="sponsor-status-card" id="sponsor-status-card">
+					<div style="display: flex; align-items: center; gap: 16px; padding: 20px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 20px;">
+						<div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, rgba(96,165,250,0.2), rgba(77,162,255,0.2)); display: flex; align-items: center; justify-content: center;">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px; color: var(--accent);">
+								<path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+							</svg>
 						</div>
+						<div style="flex: 1;">
+							<div style="font-weight: 600; margin-bottom: 4px;">Sponsorship Status</div>
+							<div style="font-size: 0.9rem; color: var(--text-muted);" id="sponsor-status-text">Checking...</div>
+						</div>
+						<div id="sponsor-status-indicator" style="width: 12px; height: 12px; border-radius: 50%; background: var(--text-muted);"></div>
 					</div>
 				</div>
 
-				<div style="margin-top: 24px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
-					<h4 style="margin-bottom: 8px; font-size: 0.9rem;">How Coupons Work</h4>
-					<ul style="color: var(--text-muted); font-size: 0.85rem; padding-left: 20px;">
-						<li>Coupons may have domain length restrictions</li>
-						<li>Some coupons are limited to specific registration periods</li>
-						<li>Coupons can only be used once per eligible domain</li>
-						<li>Discounts are applied to the base registration price</li>
-					</ul>
+				<div class="sponsor-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px;">
+					<div style="padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; text-align: center;">
+						<div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Daily Budget</div>
+						<div style="font-size: 1.3rem; font-weight: 700;" id="sponsor-daily-budget">-- SUI</div>
+					</div>
+					<div style="padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; text-align: center;">
+						<div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Remaining</div>
+						<div style="font-size: 1.3rem; font-weight: 700; color: var(--success);" id="sponsor-remaining">-- SUI</div>
+					</div>
+					<div style="padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; text-align: center;">
+						<div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Sponsor</div>
+						<div style="font-size: 0.85rem; font-weight: 600; font-family: ui-monospace, monospace;" id="sponsor-address">--</div>
+					</div>
 				</div>
 
-				<div class="status" id="coupon-status"></div>
+				<h3 style="font-size: 1rem; margin-bottom: 12px;">Eligible Operations</h3>
+				<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px;">
+					<span class="sponsor-op-badge" data-op="register">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+							<path d="M12 5v14M5 12h14"/>
+						</svg>
+						Register
+					</span>
+					<span class="sponsor-op-badge" data-op="renew">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+							<polyline points="23 4 23 10 17 10"/>
+							<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+						</svg>
+						Renew
+					</span>
+					<span class="sponsor-op-badge" data-op="subdomain">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+							<circle cx="12" cy="12" r="10"/>
+							<line x1="2" y1="12" x2="22" y2="12"/>
+						</svg>
+						Subdomain
+					</span>
+				</div>
+
+				<div style="padding: 16px; background: linear-gradient(135deg, rgba(96,165,250,0.1), rgba(77,162,255,0.1)); border: 1px dashed var(--accent); border-radius: 12px;">
+					<h4 style="margin-bottom: 8px; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+							<circle cx="12" cy="12" r="10"/>
+							<line x1="12" y1="16" x2="12" y2="12"/>
+							<line x1="12" y1="8" x2="12" y2="8"/>
+						</svg>
+						How Gas Sponsorship Works
+					</h4>
+					<ol style="color: var(--text-muted); font-size: 0.85rem; padding-left: 20px;">
+						<li>Build your transaction (register, renew, or create subdomain)</li>
+						<li>Submit the unsigned transaction to the sponsor</li>
+						<li>Sponsor validates and signs the gas portion</li>
+						<li>You sign only the user portion and execute</li>
+					</ol>
+				</div>
+
+				<button class="btn btn-primary" id="refresh-sponsor-btn" style="width: 100%; margin-top: 20px;">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polyline points="23 4 23 10 17 10"/>
+						<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+					</svg>
+					Refresh Sponsor Status
+				</button>
+
+				<div class="status" id="sponsor-section-status"></div>
 			</div>
 		</section>
 
@@ -1083,43 +1127,51 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 		fetchPricing();
 		setInterval(fetchSuiPrice, 60000);
 
-		// Coupon validation
-		document.getElementById('apply-coupon-btn').addEventListener('click', async () => {
-			const code = document.getElementById('coupon-input').value.trim().toUpperCase();
-			const result = document.getElementById('coupon-result');
-			const status = document.getElementById('coupon-status');
-
-			if (!code) {
-				status.textContent = 'Please enter a coupon code';
-				status.className = 'status visible error';
-				return;
-			}
-
-			status.textContent = 'Validating coupon...';
-			status.className = 'status visible loading';
+		// Gas sponsorship status
+		async function fetchSponsorStatus() {
+			const statusText = document.getElementById('sponsor-status-text');
+			const statusIndicator = document.getElementById('sponsor-status-indicator');
+			const dailyBudget = document.getElementById('sponsor-daily-budget');
+			const remaining = document.getElementById('sponsor-remaining');
+			const sponsorAddress = document.getElementById('sponsor-address');
 
 			try {
-				const res = await fetch('/api/suins/validate-coupon', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ code, domainLength: 5, years: 1 })
-				});
+				const res = await fetch('/api/suins/sponsor-status');
 				const data = await res.json();
 
-				if (data.valid) {
-					result.className = 'coupon-result valid';
-					document.getElementById('coupon-discount').textContent = data.discount + '% off registration';
-					status.className = 'status';
+				if (data.enabled) {
+					statusText.textContent = 'Sponsorship Active';
+					statusIndicator.style.background = 'var(--success)';
+					dailyBudget.textContent = (data.dailyBudget / 1e9).toFixed(2) + ' SUI';
+					remaining.textContent = (data.remainingBudget / 1e9).toFixed(2) + ' SUI';
+					sponsorAddress.textContent = data.sponsorAddress ?
+						data.sponsorAddress.slice(0, 6) + '...' + data.sponsorAddress.slice(-4) : '--';
+
+					// Mark eligible operations as active
+					data.eligibleOperations.forEach(op => {
+						const badge = document.querySelector('.sponsor-op-badge[data-op="' + op + '"]');
+						if (badge) badge.classList.add('active');
+					});
 				} else {
-					result.className = 'coupon-result invalid';
-					status.textContent = data.message || 'Invalid coupon code';
-					status.className = 'status visible error';
+					statusText.textContent = data.message || 'Sponsorship Not Configured';
+					statusIndicator.style.background = 'var(--warning)';
+					dailyBudget.textContent = '0 SUI';
+					remaining.textContent = '0 SUI';
+					sponsorAddress.textContent = '--';
 				}
 			} catch (e) {
-				status.textContent = 'Failed to validate coupon';
-				status.className = 'status visible error';
+				statusText.textContent = 'Failed to fetch status';
+				statusIndicator.style.background = 'var(--error)';
 			}
+		}
+
+		// Refresh sponsor status button
+		document.getElementById('refresh-sponsor-btn').addEventListener('click', () => {
+			fetchSponsorStatus();
 		});
+
+		// Fetch sponsor status on load
+		fetchSponsorStatus();
 
 		// Check discounts
 		document.getElementById('check-discounts-btn').addEventListener('click', async () => {
