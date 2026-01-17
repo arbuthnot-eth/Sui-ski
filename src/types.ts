@@ -7,9 +7,10 @@ export interface Env {
 	CACHE: KVNamespace
 	// Messaging SDK contract addresses (testnet/mainnet)
 	MESSAGING_CONTRACT_ADDRESS?: string
+	MOVE_REGISTRY_PARENT_ID?: string
 }
 
-export type RouteType = 'suins' | 'mvr' | 'content' | 'rpc' | 'root' | 'play'
+export type RouteType = 'suins' | 'mvr' | 'content' | 'rpc' | 'root'
 
 export interface ParsedSubdomain {
 	type: RouteType

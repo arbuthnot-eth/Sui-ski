@@ -1490,161 +1490,6 @@ export function generateProfilePage(
 			line-height: 1.6;
 		}
 
-		/* Knowledge Section */
-		.knowledge-section {
-			background: var(--card-bg);
-			backdrop-filter: blur(20px);
-			-webkit-backdrop-filter: blur(20px);
-			border: 1px solid var(--glass-border);
-			border-radius: 20px;
-			margin-bottom: 20px;
-			overflow: hidden;
-			box-shadow: var(--shadow);
-		}
-		.knowledge-box {
-			border-bottom: 1px solid var(--border);
-		}
-		.knowledge-box:last-child {
-			border-bottom: none;
-		}
-		.knowledge-header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			padding: 16px 20px;
-			background: linear-gradient(135deg, rgba(14, 165, 233, 0.05), rgba(6, 182, 212, 0.05));
-		}
-		.knowledge-header-left {
-			display: flex;
-			align-items: center;
-			gap: 12px;
-		}
-		.knowledge-icon {
-			width: 36px;
-			height: 36px;
-			border-radius: 10px;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			background: linear-gradient(135deg, var(--accent), #06b6d4);
-		}
-		.knowledge-icon.wiki {
-			background: linear-gradient(135deg, #10b981, #059669);
-		}
-		.knowledge-icon svg {
-			width: 18px;
-			height: 18px;
-			color: white;
-		}
-		.knowledge-title {
-			font-size: 0.95rem;
-			font-weight: 700;
-			color: var(--text);
-		}
-		.knowledge-badge {
-			font-size: 0.7rem;
-			font-weight: 600;
-			padding: 4px 10px;
-			border-radius: 8px;
-			text-transform: uppercase;
-			letter-spacing: 0.03em;
-		}
-		.knowledge-badge.found {
-			background: var(--success-light);
-			color: var(--success);
-			border: 1px solid rgba(16, 185, 129, 0.2);
-		}
-		.knowledge-badge.not-found {
-			background: rgba(100, 116, 139, 0.1);
-			color: var(--text-muted);
-		}
-		.knowledge-content {
-			padding: 20px;
-		}
-		.knowledge-word {
-			font-size: 1.5rem;
-			font-weight: 800;
-			background: linear-gradient(135deg, var(--accent), #06b6d4);
-			-webkit-background-clip: text;
-			-webkit-text-fill-color: transparent;
-			background-clip: text;
-			margin-bottom: 4px;
-		}
-		.knowledge-phonetic {
-			font-size: 0.9rem;
-			color: var(--text-muted);
-			font-style: italic;
-			margin-bottom: 16px;
-		}
-		.knowledge-meanings {
-			display: flex;
-			flex-direction: column;
-			gap: 14px;
-		}
-		.knowledge-meaning {
-			padding-left: 14px;
-			border-left: 3px solid var(--accent);
-		}
-		.knowledge-pos {
-			font-size: 0.7rem;
-			font-weight: 700;
-			color: var(--accent);
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
-			margin-bottom: 6px;
-		}
-		.knowledge-def {
-			font-size: 0.9rem;
-			color: var(--text);
-			line-height: 1.6;
-			margin-bottom: 6px;
-		}
-		.knowledge-example {
-			font-size: 0.85rem;
-			color: var(--text-muted);
-			font-style: italic;
-			padding-left: 12px;
-			border-left: 2px solid var(--border);
-		}
-		.knowledge-article-title {
-			font-size: 1.1rem;
-			font-weight: 700;
-			color: var(--text);
-			margin-bottom: 12px;
-		}
-		.knowledge-article-desc {
-			font-size: 0.8rem;
-			color: var(--text-muted);
-			font-style: italic;
-			margin-bottom: 12px;
-		}
-		.knowledge-article-extract {
-			font-size: 0.9rem;
-			color: var(--text);
-			line-height: 1.7;
-			margin-bottom: 16px;
-		}
-		.knowledge-link {
-			display: inline-flex;
-			align-items: center;
-			gap: 6px;
-			color: var(--accent);
-			font-size: 0.85rem;
-			font-weight: 600;
-			margin-right: 16px;
-		}
-		.knowledge-link svg {
-			width: 14px;
-			height: 14px;
-		}
-		.knowledge-loading {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			gap: 10px;
-			padding: 24px;
-			color: var(--text-muted);
-		}
 
 		/* Quick Message Section (Overview Tab) */
 		.quick-message-section {
@@ -3033,9 +2878,12 @@ export function generateProfilePage(
 			text-decoration: underline;
 		}
 
-		/* Hide unused sections */
 		.social-links-section {
-			display: none;
+			background: var(--card-bg);
+			border: 1px solid var(--border);
+			border-radius: 18px;
+			padding: 18px;
+			margin-top: 20px;
 		}
 		.social-links-header {
 			display: flex;
@@ -3376,9 +3224,6 @@ export function generateProfilePage(
 			.profile-grid { gap: 10px; }
 			.profile-item { padding: 12px; }
 
-			.knowledge-box { padding: 14px; }
-			.knowledge-header { flex-direction: column; align-items: flex-start; gap: 8px; }
-			.knowledge-word { font-size: 1rem; }
 
 			.qr-expanded-content { padding: 18px; max-width: 260px; }
 			.qr-expanded-content canvas { width: 180px; height: 180px; }
@@ -3404,6 +3249,7 @@ export function generateProfilePage(
 			.identity-name { font-size: 0.7rem; padding: 8px; }
 			.identity-qr-toggle { width: 30px; height: 30px; bottom: 8px; left: 8px; right: auto; }
 		}
+${generatePasskeyWalletStyles()}
 	</style>
 </head>
 <body>
@@ -3440,10 +3286,6 @@ export function generateProfilePage(
 					<button class="sidebar-tab" data-tab="bid">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
 						<span>Queue Bid</span>
-					</button>
-					<button class="sidebar-tab" data-tab="knowledge">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-						<span>Knowledge</span>
 					</button>
 					<button class="sidebar-tab" data-tab="names">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
@@ -3506,6 +3348,8 @@ export function generateProfilePage(
 					</div>
 				</div>
 			</div>
+			${generatePasskeyWalletHTML()}
+			${generateSocialLinksHTML(record)}
 
 			${
 				record.contentHash || record.walrusSiteId
@@ -3824,56 +3668,6 @@ export function generateProfilePage(
 							: ''
 					}
 				</div><!-- end tab-bid -->
-
-				<div class="tab-panel" id="tab-knowledge">
-					<!-- Knowledge Section -->
-					<div class="knowledge-section" id="knowledge-section">
-			<!-- Dictionary -->
-			<div class="knowledge-box" id="dictionary-box">
-				<div class="knowledge-header">
-					<div class="knowledge-header-left">
-						<div class="knowledge-icon">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-								<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-							</svg>
-						</div>
-						<span class="knowledge-title">Dictionary</span>
-					</div>
-					<span class="knowledge-badge" id="dictionary-badge">Loading...</span>
-				</div>
-				<div class="knowledge-content" id="dictionary-content">
-					<div class="knowledge-loading">
-						<span class="loading"></span>
-						Looking up definition...
-					</div>
-				</div>
-			</div>
-
-			<!-- Grokipedia -->
-			<div class="knowledge-box" id="grokipedia-box">
-				<div class="knowledge-header">
-					<div class="knowledge-header-left">
-						<div class="knowledge-icon wiki">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<circle cx="12" cy="12" r="10"></circle>
-								<line x1="2" y1="12" x2="22" y2="12"></line>
-								<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-							</svg>
-						</div>
-						<span class="knowledge-title">Grokipedia</span>
-					</div>
-					<span class="knowledge-badge" id="grokipedia-badge">Loading...</span>
-				</div>
-				<div class="knowledge-content" id="grokipedia-content">
-					<div class="knowledge-loading">
-						<span class="loading"></span>
-						Searching encyclopedia...
-					</div>
-				</div>
-					</div>
-					</div>
-				</div><!-- end tab-knowledge -->
 
 				<div class="tab-panel" id="tab-names">
 					<div class="names-section">
@@ -5439,105 +5233,6 @@ export function generateProfilePage(
 				loadExistingBid();
 			}
 		}
-
-		// ===== KNOWLEDGE BASE (Dictionary + Encyclopedia) =====
-		function fetchWithTimeout(url, timeout = 5000) {
-			return Promise.race([
-				fetch(url),
-				new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout))
-			]);
-		}
-
-		async function fetchDictionary() {
-			const contentEl = document.getElementById('dictionary-content');
-			const badgeEl = document.getElementById('dictionary-badge');
-			const boxEl = document.getElementById('dictionary-box');
-
-			try {
-				const response = await fetchWithTimeout(\`https://api.dictionaryapi.dev/api/v2/entries/en/\${NAME}\`, 5000);
-				if (!response.ok) throw new Error('Not found');
-				const data = await response.json();
-
-				if (data && data[0]) {
-					const entry = data[0];
-					const phonetic = entry.phonetic || entry.phonetics?.find(p => p.text)?.text || '';
-
-					let meaningsHtml = '<div class="knowledge-meanings">';
-					for (const meaning of (entry.meanings || []).slice(0, 2)) {
-						const pos = meaning.partOfSpeech || 'unknown';
-						for (const def of (meaning.definitions || []).slice(0, 2)) {
-							meaningsHtml += \`<div class="knowledge-meaning">
-								<div class="knowledge-pos">\${pos}</div>
-								<div class="knowledge-def">\${def.definition}</div>
-								\${def.example ? \`<div class="knowledge-example">"\${def.example}"</div>\` : ''}
-							</div>\`;
-						}
-					}
-					meaningsHtml += '</div>';
-
-					contentEl.innerHTML = \`
-						<div class="knowledge-word">\${entry.word}</div>
-						\${phonetic ? \`<div class="knowledge-phonetic">\${phonetic}</div>\` : ''}
-						\${meaningsHtml}
-					\`;
-					badgeEl.textContent = 'Found';
-					badgeEl.className = 'knowledge-badge found';
-				} else {
-					throw new Error('No definition');
-				}
-			} catch (e) {
-				if (boxEl) boxEl.style.display = 'none';
-			}
-		}
-
-		async function fetchGrokipedia() {
-			const contentEl = document.getElementById('grokipedia-content');
-			const badgeEl = document.getElementById('grokipedia-badge');
-			const grokipediaUrl = \`https://grokipedia.com/wiki/\${encodeURIComponent(NAME)}\`;
-
-			try {
-				const apiUrl = \`\${window.location.origin}/api/grokipedia?name=\${encodeURIComponent(NAME)}\`;
-				const response = await fetchWithTimeout(apiUrl, 8000);
-				if (!response.ok) throw new Error('Not found');
-				const data = await response.json();
-
-				if (data && data.found && data.excerpt) {
-					const title = data.title || NAME;
-					const excerpt = data.excerpt;
-
-					contentEl.innerHTML = \`
-						<div class="knowledge-word">\${title}</div>
-						<div class="knowledge-def" style="margin-top: 12px; line-height: 1.6;">\${excerpt}\${excerpt.length >= 500 ? '...' : ''}</div>
-						<a href="\${grokipediaUrl}" target="_blank" class="knowledge-link" style="display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 10px 18px; background: linear-gradient(135deg, var(--accent), #06b6d4); color: white; border-radius: 10px; text-decoration: none; font-weight: 600;">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-							View full article on Grokipedia
-						</a>
-					\`;
-					badgeEl.textContent = 'Found';
-					badgeEl.className = 'knowledge-badge found';
-				} else {
-					throw new Error('No article');
-				}
-			} catch (e) {
-				// Show link to Grokipedia with prompt to explore
-				contentEl.innerHTML = \`
-					<div class="knowledge-article-title" style="text-transform: capitalize;">\${NAME}</div>
-					<div class="knowledge-article-extract" style="color: var(--text-muted);">
-						Grokipedia is an AI-powered encyclopedia. Click below to explore what Grok knows about this term.
-					</div>
-					<a href="\${grokipediaUrl}" target="_blank" class="knowledge-link" style="display: inline-flex; padding: 10px 18px; background: linear-gradient(135deg, var(--accent), #06b6d4); color: white; border-radius: 10px; margin-top: 8px;">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-						Open in Grokipedia
-					</a>
-				\`;
-				badgeEl.textContent = 'Explore';
-				badgeEl.className = 'knowledge-badge found';
-			}
-		}
-
-		// Load knowledge base
-		fetchDictionary();
-		fetchGrokipedia();
 
 		// ===== QUICK SEARCH (Keyboard-activated + Button) =====
 		const searchOverlay = document.getElementById('search-overlay');

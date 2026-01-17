@@ -1,12 +1,11 @@
 import { handleBidsRequest } from './handlers/bids'
-import { handleGrokipediaRequest } from './handlers/grokipedia'
 import { handleLandingPage } from './handlers/landing'
-import { handlePlayerEntryPage, handlePlayRequest } from './handlers/media'
 import { handleMessagingPage, handleMessagingRequest } from './handlers/messaging'
 import { generateProfilePage } from './handlers/profile'
 import { handlePWARequest } from './handlers/pwa'
 import { handleTransaction } from './handlers/transaction'
 import { handleUploadPage } from './handlers/upload'
+import { handleRegistrationSubmission } from './handlers/register'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { getMVRDocumentationUrl, getPackageExplorerUrl, resolveMVRPackage } from './resolvers/mvr'
 import { handleRPCRequest } from './resolvers/rpc'
@@ -49,10 +48,6 @@ export default {
 			return handleBidsRequest(request, env)
 		}
 
-		if (url.pathname === '/api/grokipedia') {
-			return handleGrokipediaRequest(request, env)
-		}
-
 		// Messaging page
 		if (url.pathname === '/messages' || url.pathname === '/messages/') {
 			return handleMessagingPage(env)
@@ -68,9 +63,8 @@ export default {
 			return handleUploadPage(request, env)
 		}
 
-		// Media player entry page
-		if (url.pathname === '/play' || url.pathname === '/play/') {
-			return handlePlayerEntryPage(env)
+		if (url.pathname === '/api/register/submit') {
+			return handleRegistrationSubmission(request, env)
 		}
 
 		// Transaction viewer: /tx/{digest} or /transaction/{digest}
@@ -114,9 +108,6 @@ export default {
 
 				case 'content':
 					return handleContentRequest(parsed.subdomain, env)
-
-				case 'play':
-					return handlePlayRequest(parsed.subdomain, env)
 
 				default:
 					return errorResponse('Unknown route type', 'UNKNOWN_ROUTE', 400)

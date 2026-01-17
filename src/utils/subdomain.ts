@@ -14,7 +14,6 @@ const STAGING_DOMAIN = 'staging.sui.ski'
  * - rpc.sui.ski -> RPC proxy endpoint
  * - ipfs-{cid}.sui.ski -> Direct IPFS content
  * - walrus-{blobId}.sui.ski -> Direct Walrus content
- * - play-{blobId}.sui.ski -> Media player for audio/video or playlist
  */
 export function parseSubdomain(hostname: string): ParsedSubdomain {
 	// Normalize hostname
@@ -50,15 +49,6 @@ export function parseSubdomain(hostname: string): ParsedSubdomain {
 	if (subdomain.startsWith('walrus-')) {
 		return {
 			type: 'content',
-			subdomain,
-			hostname: host,
-		}
-	}
-
-	// Media player: play-{blobId}.sui.ski
-	if (subdomain.startsWith('play-')) {
-		return {
-			type: 'play',
 			subdomain,
 			hostname: host,
 		}

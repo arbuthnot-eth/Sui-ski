@@ -5,9 +5,23 @@ import { toMVRName } from '../utils/subdomain'
 
 const CACHE_TTL = 600 // 10 minutes - packages change less frequently
 
-// MVR Registry object ID on mainnet
-const MVR_REGISTRY_MAINNET = '0x0000000000000000000000000000000000000000000000000000000000000001' // TODO: Replace with actual registry ID
-const MVR_REGISTRY_TESTNET = '0x0000000000000000000000000000000000000000000000000000000000000001' // TODO: Replace with actual registry ID
+const PLACEHOLDER_REGISTRY_ID =
+	'0x0000000000000000000000000000000000000000000000000000000000000001'
+const MVR_REGISTRY_MAINNET = ''
+const MVR_REGISTRY_TESTNET = ''
+
+export function getMoveRegistryParentId(env: Env): string | null {
+	const configured = env.MOVE_REGISTRY_PARENT_ID?.trim()
+	if (configured && configured !== PLACEHOLDER_REGISTRY_ID) {
+		return configured
+	}
+
+	const fallback = env.SUI_NETWORK === 'mainnet' ? MVR_REGISTRY_MAINNET : MVR_REGISTRY_TESTNET
+	if (fallback && fallback !== PLACEHOLDER_REGISTRY_ID) {
+		return fallback
+	}
+	return null
+}
 
 /**
  * Resolve a Move Registry package by name
@@ -61,7 +75,10 @@ async function queryMVRRegistry(
 	version: number | undefined,
 	env: Env,
 ): Promise<MVRPackage | null> {
-	const registryId = env.SUI_NETWORK === 'mainnet' ? MVR_REGISTRY_MAINNET : MVR_REGISTRY_TESTNET
+	const registryId = getMoveRegistryParentId(env)
+	if (!registryId) {
+		throw new Error('Move Registry parent ID not configured')
+	}
 
 	// The MVR registry stores package mappings as dynamic fields
 	// Key format: {suins_name}/{package_name}

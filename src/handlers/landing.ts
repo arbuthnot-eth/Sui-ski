@@ -1,9 +1,9 @@
 import { SuiClient } from '@mysten/sui/client'
 import { SuinsClient } from '@mysten/suins'
-import { getNetworkStatus } from '../resolvers/rpc'
 import type { Env } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
 import { renderSocialMeta } from '../utils/social'
+import { getGatewayStatus } from '../utils/status'
 
 interface LandingPageOptions {
 	canonicalUrl?: string
@@ -18,7 +18,7 @@ export async function handleLandingPage(request: Request, env: Env): Promise<Res
 
 	// API endpoint for status
 	if (url.pathname === '/api/status') {
-		const status = await getNetworkStatus(env)
+		const status = await getGatewayStatus(env)
 		return jsonResponse(status)
 	}
 
@@ -602,6 +602,44 @@ ${socialMeta}
 			.portal-header h2 { font-size: 2rem; }
 			.portal-field-grid { grid-template-columns: 1fr; }
 		}
+		.status-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+			gap: 16px;
+			margin-bottom: 32px;
+		}
+		.status-card {
+			background: rgba(15, 23, 42, 0.7);
+			border: 1px solid rgba(255, 255, 255, 0.08);
+			border-radius: 18px;
+			padding: 20px;
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+		}
+		.status-card h3 {
+			font-size: 0.95rem;
+			font-weight: 600;
+			color: #c7d2fe;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 8px;
+			margin: 0;
+		}
+		.status-value {
+			font-size: 1.25rem;
+			font-weight: 700;
+		}
+		.status-value.ok { color: #34d399; }
+		.status-value.warn { color: #fbbf24; }
+		.status-value.error { color: #f87171; }
+		.status-meta {
+			font-size: 0.8rem;
+			color: #94a3b8;
+			min-height: 1.25rem;
+		}
 		footer {
 			margin-top: auto;
 			padding-top: 48px;
@@ -624,6 +662,29 @@ ${socialMeta}
 			<span class="network-badge">${network}</span>
 			<h1>sui.ski</h1>
 			<p class="tagline">Your gateway to the Sui ecosystem</p>
+		</div>
+
+		<div class="status-grid" id="status-grid">
+			<div class="status-card">
+				<h3>Sui RPC</h3>
+				<div class="status-value" id="status-rpc-value">Loading...</div>
+				<div class="status-meta" id="status-rpc-meta">Checking checkpoints</div>
+			</div>
+			<div class="status-card">
+				<h3>Move Registry</h3>
+				<div class="status-value" id="status-mvr-value">Loading...</div>
+				<div class="status-meta" id="status-mvr-meta">Validating registry object</div>
+			</div>
+			<div class="status-card">
+				<h3>Passkey / Ika</h3>
+				<div class="status-value" id="status-ika-value">Loading...</div>
+				<div class="status-meta" id="status-ika-meta">Verifying shared objects</div>
+			</div>
+			<div class="status-card">
+				<h3>Messaging SDK</h3>
+				<div class="status-value" id="status-msg-value">Loading...</div>
+				<div class="status-meta" id="status-msg-meta">Contract wiring</div>
+			</div>
 		</div>
 
 		<div class="portal-section" id="wildcard-portal">
@@ -808,33 +869,6 @@ ${socialMeta}
 
 		<div class="card">
 			<h2>
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-				Media Player
-			</h2>
-			<p>Play audio and video stored on Walrus. <a href="/play">More options</a></p>
-			<form class="player-input" onsubmit="goToPlayer(event)">
-				<input type="text" id="blob-input" placeholder="Paste blob ID or URL...">
-				<button type="submit">Play</button>
-			</form>
-			<div class="format-badges">
-				<span class="format-badge">MP4</span>
-				<span class="format-badge">WebM</span>
-				<span class="format-badge">MP3</span>
-				<span class="format-badge">OGG</span>
-				<span class="format-badge">WAV</span>
-				<span class="format-badge">FLAC</span>
-			</div>
-			<div class="examples">
-				<div class="example">
-					<span class="example-url">play-{blobId}.sui.ski</span>
-					<span class="arrow">→</span>
-					<span class="example-desc">Play media file</span>
-				</div>
-			</div>
-		</div>
-
-		<div class="card">
-			<h2>
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
 				RPC Proxy
 			</h2>
@@ -893,6 +927,115 @@ ${socialMeta}
 	<footer>
 		<p>Built on <a href="https://sui.io">Sui</a> · <a href="https://suins.io">SuiNS</a> · <a href="https://moveregistry.com">MVR</a> · <a href="https://walrus.xyz">Walrus</a></p>
 	</footer>
+
+	<script>
+		(() => {
+			const cards = {
+				rpc: {
+					value: document.getElementById('status-rpc-value'),
+					meta: document.getElementById('status-rpc-meta'),
+				},
+				mvr: {
+					value: document.getElementById('status-mvr-value'),
+					meta: document.getElementById('status-mvr-meta'),
+				},
+				ika: {
+					value: document.getElementById('status-ika-value'),
+					meta: document.getElementById('status-ika-meta'),
+				},
+				msg: {
+					value: document.getElementById('status-msg-value'),
+					meta: document.getElementById('status-msg-meta'),
+				},
+			}
+
+			updateGatewayStatus()
+
+			async function updateGatewayStatus() {
+				try {
+					const response = await fetch('/api/status')
+					if (!response.ok) {
+						throw new Error('Status request failed')
+					}
+					const data = await response.json()
+					applyRpc(data.rpc)
+					applyMoveRegistry(data.moveRegistry)
+					applyIka(data.ika)
+					applyMessaging(data.messaging)
+				} catch (error) {
+					const message = error instanceof Error ? error.message : 'Unable to load status'
+					Object.values(cards).forEach((card) => {
+						setCardState(card, 'error', message, 'Unavailable')
+					})
+				}
+			}
+
+			function applyRpc(payload) {
+				if (!payload) return
+				const meta = payload.ok
+					? 'Checkpoint #' + (payload.latestCheckpoint ?? 'unknown')
+					: payload.error || 'RPC unreachable'
+				const value = payload.ok ? payload.chainId || 'Online' : 'Offline'
+				setCardState(cards.rpc, payload.ok ? 'ok' : 'error', meta, value)
+			}
+
+			function applyMoveRegistry(payload) {
+				if (!payload) return
+				if (!payload.configured) {
+					setCardState(cards.mvr, 'warn', 'Set MOVE_REGISTRY_PARENT_ID', 'Not Configured')
+					return
+				}
+				const meta = payload.ok
+					? 'Object ' + shorten(payload.registryId)
+					: payload.error || 'Registry object unreachable'
+				setCardState(cards.mvr, payload.ok ? 'ok' : 'error', meta, payload.ok ? 'Ready' : 'Degraded')
+			}
+
+			function applyIka(payload) {
+				if (!payload) return
+				const failing = Object.entries(payload.objects || {})
+					.filter(([, ok]) => !ok)
+					.map(([key]) => key.replace(/([A-Z])/g, ' $1').trim())
+				let meta = 'Network: ' + payload.network
+				if (failing.length > 0) {
+					meta += ' - Check ' + failing.join(', ')
+				}
+				setCardState(
+					cards.ika,
+					payload.ok ? 'ok' : 'error',
+					meta,
+					payload.ok ? 'Ready' : 'Unavailable',
+				)
+			}
+
+			function applyMessaging(payload) {
+				if (!payload) {
+					setCardState(cards.msg, 'warn', 'No configuration data', 'Unknown')
+					return
+				}
+				if (!payload.configured) {
+					setCardState(cards.msg, 'warn', 'Set MESSAGING_CONTRACT_ADDRESS', 'Disabled')
+					return
+				}
+				const meta = payload.contractAddress ? 'Contract ' + shorten(payload.contractAddress) : ''
+				setCardState(cards.msg, 'ok', meta, 'Enabled')
+			}
+
+			function setCardState(card, state, meta, value) {
+				if (!card?.value || !card?.meta) return
+				card.value.textContent = value || ''
+				card.value.classList.remove('ok', 'warn', 'error')
+				card.value.classList.add(state)
+				card.meta.textContent = meta || ''
+			}
+
+			function shorten(value) {
+				if (!value) return ''
+				if (value.length <= 12) return value
+				return value.slice(0, 6) + '...' + value.slice(-4)
+			}
+		})()
+	</script>
 
 	<script>
 		;(function () {
@@ -1325,30 +1468,6 @@ ${socialMeta}
 				updateQRData()
 			})
 		})()
-	</script>
-
-	<script>
-		function goToPlayer(e) {
-			e.preventDefault();
-			const input = document.getElementById('blob-input').value.trim();
-			const blobId = extractBlobId(input);
-			if (blobId) {
-				window.location.href = 'https://play-' + blobId + '.sui.ski';
-			}
-		}
-
-		function extractBlobId(input) {
-			if (!input) return null;
-			// Handle full URLs: play-xxx.sui.ski or walrus-xxx.sui.ski
-			let match = input.match(/(?:play|walrus)-([a-zA-Z0-9_-]+)(?:\\.sui\\.ski)?/);
-			if (match) return match[1];
-			// Handle /walrus/xxx paths
-			match = input.match(/\\/walrus\\/([a-zA-Z0-9_-]+)/);
-			if (match) return match[1];
-			// Handle raw blob ID (alphanumeric with - and _)
-			if (/^[a-zA-Z0-9_-]+$/.test(input)) return input;
-			return null;
-		}
 	</script>
 </body>
 </html>`
