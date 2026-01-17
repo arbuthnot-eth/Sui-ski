@@ -69,7 +69,10 @@ async function getTargetAddress(env: Env): Promise<string | null> {
 /**
  * Get name record including expiration
  */
-async function getNameExpiration(env: Env, name: string): Promise<{ expirationMs: number; inGracePeriod: boolean } | null> {
+async function getNameExpiration(
+	env: Env,
+	name: string,
+): Promise<{ expirationMs: number; inGracePeriod: boolean } | null> {
 	try {
 		const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
 		const suinsClient = new SuinsClient({
@@ -145,7 +148,10 @@ async function verifyPayment(
 
 		const receivedAmount = BigInt(recipientChange.amount)
 		if (receivedAmount < expectedAmount) {
-			return { valid: false, error: `Insufficient payment: expected ${expectedAmount}, got ${receivedAmount}` }
+			return {
+				valid: false,
+				error: `Insufficient payment: expected ${expectedAmount}, got ${receivedAmount}`,
+			}
 		}
 
 		return { valid: true, sender }
@@ -207,9 +213,13 @@ async function updateClaim(
 
 	const updated = { ...claim, ...updates }
 	const key = `claim:${claimId}`
-	const ttl = updated.status === 'completed' || updated.status === 'failed'
-		? 30 * 24 * 60 * 60 // 30 days for completed/failed
-		: Math.max(Math.ceil((updated.scheduledAt - Date.now()) / 1000) + 7 * 24 * 60 * 60, 7 * 24 * 60 * 60)
+	const ttl =
+		updated.status === 'completed' || updated.status === 'failed'
+			? 30 * 24 * 60 * 60 // 30 days for completed/failed
+			: Math.max(
+					Math.ceil((updated.scheduledAt - Date.now()) / 1000) + 7 * 24 * 60 * 60,
+					7 * 24 * 60 * 60,
+				)
 
 	await env.CACHE.put(key, JSON.stringify(updated), { expirationTtl: ttl })
 }
@@ -241,10 +251,7 @@ export async function getReadyClaims(env: Env, now: number): Promise<ScheduledCl
 			// Update status to ready
 			claim.status = 'ready'
 			readyClaims.push(claim)
-		} else if (
-			claim.status === 'ready' &&
-			claim.attempts < MAX_RETRY_ATTEMPTS
-		) {
+		} else if (claim.status === 'ready' && claim.attempts < MAX_RETRY_ATTEMPTS) {
 			readyClaims.push(claim)
 		}
 	}
@@ -278,7 +285,10 @@ export async function handleClaimSchedule(request: Request, env: Env): Promise<R
 		return jsonResponse({ error: 'Invalid JSON body' }, 400)
 	}
 
-	const name = payload.name?.trim()?.toLowerCase()?.replace(/\.sui$/i, '')
+	const name = payload.name
+		?.trim()
+		?.toLowerCase()
+		?.replace(/\.sui$/i, '')
 	if (!name) {
 		return jsonResponse({ error: 'Name is required' }, 400)
 	}
@@ -300,18 +310,24 @@ export async function handleClaimSchedule(request: Request, env: Env): Promise<R
 		const now = Date.now()
 		const gracePeriodEnd = expirationInfo.expirationMs + GRACE_PERIOD_MS
 		if (now < expirationInfo.expirationMs) {
-			return jsonResponse({
-				error: 'Name is not expired yet',
-				code: 'NOT_EXPIRED',
-				expiresAt: expirationInfo.expirationMs,
-				availableAt: expirationInfo.expirationMs + GRACE_PERIOD_MS,
-			}, 400)
+			return jsonResponse(
+				{
+					error: 'Name is not expired yet',
+					code: 'NOT_EXPIRED',
+					expiresAt: expirationInfo.expirationMs,
+					availableAt: expirationInfo.expirationMs + GRACE_PERIOD_MS,
+				},
+				400,
+			)
 		}
 		if (now >= gracePeriodEnd) {
-			return jsonResponse({
-				error: 'Grace period has ended - name is available for direct registration',
-				code: 'AVAILABLE_NOW',
-			}, 400)
+			return jsonResponse(
+				{
+					error: 'Grace period has ended - name is available for direct registration',
+					code: 'AVAILABLE_NOW',
+				},
+				400,
+			)
 		}
 	}
 
@@ -490,10 +506,13 @@ export async function handleClaimCancel(request: Request, env: Env): Promise<Res
 	}
 
 	if (claim.status !== 'pending') {
-		return jsonResponse({
-			error: 'Can only cancel pending claims',
-			currentStatus: claim.status,
-		}, 400)
+		return jsonResponse(
+			{
+				error: 'Can only cancel pending claims',
+				currentStatus: claim.status,
+			},
+			400,
+		)
 	}
 
 	await updateClaim(env, claimId, { status: 'cancelled' })
@@ -600,7 +619,9 @@ export async function processClaim(env: Env, claim: ScheduledClaim): Promise<voi
 
 	// For now, mark as ready for Nautilus to pick up
 	// The actual execution happens when Nautilus polls /api/claim/nautilus-queue
-	console.log(`Claim ${claim.id} ready for Nautilus processing: ${claim.name}.sui -> ${claim.targetAddress}`)
+	console.log(
+		`Claim ${claim.id} ready for Nautilus processing: ${claim.name}.sui -> ${claim.targetAddress}`,
+	)
 }
 
 // JSON response helper

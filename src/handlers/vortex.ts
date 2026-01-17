@@ -21,10 +21,7 @@ const VORTEX_POOL_IDS: Record<string, string> = {
 /**
  * Proxy a request to the Vortex API
  */
-async function proxyToVortex(
-	path: string,
-	options: RequestInit = {},
-): Promise<Response> {
+async function proxyToVortex(path: string, options: RequestInit = {}): Promise<Response> {
 	const url = `${VORTEX_API_URL}${path}`
 
 	try {
