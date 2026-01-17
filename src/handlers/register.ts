@@ -484,9 +484,9 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					const metaRow = chips.length ? '<div class=\"bid-meta\">' + chips.join('') + '</div>' : '';
 					return `<li>
 						<div class=\"bid-main\">
-							<span>\\${escapeHtml(shortAddr)}</span>
-							<span>\\${escapeHtml(amt)} SUI</span>
-							<span>\\${escapeHtml(eta)}</span>
+							<span>\\\${escapeHtml(shortAddr)}</span>
+							<span>\\\${escapeHtml(amt)} SUI</span>
+							<span>\\\${escapeHtml(eta)}</span>
 						</div>
 						${metaRow}
 					</li>`;
