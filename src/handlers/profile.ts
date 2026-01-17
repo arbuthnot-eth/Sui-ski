@@ -1080,8 +1080,7 @@ export function generateProfilePage(
 
 		function renderPremiumState(progress, mode = 'live') {
 			if (!graceSkillValue || !EXPIRATION_MS) return;
-			const totalWindow = AVAILABLE_AT - EXPIRATION_MS;
-			if (totalWindow <= 0) return;
+			const totalWindow = Math.max(1, AVAILABLE_AT - EXPIRATION_MS);
 
 			const clampedProgress = Math.max(0, Math.min(1, progress));
 			const timestamp = EXPIRATION_MS + clampedProgress * totalWindow;
