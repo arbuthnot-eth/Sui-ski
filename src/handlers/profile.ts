@@ -267,7 +267,7 @@ export function generateProfilePage(
 						</div>
 						<div class="grace-skill-counter">
 							<div class="grace-skill-label">Premium Estimate</div>
-							<div class="premium-graph-container">
+							<div class="premium-graph-container" id="premium-graph-container">
 								<svg class="premium-decay-graph" viewBox="0 0 300 80" preserveAspectRatio="none">
 									<defs>
 										<linearGradient id="decayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -307,6 +307,7 @@ export function generateProfilePage(
 									<span>Day 30</span>
 								</div>
 							</div>
+							<div class="premium-hover-time" id="grace-premium-time">Live premium as of now.</div>
 							<div class="premium-values-grid">
 								<div class="premium-value-row sui-row">
 									<span class="premium-currency-badge sui-badge">SUI</span>
@@ -317,25 +318,6 @@ export function generateProfilePage(
 									<span class="premium-currency-badge ns-badge">$NS</span>
 									<span class="premium-value" id="grace-ns-value">--</span>
 									<span class="premium-discount">3-day discount</span>
-								</div>
-							</div>
-							<div class="premium-simulator">
-								<div class="premium-slider">
-									<label for="grace-premium-slider">Simulate days since expiration</label>
-									<input type="range" id="grace-premium-slider" min="0" max="30" step="0.25" value="0" />
-									<div class="premium-slider-readout">
-										<span id="grace-premium-slider-value">0d → 100,000,000 SUI</span>
-										<span id="grace-premium-log-value">log₁₀ = 8.00</span>
-									</div>
-								</div>
-								<div class="premium-target">
-									<label for="grace-premium-target">Estimate when premium reaches a target (USD, falls back to SUI)</label>
-									<div class="premium-target-input">
-										<span>$</span>
-										<input type="number" id="grace-premium-target" min="1" step="1" placeholder="100" />
-										<button type="button" id="grace-premium-target-btn">Estimate</button>
-									</div>
-									<div class="premium-target-result" id="grace-premium-target-result">Enter a target to see the projected date.</div>
 								</div>
 							</div>
 						</div>
@@ -1082,100 +1064,50 @@ export function generateProfilePage(
 			console.error('Failed to init wallet API:', e);
 		}
 
-		function getProgressForValue(value) {
-			if (!value || value <= 0) return Number.POSITIVE_INFINITY;
-			if (value >= SKILL_CREATOR_MAX_SUPPLY) return 0;
-			return Math.log(SKILL_CREATOR_MAX_SUPPLY / value) / PREMIUM_DECAY_CONSTANT;
-		}
-
-		function updatePremiumSliderReadout(progressOverride = null) {
-			if (!premiumSlider || !premiumSliderValue || !premiumSliderLog) return;
-			let progress =
-				progressOverride !== null
-					? Math.max(0, Math.min(1, progressOverride))
-					: Math.max(0, Math.min(1, Number(premiumSlider.value) / GRACE_PERIOD_DAYS));
-
-			const days = progress * GRACE_PERIOD_DAYS;
-			const value = getDecayValue(progress);
-			premiumSliderValue.textContent = days.toFixed(2) + 'd → ' + numberFormatter.format(
-				Math.max(0, Math.round(value)),
-			) + ' SUI';
-			const logValue = value > 0 ? Math.log10(value) : -Infinity;
-			premiumSliderLog.textContent =
-				logValue === -Infinity ? 'log₁₀ = -∞' : 'log₁₀ = ' + logValue.toFixed(2);
-		}
-
-		function syncPremiumSlider(progress) {
-			if (!premiumSlider) return;
-			if (!premiumSliderLocked) {
-				premiumSlider.value = String((progress * GRACE_PERIOD_DAYS).toFixed(2));
-				updatePremiumSliderReadout(progress);
-			} else {
-				updatePremiumSliderReadout();
-			}
-		}
-
-		function estimatePremiumTarget() {
-			if (!premiumTargetInput || !premiumTargetResult) return;
-
-			const rawValue = Number(premiumTargetInput.value);
-			if (!rawValue || rawValue <= 0) {
-				premiumTargetResult.textContent = 'Enter a positive number.';
-				return;
-			}
-
-			let targetSui = rawValue;
-			let usingUsd = false;
-			if (suiPriceUsd && suiPriceUsd > 0) {
-				targetSui = rawValue / suiPriceUsd;
-				usingUsd = true;
-			}
-
-			if (!Number.isFinite(targetSui) || targetSui <= 0) {
-				premiumTargetResult.textContent = 'Target value is out of range.';
-				return;
-			}
-			if (targetSui >= SKILL_CREATOR_MAX_SUPPLY) {
-				premiumTargetResult.textContent =
-					'Target must be less than the starting premium (100,000,000).';
-				return;
-			}
-
-			const progressNeeded = getProgressForValue(targetSui);
-			if (!Number.isFinite(progressNeeded) || progressNeeded < 0) {
-				premiumTargetResult.textContent = 'Unable to compute a projection for that target.';
-				return;
-			}
-
-			if (progressNeeded > 1) {
-				const daysNeeded = progressNeeded * GRACE_PERIOD_DAYS;
-				premiumTargetResult.textContent = 'The premium will not reach this target within the grace window (needs ~' + daysNeeded.toFixed(
-					1,
-				) + ' days).';
-				return;
-			}
-
-			const totalWindow = AVAILABLE_AT - EXPIRATION_MS;
-			const targetTime = EXPIRATION_MS + progressNeeded * totalWindow;
-			const targetDate = new Date(targetTime);
-			const daysNeeded = progressNeeded * GRACE_PERIOD_DAYS;
-			const projectedSui = Math.max(1, Math.round(getDecayValue(progressNeeded)));
-			const projectedUsd = suiPriceUsd ? usdFormatter.format(projectedSui * suiPriceUsd) : null;
-
-			const usdLine = projectedUsd ? ' (~$' + projectedUsd + ')' : '';
-			const modeLine = usingUsd
-				? ''
-				: '<br><small>No USD price available; interpreted value as SUI.</small>';
-
-			const dateLabel = targetDate.toLocaleDateString('en-US', {
+		function formatPremiumTime(progress, timestamp) {
+			const totalMinutes = progress * GRACE_PERIOD_DAYS * 24 * 60;
+			const days = Math.floor(totalMinutes / (24 * 60));
+			const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+			const minutes = Math.floor(totalMinutes % 60);
+			const dateStr = new Date(timestamp).toLocaleString('en-US', {
 				month: 'short',
 				day: 'numeric',
 				hour: 'numeric',
 				minute: '2-digit',
 			});
-			const baseLine = '≈ ' + daysNeeded.toFixed(1) + ' days after expiry (<strong>' + dateLabel + '</strong>)';
-			const premiumLine = 'Projected premium: ' + numberFormatter.format(projectedSui) + ' SUI' + usdLine;
-			premiumTargetResult.innerHTML = baseLine + '<br>' + premiumLine + modeLine;
+			return `${dateStr} (${days}d ${hours}h ${minutes}m after expiry)`;
+		}
+
+		function renderPremiumState(progress, mode = 'live') {
+			if (!graceSkillValue || !EXPIRATION_MS) return;
+			const totalWindow = AVAILABLE_AT - EXPIRATION_MS;
+			if (totalWindow <= 0) return;
+
+			const clampedProgress = Math.max(0, Math.min(1, progress));
+			const timestamp = EXPIRATION_MS + clampedProgress * totalWindow;
+
+			const suiValue = Math.max(0, Math.round(getDecayValue(clampedProgress)));
+			graceSkillValue.textContent = numberFormatter.format(suiValue);
+
+			const nsProgress = Math.min(1, clampedProgress + NS_DISCOUNT_PROGRESS);
+			const nsValue = Math.max(0, Math.round(getDecayValue(nsProgress)));
+			if (graceNsValue) {
+				graceNsValue.textContent = numberFormatter.format(nsValue);
+			}
+
+			if (graceSkillUsd && suiPriceUsd !== null) {
+				graceSkillUsd.textContent = usdFormatter.format(suiValue * suiPriceUsd);
+			}
+
+			updateGraphMarker(clampedProgress, nsProgress);
+
+			if (premiumTimeDisplay) {
+				const prefix = mode === 'hover' ? 'Cursor estimate' : 'Live premium';
+				premiumTimeDisplay.innerHTML = `<strong>${prefix}:</strong> ${formatPremiumTime(
+					clampedProgress,
+					timestamp,
+				)}`;
+			}
 		}
 
 		// DOM Elements
@@ -3864,13 +3796,25 @@ export function generateProfilePage(
 		let namesLoading = false;
 
 		// Fetch all SuiNS names owned by the target address
-		async function fetchOwnedNames(cursor = null) {
+		async function fetchOwnedNames(cursor = null, ownerOverride = null) {
 			if (namesLoading) return;
 
+			// Determine the owner address to use
+			let ownerAddress = ownerOverride || CURRENT_ADDRESS;
+
 			// Validate address before attempting to fetch
-			if (!isValidSuiAddress(CURRENT_ADDRESS)) {
-				console.warn('Invalid or missing address for names fetch:', CURRENT_ADDRESS);
-				renderNamesError('This name does not have a valid owner address');
+			if (!isValidSuiAddress(ownerAddress)) {
+				// Try to get owner from NFT as fallback
+				if (!ownerOverride && NFT_ID) {
+					console.log('Attempting to fetch NFT owner as fallback for names...');
+					const nftOwner = await fetchNftOwner();
+					if (nftOwner && isValidSuiAddress(nftOwner)) {
+						console.log('Using NFT owner for names:', nftOwner);
+						return fetchOwnedNames(cursor, nftOwner);
+					}
+				}
+				console.warn('Invalid or missing address for names fetch:', ownerAddress);
+				renderNamesError('No valid owner address available for this name');
 				return;
 			}
 
@@ -3881,7 +3825,7 @@ export function generateProfilePage(
 
 				// Use the built-in resolveNameServiceNames method
 				const response = await suiClient.resolveNameServiceNames({
-					address: CURRENT_ADDRESS,
+					address: ownerAddress,
 					cursor: cursor,
 					limit: 50
 				});
@@ -4108,13 +4052,25 @@ export function generateProfilePage(
 		}
 
 		// Fetch all SuiNS registration NFTs owned by the address
-		async function fetchNFTs(cursor = null) {
+		async function fetchNFTs(cursor = null, ownerOverride = null) {
 			if (nftsLoading && cursor === null) return; // Only prevent if starting fresh fetch
 
+			// Determine the owner address to use
+			let ownerAddress = ownerOverride || CURRENT_ADDRESS;
+
 			// Validate address before attempting to fetch
-			if (!isValidSuiAddress(CURRENT_ADDRESS)) {
-				console.warn('Invalid or missing address for NFT fetch:', CURRENT_ADDRESS);
-				renderNFTsError('This name does not have a valid owner address');
+			if (!isValidSuiAddress(ownerAddress)) {
+				// Try to get owner from NFT as fallback
+				if (!ownerOverride && NFT_ID) {
+					console.log('Attempting to fetch NFT owner as fallback...');
+					const nftOwner = await fetchNftOwner();
+					if (nftOwner && isValidSuiAddress(nftOwner)) {
+						console.log('Using NFT owner:', nftOwner);
+						return fetchNFTs(cursor, nftOwner);
+					}
+				}
+				console.warn('Invalid or missing address for NFT fetch:', ownerAddress);
+				renderNFTsError('No valid owner address available for this name');
 				nftsLoading = false;
 				return;
 			}
@@ -4134,7 +4090,7 @@ export function generateProfilePage(
 				// Fetch owned objects filtered by SuiNS registration type
 				// The struct type includes "SuinsRegistration" in the name
 				const response = await suiClient.getOwnedObjects({
-					owner: CURRENT_ADDRESS,
+					owner: ownerAddress,
 					filter: {
 						StructType: '0x2d0dee46d9f967ec56c2fb8d64f9b01bb3c5c8d11e8c03a42b149f2e90e8e9b::suins_registration::SuinsRegistration'
 					},
@@ -4188,8 +4144,8 @@ export function generateProfilePage(
 				if (nftsHasMore && nftsNextCursor) {
 					// Update count to show progress
 					nftsCountEl.textContent = \`\${allNFTs.length}+...\`;
-					// Continue fetching next page
-					await fetchNFTs(nftsNextCursor);
+					// Continue fetching next page (pass ownerAddress to maintain override)
+					await fetchNFTs(nftsNextCursor, ownerAddress);
 				} else {
 					// All pages fetched, render final results
 					renderNFTs();
@@ -4209,7 +4165,7 @@ export function generateProfilePage(
 						allNFTs = [];
 					}
 					const response = await suiClient.getOwnedObjects({
-						owner: CURRENT_ADDRESS,
+						owner: ownerAddress,
 						options: {
 							showType: true,
 							showContent: true,
@@ -4263,8 +4219,8 @@ export function generateProfilePage(
 					if (nftsHasMore && nftsNextCursor) {
 						// Update count to show progress
 						nftsCountEl.textContent = \`\${allNFTs.length}+...\`;
-						// Continue fetching next page (recursive call)
-						await fetchNFTs(nftsNextCursor);
+						// Continue fetching next page (pass ownerAddress to maintain override)
+						await fetchNFTs(nftsNextCursor, ownerAddress);
 					} else {
 						// All pages fetched, render final results
 						renderNFTs();
@@ -4678,12 +4634,8 @@ export function generateProfilePage(
 		const nsDecayMarker = document.getElementById('ns-decay-marker');
 		const nsDecayCurve = document.getElementById('ns-decay-curve');
 		const nsDecayArea = document.getElementById('ns-decay-area');
-		const premiumSlider = document.getElementById('grace-premium-slider');
-		const premiumSliderValue = document.getElementById('grace-premium-slider-value');
-		const premiumSliderLog = document.getElementById('grace-premium-log-value');
-		const premiumTargetInput = document.getElementById('grace-premium-target');
-		const premiumTargetBtn = document.getElementById('grace-premium-target-btn');
-		const premiumTargetResult = document.getElementById('grace-premium-target-result');
+		const premiumGraphContainer = document.getElementById('premium-graph-container');
+		const premiumTimeDisplay = document.getElementById('grace-premium-time');
 
 		// SUI price state
 		let suiPriceUsd = null;
@@ -4693,7 +4645,7 @@ export function generateProfilePage(
 		const NS_DISCOUNT_DAYS = 3;
 		const GRACE_PERIOD_DAYS = 30;
 		const NS_DISCOUNT_PROGRESS = NS_DISCOUNT_DAYS / GRACE_PERIOD_DAYS; // 0.1 (10%)
-		let premiumSliderLocked = false;
+		let premiumHoverProgress: number | null = null;
 
 		// Fetch SUI price from CoinGecko
 		async function fetchSuiPrice() {
@@ -4800,14 +4752,11 @@ export function generateProfilePage(
 
 		function updateGraceSkillCounter(currentTime = Date.now()) {
 			if (!graceSkillValue || !EXPIRATION_MS) return;
+			if (premiumHoverProgress !== null) return;
 
 			const totalWindow = AVAILABLE_AT - EXPIRATION_MS;
 			if (totalWindow <= 0) {
-				graceSkillValue.textContent = '0';
-				if (graceSkillUsd) graceSkillUsd.textContent = '0';
-				if (graceNsValue) graceNsValue.textContent = '0';
-				updateGraphMarker(1, 1);
-				syncPremiumSlider(1);
+				renderPremiumState(1);
 				return;
 			}
 
@@ -4815,26 +4764,7 @@ export function generateProfilePage(
 			const elapsed = clampedTime - EXPIRATION_MS;
 			const progress = elapsed / totalWindow;
 
-			// Calculate SUI premium (current position on decay curve)
-			const suiValue = Math.max(0, Math.round(getDecayValue(progress)));
-			graceSkillValue.textContent = numberFormatter.format(suiValue);
-
-			// Calculate NS premium (3-day discount = position + 10% on decay curve)
-			const nsProgress = Math.min(1, progress + NS_DISCOUNT_PROGRESS);
-			const nsValue = Math.max(0, Math.round(getDecayValue(nsProgress)));
-			if (graceNsValue) {
-				graceNsValue.textContent = numberFormatter.format(nsValue);
-			}
-
-			// Update USD value if price is available (for SUI)
-			if (graceSkillUsd && suiPriceUsd !== null) {
-				const usdValue = suiValue * suiPriceUsd;
-				graceSkillUsd.textContent = usdFormatter.format(usdValue);
-			}
-
-			// Update graph markers
-			updateGraphMarker(progress, nsProgress);
-			syncPremiumSlider(progress);
+			renderPremiumState(progress);
 		}
 
 		function updateGracePeriodCountdown() {
