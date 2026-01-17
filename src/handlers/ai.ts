@@ -13,6 +13,8 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
 // Gemini 3 Flash model ID on OpenRouter
 const GEMINI_3_FLASH_MODEL = 'google/gemini-2.0-flash-exp:free'
+// Image generation model (using Flux Pro via OpenRouter)
+const IMAGE_GENERATION_MODEL = 'black-forest-labs/flux-pro'
 
 // Payment amount: 0.000003 SUI (nano bana 3)
 const PAYMENT_AMOUNT = '3000000' // in MIST (1 SUI = 1e9 MIST)
@@ -51,12 +53,14 @@ export async function handleAIRequest(request: Request, env: Env): Promise<Respo
 		return jsonResponse({ error: 'Method not allowed' }, 405, CORS_HEADERS)
 	}
 
-	try {
+		try {
 		switch (action) {
 			case 'generate-names':
 				return handleGenerateNames(request, env)
 			case 'generate-avatar':
 				return handleGenerateAvatar(request, env)
+			case 'generate-image':
+				return handleGenerateImage(request, env)
 			default:
 				return jsonResponse({ error: 'Unknown action' }, 400, CORS_HEADERS)
 		}
@@ -179,6 +183,52 @@ async function handleGenerateAvatar(request: Request, env: Env): Promise<Respons
 			success: true,
 			description: aiResponse.content,
 			prompt: userDescription,
+		},
+		200,
+		CORS_HEADERS,
+	)
+}
+
+/**
+ * Generate an image using OpenRouter image generation
+ */
+async function handleGenerateImage(request: Request, env: Env): Promise<Response> {
+	// Verify wallet ownership and payment
+	let payload: { prompt?: string; style?: string; walletAddress?: string }
+	try {
+		payload = (await request.json()) as typeof payload
+	} catch {
+		return jsonResponse({ error: 'Invalid JSON body' }, 400, CORS_HEADERS)
+	}
+
+	const verification = await verifyWalletAndPayment(request, payload.walletAddress, env)
+	if (!verification.valid) {
+		return jsonResponse({ error: verification.error }, verification.status, CORS_HEADERS)
+	}
+
+	if (!payload.prompt) {
+		return jsonResponse({ error: 'Prompt is required' }, 400, CORS_HEADERS)
+	}
+
+	const prompt = payload.prompt
+	const style = payload.style || 'modern, web3, blockchain, futuristic'
+
+	// Call OpenRouter image generation API
+	const imageResponse = await callOpenRouterImageGeneration(env, {
+		prompt: `${prompt}, ${style}`,
+		n: 1,
+		size: '1024x1024',
+	})
+
+	if (!imageResponse.success) {
+		return jsonResponse({ error: imageResponse.error || 'Failed to generate image' }, 500, CORS_HEADERS)
+	}
+
+	return jsonResponse(
+		{
+			success: true,
+			imageUrl: imageResponse.imageUrl,
+			prompt,
 		},
 		200,
 		CORS_HEADERS,
@@ -456,4 +506,99 @@ function parseNamesFromResponse(response: string): string[] {
 		.filter((name) => name.length >= 2 && name.length <= 20 && /^[a-z0-9-]+$/i.test(name))
 
 	return [...new Set(names)] // Remove duplicates
+}
+
+/**
+ * Call OpenRouter image generation API (via chat completions with image model)
+ */
+async function callOpenRouterImageGeneration(
+	env: Env,
+	body: {
+		prompt: string
+		n?: number
+		size?: string
+	},
+): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
+	if (!env.OPENROUTER_API_KEY) {
+		return { success: false, error: 'OpenRouter API key not configured' }
+	}
+
+	try {
+		// Use chat completions API with image generation model
+		const response = await fetch(OPENROUTER_API_URL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+				'HTTP-Referer': 'https://sui.ski',
+				'X-Title': 'Sui.ski AI Image Generator',
+			},
+			body: JSON.stringify({
+				model: IMAGE_GENERATION_MODEL,
+				messages: [
+					{
+						role: 'user',
+						content: body.prompt,
+					},
+				],
+				// Image generation parameters
+				n: body.n || 1,
+				size: body.size || '1024x1024',
+			}),
+		})
+
+		if (!response.ok) {
+			const errorText = await response.text()
+			console.error('OpenRouter Image API error:', response.status, errorText)
+			return {
+				success: false,
+				error: `OpenRouter Image API error: ${response.status} ${errorText}`,
+			}
+		}
+
+		const data = (await response.json()) as {
+			choices?: Array<{
+				message?: { content?: string }
+				image_url?: string
+			}>
+			data?: Array<{ url?: string }>
+			error?: { message?: string }
+		}
+
+		if (data.error) {
+			return { success: false, error: data.error.message || 'Unknown error' }
+		}
+
+		// Try to extract image URL from response
+		// Some models return it in choices[0].image_url, others in data[0].url
+		const imageUrl =
+			data.choices?.[0]?.image_url ||
+			data.choices?.[0]?.message?.content ||
+			data.data?.[0]?.url ||
+			null
+
+		if (!imageUrl) {
+			// If no direct URL, try parsing content as base64 or URL
+			const content = data.choices?.[0]?.message?.content
+			if (content) {
+				// Check if content is a URL
+				try {
+					new URL(content)
+					return { success: true, imageUrl: content }
+				} catch {
+					// Not a URL, might be base64 or other format
+					return { success: false, error: 'Image generation succeeded but no URL found in response' }
+				}
+			}
+			return { success: false, error: 'No image URL in response' }
+		}
+
+		return { success: true, imageUrl }
+	} catch (error) {
+		console.error('OpenRouter image request error:', error)
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : 'Unknown error',
+		}
+	}
 }

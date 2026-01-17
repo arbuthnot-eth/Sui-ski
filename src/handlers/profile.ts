@@ -281,6 +281,67 @@ export function generateProfilePage(
 		.identity-qr-toggle.active svg {
 			color: white;
 		}
+		.ai-generate-btn {
+			position: absolute;
+			bottom: 8px;
+			right: 8px;
+			width: 32px;
+			height: 32px;
+			border-radius: 8px;
+			border: 1px solid rgba(255, 255, 255, 0.1);
+			background: rgba(139, 92, 246, 0.15);
+			backdrop-filter: blur(10px);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			transition: all 0.2s;
+			z-index: 10;
+		}
+		.ai-generate-btn:hover {
+			background: rgba(139, 92, 246, 0.3);
+			border-color: rgba(139, 92, 246, 0.5);
+			transform: scale(1.1);
+			box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+		}
+		.ai-generate-btn:active {
+			transform: scale(0.95);
+		}
+		.ai-generate-btn svg {
+			width: 18px;
+			height: 18px;
+			color: #a78bfa;
+			transition: all 0.3s;
+		}
+		.ai-generate-btn:hover svg {
+			color: #c4b5fd;
+			filter: drop-shadow(0 0 4px rgba(167, 139, 250, 0.6));
+		}
+		.ai-generate-btn.loading svg {
+			animation: sparkle 1.5s ease-in-out infinite;
+		}
+		@keyframes sparkle {
+			0%, 100% { opacity: 1; transform: scale(1); }
+			50% { opacity: 0.7; transform: scale(1.2); }
+		}
+		.ai-generate-btn .sparkle-1,
+		.ai-generate-btn .sparkle-2,
+		.ai-generate-btn .sparkle-3 {
+			opacity: 0;
+			transition: opacity 0.3s;
+		}
+		.ai-generate-btn:hover .sparkle-1,
+		.ai-generate-btn:hover .sparkle-2,
+		.ai-generate-btn:hover .sparkle-3 {
+			opacity: 1;
+			animation: sparkle 1s ease-in-out infinite;
+		}
+		.ai-generate-btn .sparkle-2 {
+			animation-delay: 0.2s;
+		}
+		.ai-generate-btn .sparkle-3 {
+			animation-delay: 0.4s;
+		}
 		.identity-name {
 			padding: 10px;
 			text-align: center;
@@ -3479,6 +3540,8 @@ export function generateProfilePage(
 			.identity-card { width: 140px; }
 			.identity-name { font-size: 0.7rem; padding: 8px; }
 			.identity-qr-toggle { width: 30px; height: 30px; bottom: 8px; left: 8px; right: auto; }
+			.ai-generate-btn { width: 30px; height: 30px; bottom: 8px; right: 8px; }
+			.ai-generate-btn svg { width: 16px; height: 16px; }
 		}
 ${generatePasskeyWalletStyles()}
 	</style>
@@ -3523,6 +3586,14 @@ ${generatePasskeyWalletStyles()}
 						<canvas id="qr-canvas"></canvas>
 						<button class="identity-qr-toggle" id="qr-toggle" title="Toggle QR code">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
+						</button>
+						<button class="ai-generate-btn" id="ai-generate-btn" title="Generate AI image">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="lightbulb-icon">
+								<path d="M9 21h6M12 3a6 6 0 0 1 6 6c0 2.5-1.5 4.5-3 6l-3 3-3-3c-1.5-1.5-3-3.5-3-6a6 6 0 0 1 6-6z"></path>
+								<path d="M12 9v6M9 12h6" class="sparkle-1"></path>
+								<circle cx="8" cy="8" r="1" class="sparkle-2"></circle>
+								<circle cx="16" cy="8" r="1" class="sparkle-3"></circle>
+							</svg>
 						</button>
 					</div>
 					<div class="identity-name" id="identity-name" title="Click to copy">${escapeHtml(cleanName)}.sui.ski</div>
@@ -4806,6 +4877,80 @@ ${generatePasskeyWalletStyles()}
 				// Don't expand if clicking toggle button
 				if (e.target.closest('.identity-qr-toggle')) return;
 				openQrOverlay();
+			});
+		}
+
+		// AI Image Generation
+		const aiGenerateBtn = document.getElementById('ai-generate-btn');
+		if (aiGenerateBtn) {
+			aiGenerateBtn.addEventListener('click', async () => {
+				// Get wallet address if connected
+				const walletAddress = connectedAddress || null;
+				
+				// Prompt user for image description
+				const prompt = prompt('Describe the image you want to generate:');
+				if (!prompt || !prompt.trim()) return;
+				
+				aiGenerateBtn.classList.add('loading');
+				aiGenerateBtn.disabled = true;
+				
+				try {
+					const response = await fetch('/api/ai/generate-image', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							...(walletAddress ? { 'Authorization': \`Bearer \${walletAddress}\` } : {}),
+						},
+						body: JSON.stringify({
+							prompt: prompt.trim(),
+							style: 'modern, web3, blockchain, futuristic, digital art',
+							walletAddress,
+						}),
+					});
+					
+					const data = await response.json();
+					
+					if (!response.ok) {
+						throw new Error(data.error || 'Failed to generate image');
+					}
+					
+					if (data.success && data.imageUrl) {
+						// Open image in new tab
+						window.open(data.imageUrl, '_blank');
+						
+						// Show success message
+						const notification = document.createElement('div');
+						notification.style.cssText = \`
+							position: fixed;
+							top: 20px;
+							right: 20px;
+							background: rgba(16, 185, 129, 0.95);
+							color: white;
+							padding: 16px 20px;
+							border-radius: 12px;
+							box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+							z-index: 10000;
+							font-size: 0.9rem;
+							font-weight: 600;
+							animation: slideIn 0.3s ease-out;
+						\`;
+						notification.textContent = '✨ Image generated! Opening in new tab...';
+						document.body.appendChild(notification);
+						
+						setTimeout(() => {
+							notification.style.animation = 'slideOut 0.3s ease-out';
+							setTimeout(() => notification.remove(), 300);
+						}, 3000);
+					} else {
+						throw new Error('No image URL in response');
+					}
+				} catch (error) {
+					console.error('AI image generation error:', error);
+					alert('Failed to generate image: ' + (error instanceof Error ? error.message : 'Unknown error'));
+				} finally {
+					aiGenerateBtn.classList.remove('loading');
+					aiGenerateBtn.disabled = false;
+				}
 			});
 		}
 
