@@ -1045,7 +1045,6 @@ export function generateProfilePage(
 			? new Intl.NumberFormat('en-US')
 			: { format: (value) => String(value ?? 0) };
 	const PREMIUM_DECAY_CONSTANT = 5; // Controls exponential decay curve steepness
-	const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 		let connectedWallet = null;
 		let connectedAccount = null;
@@ -1075,7 +1074,7 @@ export function generateProfilePage(
 				hour: 'numeric',
 				minute: '2-digit',
 			});
-			return `${dateStr} (${days}d ${hours}h ${minutes}m after expiry)`;
+			return dateStr + ' (' + days + 'd ' + hours + 'h ' + minutes + 'm after expiry)';
 		}
 
 		function renderPremiumState(progress, mode = 'live') {
@@ -1102,10 +1101,10 @@ export function generateProfilePage(
 
 			if (premiumTimeDisplay) {
 				const prefix = mode === 'hover' ? 'Cursor estimate' : 'Live premium';
-				premiumTimeDisplay.innerHTML = `<strong>${prefix}:</strong> ${formatPremiumTime(
+				premiumTimeDisplay.innerHTML = '<strong>' + prefix + ':</strong> ' + formatPremiumTime(
 					clampedProgress,
 					timestamp,
-				)}`;
+				);
 			}
 		}
 
