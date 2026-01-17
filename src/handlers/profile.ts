@@ -4867,8 +4867,9 @@ ${generatePasskeyWalletStyles()}
 					}
 				}
 				
-				// Prompt user for image description (use window.prompt to avoid shadowing)
-				const userPrompt = window.prompt('Describe the image you want to generate:');
+				// Use SuiNS name as default prompt, allow user to modify
+				const defaultPrompt = FULL_NAME; // e.g., "barnacle.sui"
+				const userPrompt = window.prompt('Describe the image you want to generate:', defaultPrompt);
 				if (!userPrompt || !userPrompt.trim()) return;
 				
 				aiGenerateBtn.classList.add('loading');
@@ -4994,8 +4995,21 @@ ${generatePasskeyWalletStyles()}
 					}
 					
 					if (imageData.success && imageData.imageUrl) {
-						// Show the generated description/image info
-						alert('Image description generated: ' + decodeURIComponent(imageData.imageUrl.replace('data:text/plain;charset=utf-8,', '')));
+						// Check if it's an actual image (data:image) or text description
+						if (imageData.imageUrl.startsWith('data:image/')) {
+							// Display the generated image in a modal
+							const imgModal = document.createElement('div');
+							imgModal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center; cursor: pointer;';
+							const img = document.createElement('img');
+							img.src = imageData.imageUrl;
+							img.style.cssText = 'max-width: 90vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);';
+							imgModal.appendChild(img);
+							imgModal.addEventListener('click', () => imgModal.remove());
+							document.body.appendChild(imgModal);
+						} else {
+							// Fallback: show text description if image wasn't generated
+							alert('Image description: ' + decodeURIComponent(imageData.imageUrl.replace('data:text/plain;charset=utf-8,', '')));
+						}
 					} else {
 						throw new Error('No image URL in response');
 					}

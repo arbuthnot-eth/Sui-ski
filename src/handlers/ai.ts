@@ -15,8 +15,8 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
 // Gemini Nano Banana 3 Flash model ID on OpenRouter (free/cheap)
 const GEMINI_3_FLASH_MODEL = 'google/gemini-2.0-flash-exp:free'
-// Image generation model - using Gemini Nano Banana 3 Flash
-const IMAGE_GENERATION_MODEL = 'google/gemini-2.0-flash-exp:free'
+// Image generation model - using Gemini 3 Pro Nano Banana (paid, avoids rate limits)
+const IMAGE_GENERATION_MODEL = 'google/gemini-3-pro-image-preview' // Paid model, ~$0.134 per image
 
 // Payment amount: 0.000003 SUI (nano bana 3)
 const PAYMENT_AMOUNT = '3000000' // in MIST (1 SUI = 1e9 MIST)
@@ -791,8 +791,7 @@ async function callOpenRouterImageGeneration(
 	}
 
 	try {
-		// Use Gemini to generate an image description, then create a simple visualization
-		// For actual image generation, you'd integrate with a proper image model
+		// Use Gemini 3 Pro Image Preview to generate actual images (paid model)
 		const response = await fetch(OPENROUTER_API_URL, {
 			method: 'POST',
 			headers: {
@@ -805,16 +804,16 @@ async function callOpenRouterImageGeneration(
 				model: IMAGE_GENERATION_MODEL,
 				messages: [
 					{
-						role: 'system',
-						content: 'You are an image generation assistant. Generate a detailed image description that can be visualized.',
-					},
-					{
 						role: 'user',
-						content: `Create a visual description for: ${body.prompt}. Return only a concise description suitable for image generation.`,
+						content: body.prompt,
 					},
 				],
+				modalities: ['image', 'text'], // Request both image and text output
+				image_config: {
+					aspect_ratio: '1:1', // Square images by default
+					image_size: '2K', // 2K resolution (~$0.134 per image)
+				},
 				temperature: 0.8,
-				max_tokens: 200,
 			}),
 		})
 
@@ -829,7 +828,14 @@ async function callOpenRouterImageGeneration(
 
 		const data = (await response.json()) as {
 			choices?: Array<{
-				message?: { content?: string }
+				message?: {
+					content?: string
+					images?: Array<{
+						type?: string
+						image_url?: { url?: string }
+						imageUrl?: { url?: string }
+					}>
+				}
 			}>
 			error?: { message?: string }
 		}
@@ -838,17 +844,34 @@ async function callOpenRouterImageGeneration(
 			return { success: false, error: data.error.message || 'Unknown error' }
 		}
 
-		const description = data.choices?.[0]?.message?.content
-		if (!description) {
-			return { success: false, error: 'No description generated' }
+		// Extract image URL from response
+		const message = data.choices?.[0]?.message
+		const images = message?.images || []
+		
+		// Look for image URL in various possible formats
+		let imageUrl: string | undefined
+		for (const img of images) {
+			if (img.image_url?.url) {
+				imageUrl = img.image_url.url
+				break
+			}
+			if (img.imageUrl?.url) {
+				imageUrl = img.imageUrl.url
+				break
+			}
 		}
 
-		// For now, return the description as a data URL encoded string
-		// In a real implementation, you'd use an actual image generation API
-		// This is a placeholder that shows the concept works
-		// TODO: Integrate with actual image generation service (DALL-E, Stable Diffusion, etc.)
-		const encodedDescription = encodeURIComponent(description)
-		const imageUrl = `data:text/plain;charset=utf-8,${encodedDescription}`
+		if (!imageUrl) {
+			// Fallback: if no image but we have text content, return that
+			const textContent = message?.content
+			if (textContent) {
+				console.warn('No image generated, returning text description')
+				const encodedDescription = encodeURIComponent(textContent)
+				imageUrl = `data:text/plain;charset=utf-8,${encodedDescription}`
+			} else {
+				return { success: false, error: 'No image generated' }
+			}
+		}
 
 		return { success: true, imageUrl }
 	} catch (error) {
