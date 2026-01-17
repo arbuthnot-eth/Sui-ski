@@ -4943,22 +4943,49 @@ ${generatePasskeyWalletStyles()}
 						throw new Error('Transaction failed');
 					}
 					
-					// Step 4: Wait for transaction confirmation
-					await suiClient.waitForTransaction({ digest: result.digest });
+					// Step 4: Wait for transaction confirmation (with timeout)
+					try {
+						await suiClient.waitForTransaction({ 
+							digest: result.digest,
+							timeout: 30000, // 30 second timeout
+							pollInterval: 1000, // Check every second
+						});
+					} catch (waitError) {
+						console.warn('Transaction wait timeout, proceeding anyway:', waitError);
+						// Continue anyway - transaction might still be processing
+					}
 					
-					// Step 5: Generate image after payment confirmed
+					// Step 5: Generate image after payment confirmed (x402 protocol)
 					const imageResponse = await fetch('/api/ai/generate-image', {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/json',
 							'Authorization': \`Bearer \${connectedAddress}\`,
+							'X-Payment-Tx-Digest': result.digest, // x402 payment proof header
 						},
 						body: JSON.stringify({
 							prompt: userPrompt.trim(),
-							paymentTxDigest: result.digest,
+							name: NAME, // SuiNS name for resolving payment recipient
 							walletAddress: connectedAddress,
 						}),
 					});
+					
+					// Handle x402 Payment Required response
+					if (imageResponse.status === 402) {
+						const paymentInfo = await imageResponse.json();
+						let errorMsg = paymentInfo.error || 'Payment verification failed';
+						
+						// Include debug info if available
+						if (paymentInfo.debug) {
+							console.error('Payment verification debug:', paymentInfo.debug);
+							errorMsg += '\\n\\nDebug info logged to console.';
+							if (paymentInfo.debug.totalReceivedSui !== undefined) {
+								errorMsg += \`\\nReceived: \${paymentInfo.debug.totalReceivedSui} SUI, Required: \${paymentInfo.debug.requiredAmountSui} SUI\`;
+							}
+						}
+						
+						throw new Error(errorMsg);
+					}
 					
 					const imageData = await imageResponse.json();
 					
@@ -4974,7 +5001,8 @@ ${generatePasskeyWalletStyles()}
 					}
 				} catch (error) {
 					console.error('AI image generation error:', error);
-					alert('Failed to generate image: ' + (error instanceof Error ? error.message : 'Unknown error'));
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					alert('Failed to generate image: ' + errorMessage);
 				} finally {
 					aiGenerateBtn.classList.remove('loading');
 					aiGenerateBtn.disabled = false;

@@ -1,5 +1,5 @@
 import { SuiClient } from '@mysten/sui/client'
-import { SuinsClient } from '@mysten/sui/suins'
+import { SuinsClient } from '@mysten/suins'
 import type { Env } from '../types'
 import { jsonResponse } from '../utils/response'
 import { toSuiNSName } from '../utils/subdomain'
@@ -7,7 +7,7 @@ import { toSuiNSName } from '../utils/subdomain'
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
 	'Access-Control-Allow-Methods': 'POST, OPTIONS',
-	'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+	'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Payment-Proof, X-Payment-Tx-Digest',
 }
 
 // OpenRouter API endpoint
@@ -26,20 +26,24 @@ const PAYMENT_AMOUNT = '3000000' // in MIST (1 SUI = 1e9 MIST)
  * 
  * POST /api/ai/generate-names - Generate Sui name suggestions
  * POST /api/ai/generate-avatar - Generate avatar description/image
+ * POST /api/ai/generate-image - Generate image description (x402 payment gated)
+ * POST /api/ai/create-payment-tx - Get payment transaction details
+ * 
+ * x402 Payment Protocol (for generate-image):
+ * - First request without payment: Returns 402 Payment Required with payment details
+ * - Payment details include: amount, recipient (alias.sui address), chain, currency
+ * - Client creates and executes payment transaction
+ * - Retry request with X-Payment-Tx-Digest header containing transaction digest
+ * - Server verifies payment on-chain before generating image
+ * - Works for both browser users and API agents
  * 
  * Authentication:
- * - Authorization header: Bearer <wallet_address>
+ * - Authorization header: Bearer <wallet_address> (optional)
  * - Or include walletAddress in request body
- * 
- * Payment Verification (optional but recommended):
- * - X-Payment-Transaction-Bytes: Base64-encoded transaction bytes
- * - X-Payment-Signatures: JSON array of signatures
- * - Payment is verified via dry-run before processing
- * - Payment amount: 0.000003 SUI (3000000 MIST)
  * 
  * Access Control:
  * - If CONTROLLING_WALLET_ADDRESS is set, user must own that wallet/NFT
- * - Otherwise, anyone can use the feature (payment still verified)
+ * - Otherwise, anyone can use the feature (payment still required)
  */
 export async function handleAIRequest(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url)
@@ -245,11 +249,11 @@ async function handleCreatePaymentTransaction(request: Request, env: Env): Promi
 }
 
 /**
- * Generate an image using OpenRouter image generation (after payment verified)
+ * Generate an image using OpenRouter image generation (x402 payment gating)
+ * Supports both browser users and agents via x402 protocol
  */
 async function handleGenerateImage(request: Request, env: Env): Promise<Response> {
-	// Verify payment transaction was executed
-	let payload: { prompt?: string; paymentTxDigest?: string; walletAddress?: string }
+	let payload: { prompt?: string; name?: string; walletAddress?: string }
 	try {
 		payload = (await request.json()) as typeof payload
 	} catch {
@@ -260,37 +264,221 @@ async function handleGenerateImage(request: Request, env: Env): Promise<Response
 		return jsonResponse({ error: 'Prompt is required' }, 400, CORS_HEADERS)
 	}
 
-	if (!payload.paymentTxDigest) {
-		return jsonResponse({ error: 'Payment transaction digest required' }, 400, CORS_HEADERS)
+	if (!payload.name) {
+		return jsonResponse({ error: 'SuiNS name is required' }, 400, CORS_HEADERS)
+	}
+
+	// Resolve the SuiNS name to get the target address (payment recipient)
+	const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
+	const suinsClient = new SuinsClient({
+		client: suiClient as never,
+		network: env.SUI_NETWORK as 'mainnet' | 'testnet',
+	})
+
+	let recipientAddress: string
+	try {
+		const suinsName = toSuiNSName(payload.name)
+		const nameRecord = await suinsClient.getNameRecord(suinsName)
+		
+		if (!nameRecord || !nameRecord.targetAddress) {
+			return jsonResponse({ error: `Could not resolve "${suinsName}" to an address` }, 404, CORS_HEADERS)
+		}
+		recipientAddress = nameRecord.targetAddress
+	} catch (error) {
+		console.error('Failed to resolve SuiNS name:', error)
+		return jsonResponse({ error: 'Failed to resolve SuiNS name' }, 500, CORS_HEADERS)
+	}
+
+	// Check for x402 payment proof in headers (X-Payment-Proof or X-Payment-Tx-Digest)
+	const paymentProof = request.headers.get('X-Payment-Proof') || request.headers.get('X-Payment-Tx-Digest')
+	const paymentTxDigest = paymentProof || payload.paymentTxDigest
+
+	if (!paymentTxDigest) {
+		// Return 402 Payment Required with payment details (x402 protocol)
+		return jsonResponse(
+			{
+				error: 'Payment required',
+				payment: {
+					amount: PAYMENT_AMOUNT,
+					amountSui: '0.000003',
+					recipient: recipientAddress,
+					chain: env.SUI_NETWORK,
+					currency: 'SUI',
+				},
+				instructions: 'Include X-Payment-Tx-Digest header with a successful payment transaction digest, or use /api/ai/create-payment-tx to get payment details',
+			},
+			402,
+			CORS_HEADERS,
+		)
 	}
 
 	// Verify the payment transaction was executed successfully
-	const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
 	try {
-		const txResult = await suiClient.getTransactionBlock({
-			digest: payload.paymentTxDigest,
-			options: { showEffects: true, showBalanceChanges: true },
-		})
+		// Try to get transaction, with retry if it's not available yet
+		let txResult
+		let retries = 3
+		while (retries > 0) {
+			try {
+				txResult = await suiClient.getTransactionBlock({
+					digest: paymentTxDigest,
+					options: { 
+						showEffects: true, 
+						showBalanceChanges: true,
+						showObjectChanges: true,
+						showInput: true,
+					},
+				})
+				break
+			} catch (error) {
+				retries--
+				if (retries === 0) throw error
+				// Wait a bit before retrying
+				await new Promise(resolve => setTimeout(resolve, 1000))
+			}
+		}
 
 		const effects = txResult.effects
 		if (effects?.status?.status !== 'success') {
-			return jsonResponse({ error: 'Payment transaction failed' }, 402, CORS_HEADERS)
+			return jsonResponse(
+				{
+					error: 'Payment transaction failed',
+					payment: {
+						amount: PAYMENT_AMOUNT,
+						amountSui: '0.000003',
+						recipient: recipientAddress,
+						chain: env.SUI_NETWORK,
+						currency: 'SUI',
+					},
+				},
+				402,
+				CORS_HEADERS,
+			)
 		}
 
-		// Verify payment was made (check balance changes for positive amounts)
+		// Verify payment was made to the correct recipient
+		// Balance changes: negative for sender, positive for recipient
 		const balanceChanges = txResult.balanceChanges || []
-		const paymentFound = balanceChanges.some((change) => {
-			const amount = BigInt(change.amount || '0')
-			// Check if any address received at least the payment amount
-			return amount >= BigInt(PAYMENT_AMOUNT)
-		})
+		const requiredAmount = BigInt(PAYMENT_AMOUNT)
+		
+		// Find positive balance change to the recipient (payment received)
+		let paymentFound = false
+		let totalReceived = 0n
+		
+		for (const change of balanceChanges) {
+			// Extract owner address
+			let ownerAddress: string | null = null
+			if (change.owner && typeof change.owner === 'object') {
+				if ('AddressOwner' in change.owner) {
+					ownerAddress = change.owner.AddressOwner
+				} else if ('ObjectOwner' in change.owner) {
+					ownerAddress = change.owner.ObjectOwner
+				}
+			}
+			
+			// Check if this is for the recipient
+			if (ownerAddress?.toLowerCase() === recipientAddress.toLowerCase()) {
+				// Parse amount (can be string or number)
+				const amountStr = String(change.amount || '0')
+				const amount = BigInt(amountStr)
+				
+				// Check coinType is SUI (0x2::sui::SUI or empty/default)
+				const coinType = change.coinType || ''
+				const isSui = !coinType || coinType.includes('sui::SUI') || coinType === '0x2::sui::SUI' || coinType === ''
+				
+				// Sum up all positive amounts received by recipient
+				if (isSui && amount > 0n) {
+					totalReceived += amount
+				}
+			}
+		}
+		
+		// Check if total received meets requirement
+		if (totalReceived >= requiredAmount) {
+			paymentFound = true
+		}
 
+		// If balance changes check fails, also check object changes for transferred objects
 		if (!paymentFound) {
-			return jsonResponse({ error: 'Payment verification failed - insufficient payment amount' }, 402, CORS_HEADERS)
+			const objectChanges = txResult.objectChanges || []
+			// Check if any coins were transferred to the recipient
+			for (const change of objectChanges) {
+				if (change.type === 'transferred' || change.type === 'created') {
+					const owner = change.owner
+					let ownerAddress: string | null = null
+					if (owner && typeof owner === 'object') {
+						if ('AddressOwner' in owner) {
+							ownerAddress = owner.AddressOwner
+						} else if ('ObjectOwner' in owner) {
+							ownerAddress = owner.ObjectOwner
+						}
+					}
+					// Check if object was transferred to recipient and is a coin
+					if (ownerAddress?.toLowerCase() === recipientAddress.toLowerCase()) {
+						const objectType = change.objectType || ''
+						// Check if it's a coin object (Coin<SUI>)
+						if (objectType.includes('Coin') || objectType.includes('coin')) {
+							paymentFound = true
+							console.log('Payment verified via object changes:', change.objectId)
+							break
+						}
+					}
+				}
+			}
+		}
+		
+		if (!paymentFound) {
+			// Log for debugging
+			console.log('Payment verification failed.')
+			console.log('Recipient:', recipientAddress)
+			console.log('Required:', PAYMENT_AMOUNT, 'MIST (', Number(PAYMENT_AMOUNT) / 1e9, 'SUI)')
+			console.log('Total received:', totalReceived.toString(), 'MIST (', Number(totalReceived) / 1e9, 'SUI)')
+			console.log('Balance changes:', JSON.stringify(balanceChanges, null, 2))
+			console.log('Object changes:', JSON.stringify(txResult.objectChanges || [], null, 2))
+			
+			return jsonResponse(
+				{
+					error: 'Payment verification failed - insufficient payment amount or wrong recipient',
+					debug: {
+						recipient: recipientAddress,
+						requiredAmount: PAYMENT_AMOUNT,
+						requiredAmountSui: Number(PAYMENT_AMOUNT) / 1e9,
+						totalReceived: totalReceived.toString(),
+						totalReceivedSui: Number(totalReceived) / 1e9,
+						balanceChanges: balanceChanges.map((bc) => ({
+							owner: bc.owner,
+							amount: bc.amount,
+							amountSui: Number(bc.amount || 0) / 1e9,
+							coinType: bc.coinType,
+						})),
+					},
+					payment: {
+						amount: PAYMENT_AMOUNT,
+						amountSui: '0.000003',
+						recipient: recipientAddress,
+						chain: env.SUI_NETWORK,
+						currency: 'SUI',
+					},
+				},
+				402,
+				CORS_HEADERS,
+			)
 		}
 	} catch (error) {
 		console.error('Payment verification error:', error)
-		return jsonResponse({ error: 'Failed to verify payment' }, 402, CORS_HEADERS)
+		return jsonResponse(
+			{
+				error: 'Failed to verify payment',
+				payment: {
+					amount: PAYMENT_AMOUNT,
+					amountSui: '0.000003',
+					recipient: recipientAddress,
+					chain: env.SUI_NETWORK,
+					currency: 'SUI',
+				},
+			},
+			402,
+			CORS_HEADERS,
+		)
 	}
 
 	const prompt = payload.prompt
