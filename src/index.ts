@@ -88,6 +88,11 @@ export default {
 			return handleSuiNSImageProxy(request, env)
 		}
 
+		// Generic image proxy for external URLs (to avoid CORS issues)
+		if (url.pathname === '/api/image-proxy') {
+			return handleImageProxy(request)
+		}
+
 		// Walrus upload proxy (to avoid CORS issues)
 		if (url.pathname === '/api/upload' && request.method === 'PUT') {
 			return handleUploadProxy(request, env)
@@ -201,8 +206,8 @@ async function handleSuiNSRequest(
 		return jsonResponse(record)
 	}
 
-	// Force profile view
-	if (url.pathname === '/profile' || url.searchParams.has('profile')) {
+	// Force profile view (accessible via /home or ?profile)
+	if (url.pathname === '/home' || url.searchParams.has('profile')) {
 		return htmlResponse(renderProfilePage())
 	}
 
@@ -920,6 +925,83 @@ async function handleSuiNSImageProxy(request: Request, env: Env): Promise<Respon
 		})
 	} catch (error) {
 		console.error('SuiNS image proxy error:', error)
+		return new Response('Failed to proxy image', {
+			status: 500,
+			headers: {
+				'Access-Control-Allow-Origin': '*',
+			},
+		})
+	}
+}
+
+/**
+ * Generic image proxy for external URLs
+ * Endpoint: /api/image-proxy?url={encodedUrl}
+ * Only allows specific trusted domains
+ */
+async function handleImageProxy(request: Request): Promise<Response> {
+	try {
+		const reqUrl = new URL(request.url)
+		const targetUrl = reqUrl.searchParams.get('url')
+
+		if (!targetUrl) {
+			return new Response('Missing url parameter', { status: 400 })
+		}
+
+		// Validate URL
+		let parsedUrl: URL
+		try {
+			parsedUrl = new URL(targetUrl)
+		} catch {
+			return new Response('Invalid URL', { status: 400 })
+		}
+
+		// Only allow specific trusted domains
+		const allowedDomains = [
+			'api-mainnet.suins.io',
+			'api-testnet.suins.io',
+			'suins.io',
+			'ipfs.io',
+			'nftstorage.link',
+			'cloudflare-ipfs.com',
+		]
+
+		if (!allowedDomains.some((domain) => parsedUrl.hostname === domain || parsedUrl.hostname.endsWith(`.${domain}`))) {
+			return new Response('Domain not allowed', { status: 403 })
+		}
+
+		// Fetch the image
+		const response = await fetch(targetUrl, {
+			headers: {
+				Accept: 'image/*,*/*',
+				'User-Agent': 'sui.ski-gateway/1.0',
+			},
+		})
+
+		if (!response.ok) {
+			return new Response(`Failed to fetch image: ${response.status}`, {
+				status: response.status,
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+				},
+			})
+		}
+
+		// Get the image data
+		const imageData = await response.arrayBuffer()
+		const contentType = response.headers.get('Content-Type') || 'image/png'
+
+		// Return the image with CORS headers
+		return new Response(imageData, {
+			status: 200,
+			headers: {
+				'Content-Type': contentType,
+				'Access-Control-Allow-Origin': '*',
+				'Cache-Control': 'public, max-age=3600',
+			},
+		})
+	} catch (error) {
+		console.error('Image proxy error:', error)
 		return new Response('Failed to proxy image', {
 			status: 500,
 			headers: {
