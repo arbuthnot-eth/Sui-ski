@@ -5271,13 +5271,11 @@ ${generatePasskeyWalletStyles()}
 		// Hide toggle button initially (will show when NFT loads)
 		if (qrToggle) qrToggle.style.display = 'none';
 
-		// Generate SuiNS API image URL as primary source (more reliable than on-chain display data)
+		// Generate SuiNS image URL via our proxy (to avoid CORS issues)
 		function getSuiNSImageUrl(domainName) {
 			const cleanDomain = domainName.toLowerCase().replace(/\\.sui$/i, '');
-			// SuiNS API serves NFT images dynamically
-			return NETWORK === 'mainnet'
-				? \`https://api-mainnet.suins.io/nfts/image/\${cleanDomain}.sui\`
-				: \`https://api-testnet.suins.io/nfts/image/\${cleanDomain}.sui\`;
+			// Use our proxy endpoint to fetch SuiNS NFT images
+			return \`/api/suins-image/\${encodeURIComponent(cleanDomain)}.sui\`;
 		}
 
 		// Try to load an image with fallback URLs

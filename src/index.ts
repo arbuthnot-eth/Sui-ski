@@ -83,6 +83,11 @@ export default {
 			return handleMessagingPage(env)
 		}
 
+		// SuiNS image proxy (to avoid CORS issues)
+		if (url.pathname.startsWith('/api/suins-image/')) {
+			return handleSuiNSImageProxy(request, env)
+		}
+
 		// Walrus upload proxy (to avoid CORS issues)
 		if (url.pathname === '/api/upload' && request.method === 'PUT') {
 			return handleUploadProxy(request, env)
@@ -822,6 +827,76 @@ async function handleUploadProxy(request: Request, env: Env): Promise<Response> 
 			status: 500,
 			headers: {
 				'Content-Type': 'application/json',
+				'Access-Control-Allow-Origin': '*',
+			},
+		})
+	}
+}
+
+/**
+ * Proxy SuiNS NFT images to avoid CORS issues
+ * Endpoint: /api/suins-image/{domain}.sui
+ */
+async function handleSuiNSImageProxy(request: Request, env: Env): Promise<Response> {
+	try {
+		const url = new URL(request.url)
+		// Extract domain from path: /api/suins-image/example.sui -> example.sui
+		const pathMatch = url.pathname.match(/^\/api\/suins-image\/(.+)$/)
+		if (!pathMatch) {
+			return new Response('Invalid path', { status: 400 })
+		}
+
+		const domain = decodeURIComponent(pathMatch[1])
+
+		// Validate domain format (basic check)
+		if (!domain || !domain.includes('.sui')) {
+			return new Response('Invalid domain format', { status: 400 })
+		}
+
+		// Build SuiNS API URL
+		const suinsApiBase =
+			env.SUI_NETWORK === 'mainnet'
+				? 'https://api-mainnet.suins.io'
+				: 'https://api-testnet.suins.io'
+
+		const imageUrl = `${suinsApiBase}/nfts/image/${domain}`
+
+		// Fetch the image from SuiNS API
+		const response = await fetch(imageUrl, {
+			headers: {
+				Accept: 'image/*',
+				'User-Agent': 'sui.ski-gateway/1.0',
+			},
+		})
+
+		if (!response.ok) {
+			// Return a placeholder or error
+			return new Response(`Failed to fetch image: ${response.status}`, {
+				status: response.status,
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+				},
+			})
+		}
+
+		// Get the image data
+		const imageData = await response.arrayBuffer()
+		const contentType = response.headers.get('Content-Type') || 'image/png'
+
+		// Return the image with CORS headers
+		return new Response(imageData, {
+			status: 200,
+			headers: {
+				'Content-Type': contentType,
+				'Access-Control-Allow-Origin': '*',
+				'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+			},
+		})
+	} catch (error) {
+		console.error('SuiNS image proxy error:', error)
+		return new Response('Failed to proxy image', {
+			status: 500,
+			headers: {
 				'Access-Control-Allow-Origin': '*',
 			},
 		})
