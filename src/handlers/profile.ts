@@ -4116,6 +4116,7 @@ ${generatePasskeyWalletStyles()}
 		const CURRENT_ADDRESS = ${serializeJson(record.address)};
 		const PROFILE_URL = ${serializeJson(`https://${cleanName}.sui.ski`)};
 		const NFT_EXPLORER_URL = ${serializeJson(nftExplorerUrl)};
+		const EXPLORER_BASE = ${serializeJson(explorerBase)};
 		const IS_SUBNAME = NAME.includes('.');
 		const STORAGE_KEY = 'sui_ski_wallet';
 		const EXPIRATION_MS = ${expiresMs || 0};
@@ -6621,7 +6622,7 @@ ${generatePasskeyWalletStyles()}
 				const isCurrentName = cleanedName && cleanedName.toLowerCase() === NAME.toLowerCase();
 				const initial = cleanedName ? cleanedName.charAt(0).toUpperCase() : '?';
 				const profileUrl = cleanedName ? \`https://\${cleanedName}.sui.ski\` : null;
-				const explorerUrl = \`\${explorerBase}/object/\${objectId}\`;
+				const explorerUrl = \`\${EXPLORER_BASE}/object/\${objectId}\`;
 
 				// Extract expiration if available
 				let expirationText = '';
