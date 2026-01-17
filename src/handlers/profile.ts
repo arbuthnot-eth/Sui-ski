@@ -2027,26 +2027,20 @@ export function generateProfilePage(
 			color: var(--accent);
 		}
 
-		/* Top Search Bar */
-		.top-search-bar {
-			display: flex;
-			align-items: center;
-			justify-content: flex-end;
-			gap: 12px;
-			margin-bottom: 16px;
-		}
+		/* Search Button (in wallet bar) */
 		.search-btn {
 			display: flex;
 			align-items: center;
-			gap: 10px;
-			padding: 10px 18px;
+			gap: 8px;
+			padding: 8px 14px;
 			background: var(--card-bg);
 			border: 1px solid var(--border);
-			border-radius: 12px;
+			border-radius: 10px;
 			cursor: pointer;
 			transition: all 0.2s;
 			color: var(--text-muted);
-			font-size: 0.85rem;
+			font-size: 0.8rem;
+			margin-right: 10px;
 		}
 		.search-btn:hover {
 			border-color: var(--accent);
@@ -2054,16 +2048,16 @@ export function generateProfilePage(
 			color: var(--accent);
 		}
 		.search-btn svg {
-			width: 18px;
-			height: 18px;
+			width: 16px;
+			height: 16px;
 		}
 		.search-btn kbd {
 			background: rgba(255, 255, 255, 0.08);
 			border: 1px solid var(--border);
-			border-radius: 5px;
-			padding: 2px 6px;
+			border-radius: 4px;
+			padding: 2px 5px;
 			font-family: ui-monospace, monospace;
-			font-size: 0.7rem;
+			font-size: 0.65rem;
 			color: var(--text-muted);
 		}
 		@media (max-width: 600px) {
@@ -2072,8 +2066,8 @@ export function generateProfilePage(
 				display: none;
 			}
 			.search-btn {
-				padding: 12px;
-				border-radius: 10px;
+				padding: 8px;
+				margin-right: 8px;
 			}
 		}
 
@@ -2366,92 +2360,6 @@ export function generateProfilePage(
 			padding: 24px;
 			color: var(--text-muted);
 			font-size: 0.85rem;
-		}
-
-		/* Media Player Section */
-		.media-player-section {
-			background: var(--card-bg);
-			backdrop-filter: blur(20px);
-			border: 1px solid var(--glass-border);
-			border-radius: 16px;
-			padding: 24px;
-			margin-bottom: 20px;
-		}
-		.media-player-section h3 {
-			color: var(--text);
-			font-size: 0.95rem;
-			font-weight: 700;
-			margin-bottom: 12px;
-			display: flex;
-			align-items: center;
-			gap: 10px;
-		}
-		.media-player-section h3 svg {
-			width: 20px;
-			height: 20px;
-			color: var(--accent);
-		}
-		.media-player-section p {
-			color: var(--text-muted);
-			font-size: 0.85rem;
-			margin-bottom: 16px;
-		}
-		.media-player-section p a {
-			color: var(--accent);
-		}
-		.media-player-input {
-			display: flex;
-			gap: 10px;
-		}
-		.media-player-input input {
-			flex: 1;
-			padding: 12px 14px;
-			background: rgba(30, 30, 40, 0.6);
-			border: 1px solid var(--border);
-			border-radius: 10px;
-			color: var(--text);
-			font-size: 0.9rem;
-			font-family: ui-monospace, monospace;
-			outline: none;
-			transition: border-color 0.2s;
-		}
-		.media-player-input input:focus {
-			border-color: var(--accent);
-		}
-		.media-player-input input::placeholder {
-			color: var(--text-muted);
-			font-family: inherit;
-		}
-		.media-player-input button {
-			padding: 12px 20px;
-			background: linear-gradient(135deg, var(--accent), #8b5cf6);
-			border: none;
-			border-radius: 10px;
-			color: white;
-			font-size: 0.9rem;
-			font-weight: 600;
-			cursor: pointer;
-			transition: transform 0.2s, box-shadow 0.2s;
-			box-shadow: 0 4px 12px var(--accent-glow);
-		}
-		.media-player-input button:hover {
-			transform: translateY(-2px);
-			box-shadow: 0 6px 16px var(--accent-glow);
-		}
-		.media-format-badges {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 6px;
-			margin-top: 12px;
-		}
-		.media-format-badge {
-			padding: 4px 10px;
-			background: var(--accent-light);
-			border: 1px solid rgba(96, 165, 250, 0.15);
-			border-radius: 6px;
-			font-size: 0.7rem;
-			font-weight: 600;
-			color: var(--accent);
 		}
 
 		/* ===== OWNED NAMES SECTION ===== */
@@ -3230,9 +3138,6 @@ export function generateProfilePage(
 			.qr-expanded-actions { flex-direction: column; width: 100%; }
 			.qr-expanded-actions button { width: 100%; justify-content: center; }
 
-			.media-player-section { padding: 18px; }
-			.media-player-input { flex-direction: column; }
-			.media-player-input button { width: 100%; }
 
 			.queue-bid-section { padding: 18px; }
 			.queue-bid-form { flex-direction: column; }
@@ -3254,16 +3159,6 @@ ${generatePasskeyWalletStyles()}
 </head>
 <body>
 	<div class="container">
-		<div class="top-search-bar">
-			<button class="search-btn" id="search-btn" title="Search SuiNS names">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<circle cx="11" cy="11" r="8"></circle>
-					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-				</svg>
-				<span>Search names...</span>
-				<kbd>/</kbd>
-			</button>
-		</div>
 		<div class="page-layout">
 			<div class="sidebar">
 				<nav class="sidebar-nav">
@@ -3484,28 +3379,6 @@ ${generatePasskeyWalletStyles()}
 			<div id="content-items"></div>
 					</div>
 
-					<!-- Media Player Section -->
-					<div class="media-player-section">
-						<h3>
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<polygon points="5 3 19 12 5 21 5 3"></polygon>
-							</svg>
-							Media Player
-						</h3>
-						<p>Play audio and video from Walrus. <a href="/play">More options</a></p>
-						<form class="media-player-input" onsubmit="goToPlayer(event)">
-							<input type="text" id="media-blob-input" placeholder="Paste blob ID or URL...">
-							<button type="submit">Play</button>
-						</form>
-						<div class="media-format-badges">
-							<span class="media-format-badge">MP4</span>
-							<span class="media-format-badge">WebM</span>
-							<span class="media-format-badge">MP3</span>
-							<span class="media-format-badge">OGG</span>
-							<span class="media-format-badge">WAV</span>
-							<span class="media-format-badge">FLAC</span>
-						</div>
-					</div>
 				</div><!-- end tab-media -->
 
 				<div class="tab-panel" id="tab-upload">
@@ -4305,21 +4178,35 @@ ${generatePasskeyWalletStyles()}
 
 		// Render wallet bar at top
 		function renderWalletBar() {
+			const searchBtn = \`<button class="search-btn" id="search-btn" title="Search SuiNS names">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="11" cy="11" r="8"></circle>
+					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+				</svg>
+				<span>Search names...</span>
+				<kbd>/</kbd>
+			</button>\`;
 			const networkBadge = '<span class="badge network">' + NETWORK + '</span>';
+			const leftSection = searchBtn + networkBadge;
 			if (!connectedAddress) {
-				walletBar.innerHTML = networkBadge + '<button class="connect-btn" id="connect-wallet-btn">Connect Wallet</button>';
-				document.getElementById('connect-wallet-btn').addEventListener('click', connectWallet);
+				walletBar.innerHTML = leftSection + '<button class="connect-btn" id="connect-wallet-btn">Connect Wallet</button>';
+				const connectBtn = document.getElementById('connect-wallet-btn');
+				if (connectBtn) connectBtn.addEventListener('click', connectWallet);
 			} else {
 				const displayName = connectedPrimaryName || truncAddr(connectedAddress);
-				walletBar.innerHTML = networkBadge + \`
+				walletBar.innerHTML = leftSection + \`
 					<div class="wallet-status">
 						<span class="wallet-addr">\${displayName}</span>
 						\${connectedPrimaryName ? \`<span class="wallet-name">\${truncAddr(connectedAddress)}</span>\` : ''}
 						<button id="disconnect-wallet-btn">×</button>
 					</div>
 				\`;
-				document.getElementById('disconnect-wallet-btn').addEventListener('click', disconnectWallet);
+				const disconnectBtn = document.getElementById('disconnect-wallet-btn');
+				if (disconnectBtn) disconnectBtn.addEventListener('click', disconnectWallet);
 			}
+			// Re-attach search button listener
+			const newSearchBtn = document.getElementById('search-btn');
+			if (newSearchBtn) newSearchBtn.addEventListener('click', () => openSearch(''));
 		}
 
 		// Copy address to clipboard
@@ -5237,27 +5124,26 @@ ${generatePasskeyWalletStyles()}
 		// ===== QUICK SEARCH (Keyboard-activated + Button) =====
 		const searchOverlay = document.getElementById('search-overlay');
 		const searchInput = document.getElementById('search-input');
-		const searchBtn = document.getElementById('search-btn');
 		let searchActive = false;
 
 		function openSearch(initialChar) {
 			if (searchActive) return;
 			searchActive = true;
-			searchOverlay.classList.add('active');
-			if (initialChar) {
+			if (searchOverlay) searchOverlay.classList.add('active');
+			if (initialChar && searchInput) {
 				searchInput.value = initialChar;
 			}
-			setTimeout(() => searchInput.focus(), 50);
+			setTimeout(() => searchInput?.focus(), 50);
 		}
 
 		function closeSearch() {
 			searchActive = false;
-			searchOverlay.classList.remove('active');
-			searchInput.value = '';
+			if (searchOverlay) searchOverlay.classList.remove('active');
+			if (searchInput) searchInput.value = '';
 		}
 
 		function navigateToName() {
-			let name = searchInput.value.trim().toLowerCase();
+			let name = searchInput?.value?.trim()?.toLowerCase();
 			if (!name) return;
 			name = name.replace(/\\.sui$/i, '');
 			name = name.replace(/[^a-z0-9-]/g, '');
@@ -5265,9 +5151,6 @@ ${generatePasskeyWalletStyles()}
 				window.location.href = 'https://' + name + '.sui.ski';
 			}
 		}
-
-		// Click search button
-		if (searchBtn) searchBtn.addEventListener('click', () => openSearch(''));
 
 		// Search input events
 		if (searchInput) {
@@ -5746,29 +5629,6 @@ ${generatePasskeyWalletStyles()}
 		// Initialize content display
 		loadExistingContent();
 		updateFileMeta(null);
-
-		// Media player function
-		window.goToPlayer = function(e) {
-			e.preventDefault();
-			const input = document.getElementById('media-blob-input').value.trim();
-			const blobId = extractBlobId(input);
-			if (blobId) {
-				window.location.href = 'https://play-' + blobId + '.sui.ski';
-			}
-		};
-
-		function extractBlobId(input) {
-			if (!input) return null;
-			// Handle full URLs: play-xxx.sui.ski or walrus-xxx.sui.ski
-			let match = input.match(/(?:play|walrus)-([a-zA-Z0-9_-]+)(?:\\.sui\\.ski)?/);
-			if (match) return match[1];
-			// Handle /walrus/xxx paths
-			match = input.match(/\\/walrus\\/([a-zA-Z0-9_-]+)/);
-			if (match) return match[1];
-			// Handle raw blob ID (alphanumeric with - and _)
-			if (/^[a-zA-Z0-9_-]+$/.test(input)) return input;
-			return null;
-		}
 
 		// ===== MESSAGING FUNCTIONALITY =====
 		const MESSAGING_CONTRACT = '${env.MESSAGING_CONTRACT_ADDRESS || ''}';
