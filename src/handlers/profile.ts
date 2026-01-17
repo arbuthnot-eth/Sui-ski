@@ -2026,6 +2026,110 @@ export function generateProfilePage(
 			font-size: 0.75rem;
 			color: var(--accent);
 		}
+		.search-results {
+			max-height: 320px;
+			overflow-y: auto;
+			border-top: 1px solid var(--border);
+		}
+		.search-result-item {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+			padding: 14px 18px;
+			cursor: pointer;
+			transition: all 0.15s;
+			border-bottom: 1px solid var(--border);
+		}
+		.search-result-item:last-child {
+			border-bottom: none;
+		}
+		.search-result-item:hover,
+		.search-result-item.selected {
+			background: var(--accent-light);
+		}
+		.search-result-avatar {
+			width: 40px;
+			height: 40px;
+			border-radius: 10px;
+			background: linear-gradient(135deg, var(--accent), #a78bfa);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 1rem;
+			font-weight: 700;
+			color: white;
+			flex-shrink: 0;
+		}
+		.search-result-info {
+			flex: 1;
+			min-width: 0;
+		}
+		.search-result-name {
+			font-size: 1rem;
+			font-weight: 600;
+			color: var(--text);
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+		.search-result-name .suffix {
+			background: linear-gradient(135deg, var(--accent), #a78bfa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.search-result-status {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			margin-top: 2px;
+		}
+		.search-result-badge {
+			padding: 4px 10px;
+			border-radius: 8px;
+			font-size: 0.7rem;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.03em;
+		}
+		.search-result-badge.taken {
+			background: rgba(248, 113, 113, 0.15);
+			color: #f87171;
+		}
+		.search-result-badge.available {
+			background: rgba(52, 211, 153, 0.15);
+			color: #34d399;
+		}
+		.search-result-badge.checking {
+			background: rgba(251, 191, 36, 0.15);
+			color: #fbbf24;
+		}
+		.search-result-badge.expiring {
+			background: rgba(251, 191, 36, 0.15);
+			color: #fbbf24;
+		}
+		.search-result-arrow {
+			color: var(--text-muted);
+			transition: all 0.15s;
+		}
+		.search-result-item:hover .search-result-arrow,
+		.search-result-item.selected .search-result-arrow {
+			color: var(--accent);
+			transform: translateX(3px);
+		}
+		.search-empty {
+			padding: 24px 18px;
+			text-align: center;
+			color: var(--text-muted);
+			font-size: 0.9rem;
+		}
+		.search-loading {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			padding: 20px;
+			color: var(--text-muted);
+		}
 
 		/* Search Button (in wallet bar) */
 		.search-btn {
@@ -3593,9 +3697,10 @@ ${generatePasskeyWalletStyles()}
 				</svg>
 				<input type="text" class="search-input" id="search-input" placeholder="Search for a name..." autocomplete="off" spellcheck="false" />
 			</div>
+			<div class="search-results" id="search-results"></div>
 			<div class="search-hint">
-				<span>Type to search SuiNS names</span>
-				<span><kbd>Enter</kbd> to go · <kbd>Esc</kbd> to close</span>
+				<span>Type to check availability</span>
+				<span><kbd>↑↓</kbd> navigate · <kbd>Enter</kbd> go · <kbd>Esc</kbd> close</span>
 			</div>
 		</div>
 	</div>
@@ -5124,14 +5229,22 @@ ${generatePasskeyWalletStyles()}
 		// ===== QUICK SEARCH (Keyboard-activated + Button) =====
 		const searchOverlay = document.getElementById('search-overlay');
 		const searchInput = document.getElementById('search-input');
+		const searchResults = document.getElementById('search-results');
 		let searchActive = false;
+		let searchTimeout = null;
+		let selectedIndex = 0;
+		let currentResults = [];
 
 		function openSearch(initialChar) {
 			if (searchActive) return;
 			searchActive = true;
+			selectedIndex = 0;
+			currentResults = [];
 			if (searchOverlay) searchOverlay.classList.add('active');
+			if (searchResults) searchResults.innerHTML = '';
 			if (initialChar && searchInput) {
 				searchInput.value = initialChar;
+				performSearch(initialChar);
 			}
 			setTimeout(() => searchInput?.focus(), 50);
 		}
@@ -5140,27 +5253,186 @@ ${generatePasskeyWalletStyles()}
 			searchActive = false;
 			if (searchOverlay) searchOverlay.classList.remove('active');
 			if (searchInput) searchInput.value = '';
+			if (searchResults) searchResults.innerHTML = '';
+			currentResults = [];
+			selectedIndex = 0;
 		}
 
-		function navigateToName() {
-			let name = searchInput?.value?.trim()?.toLowerCase();
-			if (!name) return;
+		function cleanNameInput(input) {
+			let name = input?.trim()?.toLowerCase() || '';
 			name = name.replace(/\\.sui$/i, '');
 			name = name.replace(/[^a-z0-9-]/g, '');
-			if (name && name.length >= 1) {
-				window.location.href = 'https://' + name + '.sui.ski';
+			return name;
+		}
+
+		function navigateToName(name) {
+			const cleanName = name ? cleanNameInput(name) : cleanNameInput(searchInput?.value);
+			if (cleanName && cleanName.length >= 1) {
+				window.location.href = 'https://' + cleanName + '.sui.ski';
+			}
+		}
+
+		function renderSearchResults() {
+			if (!searchResults) return;
+			if (currentResults.length === 0) {
+				searchResults.innerHTML = '';
+				return;
+			}
+
+			const arrowIcon = '<svg class="search-result-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+
+			searchResults.innerHTML = currentResults.map((result, idx) => {
+				const initial = result.name.charAt(0).toUpperCase();
+				let badgeClass = 'checking';
+				let badgeText = 'Checking...';
+				let statusText = '';
+
+				if (result.status === 'available') {
+					badgeClass = 'available';
+					badgeText = 'Available';
+					statusText = 'Register this name on SuiNS';
+				} else if (result.status === 'taken') {
+					badgeClass = 'taken';
+					badgeText = 'Taken';
+					if (result.expiresIn) {
+						if (result.expiresIn <= 0) {
+							badgeClass = 'expiring';
+							badgeText = 'Expired';
+							statusText = 'In grace period - may become available';
+						} else if (result.expiresIn <= 90) {
+							badgeClass = 'expiring';
+							badgeText = result.expiresIn + 'd left';
+							statusText = 'Expiring soon';
+						} else {
+							statusText = 'Expires in ' + result.expiresIn + ' days';
+						}
+					} else {
+						statusText = 'View profile';
+					}
+				}
+
+				return \`
+					<div class="search-result-item\${idx === selectedIndex ? ' selected' : ''}" data-name="\${result.name}" data-index="\${idx}">
+						<div class="search-result-avatar">\${initial}</div>
+						<div class="search-result-info">
+							<div class="search-result-name">\${result.name}<span class="suffix">.sui</span></div>
+							<div class="search-result-status">\${statusText}</div>
+						</div>
+						<span class="search-result-badge \${badgeClass}">\${badgeText}</span>
+						\${arrowIcon}
+					</div>
+				\`;
+			}).join('');
+
+			// Add click handlers
+			searchResults.querySelectorAll('.search-result-item').forEach(item => {
+				item.addEventListener('click', () => {
+					const name = item.dataset.name;
+					navigateToName(name);
+				});
+				item.addEventListener('mouseenter', () => {
+					selectedIndex = parseInt(item.dataset.index);
+					updateSelection();
+				});
+			});
+		}
+
+		function updateSelection() {
+			if (!searchResults) return;
+			searchResults.querySelectorAll('.search-result-item').forEach((item, idx) => {
+				item.classList.toggle('selected', idx === selectedIndex);
+			});
+		}
+
+		async function checkNameAvailability(name) {
+			try {
+				const suiClient = new SuiClient({ url: RPC_URL });
+				const address = await suiClient.resolveNameServiceAddress({ name: name + '.sui' });
+
+				if (!address) {
+					return { name, status: 'available' };
+				}
+
+				// Name is taken, try to get expiration
+				const suinsClient = new SuinsClient({
+					client: suiClient,
+					network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+				});
+
+				try {
+					const record = await suinsClient.getNameRecord(name + '.sui');
+					if (record?.expirationTimestampMs) {
+						const expiresMs = parseInt(record.expirationTimestampMs);
+						const now = Date.now();
+						const daysLeft = Math.ceil((expiresMs - now) / (24 * 60 * 60 * 1000));
+						return { name, status: 'taken', expiresIn: daysLeft };
+					}
+				} catch (e) {
+					// Couldn't get expiration, that's ok
+				}
+
+				return { name, status: 'taken' };
+			} catch (e) {
+				console.error('Error checking name:', e);
+				return { name, status: 'taken' };
+			}
+		}
+
+		async function performSearch(query) {
+			const name = cleanNameInput(query);
+			if (!name || name.length < 1) {
+				currentResults = [];
+				renderSearchResults();
+				return;
+			}
+
+			// Show the name being searched with checking status
+			currentResults = [{ name, status: 'checking' }];
+			selectedIndex = 0;
+			renderSearchResults();
+
+			// Check availability
+			const result = await checkNameAvailability(name);
+
+			// Only update if the input hasn't changed
+			if (cleanNameInput(searchInput?.value) === name) {
+				currentResults = [result];
+				renderSearchResults();
 			}
 		}
 
 		// Search input events
 		if (searchInput) {
+			searchInput.addEventListener('input', (e) => {
+				clearTimeout(searchTimeout);
+				searchTimeout = setTimeout(() => {
+					performSearch(e.target.value);
+				}, 300);
+			});
+
 			searchInput.addEventListener('keydown', (e) => {
 				if (e.key === 'Enter') {
 					e.preventDefault();
-					navigateToName();
+					if (currentResults.length > 0 && currentResults[selectedIndex]) {
+						navigateToName(currentResults[selectedIndex].name);
+					} else {
+						navigateToName();
+					}
 				} else if (e.key === 'Escape') {
 					e.preventDefault();
 					closeSearch();
+				} else if (e.key === 'ArrowDown') {
+					e.preventDefault();
+					if (currentResults.length > 0) {
+						selectedIndex = (selectedIndex + 1) % currentResults.length;
+						updateSelection();
+					}
+				} else if (e.key === 'ArrowUp') {
+					e.preventDefault();
+					if (currentResults.length > 0) {
+						selectedIndex = (selectedIndex - 1 + currentResults.length) % currentResults.length;
+						updateSelection();
+					}
 				}
 			});
 		}
