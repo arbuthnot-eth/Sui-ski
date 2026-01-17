@@ -4592,8 +4592,7 @@ ${generatePasskeyWalletStyles()}
 			});
 		}
 
-		// AI Image Generation removed - replaced with automatic description display
-		// The description is now automatically loaded and displayed in the name-description-card
+		// AI Image Generation removed
 
 		// Click identity name to copy
 		if (identityName) {
