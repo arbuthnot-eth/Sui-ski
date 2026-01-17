@@ -2356,113 +2356,84 @@ export function generateProfilePage(
 			gap: 8px;
 		}
 
-		/* Content Display Section */
-		.content-display {
-			background: var(--card-bg);
-			backdrop-filter: blur(20px);
-			-webkit-backdrop-filter: blur(20px);
-			border: 1px solid var(--glass-border);
-			border-radius: 20px;
-			padding: 24px;
-			margin-bottom: 20px;
-			box-shadow: var(--shadow);
-		}
-		.content-display h3 {
-			color: var(--text);
-			font-size: 0.9rem;
-			font-weight: 700;
-			margin-bottom: 18px;
-			display: flex;
-			align-items: center;
-			gap: 10px;
-		}
-		.content-display h3 svg {
-			width: 18px;
-			height: 18px;
-			color: var(--accent);
-		}
-		.content-item {
-			background: linear-gradient(135deg, rgba(14, 165, 233, 0.03), rgba(6, 182, 212, 0.03));
-			border: 1px solid var(--border);
-			border-radius: 14px;
-			padding: 16px;
-			margin-bottom: 12px;
-		}
-		.content-item:last-child {
-			margin-bottom: 0;
-		}
-		.content-image {
-			max-width: 100%;
-			border-radius: 10px;
-			display: block;
-		}
-		.content-video {
-			width: 100%;
-			border-radius: 10px;
-			background: #000;
-		}
-		.content-audio {
-			width: 100%;
-		}
-		.content-meta {
+		/* Registration Queue Enhancements */
+		.queue-bid-grid {
 			display: flex;
 			flex-direction: column;
-			align-items: flex-start;
-			gap: 6px;
-			margin-top: 12px;
-			font-size: 0.8rem;
+			gap: 16px;
 		}
-		.content-meta-main {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			gap: 12px;
+		.queue-offline-fields {
+			display: none;
+			flex-direction: column;
+			gap: 10px;
+			margin-top: 10px;
+			padding: 12px;
+			border-radius: 12px;
+			border: 1px dashed var(--border);
+			background: rgba(15, 18, 32, 0.65);
+		}
+		.queue-offline-fields textarea {
 			width: 100%;
-		}
-		.content-meta .content-name {
+			min-height: 70px;
+			font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+			font-size: 0.8rem;
+			padding: 10px;
+			border-radius: 10px;
+			border: 1px solid var(--border);
+			background: rgba(0,0,0,0.25);
 			color: var(--text);
-			font-weight: 500;
 		}
-		.content-meta .content-type {
-			color: var(--text-muted);
+		.queue-offline-fields textarea:focus {
+			outline: none;
+			border-color: var(--accent);
+			box-shadow: 0 0 0 3px var(--accent-glow);
 		}
-		.content-meta-secondary {
-			color: var(--text-muted);
-			font-size: 0.7rem;
+		.queue-bid-list {
+			border: 1px solid var(--border);
+			border-radius: 16px;
+			overflow: hidden;
 		}
-		.content-actions {
-			display: flex;
-			gap: 8px;
-			margin-top: 12px;
+		.queue-bid-row {
+			display: grid;
+			grid-template-columns: 2fr 1fr 1fr 1fr;
+			gap: 10px;
+			padding: 12px 16px;
+			border-bottom: 1px solid rgba(255,255,255,0.04);
+			font-size: 0.8rem;
+			align-items: center;
 		}
-		.content-actions a,
-		.content-actions button {
+		.queue-bid-row:last-child {
+			border-bottom: none;
+		}
+		.queue-bid-row strong {
+			font-size: 0.9rem;
+			color: var(--text);
+		}
+		.queue-bid-chip {
 			display: inline-flex;
 			align-items: center;
-			gap: 6px;
-			padding: 8px 14px;
-			background: var(--card-bg-solid);
-			border: 1px solid var(--border);
-			border-radius: 8px;
-			color: var(--text);
-			font-size: 0.75rem;
-			font-weight: 500;
-			text-decoration: none;
-			cursor: pointer;
-			transition: all 0.2s;
-		}
-		.content-actions a:hover,
-		.content-actions button:hover {
-			border-color: var(--accent);
+			gap: 4px;
+			padding: 4px 10px;
+			border-radius: 999px;
+			font-size: 0.65rem;
+			background: rgba(96, 165, 250, 0.12);
 			color: var(--accent);
 		}
-		.content-actions svg {
-			width: 14px;
-			height: 14px;
+		.queue-bid-chip.auto {
+			background: rgba(34, 197, 94, 0.15);
+			color: #34d399;
 		}
-		.content-empty {
+		.queue-bid-chip.failed {
+			background: rgba(248, 113, 113, 0.18);
+			color: #f87171;
+		}
+		.queue-bid-chip.pending {
+			background: rgba(251, 191, 36, 0.18);
+			color: #fbbf24;
+		}
+		.queue-bid-empty {
 			text-align: center;
-			padding: 24px;
+			padding: 20px;
 			color: var(--text-muted);
 			font-size: 0.85rem;
 		}
@@ -2939,123 +2910,206 @@ export function generateProfilePage(
 			color: var(--text);
 		}
 
-		/* ===== OWNER NAMES SECTION ===== */
-		.owner-names-section {
-			background: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(139, 92, 246, 0.08));
-			border: 1px solid rgba(96, 165, 250, 0.25);
-			border-radius: 16px;
-			padding: 20px;
+		/* ===== OWNERSHIP ARENA ===== */
+		.ownership-arena {
+			background: var(--card-bg);
+			border: 1px solid var(--border);
+			border-radius: 20px;
+			padding: 24px;
 			margin-bottom: 20px;
+			display: flex;
+			flex-direction: column;
+			gap: 20px;
 		}
-		.owner-names-header {
+		.dominion-score {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 18px;
+			align-items: center;
+			justify-content: space-between;
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(139, 92, 246, 0.08));
+			border: 1px solid rgba(96, 165, 250, 0.35);
+			border-radius: 16px;
+			padding: 18px;
+		}
+		.dominion-core {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+		.dominion-label {
+			font-size: 0.7rem;
+			text-transform: uppercase;
+			letter-spacing: 0.2em;
+			color: var(--text-muted);
+		}
+		.dominion-value {
+			font-size: 2.5rem;
+			font-weight: 800;
+			letter-spacing: 0.2em;
+		}
+		.dominion-rank {
+			font-size: 0.9rem;
+			color: var(--text-muted);
+		}
+		.dominion-traits {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 10px;
+		}
+		.trait-pill {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 6px 12px;
+			border-radius: 999px;
+			border: 1px solid rgba(255,255,255,0.1);
+			background: rgba(255,255,255,0.03);
+			font-size: 0.8rem;
+		}
+		.trait-pill strong {
+			color: var(--accent);
+		}
+		.agent-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+			gap: 16px;
+		}
+		.agent-card {
+			border: 1px solid rgba(255,255,255,0.08);
+			border-radius: 16px;
+			padding: 16px;
+			background: rgba(10, 12, 25, 0.7);
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+			box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+		}
+		.agent-card[data-agent="chrono"] { border-color: rgba(248, 113, 113, 0.35); }
+		.agent-card[data-agent="atlas"] { border-color: rgba(34, 197, 94, 0.35); }
+		.agent-card[data-agent="walrus"] { border-color: rgba(56, 189, 248, 0.35); }
+		.agent-header {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+		}
+		.agent-role {
+			font-size: 0.75rem;
+			text-transform: uppercase;
+			letter-spacing: 0.2em;
+			color: var(--text-muted);
+		}
+		.agent-meter {
+			height: 9px;
+			border-radius: 999px;
+			background: rgba(255,255,255,0.08);
+			position: relative;
+			overflow: hidden;
+		}
+		.agent-meter-fill {
+			position: absolute;
+			inset: 0;
+			width: 0%;
+			background: linear-gradient(90deg, var(--accent), #a855f7);
+			border-radius: 999px;
+			transition: width 0.35s ease;
+		}
+		.agent-card[data-agent="chrono"] .agent-meter-fill {
+			background: linear-gradient(90deg, #f97316, #f87171);
+		}
+		.agent-card[data-agent="atlas"] .agent-meter-fill {
+			background: linear-gradient(90deg, #34d399, #22d3ee);
+		}
+		.agent-card[data-agent="walrus"] .agent-meter-fill {
+			background: linear-gradient(90deg, #38bdf8, #8b5cf6);
+		}
+		.agent-meta {
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			margin-bottom: 16px;
+			font-size: 0.85rem;
+			color: var(--text-muted);
 		}
-		.owner-names-title {
+		.agent-meta strong {
+			color: #fff;
+		}
+		.realm-sigil-grid {
 			display: flex;
-			align-items: center;
+			flex-wrap: wrap;
 			gap: 10px;
-			font-size: 0.95rem;
-			font-weight: 700;
-			color: var(--text);
 		}
-		.owner-names-title svg {
-			width: 20px;
-			height: 20px;
-			color: #60a5fa;
-		}
-		.owner-names-count {
-			font-size: 0.7rem;
-			padding: 3px 10px;
-			background: rgba(96, 165, 250, 0.2);
-			color: #60a5fa;
+		.sigil-chip {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			padding: 6px 12px;
 			border-radius: 12px;
-			font-weight: 600;
-		}
-		.owner-names-grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-			gap: 10px;
-		}
-		.owner-names-loading {
-			grid-column: 1 / -1;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			gap: 10px;
-			padding: 24px;
-			color: var(--text-muted);
+			border: 1px solid rgba(255,255,255,0.08);
+			background: rgba(255,255,255,0.02);
 			font-size: 0.85rem;
-		}
-		.owner-name-card {
-			display: flex;
-			align-items: center;
-			gap: 10px;
-			padding: 12px;
-			background: rgba(30, 30, 40, 0.6);
-			border: 1px solid var(--border);
-			border-radius: 10px;
 			text-decoration: none;
-			transition: all 0.2s;
-		}
-		.owner-name-card:hover {
-			border-color: var(--accent);
-			background: rgba(96, 165, 250, 0.1);
-		}
-		.owner-name-card.current {
-			border-color: rgba(96, 165, 250, 0.4);
-			background: rgba(96, 165, 250, 0.1);
-		}
-		.owner-name-avatar {
-			width: 32px;
-			height: 32px;
-			border-radius: 8px;
-			background: linear-gradient(135deg, var(--accent), #a78bfa);
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			font-size: 0.85rem;
-			font-weight: 700;
-			color: white;
-			flex-shrink: 0;
-		}
-		.owner-name-text {
-			flex: 1;
-			min-width: 0;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-			font-size: 0.85rem;
-			font-weight: 600;
 			color: var(--text);
 		}
-		.owner-name-text .suffix {
-			background: linear-gradient(135deg, var(--accent), #a78bfa);
-			-webkit-background-clip: text;
-			-webkit-text-fill-color: transparent;
-			background-clip: text;
+		.sigil-chip:hover {
+			border-color: var(--accent);
 		}
-		.owner-names-empty {
-			grid-column: 1 / -1;
-			text-align: center;
-			padding: 24px;
+		.sigil-chip .sigil-rune {
+			width: 22px;
+			height: 22px;
+			border-radius: 50%;
+			background: rgba(96,165,250,0.18);
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 0.75rem;
+			color: var(--accent);
+			font-weight: 700;
+		}
+		.mission-feed {
+			border: 1px solid rgba(255,255,255,0.08);
+			border-radius: 16px;
+			padding: 16px;
+			background: rgba(5, 6, 12, 0.55);
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+		.mission-entry {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			padding: 10px 12px;
+			border-radius: 12px;
+			background: rgba(255,255,255,0.02);
+			border: 1px solid rgba(255,255,255,0.04);
+		}
+		.mission-badge {
+			font-size: 0.7rem;
+			text-transform: uppercase;
+			letter-spacing: 0.2em;
+			color: var(--text-muted);
+		}
+		.mission-text {
+			font-size: 0.95rem;
+		}
+		.mission-hint {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+		}
+		.arena-loading {
+			display: flex;
+			align-items: center;
+			gap: 10px;
 			color: var(--text-muted);
 			font-size: 0.85rem;
 		}
-		.owner-names-more {
-			grid-column: 1 / -1;
-			text-align: center;
-			padding: 10px;
-		}
-		.owner-names-more a {
-			color: var(--accent);
-			font-size: 0.85rem;
-			text-decoration: none;
-		}
-		.owner-names-more a:hover {
-			text-decoration: underline;
+		.arena-loading .loading {
+			width: 18px;
+			height: 18px;
+			border-radius: 50%;
+			border: 2px solid rgba(255,255,255,0.2);
+			border-top-color: var(--accent);
+			animation: spin 0.9s linear infinite;
 		}
 
 		.social-links-section {
@@ -3442,10 +3496,6 @@ ${generatePasskeyWalletStyles()}
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
 						<span>Records</span>
 					</button>
-					<button class="sidebar-tab" data-tab="media">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-						<span>Media</span>
-					</button>
 					<button class="sidebar-tab" data-tab="upload">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
 						<span>Upload</span>
@@ -3638,24 +3688,72 @@ ${generatePasskeyWalletStyles()}
 					: ''
 			}
 
-			<!-- Owner's Other Names -->
-			<div class="owner-names-section">
-				<div class="owner-names-header">
-					<div class="owner-names-title">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-							<circle cx="9" cy="7" r="4"></circle>
-							<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-							<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-						</svg>
-						<span>Owner's Names</span>
-						<span class="owner-names-count" id="overview-names-count">...</span>
+			<!-- Ownership Arena -->
+			<div class="ownership-arena" id="ownership-arena">
+				<div class="dominion-score">
+					<div class="dominion-core">
+						<span class="dominion-label">Realm Score</span>
+						<div class="dominion-value" id="dominion-score-value">000</div>
+						<div class="dominion-rank" id="dominion-rank">Deploying agents…</div>
+					</div>
+					<div class="dominion-traits" id="dominion-traits">
+						<span class="trait-pill">Chrono Shield <strong id="trait-chrono">--%</strong></span>
+						<span class="trait-pill">Name Fleet <strong id="trait-fleet">0 sigils</strong></span>
+						<span class="trait-pill">Walrus Sync <strong id="trait-walrus">Offline</strong></span>
 					</div>
 				</div>
-				<div class="owner-names-grid" id="overview-names-grid">
-					<div class="owner-names-loading">
+
+				<div class="agent-grid" id="agent-grid">
+					<div class="agent-card" data-agent="chrono">
+						<div class="agent-header">
+							<span class="agent-name">Chrono Ranger</span>
+							<span class="agent-role">Timeline Agent</span>
+						</div>
+						<p class="agent-desc">Keeps renewal energy above critical thresholds.</p>
+						<div class="agent-meter"><div class="agent-meter-fill" id="agent-chrono-meter"></div></div>
+						<div class="agent-meta">
+							<span id="agent-chrono-status">Calibrating…</span>
+							<strong id="agent-chrono-score">--%</strong>
+						</div>
+					</div>
+					<div class="agent-card" data-agent="atlas">
+						<div class="agent-header">
+							<span class="agent-name">Atlas Cartographer</span>
+							<span class="agent-role">Sigil Agent</span>
+						</div>
+						<p class="agent-desc">Maps every domain you command across Sui.</p>
+						<div class="agent-meter"><div class="agent-meter-fill" id="agent-atlas-meter"></div></div>
+						<div class="agent-meta">
+							<span id="agent-atlas-status">Scanning…</span>
+							<strong id="agent-atlas-score">0</strong>
+						</div>
+					</div>
+					<div class="agent-card" data-agent="walrus">
+						<div class="agent-header">
+							<span class="agent-name">Walrus Whisperer</span>
+							<span class="agent-role">Site Agent</span>
+						</div>
+						<p class="agent-desc">Binds avatars, manifests, and Walrus sites to your realm.</p>
+						<div class="agent-meter"><div class="agent-meter-fill" id="agent-walrus-meter"></div></div>
+						<div class="agent-meta">
+							<span id="agent-walrus-status">Listening…</span>
+							<strong id="agent-walrus-score">--</strong>
+						</div>
+					</div>
+				</div>
+
+				<div class="realm-sigil-grid" id="realm-sigil-grid">
+					<div class="arena-loading">
 						<span class="loading"></span>
-						<span>Loading names...</span>
+						<span>Agents retrieving sigils…</span>
+					</div>
+				</div>
+
+				<div class="mission-feed" id="mission-feed">
+					<div class="mission-entry">
+						<span class="mission-badge">Agency</span>
+						<span class="mission-text">Synchronizing missions…</span>
+						<span class="mission-hint">Awaiting intel.</span>
 					</div>
 				</div>
 			</div>
@@ -3695,21 +3793,6 @@ ${generatePasskeyWalletStyles()}
 			</table>
 					</div>
 				</div><!-- end tab-records -->
-
-				<div class="tab-panel" id="tab-media">
-					<!-- Content Display Section -->
-					<div class="content-display" id="content-display" style="display: none;">
-			<h3>
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<polygon points="23 7 16 12 23 17 23 7"></polygon>
-					<rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-				</svg>
-				Media Library
-			</h3>
-			<div id="content-items"></div>
-					</div>
-
-				</div><!-- end tab-media -->
 
 				<div class="tab-panel" id="tab-upload">
 					<!-- Upload Section (only visible to NFT owner) -->
@@ -3866,6 +3949,46 @@ ${generatePasskeyWalletStyles()}
 								<div class="queue-bid-stat-value countdown" id="countdown-timer">Calculating...</div>
 							</div>
 						</div>
+						<div id="existing-bid-container"></div>
+						<div class="queue-bid-grid">
+							<div class="queue-bid-form" id="queue-bid-form">
+								<div class="queue-bid-input-group">
+									<label for="bid-amount">Bid Amount (SUI)</label>
+									<input type="number" id="bid-amount" min="0.1" step="0.1" value="1.0" />
+								</div>
+								<div class="queue-bid-input-group">
+									<label>Execution Time</label>
+									<div class="queue-bid-existing-value">Auto-exec at grace release (${new Date(
+										expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000,
+									).toLocaleString()})</div>
+								</div>
+								<label class="queue-bid-existing-label" style="display:flex;align-items:center;gap:8px;">
+									<input type="checkbox" id="bid-offline-toggle" />
+									<span>Attach offline-signed registration for auto relay</span>
+								</label>
+								<div class="queue-offline-fields" id="queue-offline-fields">
+									<div class="queue-bid-input-group">
+										<label for="bid-tx-bytes">Transaction Bytes (base64)</label>
+										<textarea id="bid-tx-bytes" placeholder="AAACAA..."></textarea>
+									</div>
+									<div class="queue-bid-input-group">
+										<label for="bid-tx-signatures">Signatures (comma or newline separated)</label>
+										<textarea id="bid-tx-signatures" placeholder="AAQw..."></textarea>
+									</div>
+									<p class="queue-bid-note">We encrypt attachments and auto-relay them via the worker the moment the name is free.</p>
+								</div>
+								<button class="queue-bid-btn" id="queue-bid-btn">
+									Queue Bid with Wallet
+								</button>
+								<div class="queue-bid-status hidden" id="queue-bid-status"></div>
+							</div>
+						</div>
+						<div class="queue-bid-note">
+							The connected wallet address is used as the bidder identity. Offline attachments are optional but unlock automatic submission.
+						</div>
+						<div class="queue-bid-list" id="queue-bid-list">
+							<div class="queue-bid-empty">No queued bids yet.</div>
+						</div>
 					</div>
 					`
 							: ''
@@ -4004,6 +4127,8 @@ ${generatePasskeyWalletStyles()}
 		const EXPIRATION_MS = ${expiresMs || 0};
 		const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 		const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
+		const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
+		const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
 
 		let connectedWallet = null;
 		let connectedAccount = null;
@@ -5283,6 +5408,11 @@ ${generatePasskeyWalletStyles()}
 			const queueBidStatus = document.getElementById('queue-bid-status');
 			const existingBidContainer = document.getElementById('existing-bid-container');
 			const queueBidForm = document.getElementById('queue-bid-form');
+			const queueOfflineToggle = document.getElementById('bid-offline-toggle');
+			const queueOfflineFields = document.getElementById('queue-offline-fields');
+			const bidTxBytesInput = document.getElementById('bid-tx-bytes');
+			const bidTxSignaturesInput = document.getElementById('bid-tx-signatures');
+			const queueBidList = document.getElementById('queue-bid-list');
 
 			// Countdown timer
 			function updateCountdown() {
@@ -5312,6 +5442,102 @@ ${generatePasskeyWalletStyles()}
 			updateCountdown();
 			setInterval(updateCountdown, 1000);
 
+			if (queueOfflineToggle && queueOfflineFields) {
+				queueOfflineToggle.addEventListener('change', () => {
+					queueOfflineFields.style.display = queueOfflineToggle.checked ? 'flex' : 'none';
+				});
+			}
+
+			const shortAddr = (value) => {
+				const str = String(value || '');
+				return str.length > 12 ? str.slice(0, 6) + '…' + str.slice(-4) : str;
+			};
+
+			const shortDigest = (value) => {
+				const str = String(value || '');
+				return str.length > 12 ? str.slice(0, 6) + '…' + str.slice(-4) : str;
+			};
+
+			function describeBidStatus(bid) {
+				const status = (bid?.status || (bid?.autoRelay ? 'auto' : 'queued')).toLowerCase();
+				switch (status) {
+					case 'submitted':
+						return { label: 'Submitted', className: '' };
+					case 'submitting':
+						return { label: 'Relaying', className: 'pending' };
+					case 'failed':
+						return { label: 'Retry soon', className: 'failed' };
+					case 'auto':
+						return { label: 'Auto-ready', className: 'auto' };
+					default:
+						return { label: bid?.autoRelay ? 'Auto-ready' : 'Queued', className: bid?.autoRelay ? 'auto' : '' };
+				}
+			}
+
+			function formatExecuteTime(value) {
+				if (!value || Number.isNaN(Number(value))) return '—';
+				try {
+					return new Date(Number(value)).toLocaleString();
+				} catch {
+					return '—';
+				}
+			}
+
+			function renderQueueBoard(bids = []) {
+				if (!queueBidList) return;
+				if (!Array.isArray(bids) || bids.length === 0) {
+					queueBidList.innerHTML = '<div class="queue-bid-empty">No queued bids yet.</div>';
+					return;
+				}
+
+				const rows = bids.slice(0, 6).map((bid) => {
+					const statusInfo = describeBidStatus(bid);
+					const chips = [];
+					if (bid.autoRelay) {
+						chips.push('<span class="queue-bid-chip auto">Auto relay</span>');
+					}
+					if (statusInfo.label) {
+						const cls = statusInfo.className ? ' ' + statusInfo.className : '';
+						chips.push('<span class="queue-bid-chip' + cls + '">' + statusInfo.label + '</span>');
+					}
+					if (bid.resultDigest) {
+						chips.push('<span class="queue-bid-chip">' + shortDigest(bid.resultDigest) + '</span>');
+					}
+					return `
+						<div class="queue-bid-row">
+							<div><strong>${shortAddr(bid.bidder)}</strong></div>
+							<div>${Number(bid.amount || 0).toFixed(2)} SUI</div>
+							<div>${formatExecuteTime(bid.executeAt)}</div>
+							<div>${chips.join(' ')}</div>
+						</div>
+					`;
+				});
+
+				queueBidList.innerHTML = rows.join('');
+			}
+
+			async function loadQueueBoard() {
+				if (!queueBidList) return;
+				try {
+					const res = await fetch(`/api/bids/${NAME}`);
+					if (!res.ok) throw new Error('Queue fetch failed');
+					const data = await res.json();
+					renderQueueBoard(Array.isArray(data.bids) ? data.bids : []);
+				} catch (error) {
+					queueBidList.innerHTML = '<div class="queue-bid-empty">Unable to load bids right now.</div>';
+				}
+			}
+
+			function updateQueueButtonState() {
+				if (!queueBidBtn) return;
+				if (connectedAddress) {
+					queueBidBtn.textContent = 'Queue Bid';
+				} else {
+					queueBidBtn.textContent = 'Connect Wallet';
+				}
+				queueBidBtn.disabled = false;
+			}
+
 			// Show bid status message
 			function showBidStatus(msg, type) {
 				queueBidStatus.innerHTML = msg;
@@ -5324,7 +5550,7 @@ ${generatePasskeyWalletStyles()}
 
 			// Load existing bid for this name
 			async function loadExistingBid() {
-				if (!connectedAddress) return;
+				if (!connectedAddress || !existingBidContainer) return;
 
 				try {
 					const res = await fetch(\`/api/bids/\${NAME}?bidder=\${connectedAddress}\`);
@@ -5333,11 +5559,19 @@ ${generatePasskeyWalletStyles()}
 						if (data.bid) {
 							renderExistingBid(data.bid);
 						} else {
-							existingBidContainer.innerHTML = '';
+							clearExistingBid();
 						}
 					}
 				} catch (e) {
 					console.log('Failed to load existing bid:', e);
+				}
+			}
+
+			function clearExistingBid() {
+				if (!existingBidContainer) return;
+				existingBidContainer.innerHTML = '';
+				if (queueBidForm) {
+					queueBidForm.style.display = 'flex';
 				}
 			}
 
@@ -5705,10 +5939,8 @@ ${generatePasskeyWalletStyles()}
 			searchBtn.addEventListener('click', () => openSearch(''));
 		}
 
-		// ===== UPLOAD & CONTENT FUNCTIONALITY =====
+		// ===== UPLOAD FUNCTIONALITY =====
 		const uploadSection = document.getElementById('upload-section');
-		const contentDisplay = document.getElementById('content-display');
-		const contentItems = document.getElementById('content-items');
 		const uploadDropzone = document.getElementById('upload-dropzone');
 		const fileInput = document.getElementById('file-input');
 		const recordKeySelect = document.getElementById('record-key');
@@ -5719,144 +5951,19 @@ ${generatePasskeyWalletStyles()}
 		const uploadFileName = document.getElementById('upload-file-name');
 		const uploadFileType = document.getElementById('upload-file-type');
 		const uploadFileSize = document.getElementById('upload-file-size');
-
-		// Use proxy endpoint to avoid CORS issues
 		const UPLOAD_ENDPOINT = '/api/upload';
-		const MANIFEST_RECORD_KEY = 'content_manifest';
 
-		// Track current content
-		let currentAvatarBlobId = ${serializeJson(record.avatar || '')};
-		let currentContentHash = ${serializeJson(record.contentHash || '')};
-		let currentManifestBlobId = ${serializeJson(record.records?.content_manifest || '')};
-		let currentManifest = { version: 1, files: [] };
-
-		// Show upload section when user has edit permission
 		function updateUploadVisibility() {
 			if (canEdit && uploadSection) {
 				uploadSection.style.display = 'block';
 			}
 		}
 
-		// Extend the existing checkEditPermission to also show upload section
 		const originalCheckEditPermission = checkEditPermission;
 		checkEditPermission = async function() {
 			await originalCheckEditPermission();
 			updateUploadVisibility();
 		};
-
-		// Load existing content from records
-		async function loadExistingContent() {
-			currentManifest = await fetchManifest(currentManifestBlobId);
-			renderContent(currentAvatarBlobId, currentContentHash, currentManifest);
-		}
-
-		// Render content display
-		function renderContent(avatarBlobId, contentHashBlobId, manifest) {
-			currentAvatarBlobId = avatarBlobId || currentAvatarBlobId;
-			currentContentHash = contentHashBlobId || currentContentHash;
-
-			const items = [];
-			const seen = new Set();
-
-			// Avatar (stored directly in SuiNS)
-			if (avatarBlobId && avatarBlobId.length > 20) {
-				seen.add(avatarBlobId);
-				items.push({
-					blobId: avatarBlobId,
-					type: 'image',
-					name: 'Avatar',
-					isAvatar: true
-				});
-			}
-
-			// Content from contentHash record
-			if (contentHashBlobId && contentHashBlobId.length > 20) {
-				seen.add(contentHashBlobId);
-				items.push({
-					blobId: contentHashBlobId,
-					type: 'unknown',
-					name: 'Latest Content'
-				});
-			}
-
-			// Content manifest items
-			const manifestItems = Array.isArray(manifest?.files) ? manifest.files : [];
-			for (const item of manifestItems) {
-				if (!item?.blobId || seen.has(item.blobId)) continue;
-				seen.add(item.blobId);
-				items.push({
-					blobId: item.blobId,
-					type: item.type || 'application/octet-stream',
-					name: item.name || item.title || 'Untitled',
-					size: item.size,
-					uploadedAt: item.uploadedAt,
-					title: item.title,
-					artist: item.artist,
-				});
-			}
-
-			if (items.length === 0) {
-				contentDisplay.style.display = 'none';
-				return;
-			}
-
-			contentDisplay.style.display = 'block';
-			contentItems.innerHTML = items.map(item => renderContentItem(item)).join('');
-		}
-
-		function renderContentItem(item) {
-			const url = '/walrus/' + item.blobId;
-			const type = item.type || 'application/octet-stream';
-			const isImage = type.startsWith('image/') || item.isAvatar;
-			const isVideo = type.startsWith('video/');
-			const isAudio = type.startsWith('audio/');
-
-			let mediaHtml = '';
-			if (isImage) {
-				mediaHtml = \`<img src="\${url}" class="content-image" alt="\${item.name || 'Image'}">\`;
-			} else if (isVideo) {
-				mediaHtml = \`<video controls class="content-video"><source src="\${url}" type="\${type}"></video>\`;
-			} else if (isAudio) {
-				mediaHtml = \`<audio controls class="content-audio" src="\${url}"></audio>\`;
-			}
-
-
-			const metaParts = [];
-			if (item.isAvatar) {
-				metaParts.push('Avatar');
-			} else {
-				metaParts.push(type.split('/')[1] || 'file');
-			}
-			if (item.size) metaParts.push(formatBytes(item.size));
-			if (item.uploadedAt) {
-				const dateLabel = new Date(item.uploadedAt).toLocaleString();
-				metaParts.push(dateLabel);
-			}
-
-			return \`
-				<div class="content-item">
-					\${mediaHtml}
-					<div class="content-meta">
-						<div class="content-meta-main">
-							<span class="content-name">\${item.name || 'Untitled'}</span>
-							<span class="content-type">\${metaParts[0]}</span>
-						</div>
-						\${metaParts.length > 1 ? \`<div class="content-meta-secondary">\${metaParts.slice(1).join(' · ')}</div>\` : ''}
-					</div>
-					<div class="content-actions">
-						<a href="\${url}" target="_blank" rel="noopener noreferrer">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-							Open
-						</a>
-						\${playerLink}
-						<a href="\${url}" download="\${item.name || 'file'}">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-							Download
-						</a>
-					</div>
-				</div>
-			\`;
-		}
 
 		function formatBytes(bytes) {
 			if (!Number.isFinite(bytes) || bytes <= 0) return '-';
@@ -5879,53 +5986,6 @@ ${generatePasskeyWalletStyles()}
 			uploadFileSize.textContent = formatBytes(file.size);
 		}
 
-		async function fetchManifest(blobId) {
-			if (!blobId) return { version: 1, files: [] };
-
-			try {
-				const response = await fetch('/walrus/' + blobId);
-				if (!response.ok) return { version: 1, files: [] };
-				const manifest = await response.json();
-				if (!manifest || manifest.version !== 1 || !Array.isArray(manifest.files)) {
-					return { version: 1, files: [] };
-				}
-				return manifest;
-			} catch (error) {
-				console.warn('Failed to load manifest:', error);
-				return { version: 1, files: [] };
-			}
-		}
-
-		async function updateManifestWithFile(file, blobId) {
-			const manifest = await fetchManifest(currentManifestBlobId);
-			const newItem = {
-				blobId,
-				type: file.type || 'application/octet-stream',
-				name: file.name || 'Untitled',
-				size: file.size || 0,
-				uploadedAt: new Date().toISOString(),
-			};
-
-			const existing = Array.isArray(manifest.files) ? manifest.files : [];
-			const filtered = existing.filter((item) => item?.blobId && item.blobId !== blobId);
-			const updatedManifest = {
-				version: 1,
-				files: [newItem, ...filtered],
-			};
-
-			const manifestFile = new File(
-				[JSON.stringify(updatedManifest)],
-				'content-manifest.json',
-				{ type: 'application/json' },
-			);
-
-			const manifestBlobId = await uploadToWalrus(manifestFile);
-			currentManifestBlobId = manifestBlobId;
-			currentManifest = updatedManifest;
-			return manifestBlobId;
-		}
-
-		// Upload file to Walrus via proxy
 		async function uploadToWalrus(file) {
 			const response = await fetch(UPLOAD_ENDPOINT, {
 				method: 'PUT',
@@ -5951,15 +6011,13 @@ ${generatePasskeyWalletStyles()}
 				throw new Error(message || 'Upload failed');
 			}
 
-			const dataObj = typeof data === 'object' && data !== null ? data : {};
-			const blobId = dataObj.newlyCreated?.blobObject?.blobId || dataObj.alreadyCertified?.blobId;
+			const blobId = data?.newlyCreated?.blobObject?.blobId || data?.alreadyCertified?.blobId;
 			if (!blobId) {
 				throw new Error('Walrus did not return a blob ID');
 			}
 			return blobId;
 		}
 
-		// Set one or more SuiNS text records in a single transaction
 		async function setSuiNSRecords(entries) {
 			if (!connectedWallet || !connectedAccount) {
 				throw new Error('Wallet not connected');
@@ -5984,7 +6042,6 @@ ${generatePasskeyWalletStyles()}
 			const tx = new Transaction();
 			const suinsTx = new SuinsTransaction(suinsClient, tx);
 
-			// Use setUserData for text records
 			for (const entry of entries) {
 				suinsTx.setUserData({
 					nft: nftId,
@@ -6039,54 +6096,31 @@ ${generatePasskeyWalletStyles()}
 			return result;
 		}
 
-		// Handle file upload
 		async function handleFileUpload(file) {
+			if (!recordKeySelect) return;
 			const recordKey = recordKeySelect.value;
 
 			try {
 				updateFileMeta(file);
-
-				// Show progress
 				uploadProgress.style.display = 'block';
 				progressFill.style.width = '10%';
 				progressStatus.innerHTML = '<span class="loading"></span> Uploading to Walrus...';
 				hideStatus(uploadStatusEl);
 
-				// Upload to Walrus
 				const blobId = await uploadToWalrus(file);
-				progressFill.style.width = '45%';
+				progressFill.style.width = '60%';
+				progressStatus.innerHTML = '<span class="loading"></span> Updating SuiNS records...';
 
-				const recordUpdates = [{ key: recordKey, value: blobId }];
-
-				if (recordKey !== 'avatar') {
-					progressStatus.innerHTML = '<span class="loading"></span> Updating media index...';
-					const manifestBlobId = await updateManifestWithFile(file, blobId);
-					recordUpdates.push({ key: MANIFEST_RECORD_KEY, value: manifestBlobId });
-					progressFill.style.width = '70%';
-				}
-
-				progressStatus.innerHTML = '<span class="loading"></span> Saving to SuiNS record...';
-				await setSuiNSRecords(recordUpdates);
+				await setSuiNSRecords([{ key: recordKey, value: blobId }]);
 
 				progressFill.style.width = '100%';
-				progressStatus.textContent = 'Done!';
-
+				progressStatus.textContent = 'Saved to chain';
 				showStatus(uploadStatusEl, 'Content uploaded and saved!', 'success');
 
-				// Refresh content display with the new blob ID
-				if (recordKey === 'avatar') {
-					renderContent(blobId, currentContentHash, currentManifest);
-				} else {
-					currentContentHash = blobId;
-					renderContent(currentAvatarBlobId, blobId, currentManifest);
-				}
-
-				// Hide progress after a moment
 				setTimeout(() => {
 					uploadProgress.style.display = 'none';
 					progressFill.style.width = '0%';
-				}, 2000);
-
+				}, 1800);
 			} catch (error) {
 				console.error('Upload error:', error);
 				uploadProgress.style.display = 'none';
@@ -6094,9 +6128,8 @@ ${generatePasskeyWalletStyles()}
 			}
 		}
 
-		// Dropzone event handlers
 		if (uploadDropzone) {
-			uploadDropzone.addEventListener('click', () => fileInput.click());
+			uploadDropzone.addEventListener('click', () => fileInput?.click());
 
 			uploadDropzone.addEventListener('dragover', (e) => {
 				e.preventDefault();
@@ -6114,15 +6147,15 @@ ${generatePasskeyWalletStyles()}
 				if (file) handleFileUpload(file);
 			});
 
-			fileInput.addEventListener('change', (e) => {
-				const file = e.target.files[0];
-				if (file) handleFileUpload(file);
-				fileInput.value = '';
-			});
+			if (fileInput) {
+				fileInput.addEventListener('change', (e) => {
+					const file = e.target.files[0];
+					if (file) handleFileUpload(file);
+					fileInput.value = '';
+				});
+			}
 		}
 
-		// Initialize content display
-		loadExistingContent();
 		updateFileMeta(null);
 
 		// ===== MESSAGING FUNCTIONALITY =====
@@ -6514,8 +6547,26 @@ ${generatePasskeyWalletStyles()}
 		const countdownHours = document.getElementById('countdown-hours');
 		const countdownMins = document.getElementById('countdown-mins');
 		const countdownSecs = document.getElementById('countdown-secs');
-		const overviewNamesGrid = document.getElementById('overview-names-grid');
-		const overviewNamesCount = document.getElementById('overview-names-count');
+		const dominionScoreValue = document.getElementById('dominion-score-value');
+		const dominionRankEl = document.getElementById('dominion-rank');
+		const dominionTraitsEl = document.getElementById('dominion-traits');
+		const sigilGrid = document.getElementById('realm-sigil-grid');
+		const missionFeed = document.getElementById('mission-feed');
+		const agentMeters = {
+			chrono: document.getElementById('agent-chrono-meter'),
+			atlas: document.getElementById('agent-atlas-meter'),
+			walrus: document.getElementById('agent-walrus-meter'),
+		};
+		const agentStatuses = {
+			chrono: document.getElementById('agent-chrono-status'),
+			atlas: document.getElementById('agent-atlas-status'),
+			walrus: document.getElementById('agent-walrus-status'),
+		};
+		const agentScores = {
+			chrono: document.getElementById('agent-chrono-score'),
+			atlas: document.getElementById('agent-atlas-score'),
+			walrus: document.getElementById('agent-walrus-score'),
+		};
 
 		// Calculate total registration period (assume 1 year = 365 days for progress)
 		const REGISTRATION_PERIOD = 365 * 24 * 60 * 60 * 1000;
@@ -6616,14 +6667,141 @@ ${generatePasskeyWalletStyles()}
 			setInterval(updateCountdownHero, 1000); // Update every second for smooth animation
 		}
 
-		// Load owner's names for overview section
-		async function loadOverviewNames() {
-			if (!overviewNamesGrid) return;
+		function computeChronoPercent() {
+			if (!EXPIRATION_MS) return 35;
+			const diff = Math.max(0, EXPIRATION_MS - Date.now());
+			return Math.min(100, Math.round((diff / REGISTRATION_PERIOD) * 100));
+		}
+
+		function deriveRealmRank(score) {
+			if (score >= 900) return 'Mythic Custodian';
+			if (score >= 780) return 'Prime Steward';
+			if (score >= 640) return 'Ascendant Navigator';
+			if (score >= 500) return 'Horizon Ranger';
+			return 'Initiate';
+		}
+
+		function setAgentIntel(agent, percent, status, label) {
+			const meter = agentMeters[agent];
+			if (meter) {
+				meter.style.width = Math.min(100, Math.max(0, percent)) + '%';
+			}
+			if (agentStatuses[agent]) {
+				agentStatuses[agent].textContent = status;
+			}
+			if (agentScores[agent]) {
+				agentScores[agent].textContent = label;
+			}
+		}
+
+		function updateSigilGrid(names, hasMore) {
+			if (!sigilGrid) return;
+			if (!names.length) {
+				sigilGrid.innerHTML = '<div class="mission-entry"><span class="mission-badge">Atlas</span><span class="mission-text">No sigils mapped yet.</span><span class="mission-hint">Mint or import a SuiNS name to awaken the fleet.</span></div>';
+				return;
+			}
+			const chips = names.slice(0, 8).map(name => {
+				const cleaned = name.replace(/\\.sui$/i, '');
+				const initial = cleaned.charAt(0).toUpperCase();
+				return \`
+					<a href="https://\${encodeURIComponent(cleaned)}.sui.ski" class="sigil-chip" target="_blank" rel="noopener noreferrer">
+						<span class="sigil-rune">\${escapeHtmlJs(initial)}</span>
+						<span>\${escapeHtmlJs(cleaned)}<span class="suffix">.sui</span></span>
+					</a>
+				\`;
+			}).join('');
+			const moreChip = hasMore
+				? '<div class="sigil-chip" style="opacity:0.7;">+ more sigils</div>'
+				: '';
+			sigilGrid.innerHTML = chips + moreChip;
+		}
+
+		function updateMissionFeed(missions) {
+			if (!missionFeed) return;
+			if (!missions.length) {
+				missionFeed.innerHTML = '<div class="mission-entry"><span class="mission-badge">Agency</span><span class="mission-text">Agents are idle.</span><span class="mission-hint">Queue a registration bid or bind a Walrus site to issue a new mission.</span></div>';
+				return;
+			}
+			missionFeed.innerHTML = missions.map((mission) => \`
+				<div class="mission-entry">
+					<span class="mission-badge">\${escapeHtmlJs(mission.agent)}</span>
+					<span class="mission-text">\${escapeHtmlJs(mission.text)}</span>
+					<span class="mission-hint">\${escapeHtmlJs(mission.hint)}</span>
+				</div>
+			\`).join('');
+		}
+
+		function updateOwnershipArena(names, hasMore) {
+			if (!dominionScoreValue) return;
+			const chronoPercent = computeChronoPercent();
+			const walrusBoost = HAS_WALRUS_SITE ? 95 : HAS_CONTENT_HASH ? 60 : 25;
+			const namesCount = names.length;
+			const realmScore = Math.max(150, Math.min(999, Math.round(320 + namesCount * 42 + chronoPercent * 0.8 + walrusBoost)));
+			dominionScoreValue.textContent = realmScore.toString().padStart(3, '0');
+			if (dominionRankEl) dominionRankEl.textContent = deriveRealmRank(realmScore);
+			if (dominionTraitsEl) {
+				const fleetLabel = namesCount ? \`\${namesCount}\${hasMore ? '+' : ''} sigils\` : 'none yet';
+				dominionTraitsEl.innerHTML = \`
+					<span class="trait-pill">Chrono Shield <strong>\${chronoPercent}%</strong></span>
+					<span class="trait-pill">Name Fleet <strong>\${fleetLabel}</strong></span>
+					<span class="trait-pill">Walrus Sync <strong>\${HAS_WALRUS_SITE ? 'Linked' : HAS_CONTENT_HASH ? 'Manifest' : 'Dormant'}</strong></span>
+				\`;
+			}
+
+			setAgentIntel(
+				'chrono',
+				chronoPercent,
+				chronoPercent > 70 ? 'Timeline stable' : chronoPercent > 40 ? 'Monitor renewal' : 'Renewal critical',
+				chronoPercent + '%',
+			);
+
+			const atlasPercent = Math.min(100, namesCount * 18 + (hasMore ? 10 : 0));
+			setAgentIntel(
+				'atlas',
+				atlasPercent,
+				namesCount > 0 ? \`\${namesCount} sigils mapped\` : 'Awaiting sigils',
+				namesCount ? String(namesCount) : '0',
+			);
+
+			const walrusPercent = Math.min(100, walrusBoost + (HAS_CONTENT_HASH ? 10 : 0));
+			setAgentIntel(
+				'walrus',
+				walrusPercent,
+				HAS_WALRUS_SITE ? 'Walrus site bound' : HAS_CONTENT_HASH ? 'Manifest online' : 'Deploy Walrus site',
+				HAS_WALRUS_SITE ? 'Linked' : HAS_CONTENT_HASH ? 'Manifest' : 'Idle',
+			);
+
+			updateSigilGrid(names, hasMore);
+
+			const missions = [];
+			if (EXPIRATION_MS) {
+				const renewDate = new Date(EXPIRATION_MS).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+				missions.push({
+					agent: 'Chrono Ranger',
+					text: chronoPercent > 60 ? 'Renewal buffer is healthy.' : 'Renewal buffer thinning.',
+					hint: chronoPercent > 60 ? \`Target window: \${renewDate}\` : \`Renew before \${renewDate}\`,
+				});
+			}
+			const flagship = names[0]?.replace(/\\.sui$/i, '') || NAME;
+			missions.push({
+				agent: 'Atlas Cartographer',
+				text: namesCount > 0 ? \`\${flagship}.sui anchors the fleet.\` : 'Atlas requests a new sigil.',
+				hint: namesCount > 0 ? 'Share your flagship link to boost discovery.' : 'Register or import a name to unlock fleet bonuses.',
+			});
+			missions.push({
+				agent: 'Walrus Whisperer',
+				text: HAS_WALRUS_SITE ? 'Walrus enclave synced.' : HAS_CONTENT_HASH ? 'Manifest detected, binding incomplete.' : 'No Walrus enclave linked.',
+				hint: HAS_WALRUS_SITE ? 'Keep content fresh to maintain +Walrus bonus.' : 'Upload via /upload to awaken Walrus agent.',
+			});
+			updateMissionFeed(missions);
+		}
+
+		async function loadOwnershipIntel() {
+			if (!dominionScoreValue) return;
 
 			try {
 				const suiClient = new SuiClient({ url: RPC_URL });
 
-				// First, get the NFT owner address if we don't have it yet
 				let ownerAddress = nftOwnerAddress;
 				if (!ownerAddress && NFT_ID) {
 					const obj = await suiClient.getObject({
@@ -6642,7 +6820,6 @@ ${generatePasskeyWalletStyles()}
 					}
 				}
 
-				// Fallback to target address if we can't get owner
 				const addressToQuery = ownerAddress || CURRENT_ADDRESS;
 
 				const response = await suiClient.resolveNameServiceNames({
@@ -6650,46 +6827,24 @@ ${generatePasskeyWalletStyles()}
 					limit: 12
 				});
 
-				if (!response.data || response.data.length === 0) {
-					overviewNamesGrid.innerHTML = '<div class="owner-names-empty">No names found for this owner</div>';
-					if (overviewNamesCount) overviewNamesCount.textContent = '0';
-					return;
-				}
-
-				const names = response.data;
-				const hasMore = response.hasNextPage;
-				const totalCount = hasMore ? names.length + '+' : String(names.length);
-
-				if (overviewNamesCount) overviewNamesCount.textContent = totalCount;
-
-				let html = names.map(name => {
-					const cleanedName = name.replace(/\\.sui$/i, '');
-					const isCurrentName = cleanedName.toLowerCase() === NAME.toLowerCase();
-					const initial = cleanedName.charAt(0).toUpperCase();
-					const profileUrl = 'https://' + cleanedName + '.sui.ski';
-
-					return \`
-						<a href="\${profileUrl}" class="owner-name-card\${isCurrentName ? ' current' : ''}" title="\${cleanedName}.sui">
-							<div class="owner-name-avatar">\${initial}</div>
-							<div class="owner-name-text">\${escapeHtmlJs(cleanedName)}<span class="suffix">.sui</span></div>
-						</a>
-					\`;
-				}).join('');
-
-				if (hasMore) {
-					html += '<div class="owner-names-more"><a href="#" onclick="switchTab(\\'names\\'); return false;">View all names →</a></div>';
-				}
-
-				overviewNamesGrid.innerHTML = html;
-
+				const names = Array.isArray(response.data) ? response.data : [];
+				updateOwnershipArena(names, Boolean(response.hasNextPage));
 			} catch (error) {
-				console.error('Failed to load overview names:', error);
-				overviewNamesGrid.innerHTML = '<div class="owner-names-empty">Failed to load names</div>';
+				console.error('Failed to load ownership intel:', error);
+				if (sigilGrid) {
+					sigilGrid.innerHTML = '<div class="arena-loading"><span class="loading"></span><span>Agents lost contact—refresh soon.</span></div>';
+				}
+				updateMissionFeed([
+					{
+						agent: 'Agency',
+						text: 'Unable to reach Sui RPC.',
+						hint: 'Retry shortly to resync your realm.',
+					},
+				]);
 			}
 		}
 
-		// Load overview names immediately
-		loadOverviewNames();
+		loadOwnershipIntel();
 
 		// ========== SOCIAL LINKS FUNCTIONALITY (HIDDEN) ==========
 		const CURRENT_X_USERNAME = ${serializeJson(getXUsername(record) || '')};
