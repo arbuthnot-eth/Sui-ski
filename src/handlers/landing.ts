@@ -48,11 +48,14 @@ export async function handleLandingPage(request: Request, env: Env): Promise<Res
 	// API endpoint for SUI price
 	if (url.pathname === '/api/sui-price') {
 		try {
-			const price = await getSUIPrice()
+			const price = await getSUIPrice(env)
 			return jsonResponse({ price })
 		} catch (error) {
+			// Even on error, return a default price to prevent UI breakage
 			const message = error instanceof Error ? error.message : 'Failed to fetch SUI price'
-			return jsonResponse({ error: message }, 500)
+			console.error('SUI price API error:', message)
+			// Return default price instead of error to keep UI functional
+			return jsonResponse({ price: 1.0, error: message, cached: true })
 		}
 	}
 
@@ -87,10 +90,26 @@ async function getSuiNSPricing(env: Env): Promise<Record<string, number>> {
 }
 
 /**
- * Fetch SUI price from CoinGecko API
+ * Fetch SUI price from CoinGecko API with caching and rate limit handling
  */
-export async function getSUIPrice(): Promise<number> {
+export async function getSUIPrice(env?: { CACHE?: KVNamespace }): Promise<number> {
+	const CACHE_KEY = 'sui_price_cache'
+	const CACHE_TTL = 60 // Cache for 60 seconds
+	const DEFAULT_PRICE = 1.0 // Fallback price
+	
 	try {
+		// Check cache first
+		if (env?.CACHE) {
+			const cached = await env.CACHE.get(CACHE_KEY)
+			if (cached) {
+				const cachedData = JSON.parse(cached) as { price: number; timestamp: number }
+				const age = Date.now() - cachedData.timestamp
+				if (age < CACHE_TTL * 1000) {
+					return cachedData.price
+				}
+			}
+		}
+
 		const controller = new AbortController()
 		const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
@@ -108,6 +127,19 @@ export async function getSUIPrice(): Promise<number> {
 			clearTimeout(timeoutId)
 
 			if (!response.ok) {
+				// Handle rate limiting (429) gracefully
+				if (response.status === 429) {
+					console.warn('CoinGecko API rate limited, using cached or default price')
+					// Try to get cached value even if expired
+					if (env?.CACHE) {
+						const staleCache = await env.CACHE.get(CACHE_KEY)
+						if (staleCache) {
+							const staleData = JSON.parse(staleCache) as { price: number }
+							return staleData.price
+						}
+					}
+					return DEFAULT_PRICE
+				}
 				throw new Error(`CoinGecko API error: ${response.status} ${response.statusText}`)
 			}
 
@@ -115,17 +147,48 @@ export async function getSUIPrice(): Promise<number> {
 			if (!data.sui?.usd || typeof data.sui.usd !== 'number' || !Number.isFinite(data.sui.usd)) {
 				throw new Error('Invalid price data from CoinGecko')
 			}
-			return data.sui.usd
+			
+			const price = data.sui.usd
+			
+			// Cache the result
+			if (env?.CACHE) {
+				await env.CACHE.put(
+					CACHE_KEY,
+					JSON.stringify({ price, timestamp: Date.now() }),
+					{ expirationTtl: CACHE_TTL * 2 }, // Cache for 2x TTL to handle rate limits
+				)
+			}
+			
+			return price
 		} catch (fetchError) {
 			clearTimeout(timeoutId)
 			if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-				throw new Error('Request timeout: CoinGecko API did not respond in time')
+				console.warn('CoinGecko API timeout, using cached or default price')
+				// Try cached value on timeout
+				if (env?.CACHE) {
+					const cached = await env.CACHE.get(CACHE_KEY)
+					if (cached) {
+						const cachedData = JSON.parse(cached) as { price: number }
+						return cachedData.price
+					}
+				}
+				return DEFAULT_PRICE
+			}
+			// For other errors, try cache before throwing
+			if (env?.CACHE) {
+				const cached = await env.CACHE.get(CACHE_KEY)
+				if (cached) {
+					const cachedData = JSON.parse(cached) as { price: number }
+					console.warn('Using cached price due to error:', fetchError.message)
+					return cachedData.price
+				}
 			}
 			throw fetchError
 		}
 	} catch (error) {
 		console.error('Failed to fetch SUI price:', error)
-		throw error
+		// Return default price instead of throwing to prevent UI errors
+		return DEFAULT_PRICE
 	}
 }
 

@@ -4948,23 +4948,76 @@ export function generateProfilePage(
 			quickBountyTotal.textContent = totalAmount.toFixed(2) + ' SUI';
 		}
 
-		// Create a new bid
+		// Create a new bid with one-click SUI transaction
 		async function createBid() {
 			if (!connectedAddress) {
-				showStatus(createBidStatus, 'Please connect your wallet first', 'error');
+				showBidBountyStatus(createBidStatus, 'Please connect your wallet first', 'error');
 				return;
 			}
 
 			const amount = parseFloat(bidAmountInput?.value) || 0;
 			if (amount <= 0) {
-				showStatus(createBidStatus, 'Please enter a valid bid amount', 'error');
+				showBidBountyStatus(createBidStatus, 'Please enter a valid bid amount', 'error');
 				return;
 			}
 
 			if (createBidBtn) createBidBtn.disabled = true;
-			showStatus(createBidStatus, 'Creating bid...', 'loading');
+			showBidBountyStatus(createBidStatus, 'Preparing transaction...', 'loading');
 
 			try {
+				// Build transaction directly using SUI SDK (browser ESM imports)
+				const { Transaction } = await import('https://esm.sh/@mysten/sui@1.45.2/transactions');
+				const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.45.2/client');
+				
+				const suiClient = new SuiClient({ url: RPC_URL });
+				const tx = new Transaction();
+				
+				// Get gas coins
+				const coins = await suiClient.getCoins({
+					owner: connectedAddress,
+					coinType: '0x2::sui::SUI',
+				});
+				
+				if (coins.data.length === 0) {
+					throw new Error('No SUI coins found in wallet');
+				}
+				
+				const amountMist = BigInt(Math.floor(amount * 1_000_000_000));
+				
+				// Merge coins if needed
+				const primaryCoin = coins.data[0].coinObjectId;
+				if (coins.data.length > 1) {
+					tx.mergeCoins(tx.object(primaryCoin), coins.data.slice(1).map(c => tx.object(c.coinObjectId)));
+				}
+				
+				// Split the bid amount (this will be used for the bid escrow)
+				const [bidCoin] = tx.splitCoins(tx.object(primaryCoin), [amountMist]);
+				
+				// For now, transfer to self as a placeholder (this would be replaced with actual bid escrow contract)
+				// In a real implementation, this would call a bid contract to create an escrow
+				tx.transferObjects([bidCoin], connectedAddress);
+				
+				// Set gas budget and payment
+				tx.setGasBudget(BigInt(10_000_000));
+				tx.setGasPayment(coins.data.slice(0, 1).map(c => ({
+					objectId: c.coinObjectId,
+					version: c.version,
+					digest: c.digest,
+				})));
+				
+				// Build transaction
+				const txBytes = await tx.build({ client: suiClient });
+				
+				// Sign and execute transaction
+				showBidBountyStatus(createBidStatus, 'Sign transaction in wallet...', 'loading');
+				
+				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
+					transaction: txBytes,
+					account: connectedAccount,
+					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+				});
+				
+				// Create bid record after successful transaction
 				const res = await fetch('/api/bids', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -4977,15 +5030,21 @@ export function generateProfilePage(
 				});
 
 				const data = await res.json();
-				if (!res.ok) throw new Error(data.error || 'Failed to create bid');
-
-				showStatus(createBidStatus, 'Bid created successfully!', 'success');
+				if (!res.ok) {
+					console.warn('Transaction succeeded but bid record creation failed:', data.error);
+					// Transaction already succeeded, so show success but warn about record
+					showBidBountyStatus(createBidStatus, \`Transaction sent! <a href="https://suivision.xyz/txblock/\${result.digest}" target="_blank">View tx</a> (Note: Bid record may not be saved)\`, 'success');
+				} else {
+					showBidBountyStatus(createBidStatus, \`Bid placed! <a href="https://suivision.xyz/txblock/\${result.digest}" target="_blank">View tx</a>\`, 'success');
+				}
+				
 				if (bidAmountInput) bidAmountInput.value = '';
 				fetchBidQueue();
 
-				setTimeout(() => hideStatus(createBidStatus), 3000);
+				setTimeout(() => hideBidBountyStatus(createBidStatus), 5000);
 			} catch (error) {
-				showStatus(createBidStatus, error.message || 'Failed to create bid', 'error');
+				console.error('Failed to create bid:', error);
+				showBidBountyStatus(createBidStatus, error.message || 'Failed to create bid', 'error');
 			} finally {
 				if (createBidBtn) createBidBtn.disabled = false;
 			}
@@ -4994,7 +5053,7 @@ export function generateProfilePage(
 		// Create a new bounty
 		async function createQuickBounty() {
 			if (!connectedAddress) {
-				showStatus(createBountyStatus, 'Please connect your wallet first', 'error');
+				showBidBountyStatus(createBountyStatus, 'Please connect your wallet first', 'error');
 				return;
 			}
 
@@ -5003,17 +5062,17 @@ export function generateProfilePage(
 			const years = parseInt(quickBountyYears?.value) || 1;
 
 			if (totalAmount < 5) {
-				showStatus(createBountyStatus, 'Minimum bounty amount is 5 SUI', 'error');
+				showBidBountyStatus(createBountyStatus, 'Minimum bounty amount is 5 SUI', 'error');
 				return;
 			}
 
 			if (executorReward < 1) {
-				showStatus(createBountyStatus, 'Minimum executor reward is 1 SUI', 'error');
+				showBidBountyStatus(createBountyStatus, 'Minimum executor reward is 1 SUI', 'error');
 				return;
 			}
 
 			if (quickBountyBtn) quickBountyBtn.disabled = true;
-			showStatus(createBountyStatus, 'Creating bounty...', 'loading');
+			showBidBountyStatus(createBountyStatus, 'Creating bounty...', 'loading');
 
 			try {
 				// For now, create the bounty record (actual escrow would need wallet signing)
@@ -5035,27 +5094,27 @@ export function generateProfilePage(
 				const data = await res.json();
 				if (!res.ok) throw new Error(data.error || 'Failed to create bounty');
 
-				showStatus(createBountyStatus, 'Bounty created! Connect wallet to deposit funds.', 'success');
+				showBidBountyStatus(createBountyStatus, 'Bounty created! Connect wallet to deposit funds.', 'success');
 				fetchBountyQueue();
 
-				setTimeout(() => hideStatus(createBountyStatus), 5000);
+				setTimeout(() => hideBidBountyStatus(createBountyStatus), 5000);
 			} catch (error) {
-				showStatus(createBountyStatus, error.message || 'Failed to create bounty', 'error');
+				showBidBountyStatus(createBountyStatus, error.message || 'Failed to create bounty', 'error');
 			} finally {
 				if (quickBountyBtn) quickBountyBtn.disabled = false;
 			}
 		}
 
-		// Show status message
-		function showStatus(element, message, type) {
+		// Show bid/bounty status message (separate from modal showStatus)
+		function showBidBountyStatus(element, message, type) {
 			if (!element) return;
 			element.textContent = message;
 			element.className = 'create-bid-status ' + type;
 			element.classList.remove('hidden');
 		}
 
-		// Hide status message
-		function hideStatus(element) {
+		// Hide bid/bounty status message
+		function hideBidBountyStatus(element) {
 			if (!element) return;
 			element.classList.add('hidden');
 		}

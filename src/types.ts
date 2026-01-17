@@ -5,6 +5,10 @@ export interface Env {
 	SUI_RPC_URL: string
 	WALRUS_NETWORK: 'mainnet' | 'testnet'
 	CACHE: KVNamespace
+	/** Optional bounty escrow Move package id for mainnet */
+	BOUNTY_ESCROW_PACKAGE_MAINNET?: string
+	/** Optional bounty escrow Move package id for testnet */
+	BOUNTY_ESCROW_PACKAGE_TESTNET?: string
 	// Messaging SDK contract addresses (testnet/mainnet)
 	MESSAGING_CONTRACT_ADDRESS?: string
 	MOVE_REGISTRY_PARENT_ID?: string
@@ -202,4 +206,6 @@ export interface Bounty {
 }
 
 /** Public bounty info (without sensitive tx data) */
-export type PublicBounty = Omit<Bounty, 'txBytes' | 'signatures'>
+export type PublicBounty = Omit<Bounty, 'txBytes' | 'signatures'> & {
+	hasSignedTx: boolean
+}

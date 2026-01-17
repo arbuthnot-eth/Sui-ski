@@ -1,5 +1,6 @@
 import { Transaction } from '@mysten/sui/transactions'
 import { SuiClient } from '@mysten/sui/client'
+import { SuinsClient, SuinsTransaction } from '@mysten/suins'
 import type { Env } from '../types'
 
 /**
@@ -10,11 +11,40 @@ import type { Env } from '../types'
  * broadcast by an executor when the grace period ends.
  */
 
-// Bounty escrow package addresses - update after deployment
-export const BOUNTY_ESCROW_PACKAGE_ID = {
-	mainnet: '0x0000000000000000000000000000000000000000000000000000000000000000', // TODO: Deploy and update
-	testnet: '0x0000000000000000000000000000000000000000000000000000000000000000', // TODO: Deploy and update
-} as const
+const DEFAULT_BOUNTY_ESCROW_PACKAGE_ID: Record<'mainnet' | 'testnet', string | null> = {
+	mainnet: null,
+	testnet: null,
+}
+
+function resolveNetwork(env: { SUI_NETWORK: string }): 'mainnet' | 'testnet' {
+	return env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+}
+
+export function resolveBountyPackageId(
+	env: Pick<Env, 'BOUNTY_ESCROW_PACKAGE_MAINNET' | 'BOUNTY_ESCROW_PACKAGE_TESTNET' | 'SUI_NETWORK'> | undefined,
+	overrideNetwork?: 'mainnet' | 'testnet',
+): string {
+	const network = overrideNetwork || (env ? resolveNetwork(env) : undefined)
+
+	if (!network) {
+		throw new Error('Network is required to resolve bounty package id')
+	}
+
+	const fromEnv =
+		env && network === 'mainnet'
+			? env.BOUNTY_ESCROW_PACKAGE_MAINNET
+			: env && network === 'testnet'
+				? env.BOUNTY_ESCROW_PACKAGE_TESTNET
+				: undefined
+
+	const candidate = fromEnv?.trim() || DEFAULT_BOUNTY_ESCROW_PACKAGE_ID[network]
+
+	if (!candidate || candidate === '0x0' || candidate === '0x' || /^0x0+$/.test(candidate)) {
+		throw new Error(`Bounty escrow package id is not configured for ${network}`)
+	}
+
+	return candidate
+}
 
 // SuiNS package addresses
 export const SUINS_PACKAGE_ID = {
@@ -120,9 +150,10 @@ export function calculatePremium(
  */
 export function buildCreateBountyTx(
 	params: CreateBountyParams,
-	network: 'mainnet' | 'testnet',
+	env: Env,
+	networkOverride?: 'mainnet' | 'testnet',
 ): Transaction {
-	const packageId = BOUNTY_ESCROW_PACKAGE_ID[network]
+	const packageId = resolveBountyPackageId(env, networkOverride)
 	const tx = new Transaction()
 
 	// Set gas budget
@@ -165,11 +196,9 @@ export function buildCreateBountyTx(
  * IMPORTANT: The bounty can only be claimed if the name is transferred to the beneficiary.
  * This atomic transaction ensures the executor cannot take funds without completing registration.
  */
-export function buildExecuteBountyTx(
-	params: ExecuteBountyParams,
-	network: 'mainnet' | 'testnet',
-): Transaction {
-	const bountyPackageId = BOUNTY_ESCROW_PACKAGE_ID[network]
+export function buildExecuteBountyTx(params: ExecuteBountyParams, env: Env): Transaction {
+	const network = resolveNetwork(env)
+	const bountyPackageId = resolveBountyPackageId(env, network)
 	const tx = new Transaction()
 
 	// Set gas budget
@@ -186,25 +215,37 @@ export function buildExecuteBountyTx(
 		arguments: [tx.object(params.bountyObjectId), tx.object(clockId)],
 	})
 
-	// Step 2 & 3: Register the SuiNS name and set target address
-	// This requires integration with SuiNS SDK. The executor must construct
-	// the full PTB using SuinsTransaction wrapper:
-	//
-	// const suinsTx = new SuinsTransaction(suinsClient, tx)
-	// const nft = suinsTx.register({
-	//     domain: params.name,
-	//     years: params.years,
-	//     coin: registrationCoin,
-	// })
-	// suinsTx.setTargetAddress({ nft, address: beneficiaryAddr })
-	// tx.transferObjects([nft], beneficiaryAddr)
+	// Step 2: Register the SuiNS name using escrowed funds
+	const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
+	const suinsClient = new SuinsClient({
+		client: suiClient,
+		network,
+	})
+	const suinsTx = new SuinsTransaction(suinsClient, tx)
+	const coinConfig = suinsClient.config.coins.SUI
+	if (!coinConfig) {
+		throw new Error('SuiNS configuration for SUI coin is missing')
+	}
 
-	// For now, return the registration coin to beneficiary (placeholder)
-	// In production, this should be replaced with actual SuiNS registration
-	tx.transferObjects([registrationCoin], beneficiaryAddr)
+	const domain = params.name.endsWith('.sui') ? params.name.toLowerCase() : `${params.name.toLowerCase()}.sui`
+	const isSubDomain = domain.replace(/\.sui$/i, '').includes('.')
+	const nft = suinsTx.register({
+		domain,
+		years: params.years,
+		coinConfig,
+		coin: registrationCoin,
+	})
 
-	// Step 5: Transfer reward to executor (tx sender)
-	tx.transferObjects([rewardCoin], tx.gas) // Uses sender's gas object as proxy for sender address
+	// Step 3: Ensure the beneficiary becomes the controller/recipient
+	suinsTx.setTargetAddress({
+		nft,
+		address: params.beneficiary,
+		isSubname: isSubDomain,
+	})
+	tx.transferObjects([nft], beneficiaryAddr)
+
+	// Step 4: Transfer reward to executor (tx sender)
+	tx.transferObjects([rewardCoin], tx.gas)
 
 	return tx
 }
@@ -214,12 +255,8 @@ export function buildExecuteBountyTx(
  *
  * Only the creator can cancel, and only if the bounty is not locked.
  */
-export function buildCancelBountyTx(
-	bountyObjectId: string,
-	network: 'mainnet' | 'testnet',
-	gasBudget?: string,
-): Transaction {
-	const packageId = BOUNTY_ESCROW_PACKAGE_ID[network]
+export function buildCancelBountyTx(bountyObjectId: string, env: Env, gasBudget?: string): Transaction {
+	const packageId = resolveBountyPackageId(env)
 	const tx = new Transaction()
 
 	if (gasBudget) {
@@ -237,12 +274,8 @@ export function buildCancelBountyTx(
 /**
  * Build transaction to lock a bounty (after pre-signing the execution tx)
  */
-export function buildLockBountyTx(
-	bountyObjectId: string,
-	network: 'mainnet' | 'testnet',
-	gasBudget?: string,
-): Transaction {
-	const packageId = BOUNTY_ESCROW_PACKAGE_ID[network]
+export function buildLockBountyTx(bountyObjectId: string, env: Env, gasBudget?: string): Transaction {
+	const packageId = resolveBountyPackageId(env)
 	const tx = new Transaction()
 
 	if (gasBudget) {
@@ -263,12 +296,8 @@ export function buildLockBountyTx(
  * Anyone can call this after the bounty expires (7 days after available_at).
  * Funds are returned to the original creator.
  */
-export function buildReclaimExpiredTx(
-	bountyObjectId: string,
-	network: 'mainnet' | 'testnet',
-	gasBudget?: string,
-): Transaction {
-	const packageId = BOUNTY_ESCROW_PACKAGE_ID[network]
+export function buildReclaimExpiredTx(bountyObjectId: string, env: Env, gasBudget?: string): Transaction {
+	const packageId = resolveBountyPackageId(env)
 	const tx = new Transaction()
 
 	if (gasBudget) {

@@ -60,7 +60,7 @@ export async function handleBountiesRequest(request: Request, env: Env): Promise
 
 		// GET /api/bounties/:name - List bounties for name
 		if (request.method === 'GET' && pathParts.length === 1) {
-			return handleGetBounties(name, env)
+			return handleGetBounties(name, env, url.searchParams)
 		}
 
 		// GET /api/bounties/:name/:id - Get specific bounty
@@ -121,15 +121,32 @@ async function handleCreateBounty(request: Request, env: Env): Promise<Response>
 		)
 	}
 
+	const totalAmount = BigInt(totalAmountMist)
+	const executorReward = BigInt(executorRewardMist)
+
 	// Validate executor reward minimum
-	if (BigInt(executorRewardMist) < BigInt(MIN_EXECUTOR_REWARD_MIST)) {
+	if (executorReward < BigInt(MIN_EXECUTOR_REWARD_MIST)) {
 		return jsonResponse({ error: `Executor reward must be at least 1 SUI (${MIN_EXECUTOR_REWARD_MIST} MIST)` }, 400)
+	}
+
+	if (totalAmount < executorReward) {
+		return jsonResponse({ error: 'Total amount must be greater than or equal to executor reward' }, 400)
+	}
+
+	const escrowId = escrowObjectId.trim()
+	if (!/^0x[0-9a-f]{64}$/i.test(escrowId)) {
+		return jsonResponse({ error: 'escrowObjectId must be a valid 0x-prefixed object id' }, 400)
 	}
 
 	// Validate years
 	if (years < 1 || years > 5) {
 		return jsonResponse({ error: 'Years must be between 1 and 5' }, 400)
 	}
+
+	const effectiveRegistrationMist =
+		registrationCostMist && BigInt(registrationCostMist) > BigInt(0)
+			? registrationCostMist
+			: (totalAmount - executorReward).toString()
 
 	const cleanName = name.toLowerCase().replace(/\.sui$/i, '')
 	const bountyId = `bounty_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -140,10 +157,10 @@ async function handleCreateBounty(request: Request, env: Env): Promise<Response>
 		name: cleanName,
 		beneficiary,
 		creator,
-		escrowObjectId,
-		totalAmountMist,
-		executorRewardMist,
-		registrationCostMist: registrationCostMist || '0',
+		escrowObjectId: escrowId,
+		totalAmountMist: totalAmount.toString(),
+		executorRewardMist: executorReward.toString(),
+		registrationCostMist: effectiveRegistrationMist,
 		paymentCurrency,
 		availableAt,
 		years,
@@ -186,7 +203,7 @@ async function handleCreateBounty(request: Request, env: Env): Promise<Response>
 /**
  * Get all bounties for a name
  */
-async function handleGetBounties(name: string, env: Env): Promise<Response> {
+async function handleGetBounties(name: string, env: Env, searchParams?: URLSearchParams): Promise<Response> {
 	const indexKey = `bounties:name:${name}`
 	const indexData = await env.CACHE.get(indexKey)
 
@@ -196,11 +213,15 @@ async function handleGetBounties(name: string, env: Env): Promise<Response> {
 
 	const bountyIds: string[] = JSON.parse(indexData)
 	const bounties: PublicBounty[] = []
+	const creatorFilter = searchParams?.get('creator')?.toLowerCase()
 
 	for (const id of bountyIds) {
 		const bountyData = await env.CACHE.get(`bounty:${id}`)
 		if (bountyData) {
 			const bounty: Bounty = JSON.parse(bountyData)
+			if (creatorFilter && bounty.creator.toLowerCase() !== creatorFilter) {
+				continue
+			}
 			bounties.push(toPublicBounty(bounty))
 		}
 	}
@@ -304,7 +325,6 @@ async function handleBuildTx(
 	}
 
 	// Build the execution transaction
-	const network = env.SUI_NETWORK as 'mainnet' | 'testnet'
 	const tx = buildExecuteBountyTx(
 		{
 			bountyObjectId: bounty.escrowObjectId,
@@ -312,7 +332,7 @@ async function handleBuildTx(
 			beneficiary: bounty.beneficiary,
 			years: bounty.years,
 		},
-		network,
+		env,
 	)
 
 	// Serialize for signing
@@ -338,6 +358,7 @@ async function handleAttachTx(
 	const body = (await request.json()) as {
 		txBytes?: string
 		signatures?: string[] | string
+		signature?: string
 		creator?: string
 	}
 
@@ -357,12 +378,23 @@ async function handleAttachTx(
 		return jsonResponse({ error: 'Only the creator can attach transactions' }, 403)
 	}
 
-	if (!body.txBytes || !body.signatures) {
+	if (!body.txBytes) {
 		return jsonResponse({ error: 'txBytes and signatures are required' }, 400)
 	}
 
 	// Normalize signatures to array
-	const signatures = Array.isArray(body.signatures) ? body.signatures : [body.signatures]
+	const signatures: string[] = []
+	if (Array.isArray(body.signatures)) {
+		signatures.push(...body.signatures.filter(Boolean))
+	} else if (typeof body.signatures === 'string' && body.signatures.trim()) {
+		signatures.push(body.signatures)
+	}
+	if (body.signature && body.signature.trim()) {
+		signatures.push(body.signature.trim())
+	}
+	if (signatures.length === 0) {
+		return jsonResponse({ error: 'At least one signature is required' }, 400)
+	}
 
 	// Update bounty with transaction
 	bounty.txBytes = body.txBytes
@@ -519,7 +551,10 @@ async function removeFromPendingIndex(bountyId: string, env: Env): Promise<void>
 
 function toPublicBounty(bounty: Bounty): PublicBounty {
 	const { txBytes, signatures, ...publicData } = bounty
-	return publicData
+	return {
+		...publicData,
+		hasSignedTx: Boolean(txBytes && signatures && signatures.length > 0),
+	}
 }
 
 function jsonResponse(data: unknown, status = 200): Response {

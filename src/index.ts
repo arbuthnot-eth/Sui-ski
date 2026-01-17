@@ -144,11 +144,14 @@ export default {
 		// API endpoint for SUI price (available from any subdomain)
 		if (url.pathname === '/api/sui-price') {
 			try {
-				const price = await getSUIPrice()
+				const price = await getSUIPrice(env)
 				return jsonResponse({ price })
 			} catch (error) {
+				// Even on error, return a default price to prevent UI breakage
 				const message = error instanceof Error ? error.message : 'Failed to fetch SUI price'
-				return jsonResponse({ error: message }, 500)
+				console.error('SUI price API error:', message)
+				// Return default price instead of error to keep UI functional
+				return jsonResponse({ price: 1.0, error: message, cached: true })
 			}
 		}
 
