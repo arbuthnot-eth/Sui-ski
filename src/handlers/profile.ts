@@ -287,10 +287,12 @@ export function generateProfilePage(
 									<path id="decay-area" class="decay-area" d="M0,10 Q75,12 150,30 T300,70 L300,80 L0,80 Z"/>
 									<!-- SUI exponential decay curve (line) -->
 									<path id="decay-curve" class="decay-curve" d="M0,10 Q75,12 150,30 T300,70"/>
+									<path id="decay-hover-path" class="decay-hover-path" d=""/>
 									<!-- NS decay curve - 3 day discount (filled area) -->
 									<path id="ns-decay-area" class="ns-decay-area" d="M0,10 Q75,12 150,30 T300,70 L300,80 L0,80 Z"/>
 									<!-- NS decay curve (line) -->
 									<path id="ns-decay-curve" class="ns-decay-curve" d="M0,10 Q75,12 150,30 T300,70"/>
+									<path id="ns-decay-hover-path" class="ns-decay-hover-path" d=""/>
 									<!-- SUI current position marker -->
 									<circle id="decay-marker" class="decay-marker" cx="0" cy="10" r="5"/>
 									<!-- NS current position marker -->
