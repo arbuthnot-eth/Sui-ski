@@ -319,6 +319,25 @@ export function generateProfilePage(
 									<span class="premium-discount">3-day discount</span>
 								</div>
 							</div>
+							<div class="premium-simulator">
+								<div class="premium-slider">
+									<label for="grace-premium-slider">Simulate days since expiration</label>
+									<input type="range" id="grace-premium-slider" min="0" max="30" step="0.25" value="0" />
+									<div class="premium-slider-readout">
+										<span id="grace-premium-slider-value">0d → 100,000,000 SUI</span>
+										<span id="grace-premium-log-value">log₁₀ = 8.00</span>
+									</div>
+								</div>
+								<div class="premium-target">
+									<label for="grace-premium-target">Estimate when premium reaches a target (USD, falls back to SUI)</label>
+									<div class="premium-target-input">
+										<span>$</span>
+										<input type="number" id="grace-premium-target" min="1" step="1" placeholder="100" />
+										<button type="button" id="grace-premium-target-btn">Estimate</button>
+									</div>
+									<div class="premium-target-result" id="grace-premium-target-result">Enter a target to see the projected date.</div>
+								</div>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -1043,6 +1062,8 @@ export function generateProfilePage(
 		typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function'
 			? new Intl.NumberFormat('en-US')
 			: { format: (value) => String(value ?? 0) };
+	const PREMIUM_DECAY_CONSTANT = 5; // Controls exponential decay curve steepness
+	const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 		let connectedWallet = null;
 		let connectedAccount = null;
@@ -1059,6 +1080,102 @@ export function generateProfilePage(
 			walletsApi = getWallets();
 		} catch (e) {
 			console.error('Failed to init wallet API:', e);
+		}
+
+		function getProgressForValue(value) {
+			if (!value || value <= 0) return Number.POSITIVE_INFINITY;
+			if (value >= SKILL_CREATOR_MAX_SUPPLY) return 0;
+			return Math.log(SKILL_CREATOR_MAX_SUPPLY / value) / PREMIUM_DECAY_CONSTANT;
+		}
+
+		function updatePremiumSliderReadout(progressOverride = null) {
+			if (!premiumSlider || !premiumSliderValue || !premiumSliderLog) return;
+			let progress =
+				progressOverride !== null
+					? Math.max(0, Math.min(1, progressOverride))
+					: Math.max(0, Math.min(1, Number(premiumSlider.value) / GRACE_PERIOD_DAYS));
+
+			const days = progress * GRACE_PERIOD_DAYS;
+			const value = getDecayValue(progress);
+			premiumSliderValue.textContent = `${days.toFixed(2)}d → ${numberFormatter.format(
+				Math.max(0, Math.round(value)),
+			)} SUI`;
+			const logValue = value > 0 ? Math.log10(value) : -Infinity;
+			premiumSliderLog.textContent =
+				logValue === -Infinity ? 'log₁₀ = -∞' : `log₁₀ = ${logValue.toFixed(2)}`;
+		}
+
+		function syncPremiumSlider(progress) {
+			if (!premiumSlider) return;
+			if (!premiumSliderLocked) {
+				premiumSlider.value = String((progress * GRACE_PERIOD_DAYS).toFixed(2));
+				updatePremiumSliderReadout(progress);
+			} else {
+				updatePremiumSliderReadout();
+			}
+		}
+
+		function estimatePremiumTarget() {
+			if (!premiumTargetInput || !premiumTargetResult) return;
+
+			const rawValue = Number(premiumTargetInput.value);
+			if (!rawValue || rawValue <= 0) {
+				premiumTargetResult.textContent = 'Enter a positive number.';
+				return;
+			}
+
+			let targetSui = rawValue;
+			let usingUsd = false;
+			if (suiPriceUsd && suiPriceUsd > 0) {
+				targetSui = rawValue / suiPriceUsd;
+				usingUsd = true;
+			}
+
+			if (!Number.isFinite(targetSui) || targetSui <= 0) {
+				premiumTargetResult.textContent = 'Target value is out of range.';
+				return;
+			}
+			if (targetSui >= SKILL_CREATOR_MAX_SUPPLY) {
+				premiumTargetResult.textContent =
+					'Target must be less than the starting premium (100,000,000).';
+				return;
+			}
+
+			const progressNeeded = getProgressForValue(targetSui);
+			if (!Number.isFinite(progressNeeded) || progressNeeded < 0) {
+				premiumTargetResult.textContent = 'Unable to compute a projection for that target.';
+				return;
+			}
+
+			if (progressNeeded > 1) {
+				const daysNeeded = progressNeeded * GRACE_PERIOD_DAYS;
+				premiumTargetResult.textContent = `The premium will not reach this target within the grace window (needs ~${daysNeeded.toFixed(
+					1,
+				)} days).`;
+				return;
+			}
+
+			const totalWindow = AVAILABLE_AT - EXPIRATION_MS;
+			const targetTime = EXPIRATION_MS + progressNeeded * totalWindow;
+			const targetDate = new Date(targetTime);
+			const daysNeeded = progressNeeded * GRACE_PERIOD_DAYS;
+			const projectedSui = Math.max(1, Math.round(getDecayValue(progressNeeded)));
+			const projectedUsd = suiPriceUsd ? usdFormatter.format(projectedSui * suiPriceUsd) : null;
+
+			const usdLine = projectedUsd ? ` (~$${projectedUsd})` : '';
+			const modeLine = usingUsd
+				? ''
+				: '<br><small>No USD price available; interpreted value as SUI.</small>';
+
+			const dateLabel = targetDate.toLocaleDateString('en-US', {
+				month: 'short',
+				day: 'numeric',
+				hour: 'numeric',
+				minute: '2-digit',
+			});
+			const baseLine = `≈ ${daysNeeded.toFixed(1)} days after expiry (<strong>${dateLabel}</strong>)`;
+			const premiumLine = `Projected premium: ${numberFormatter.format(projectedSui)} SUI${usdLine}`;
+			premiumTargetResult.innerHTML = `${baseLine}<br>${premiumLine}${modeLine}`;
 		}
 
 		// DOM Elements
@@ -3731,6 +3848,13 @@ export function generateProfilePage(
 				.catch(err => console.log('SW registration failed:', err));
 		}
 
+		// ========== HELPER FUNCTIONS ==========
+		// Validate if a string is a valid Sui address (0x followed by 64 hex chars)
+		function isValidSuiAddress(addr) {
+			if (!addr || typeof addr !== 'string') return false;
+			return /^0x[a-fA-F0-9]{64}$/.test(addr);
+		}
+
 		// ========== OWNED SUINS NAMES ==========
 		const namesContent = document.getElementById('names-content');
 		const namesCountEl = document.getElementById('names-count');
@@ -3742,6 +3866,14 @@ export function generateProfilePage(
 		// Fetch all SuiNS names owned by the target address
 		async function fetchOwnedNames(cursor = null) {
 			if (namesLoading) return;
+
+			// Validate address before attempting to fetch
+			if (!isValidSuiAddress(CURRENT_ADDRESS)) {
+				console.warn('Invalid or missing address for names fetch:', CURRENT_ADDRESS);
+				renderNamesError('This name does not have a valid owner address');
+				return;
+			}
+
 			namesLoading = true;
 
 			try {
@@ -3978,6 +4110,15 @@ export function generateProfilePage(
 		// Fetch all SuiNS registration NFTs owned by the address
 		async function fetchNFTs(cursor = null) {
 			if (nftsLoading && cursor === null) return; // Only prevent if starting fresh fetch
+
+			// Validate address before attempting to fetch
+			if (!isValidSuiAddress(CURRENT_ADDRESS)) {
+				console.warn('Invalid or missing address for NFT fetch:', CURRENT_ADDRESS);
+				renderNFTsError('This name does not have a valid owner address');
+				nftsLoading = false;
+				return;
+			}
+
 			if (cursor === null) {
 				// Starting fresh fetch - reset state
 				allNFTs = [];
@@ -3986,9 +4127,10 @@ export function generateProfilePage(
 				nftsLoading = true;
 			}
 
-			try {
-				const suiClient = new SuiClient({ url: RPC_URL });
+			// Create client outside try block so it's available in catch
+			const suiClient = new SuiClient({ url: RPC_URL });
 
+			try {
 				// Fetch owned objects filtered by SuiNS registration type
 				// The struct type includes "SuinsRegistration" in the name
 				const response = await suiClient.getOwnedObjects({
@@ -4315,7 +4457,7 @@ export function generateProfilePage(
 
 		// Load NFTs on page load to populate the identity card (but don't render to tab yet)
 		// This allows the identity card to show the NFT image immediately
-		if (!nftsLoaded && activeTab !== 'nfts') {
+		if (!nftsLoaded && activeTab !== 'nfts' && isValidSuiAddress(CURRENT_ADDRESS)) {
 			setTimeout(async () => {
 				try {
 					const suiClient = new SuiClient({ url: RPC_URL });
@@ -4536,6 +4678,12 @@ export function generateProfilePage(
 		const nsDecayMarker = document.getElementById('ns-decay-marker');
 		const nsDecayCurve = document.getElementById('ns-decay-curve');
 		const nsDecayArea = document.getElementById('ns-decay-area');
+		const premiumSlider = document.getElementById('grace-premium-slider');
+		const premiumSliderValue = document.getElementById('grace-premium-slider-value');
+		const premiumSliderLog = document.getElementById('grace-premium-log-value');
+		const premiumTargetInput = document.getElementById('grace-premium-target');
+		const premiumTargetBtn = document.getElementById('grace-premium-target-btn');
+		const premiumTargetResult = document.getElementById('grace-premium-target-result');
 
 		// SUI price state
 		let suiPriceUsd = null;
@@ -4545,6 +4693,7 @@ export function generateProfilePage(
 		const NS_DISCOUNT_DAYS = 3;
 		const GRACE_PERIOD_DAYS = 30;
 		const NS_DISCOUNT_PROGRESS = NS_DISCOUNT_DAYS / GRACE_PERIOD_DAYS; // 0.1 (10%)
+		let premiumSliderLocked = false;
 
 		// Fetch SUI price from CoinGecko
 		async function fetchSuiPrice() {
@@ -4563,8 +4712,8 @@ export function generateProfilePage(
 		function getDecayValue(progress) {
 			// Exponential decay: starts at 100M, approaches 0
 			// Using formula: value = maxSupply * e^(-k * progress) where k controls decay rate
-			const k = 5; // Decay constant - higher = faster initial decay
-			return SKILL_CREATOR_MAX_SUPPLY * Math.exp(-k * progress);
+			const clampedProgress = Math.max(0, Math.min(1, progress));
+			return SKILL_CREATOR_MAX_SUPPLY * Math.exp(-PREMIUM_DECAY_CONSTANT * clampedProgress);
 		}
 
 		// Generate SVG path for exponential decay curve with optional progress offset
@@ -4658,6 +4807,7 @@ export function generateProfilePage(
 				if (graceSkillUsd) graceSkillUsd.textContent = '0';
 				if (graceNsValue) graceNsValue.textContent = '0';
 				updateGraphMarker(1, 1);
+				syncPremiumSlider(1);
 				return;
 			}
 
@@ -4684,6 +4834,7 @@ export function generateProfilePage(
 
 			// Update graph markers
 			updateGraphMarker(progress, nsProgress);
+			syncPremiumSlider(progress);
 		}
 
 		function updateGracePeriodCountdown() {
@@ -4732,6 +4883,25 @@ export function generateProfilePage(
 			// Start countdown
 			updateGracePeriodCountdown();
 			setInterval(updateGracePeriodCountdown, 1000);
+		}
+
+		if (premiumSlider) {
+			premiumSlider.addEventListener('input', () => {
+				premiumSliderLocked = true;
+				updatePremiumSliderReadout();
+			});
+			updatePremiumSliderReadout(0);
+		}
+
+		if (premiumTargetBtn) {
+			premiumTargetBtn.addEventListener('click', estimatePremiumTarget);
+		}
+		if (premiumTargetInput) {
+			premiumTargetInput.addEventListener('keydown', (event) => {
+				if (event.key === 'Enter') {
+					estimatePremiumTarget();
+				}
+			});
 		}
 
 		// ========== SOCIAL LINKS FUNCTIONALITY (HIDDEN) ==========
