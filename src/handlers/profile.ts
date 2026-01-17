@@ -6540,7 +6540,7 @@ ${generatePasskeyWalletStyles()}
 				
 				// For each domain, fetch the NFT object using SuinsClient
 				const suinsClient = new SuinsClient({
-					client: suiClient as never,
+					client: suiClient,
 					network: NETWORK
 				});
 
