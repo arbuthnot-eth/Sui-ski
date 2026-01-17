@@ -8,6 +8,11 @@ export interface Env {
 	// Messaging SDK contract addresses (testnet/mainnet)
 	MESSAGING_CONTRACT_ADDRESS?: string
 	MOVE_REGISTRY_PARENT_ID?: string
+	// AI features (OpenRouter integration)
+	OPENROUTER_API_KEY?: string
+	// Optional: Wallet address or object ID (NFT) that controls access to AI features
+	// If not set, anyone can use the features (payment still required)
+	CONTROLLING_WALLET_ADDRESS?: string
 }
 
 export type RouteType = 'suins' | 'mvr' | 'content' | 'rpc' | 'root'

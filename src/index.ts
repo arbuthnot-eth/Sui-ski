@@ -1,3 +1,4 @@
+import { handleAIRequest } from './handlers/ai'
 import { handleBidsRequest } from './handlers/bids'
 import { handleLandingPage } from './handlers/landing'
 import { handleMessagingPage, handleMessagingRequest } from './handlers/messaging'
@@ -6,6 +7,7 @@ import { handlePWARequest } from './handlers/pwa'
 import { handleTransaction } from './handlers/transaction'
 import { handleUploadPage } from './handlers/upload'
 import { handleRegistrationSubmission } from './handlers/register'
+import { handleViewsRequest } from './handlers/views'
 import { resolveContent, resolveDirectContent, WALRUS_AGGREGATORS } from './resolvers/content'
 import { getMVRDocumentationUrl, getPackageExplorerUrl, resolveMVRPackage } from './resolvers/mvr'
 import { handleRPCRequest } from './resolvers/rpc'
@@ -46,6 +48,16 @@ export default {
 
 		if (url.pathname.startsWith('/api/bids')) {
 			return handleBidsRequest(request, env)
+		}
+
+		// AI-powered features (name generation, avatar creation)
+		if (url.pathname.startsWith('/api/ai')) {
+			return handleAIRequest(request, env)
+		}
+
+		// View tracking API
+		if (url.pathname.startsWith('/api/views')) {
+			return handleViewsRequest(request, env)
 		}
 
 		// Messaging page

@@ -3635,7 +3635,7 @@ ${generatePasskeyWalletStyles()}
 						</svg>
 						<div class="countdown-ring-center">
 							<div class="countdown-ring-percent" id="countdown-percent">--</div>
-							<div class="countdown-ring-label">remaining</div>
+							<div class="countdown-ring-label">score</div>
 						</div>
 					</div>
 					<div class="countdown-details">
@@ -6579,6 +6579,58 @@ ${generatePasskeyWalletStyles()}
 		// Calculate total registration period (assume 1 year = 365 days for progress)
 		const REGISTRATION_PERIOD = 365 * 24 * 60 * 60 * 1000;
 		const CIRCLE_CIRCUMFERENCE = 263.89; // 2 * PI * 42
+		
+		// View score tracking
+		let currentViewScore = 0;
+		const MAX_SCORE_FOR_RING = 1000; // Max score for 100% ring fill
+
+		// Fetch and update view score
+		async function fetchViewScore() {
+			try {
+				const response = await fetch(\`/api/views/\${NAME}\`);
+				if (response.ok) {
+					const data = await response.json();
+					currentViewScore = data.score || 0;
+					updateViewScoreDisplay();
+				}
+			} catch (error) {
+				console.error('Failed to fetch view score:', error);
+			}
+		}
+
+		// Increment view score when page loads
+		async function incrementViewScore() {
+			try {
+				const response = await fetch(\`/api/views/\${NAME}\`, {
+					method: 'POST',
+				});
+				if (response.ok) {
+					const data = await response.json();
+					currentViewScore = data.score || 0;
+					updateViewScoreDisplay();
+				}
+			} catch (error) {
+				console.error('Failed to increment view score:', error);
+			}
+		}
+
+		// Update the score display
+		function updateViewScoreDisplay() {
+			if (countdownPercent) {
+				countdownPercent.textContent = String(currentViewScore);
+			}
+			
+			// Update ring progress based on score (0-1000 score = 0-100% ring)
+			if (countdownRingProgress) {
+				const scorePercent = Math.min(100, Math.round((currentViewScore / MAX_SCORE_FOR_RING) * 100));
+				const offset = CIRCLE_CIRCUMFERENCE * (1 - scorePercent / 100);
+				countdownRingProgress.style.strokeDashoffset = offset;
+			}
+		}
+
+		// Initialize view score tracking
+		incrementViewScore(); // Increment on page load
+		setInterval(fetchViewScore, 30000); // Refresh every 30 seconds
 
 		function updateCountdownHero() {
 			if (!EXPIRATION_MS) return;
@@ -6596,7 +6648,7 @@ ${generatePasskeyWalletStyles()}
 					if (countdownHours) countdownHours.textContent = '00';
 					if (countdownMins) countdownMins.textContent = '00';
 					if (countdownSecs) countdownSecs.textContent = '00';
-					if (countdownPercent) countdownPercent.textContent = '0%';
+					if (countdownPercent) countdownPercent.textContent = String(currentViewScore || 0);
 					if (countdownRingProgress) countdownRingProgress.style.strokeDashoffset = CIRCLE_CIRCUMFERENCE;
 					if (countdownHero) countdownHero.className = 'countdown-hero expired';
 					if (countdownBadge) {
@@ -6613,10 +6665,11 @@ ${generatePasskeyWalletStyles()}
 					if (countdownHours) countdownHours.textContent = String(gHours).padStart(2, '0');
 					if (countdownMins) countdownMins.textContent = String(gMins).padStart(2, '0');
 					if (countdownSecs) countdownSecs.textContent = String(gSecs).padStart(2, '0');
-					const gracePercent = Math.round((graceDiff / (30 * 24 * 60 * 60 * 1000)) * 100);
-					if (countdownPercent) countdownPercent.textContent = gracePercent + '%';
+					// Score is managed by view tracking
+					if (countdownPercent) countdownPercent.textContent = String(currentViewScore || 0);
 					if (countdownRingProgress) {
-						const offset = CIRCLE_CIRCUMFERENCE * (1 - gracePercent / 100);
+						const scorePercent = Math.min(100, Math.round((currentViewScore / MAX_SCORE_FOR_RING) * 100));
+						const offset = CIRCLE_CIRCUMFERENCE * (1 - scorePercent / 100);
 						countdownRingProgress.style.strokeDashoffset = offset;
 						countdownRingProgress.style.stroke = '#fbbf24';
 					}
@@ -6640,15 +6693,8 @@ ${generatePasskeyWalletStyles()}
 			if (countdownMins) countdownMins.textContent = String(mins).padStart(2, '0');
 			if (countdownSecs) countdownSecs.textContent = String(secs).padStart(2, '0');
 
-			// Calculate percentage - use time remaining vs 1 year as baseline
-			const percentRemaining = Math.min(100, Math.round((diff / REGISTRATION_PERIOD) * 100));
-			if (countdownPercent) countdownPercent.textContent = percentRemaining + '%';
-
-			// Update ring
-			if (countdownRingProgress) {
-				const offset = CIRCLE_CIRCUMFERENCE * (1 - percentRemaining / 100);
-				countdownRingProgress.style.strokeDashoffset = offset;
-			}
+			// Score is now managed by view tracking, not percentage
+			// The score display is updated by updateViewScoreDisplay()
 
 			// Update status badge based on days remaining
 			if (days <= 7) {
