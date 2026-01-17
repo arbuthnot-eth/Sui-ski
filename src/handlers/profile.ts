@@ -156,6 +156,31 @@ export function generateProfilePage(
 				radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
 			pointer-events: none;
 		}
+
+		/* Custom Scrollbar Styles - Blue Gradient */
+		* {
+			scrollbar-width: thin;
+			scrollbar-color: rgba(96, 165, 250, 0.6) rgba(96, 165, 250, 0.1);
+		}
+		*::-webkit-scrollbar {
+			width: 10px;
+			height: 10px;
+		}
+		*::-webkit-scrollbar-track {
+			background: rgba(96, 165, 250, 0.1);
+			border-radius: 10px;
+		}
+		*::-webkit-scrollbar-thumb {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.8), rgba(96, 165, 250, 0.6));
+			border-radius: 10px;
+			border: 2px solid transparent;
+			background-clip: padding-box;
+		}
+		*::-webkit-scrollbar-thumb:hover {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 1), rgba(96, 165, 250, 0.8));
+			background-clip: padding-box;
+		}
+
 		.container { max-width: 900px; margin: 0 auto; position: relative; }
 
 		.page-layout {
