@@ -1,20 +1,52 @@
-import {
-	REGISTRY_OBJECT_ID,
-	VORTEX_PACKAGE_ID,
-	VORTEX_POOL_IDS,
-	VortexAPI,
-} from '@interest-protocol/vortex-sdk'
+/**
+ * Vortex Privacy Protocol Handler
+ *
+ * Uses dynamic imports to avoid module-level initialization issues
+ * with the vortex-sdk (which generates random values at load time).
+ */
 import type { Env } from '../types'
 import { errorResponse, jsonResponse } from '../utils/response'
 
 // Default Vortex API URL
 const DEFAULT_VORTEX_API_URL = 'https://api.vortexfi.xyz'
 
+// Cached SDK module - using any to avoid type analysis triggering module load
+let vortexSdkModule: any = null
+let sdkLoadError: Error | null = null
+
+/**
+ * Lazy-load the vortex SDK to avoid module-level initialization errors
+ * This must only be called inside request handlers, never at module level
+ * 
+ * IMPORTANT: The SDK has top-level crypto initialization that fails in Workers global scope.
+ * We use a runtime string concatenation trick to prevent static analysis by the bundler.
+ */
+async function getVortexSdk() {
+	if (sdkLoadError) {
+		throw sdkLoadError
+	}
+	if (!vortexSdkModule) {
+		try {
+			// Split the import path to prevent static analysis
+			// This ensures the bundler doesn't pre-analyze the SDK module
+			const sdkBase = '@interest-protocol/'
+			const sdkName = 'vortex-sdk'
+			const sdkPath = sdkBase + sdkName
+			vortexSdkModule = await import(/* @vite-ignore */ sdkPath)
+		} catch (error) {
+			sdkLoadError = error instanceof Error ? error : new Error('Failed to load Vortex SDK')
+			throw sdkLoadError
+		}
+	}
+	return vortexSdkModule
+}
+
 /**
  * Create a VortexAPI instance with the configured API URL
  */
-function getVortexAPI(env: Env): VortexAPI {
-	return new VortexAPI({
+async function getVortexAPI(env: Env) {
+	const sdk = await getVortexSdk()
+	return new sdk.VortexAPI({
 		apiUrl: env.VORTEX_API_URL || DEFAULT_VORTEX_API_URL,
 	})
 }
@@ -86,8 +118,8 @@ export async function handleVortexRequest(request: Request, env: Env): Promise<R
  * Health check endpoint
  */
 async function handleHealthCheck(env: Env): Promise<Response> {
-	const api = getVortexAPI(env)
 	try {
+		const api = await getVortexAPI(env)
 		const health = await api.health()
 		return jsonResponse(health)
 	} catch (error) {
@@ -111,7 +143,7 @@ async function handleGetPools(request: Request, env: Env): Promise<Response> {
 	const limit = parseInt(url.searchParams.get('limit') || '20', 10)
 	const coinType = url.searchParams.get('coinType') || undefined
 
-	const api = getVortexAPI(env)
+	const api = await getVortexAPI(env)
 	const pools = await api.getPools({ page, limit, coinType })
 	return jsonResponse(pools)
 }
@@ -120,7 +152,8 @@ async function handleGetPools(request: Request, env: Env): Promise<Response> {
  * Get pool details for a specific coin type
  */
 async function handleGetPoolDetails(coinType: string, env: Env): Promise<Response> {
-	const api = getVortexAPI(env)
+	const api = await getVortexAPI(env)
+	const sdk = await getVortexSdk()
 
 	// Get pool info from the pools endpoint
 	const pools = await api.getPools({ coinType, limit: 1 })
@@ -132,7 +165,7 @@ async function handleGetPoolDetails(coinType: string, env: Env): Promise<Respons
 	const pool = pools.data.items[0]
 
 	// Check if this is a known pool ID
-	const knownPoolId = VORTEX_POOL_IDS[coinType as keyof typeof VORTEX_POOL_IDS]
+	const knownPoolId = sdk.VORTEX_POOL_IDS[coinType as keyof typeof sdk.VORTEX_POOL_IDS]
 
 	return jsonResponse({
 		success: true,
@@ -148,7 +181,7 @@ async function handleGetPoolDetails(coinType: string, env: Env): Promise<Respons
  * Get relayer information
  */
 async function handleGetRelayer(env: Env): Promise<Response> {
-	const api = getVortexAPI(env)
+	const api = await getVortexAPI(env)
 	const relayer = await api.getRelayer()
 	return jsonResponse(relayer)
 }
@@ -168,7 +201,7 @@ async function handleGetCommitments(request: Request, env: Env): Promise<Respons
 		return errorResponse('coinType parameter is required', 'BAD_REQUEST', 400)
 	}
 
-	const api = getVortexAPI(env)
+	const api = await getVortexAPI(env)
 	const commitments = await api.getCommitments({
 		coinType,
 		index,
@@ -206,7 +239,7 @@ async function handleGetMerklePath(request: Request, env: Env): Promise<Response
 		)
 	}
 
-	const api = getVortexAPI(env)
+	const api = await getVortexAPI(env)
 	const merklePath = await api.getMerklePath({
 		coinType,
 		index,
@@ -230,7 +263,7 @@ async function handleGetAccounts(request: Request, env: Env): Promise<Response> 
 		return errorResponse('hashedSecret parameter is required', 'BAD_REQUEST', 400)
 	}
 
-	const api = getVortexAPI(env)
+	const api = await getVortexAPI(env)
 	const accounts = await api.getAccounts({
 		hashedSecret,
 		excludeHidden,
@@ -242,7 +275,8 @@ async function handleGetAccounts(request: Request, env: Env): Promise<Response> 
  * Get Vortex protocol information
  */
 async function handleGetInfo(env: Env): Promise<Response> {
-	const api = getVortexAPI(env)
+	const api = await getVortexAPI(env)
+	const sdk = await getVortexSdk()
 
 	// Get health and pools for overview
 	let health = null
@@ -272,9 +306,9 @@ async function handleGetInfo(env: Env): Promise<Response> {
 		data: {
 			name: 'Vortex Privacy Protocol',
 			description: 'Privacy-preserving transactions on Sui using zero-knowledge proofs',
-			packageId: VORTEX_PACKAGE_ID,
-			registryId: REGISTRY_OBJECT_ID,
-			knownPools: VORTEX_POOL_IDS,
+			packageId: sdk.VORTEX_PACKAGE_ID,
+			registryId: sdk.REGISTRY_OBJECT_ID || null,
+			knownPools: sdk.VORTEX_POOL_IDS || {},
 			apiUrl: env.VORTEX_API_URL || DEFAULT_VORTEX_API_URL,
 			health: health?.data || null,
 			poolCount: pools?.data?.pagination?.total || null,
@@ -293,6 +327,7 @@ async function handleGetInfo(env: Env): Promise<Response> {
 
 /**
  * Generate Vortex UI page
+ * Note: This function doesn't need the SDK - it's just static HTML
  */
 export function generateVortexPage(env: Env): string {
 	const network = env.SUI_NETWORK
