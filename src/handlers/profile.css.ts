@@ -1951,6 +1951,20 @@ export const profileStyles = `
 		.grace-period-text strong {
 			color: var(--text);
 		}
+		.grace-period-text code {
+			background: rgba(96, 165, 250, 0.1);
+			padding: 2px 6px;
+			border-radius: 4px;
+			font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+			color: var(--accent);
+		}
+		.grace-period-text a {
+			color: var(--accent);
+			text-decoration: none;
+		}
+		.grace-period-text a:hover {
+			text-decoration: underline;
+		}
 		.grace-period-countdown {
 			margin-top: 16px;
 			padding-top: 16px;

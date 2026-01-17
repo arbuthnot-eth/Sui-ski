@@ -234,7 +234,7 @@ export function generateProfilePage(
 					<div class="grace-period-title">This name has expired</div>
 					<div class="grace-period-text">
 						The name <strong>${escapeHtml(cleanName)}.sui</strong> is currently in its 30-day grace period.
-						The owner can renew it until <strong>${expiresAt ? new Date(expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong>.
+						<span id="grace-period-owner-info">The NFT owner</span> can renew it until <strong>${expiresAt ? new Date(expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong>.
 					</div>
 					<div class="grace-period-countdown">
 						<div class="grace-countdown-label">Time left to renew:</div>
@@ -1192,6 +1192,31 @@ export function generateProfilePage(
 			}
 		}
 
+		// Update grace period owner info display
+		async function updateGracePeriodOwnerInfo() {
+			if (!IS_IN_GRACE_PERIOD) return;
+
+			const ownerInfoEl = document.getElementById('grace-period-owner-info');
+			if (!ownerInfoEl) return;
+
+			// First, ensure we have the NFT owner address
+			if (!nftOwnerAddress && NFT_ID) {
+				nftOwnerAddress = await fetchNftOwner();
+			}
+
+			if (nftOwnerAddress) {
+				// Try to get the owner's primary name
+				const ownerPrimaryName = await fetchPrimaryName(nftOwnerAddress);
+				const truncatedAddr = nftOwnerAddress.slice(0, 6) + '...' + nftOwnerAddress.slice(-4);
+
+				if (ownerPrimaryName) {
+					ownerInfoEl.innerHTML = \`<a href="https://\${ownerPrimaryName.replace(/\\.sui$/i, '')}.sui.ski" target="_blank" style="color: var(--accent); text-decoration: none;">\${ownerPrimaryName}</a> (<code style="font-size: 0.85em;">\${truncatedAddr}</code>)\`;
+				} else {
+					ownerInfoEl.innerHTML = \`<code style="font-size: 0.85em;">\${truncatedAddr}</code>\`;
+				}
+			}
+		}
+
 		// Save wallet connection to localStorage
 		function saveWalletConnection() {
 			if (connectedWalletName && connectedAddress) {
@@ -2107,6 +2132,7 @@ export function generateProfilePage(
 		updateEditButton();
 		restoreWalletConnection();
 		fetchTargetPrimaryName();
+		updateGracePeriodOwnerInfo();
 
 		// ===== TRADEPORT MARKETPLACE FUNCTIONALITY =====
 		const marketplaceLoading = document.getElementById('marketplace-loading');
