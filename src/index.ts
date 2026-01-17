@@ -24,8 +24,8 @@ import {
 import { handleTransaction } from './handlers/transaction'
 import { handleUploadPage } from './handlers/upload'
 import { handleViewsRequest } from './handlers/views'
-// Vortex SDK is too large (9MB) - temporarily disabled to stay under Cloudflare's 3MB free tier limit
-// import { generateVortexPage, handleVortexRequest } from './handlers/vortex'
+// Vortex SDK uses dynamic imports to avoid bundle size issues
+import { generateVortexPage, handleVortexRequest } from './handlers/vortex'
 import { resolveContent, resolveDirectContent, WALRUS_AGGREGATORS } from './resolvers/content'
 import { getMVRDocumentationUrl, getPackageExplorerUrl, resolveMVRPackage } from './resolvers/mvr'
 import { handleRPCRequest } from './resolvers/rpc'
@@ -69,13 +69,14 @@ export default {
 			return handleBidsRequest(request, env)
 		}
 
-		// Vortex privacy protocol API (disabled - SDK too large for free tier)
-		// if (url.pathname.startsWith('/api/vortex')) {
-		// 	return handleVortexRequest(request, env)
-		// }
-		// if (url.pathname === '/vortex' || url.pathname === '/vortex/') {
-		// 	return htmlResponse(await generateVortexPage(env))
-		// }
+		// Vortex privacy protocol API
+		if (url.pathname.startsWith('/api/vortex')) {
+			return handleVortexRequest(request, env)
+		}
+		// Vortex UI page
+		if (url.pathname === '/vortex' || url.pathname === '/vortex/') {
+			return htmlResponse(generateVortexPage(env))
+		}
 
 		// Renewal API (x402 payment-gated, Nautilus TEE)
 		if (url.pathname === '/api/renewal/request') {

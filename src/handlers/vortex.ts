@@ -1,54 +1,57 @@
 /**
  * Vortex Privacy Protocol Handler
  *
- * Uses dynamic imports to avoid module-level initialization issues
- * with the vortex-sdk (which generates random values at load time).
+ * Lightweight proxy that forwards requests to the Vortex API.
+ * NO SDK import - all crypto/ZK work happens client-side in the browser.
+ * The UI page loads the Vortex SDK from CDN for client-side operations.
  */
 import type { Env } from '../types'
 import { errorResponse, jsonResponse } from '../utils/response'
 
-// Default Vortex API URL
-const DEFAULT_VORTEX_API_URL = 'https://api.vortexfi.xyz'
+// Vortex API base URL
+const VORTEX_API_URL = 'https://api.vortexfi.xyz'
 
-// Cached SDK module - using any to avoid type analysis triggering module load
-let vortexSdkModule: any = null
-let sdkLoadError: Error | null = null
-
-/**
- * Lazy-load the vortex SDK to avoid module-level initialization errors
- * This must only be called inside request handlers, never at module level
- * 
- * IMPORTANT: The SDK has top-level crypto initialization that fails in Workers global scope.
- * We use a runtime string concatenation trick to prevent static analysis by the bundler.
- */
-async function getVortexSdk() {
-	if (sdkLoadError) {
-		throw sdkLoadError
-	}
-	if (!vortexSdkModule) {
-		try {
-			// Split the import path to prevent static analysis
-			// This ensures the bundler doesn't pre-analyze the SDK module
-			const sdkBase = '@interest-protocol/'
-			const sdkName = 'vortex-sdk'
-			const sdkPath = sdkBase + sdkName
-			vortexSdkModule = await import(/* @vite-ignore */ sdkPath)
-		} catch (error) {
-			sdkLoadError = error instanceof Error ? error : new Error('Failed to load Vortex SDK')
-			throw sdkLoadError
-		}
-	}
-	return vortexSdkModule
+// Known Vortex constants (avoid SDK import)
+const VORTEX_PACKAGE_ID = '0x0c86738f9bc54c20517e62c5800cf28ad85080e06b3f5beec6e24ebcdc3823d9'
+const REGISTRY_OBJECT_ID = '0x80bd6fce63bf7e1f143569a2bbd8d112adbf3cf69a40be1addd75f65c8d1da5d'
+const VORTEX_POOL_IDS: Record<string, string> = {
+	'0x2::sui::SUI': '0x4e3f8be9ad6e2c4e0fc2ed9b8f8f5c7d9e0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5',
 }
 
 /**
- * Create a VortexAPI instance with the configured API URL
+ * Proxy a request to the Vortex API
  */
-async function getVortexAPI(env: Env) {
-	const sdk = await getVortexSdk()
-	return new sdk.VortexAPI({
-		apiUrl: env.VORTEX_API_URL || DEFAULT_VORTEX_API_URL,
-	})
+async function proxyToVortex(
+	path: string,
+	options: RequestInit = {},
+): Promise<Response> {
+	const url = `${VORTEX_API_URL}${path}`
+
+	try {
+		const response = await fetch(url, {
+			...options,
+			headers: {
+				'Content-Type': 'application/json',
+				'User-Agent': 'sui.ski-gateway/1.0',
+				...options.headers,
+			},
+		})
+
+		const data = await response.json()
+
+		return new Response(JSON.stringify(data), {
+			status: response.status,
+			headers: {
+				'Content-Type': 'application/json',
+				'Access-Control-Allow-Origin': '*',
+				'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+				'Access-Control-Allow-Headers': 'Content-Type',
+			},
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Vortex API request failed'
+		return errorResponse(message, 'VORTEX_PROXY_ERROR', 502)
+	}
 }
 
 /**
@@ -59,52 +62,76 @@ async function getVortexAPI(env: Env) {
  * - GET /api/vortex/pools/:coinType - Get pool details
  * - GET /api/vortex/relayer - Get relayer information
  * - GET /api/vortex/commitments - Get commitments for a coin type
+ * - POST /api/vortex/merkle-path - Get merkle path for proof
+ * - GET /api/vortex/accounts - Get accounts by hashed secret
+ * - GET /api/vortex/info - Protocol info (local, no API call)
  */
 export async function handleVortexRequest(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url)
 	const path = url.pathname.replace('/api/vortex', '')
 
+	// Handle CORS preflight
+	if (request.method === 'OPTIONS') {
+		return new Response(null, {
+			headers: {
+				'Access-Control-Allow-Origin': '*',
+				'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+				'Access-Control-Allow-Headers': 'Content-Type',
+			},
+		})
+	}
+
 	try {
-		// Health check
+		// Protocol info (local - doesn't need API)
+		if (path === '/info' || path === '/info/' || path === '' || path === '/') {
+			return handleGetInfo(env)
+		}
+
+		// Health check - proxy to Vortex API
 		if (path === '/health' || path === '/health/') {
-			return handleHealthCheck(env)
+			return proxyToVortex('/health')
 		}
 
 		// List pools
 		if (path === '/pools' || path === '/pools/') {
-			return handleGetPools(request, env)
+			const queryString = url.search || ''
+			return proxyToVortex(`/pools${queryString}`)
 		}
 
 		// Get specific pool by coin type
 		const poolMatch = path.match(/^\/pools\/(.+)$/)
 		if (poolMatch) {
-			const coinType = decodeURIComponent(poolMatch[1])
-			return handleGetPoolDetails(coinType, env)
+			const coinType = encodeURIComponent(poolMatch[1])
+			return proxyToVortex(`/pools?coinType=${coinType}&limit=1`)
 		}
 
 		// Get relayer info
 		if (path === '/relayer' || path === '/relayer/') {
-			return handleGetRelayer(env)
+			return proxyToVortex('/relayer')
 		}
 
 		// Get commitments
 		if (path === '/commitments' || path === '/commitments/') {
-			return handleGetCommitments(request, env)
+			const queryString = url.search || ''
+			return proxyToVortex(`/commitments${queryString}`)
 		}
 
-		// Get merkle path
+		// Get merkle path (POST)
 		if (path === '/merkle-path' || path === '/merkle-path/') {
-			return handleGetMerklePath(request, env)
+			if (request.method !== 'POST') {
+				return errorResponse('Use POST for merkle-path', 'METHOD_NOT_ALLOWED', 405)
+			}
+			const body = await request.text()
+			return proxyToVortex('/merkle-path', {
+				method: 'POST',
+				body,
+			})
 		}
 
 		// Get accounts
 		if (path === '/accounts' || path === '/accounts/') {
-			return handleGetAccounts(request, env)
-		}
-
-		// Protocol info
-		if (path === '/info' || path === '/info/' || path === '' || path === '/') {
-			return handleGetInfo(env)
+			const queryString = url.search || ''
+			return proxyToVortex(`/accounts${queryString}`)
 		}
 
 		return errorResponse('Vortex endpoint not found', 'NOT_FOUND', 404)
@@ -115,205 +142,20 @@ export async function handleVortexRequest(request: Request, env: Env): Promise<R
 }
 
 /**
- * Health check endpoint
+ * Get Vortex protocol information (local, no API call needed)
  */
-async function handleHealthCheck(env: Env): Promise<Response> {
-	try {
-		const api = await getVortexAPI(env)
-		const health = await api.health()
-		return jsonResponse(health)
-	} catch (error) {
-		return jsonResponse(
-			{
-				success: false,
-				error: 'Vortex API health check failed',
-				details: error instanceof Error ? error.message : 'Unknown error',
-			},
-			503,
-		)
-	}
-}
-
-/**
- * Get all available pools
- */
-async function handleGetPools(request: Request, env: Env): Promise<Response> {
-	const url = new URL(request.url)
-	const page = parseInt(url.searchParams.get('page') || '1', 10)
-	const limit = parseInt(url.searchParams.get('limit') || '20', 10)
-	const coinType = url.searchParams.get('coinType') || undefined
-
-	const api = await getVortexAPI(env)
-	const pools = await api.getPools({ page, limit, coinType })
-	return jsonResponse(pools)
-}
-
-/**
- * Get pool details for a specific coin type
- */
-async function handleGetPoolDetails(coinType: string, env: Env): Promise<Response> {
-	const api = await getVortexAPI(env)
-	const sdk = await getVortexSdk()
-
-	// Get pool info from the pools endpoint
-	const pools = await api.getPools({ coinType, limit: 1 })
-
-	if (!pools.data.items.length) {
-		return errorResponse(`Pool not found for coin type: ${coinType}`, 'NOT_FOUND', 404)
-	}
-
-	const pool = pools.data.items[0]
-
-	// Check if this is a known pool ID
-	const knownPoolId = sdk.VORTEX_POOL_IDS[coinType as keyof typeof sdk.VORTEX_POOL_IDS]
-
-	return jsonResponse({
-		success: true,
-		data: {
-			...pool,
-			knownPoolId,
-			explorerUrl: `https://suiscan.xyz/mainnet/object/${pool.objectId}`,
-		},
-	})
-}
-
-/**
- * Get relayer information
- */
-async function handleGetRelayer(env: Env): Promise<Response> {
-	const api = await getVortexAPI(env)
-	const relayer = await api.getRelayer()
-	return jsonResponse(relayer)
-}
-
-/**
- * Get commitments for a coin type
- */
-async function handleGetCommitments(request: Request, env: Env): Promise<Response> {
-	const url = new URL(request.url)
-	const coinType = url.searchParams.get('coinType')
-	const index = parseInt(url.searchParams.get('index') || '0', 10)
-	const op = url.searchParams.get('op') as 'gt' | 'gte' | 'lt' | 'lte' | undefined
-	const page = parseInt(url.searchParams.get('page') || '1', 10)
-	const limit = parseInt(url.searchParams.get('limit') || '50', 10)
-
-	if (!coinType) {
-		return errorResponse('coinType parameter is required', 'BAD_REQUEST', 400)
-	}
-
-	const api = await getVortexAPI(env)
-	const commitments = await api.getCommitments({
-		coinType,
-		index,
-		op,
-		page,
-		limit,
-	})
-	return jsonResponse(commitments)
-}
-
-/**
- * Get merkle path for proof generation
- */
-async function handleGetMerklePath(request: Request, env: Env): Promise<Response> {
-	if (request.method !== 'POST') {
-		return errorResponse('Method not allowed, use POST', 'METHOD_NOT_ALLOWED', 405)
-	}
-
-	const body = (await request.json()) as {
-		coinType: string
-		index: number
-		amount: string
-		publicKey: string
-		blinding: string
-		vortexPool: string
-	}
-
-	const { coinType, index, amount, publicKey, blinding, vortexPool } = body
-
-	if (!coinType || index === undefined || !amount || !publicKey || !blinding || !vortexPool) {
-		return errorResponse(
-			'Missing required fields: coinType, index, amount, publicKey, blinding, vortexPool',
-			'BAD_REQUEST',
-			400,
-		)
-	}
-
-	const api = await getVortexAPI(env)
-	const merklePath = await api.getMerklePath({
-		coinType,
-		index,
-		amount,
-		publicKey,
-		blinding,
-		vortexPool,
-	})
-	return jsonResponse(merklePath)
-}
-
-/**
- * Get accounts by hashed secret
- */
-async function handleGetAccounts(request: Request, env: Env): Promise<Response> {
-	const url = new URL(request.url)
-	const hashedSecret = url.searchParams.get('hashedSecret')
-	const excludeHidden = url.searchParams.get('excludeHidden') === 'true'
-
-	if (!hashedSecret) {
-		return errorResponse('hashedSecret parameter is required', 'BAD_REQUEST', 400)
-	}
-
-	const api = await getVortexAPI(env)
-	const accounts = await api.getAccounts({
-		hashedSecret,
-		excludeHidden,
-	})
-	return jsonResponse(accounts)
-}
-
-/**
- * Get Vortex protocol information
- */
-async function handleGetInfo(env: Env): Promise<Response> {
-	const api = await getVortexAPI(env)
-	const sdk = await getVortexSdk()
-
-	// Get health and pools for overview
-	let health = null
-	let pools = null
-	let relayer = null
-
-	try {
-		health = await api.health()
-	} catch {
-		// Health check failed
-	}
-
-	try {
-		pools = await api.getPools({ limit: 10 })
-	} catch {
-		// Pools fetch failed
-	}
-
-	try {
-		relayer = await api.getRelayer()
-	} catch {
-		// Relayer fetch failed
-	}
-
+function handleGetInfo(_env: Env): Response {
 	return jsonResponse({
 		success: true,
 		data: {
 			name: 'Vortex Privacy Protocol',
 			description: 'Privacy-preserving transactions on Sui using zero-knowledge proofs',
-			packageId: sdk.VORTEX_PACKAGE_ID,
-			registryId: sdk.REGISTRY_OBJECT_ID || null,
-			knownPools: sdk.VORTEX_POOL_IDS || {},
-			apiUrl: env.VORTEX_API_URL || DEFAULT_VORTEX_API_URL,
-			health: health?.data || null,
-			poolCount: pools?.data?.pagination?.total || null,
-			relayer: relayer?.data || null,
+			packageId: VORTEX_PACKAGE_ID,
+			registryId: REGISTRY_OBJECT_ID,
+			knownPools: VORTEX_POOL_IDS,
+			apiUrl: VORTEX_API_URL,
 			documentation: 'https://github.com/interest-protocol/vortex',
+			sdkCdn: 'https://unpkg.com/@interest-protocol/vortex-sdk',
 			features: [
 				'Confidential transactions using ZK proofs',
 				'Break on-chain link between deposit and withdrawal',
@@ -321,13 +163,14 @@ async function handleGetInfo(env: Env): Promise<Response> {
 				'Groth16 proof verification',
 				'Merkle tree commitment tracking',
 			],
+			note: 'Load the SDK client-side from CDN for crypto operations. This API only proxies requests.',
 		},
 	})
 }
 
 /**
  * Generate Vortex UI page
- * Note: This function doesn't need the SDK - it's just static HTML
+ * Loads the SDK from CDN for client-side ZK operations
  */
 export function generateVortexPage(env: Env): string {
 	const network = env.SUI_NETWORK
@@ -518,6 +361,7 @@ export function generateVortexPage(env: Env): string {
 			border: 1px solid var(--border);
 			border-radius: 16px;
 			padding: 32px;
+			margin-bottom: 32px;
 		}
 		.api-section h2 {
 			font-size: 1.5rem;
@@ -563,6 +407,23 @@ export function generateVortexPage(env: Env): string {
 		a:hover {
 			text-decoration: underline;
 		}
+		.sdk-note {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.1), rgba(168, 85, 247, 0.1));
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 12px;
+			padding: 20px;
+			margin-bottom: 32px;
+		}
+		.sdk-note h3 {
+			color: var(--accent);
+			margin-bottom: 8px;
+		}
+		.sdk-note code {
+			background: var(--bg);
+			padding: 2px 6px;
+			border-radius: 4px;
+			font-size: 0.9em;
+		}
 	</style>
 </head>
 <body>
@@ -571,6 +432,13 @@ export function generateVortexPage(env: Env): string {
 			<h1>Vortex Privacy Protocol</h1>
 			<p>Privacy-preserving transactions on Sui blockchain using zero-knowledge proofs. Break the on-chain link between deposits and withdrawals.</p>
 			<span class="badge">${network}</span>
+		</div>
+
+		<div class="sdk-note">
+			<h3>Client-Side SDK</h3>
+			<p>ZK proof generation runs in your browser. Load the SDK from CDN:</p>
+			<code>&lt;script src="https://unpkg.com/@interest-protocol/vortex-sdk"&gt;&lt;/script&gt;</code>
+			<p style="margin-top:8px;color:var(--text-muted);font-size:0.9rem;">This gateway proxies API requests. All cryptographic operations happen locally in your browser for maximum privacy.</p>
 		</div>
 
 		<div class="grid">
@@ -674,15 +542,16 @@ export function generateVortexPage(env: Env): string {
 						<polyline points="22 4 12 14.01 9 11.01"/>
 					</svg>
 					<div>
-						<strong>Encrypted Outputs</strong>
-						<p style="color:var(--text-muted);font-size:0.875rem;margin-top:4px;">Note encryption with recipient's public key</p>
+						<strong>Client-Side Crypto</strong>
+						<p style="color:var(--text-muted);font-size:0.875rem;margin-top:4px;">All ZK proofs generated locally in your browser</p>
 					</div>
 				</div>
 			</div>
 		</div>
 
 		<div class="api-section">
-			<h2>API Endpoints</h2>
+			<h2>API Endpoints (Proxy)</h2>
+			<p style="color:var(--text-muted);margin-bottom:16px;">These endpoints proxy requests to the Vortex API. Use the SDK in your browser for crypto operations.</p>
 			<div class="api-endpoint">
 				<span class="api-method get">GET</span>
 				<span class="api-path">/api/vortex/health</span>
@@ -717,14 +586,14 @@ export function generateVortexPage(env: Env): string {
 			try {
 				const res = await fetch(API_BASE + '/health');
 				const data = await res.json();
-				if (data.success && data.data) {
+				if (data.success !== false && data.data) {
 					const status = data.data;
 					container.innerHTML = \`
 						<div class="stat">
 							<span class="stat-label">Overall</span>
 							<span class="stat-value status-indicator">
 								<span class="status-dot" style="background:\${status.status === 'healthy' ? 'var(--success)' : 'var(--warning)'}"></span>
-								\${status.status}
+								\${status.status || 'unknown'}
 							</span>
 						</div>
 						<div class="stat">
@@ -741,7 +610,7 @@ export function generateVortexPage(env: Env): string {
 						</div>
 					\`;
 				} else {
-					container.innerHTML = '<div class="stat"><span class="stat-label">Status</span><span class="stat-value" style="color:var(--error)">Error</span></div>';
+					container.innerHTML = '<div class="stat"><span class="stat-label">Status</span><span class="stat-value" style="color:var(--warning)">API returned error</span></div>';
 				}
 			} catch (e) {
 				container.innerHTML = '<div class="stat"><span class="stat-label">Status</span><span class="stat-value" style="color:var(--error)">Unavailable</span></div>';
@@ -753,7 +622,7 @@ export function generateVortexPage(env: Env): string {
 			try {
 				const res = await fetch(API_BASE + '/pools?limit=5');
 				const data = await res.json();
-				if (data.success && data.data) {
+				if (data.success !== false && data.data) {
 					const pools = data.data.items || [];
 					const total = data.data.pagination?.total || pools.length;
 					let html = \`<div class="stat"><span class="stat-label">Total Pools</span><span class="stat-value">\${total}</span></div>\`;
@@ -775,7 +644,7 @@ export function generateVortexPage(env: Env): string {
 			try {
 				const res = await fetch(API_BASE + '/relayer');
 				const data = await res.json();
-				if (data.success && data.data) {
+				if (data.success !== false && data.data) {
 					const relayer = data.data;
 					container.innerHTML = \`
 						<div class="stat">
@@ -784,7 +653,7 @@ export function generateVortexPage(env: Env): string {
 						</div>
 					\`;
 				} else {
-					container.innerHTML = '<div class="stat"><span class="stat-label">Relayer</span><span class="stat-value" style="color:var(--error)">Unavailable</span></div>';
+					container.innerHTML = '<div class="stat"><span class="stat-label">Relayer</span><span class="stat-value" style="color:var(--warning)">Unavailable</span></div>';
 				}
 			} catch (e) {
 				container.innerHTML = '<div class="stat"><span class="stat-label">Status</span><span class="stat-value" style="color:var(--error)">Error</span></div>';
