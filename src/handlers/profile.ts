@@ -3795,7 +3795,7 @@ ${generatePasskeyWalletStyles()}
 						</div>
 
 						<div class="marketplace-error" id="marketplace-error" style="display: none;">
-							<p>Failed to load marketplace data</p>
+							<p class="error-text">Failed to load marketplace data</p>
 							<button class="retry-btn" id="retry-marketplace">Retry</button>
 						</div>
 					</div>
@@ -4618,23 +4618,23 @@ ${generatePasskeyWalletStyles()}
 						nameDescription = data.description;
 						showNameDescription();
 					} else {
-						// Hide card if description fails
-						if (nameDescriptionCard) {
-							nameDescriptionCard.style.display = 'none';
-						}
+						// Use fallback description if API returns without success
+						const cleanName = NAME.replace(/\\.sui$/i, '');
+						nameDescription = \`Welcome to \${cleanName}.sui! Build your digital identity on the Sui blockchain and connect with the decentralized web.\`;
+						showNameDescription();
 					}
 				} else {
-					// Hide card if API fails
-					if (nameDescriptionCard) {
-						nameDescriptionCard.style.display = 'none';
-					}
+					// Use fallback description if API fails
+					const cleanName = NAME.replace(/\\.sui$/i, '');
+					nameDescription = \`Welcome to \${cleanName}.sui! Build your digital identity on the Sui blockchain and connect with the decentralized web.\`;
+					showNameDescription();
 				}
 			} catch (error) {
 				console.error('Failed to load name description:', error);
-				// Hide card on error
-				if (nameDescriptionCard) {
-					nameDescriptionCard.style.display = 'none';
-				}
+				// Use fallback description on error
+				const cleanName = NAME.replace(/\\.sui$/i, '');
+				nameDescription = \`Welcome to \${cleanName}.sui! Build your digital identity on the Sui blockchain and connect with the decentralized web.\`;
+				showNameDescription();
 			}
 		}
 
@@ -5146,7 +5146,13 @@ ${generatePasskeyWalletStyles()}
 
 			try {
 				const res = await fetch(\`/api/tradeport/name/\${NAME}\`);
-				if (!res.ok) throw new Error('API error');
+				if (!res.ok) {
+					// Handle 502 and other errors gracefully
+					if (res.status === 502 || res.status >= 500) {
+						throw new Error('Tradeport service temporarily unavailable');
+					}
+					throw new Error(\`API error: \${res.status}\`);
+				}
 
 				const data = await res.json();
 
@@ -5200,7 +5206,16 @@ ${generatePasskeyWalletStyles()}
 			} catch (error) {
 				console.error('Failed to load marketplace data:', error);
 				marketplaceLoading.style.display = 'none';
+				marketplaceContent.style.display = 'none';
 				marketplaceError.style.display = 'block';
+				// Update error message if available
+				const errorMsg = error instanceof Error ? error.message : 'Failed to load marketplace data';
+				if (marketplaceError) {
+					const errorText = marketplaceError.querySelector('.error-text');
+					if (errorText) {
+						errorText.textContent = errorMsg;
+					}
+				}
 			}
 		}
 

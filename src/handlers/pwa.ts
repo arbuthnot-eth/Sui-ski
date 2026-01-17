@@ -58,6 +58,7 @@ export function getManifest(suinsName?: string): string {
 		share_target: {
 			action: '/?action=share',
 			method: 'GET',
+			enctype: 'application/x-www-form-urlencoded',
 			params: {
 				title: 'title',
 				text: 'text',
@@ -84,7 +85,22 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
 	event.waitUntil(
 		caches.open(CACHE_NAME)
-			.then((cache) => cache.addAll(STATIC_ASSETS))
+			.then((cache) => {
+				// Only cache assets with http/https protocols
+				return Promise.allSettled(
+					STATIC_ASSETS.map((url) => {
+						if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
+							return cache.add(url).catch((err) => {
+								// Silently ignore cache errors for unsupported schemes
+								if (!err.message.includes('unsupported')) {
+									console.warn('Failed to cache:', url, err);
+								}
+							});
+						}
+						return Promise.resolve();
+					})
+				);
+			})
 			.then(() => self.skipWaiting())
 	);
 });
@@ -138,11 +154,20 @@ self.addEventListener('fetch', (event) => {
 	event.respondWith(
 		fetch(event.request)
 			.then((response) => {
-				// Cache successful responses
-				if (response.ok) {
+				// Cache successful responses, but skip unsupported schemes (chrome-extension://, etc.)
+				if (response.ok && url.protocol.startsWith('http')) {
 					const clone = response.clone();
 					caches.open(CACHE_NAME).then((cache) => {
-						cache.put(event.request, clone);
+						try {
+							cache.put(event.request, clone).catch((err) => {
+								// Silently ignore cache errors for unsupported schemes
+								if (!err.message.includes('unsupported')) {
+									console.warn('Cache put failed:', err);
+								}
+							});
+						} catch (err) {
+							// Ignore cache errors
+						}
 					});
 				}
 				return response;
