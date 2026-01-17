@@ -4814,22 +4814,20 @@ export function generateProfilePage(
 			setInterval(updateGracePeriodCountdown, 1000);
 		}
 
-		if (premiumSlider) {
-			premiumSlider.addEventListener('input', () => {
-				premiumSliderLocked = true;
-				updatePremiumSliderReadout();
-			});
-			updatePremiumSliderReadout(0);
-		}
+		if (premiumGraphContainer) {
+			const handlePointer = (event) => {
+				const rect = premiumGraphContainer.getBoundingClientRect();
+				const progress = (event.clientX - rect.left) / rect.width;
+				if (Number.isNaN(progress)) return;
+				premiumHoverProgress = Math.max(0, Math.min(1, progress));
+				renderPremiumState(premiumHoverProgress, 'hover');
+			};
 
-		if (premiumTargetBtn) {
-			premiumTargetBtn.addEventListener('click', estimatePremiumTarget);
-		}
-		if (premiumTargetInput) {
-			premiumTargetInput.addEventListener('keydown', (event) => {
-				if (event.key === 'Enter') {
-					estimatePremiumTarget();
-				}
+			premiumGraphContainer.addEventListener('pointermove', handlePointer);
+			premiumGraphContainer.addEventListener('pointerdown', handlePointer);
+			premiumGraphContainer.addEventListener('pointerleave', () => {
+				premiumHoverProgress = null;
+				updateGraceSkillCounter();
 			});
 		}
 
