@@ -4737,7 +4737,14 @@ export function generateProfilePage(
 		}
 
 		function updateHoverPaths(progress, nsProgress, isHover) {
-			if (!decayHoverPath || !nsDecayHoverPath || decayCurvePoints.length === 0) return;
+			if (
+				!decayHoverPath ||
+				!nsDecayHoverPath ||
+				decayCurvePoints.length === 0 ||
+				nsDecayCurvePoints.length === 0
+			) {
+				return;
+			}
 
 			if (progress === null) {
 				decayHoverPath.setAttribute('d', '');
@@ -5404,12 +5411,18 @@ export function generateProfilePage(
 		// Update SUI price
 		const suiPriceEl = document.getElementById('sui-price');
 		async function updateSUIPrice() {
+			if (!suiPriceEl) return;
 			try {
 				const response = await fetch('/api/sui-price');
-				if (!response.ok) throw new Error('Failed to fetch price');
+				if (!response.ok) {
+					const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+					throw new Error(errorData.error || 'Failed to fetch price');
+				}
 				const data = await response.json();
-				if (data.price && suiPriceEl) {
+				if (data && typeof data.price === 'number' && !isNaN(data.price)) {
 					suiPriceEl.textContent = '$' + data.price.toFixed(2);
+				} else {
+					suiPriceEl.textContent = '$--';
 				}
 			} catch (error) {
 				console.error('Failed to update SUI price:', error);
@@ -5418,8 +5431,10 @@ export function generateProfilePage(
 				}
 			}
 		}
-		updateSUIPrice();
-		setInterval(updateSUIPrice, 60000); // Update every minute
+		if (suiPriceEl) {
+			updateSUIPrice();
+			setInterval(updateSUIPrice, 60000); // Update every minute
+		}
 	</script>
 </body>
 </html>`

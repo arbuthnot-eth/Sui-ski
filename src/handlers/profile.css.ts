@@ -2056,6 +2056,7 @@ export const profileStyles = `
 		.premium-graph-container {
 			margin: 10px 0;
 			position: relative;
+			cursor: crosshair;
 		}
 		.premium-decay-graph {
 			width: 100%;
@@ -2118,7 +2119,7 @@ export const profileStyles = `
 			stroke-width: 2.5;
 			stroke-linecap: round;
 			stroke-linejoin: round;
-			opacity: 0;
+			opacity: 0.4;
 			transition: opacity 0.15s ease;
 		}
 		.decay-hover-path {
@@ -2204,23 +2205,8 @@ export const profileStyles = `
 			opacity: 0.8;
 			font-style: italic;
 		}
-		.premium-hover-time {
-			font-size: 0.75rem;
-			color: var(--text-muted);
-			margin-top: 8px;
-			font-family: var(--font-mono, SFMono-Regular, monospace);
-		}
-		.premium-hover-time {
-			font-size: 0.75rem;
-			color: var(--text-muted);
-			margin-top: 8px;
-			font-family: var(--font-mono, SFMono-Regular, monospace);
-		}
 		.premium-hover-time strong {
 			color: var(--text);
-		}
-		.premium-graph-container {
-			cursor: crosshair;
 		}
 		.grace-period-actions {
 			flex-shrink: 0;
