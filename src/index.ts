@@ -7,6 +7,7 @@ import { generateProfilePage } from './handlers/profile'
 import { handlePWARequest } from './handlers/pwa'
 import { handleRegistrationSubmission } from './handlers/register'
 import { handleSuinsManagerRequest, generateSuinsManagerPage } from './handlers/suins-manager'
+import { handleGrpcProxyRequest, generateGrpcProxyPage } from './handlers/grpc-proxy'
 import {
 	handleNautilusCallback,
 	handleNautilusQueue,
@@ -86,6 +87,15 @@ export default {
 		// SuiNS Manager UI page
 		if (url.pathname === '/suins' || url.pathname === '/suins/') {
 			return htmlResponse(generateSuinsManagerPage(env))
+		}
+
+		// gRPC Backend Proxy API
+		if (url.pathname.startsWith('/api/grpc')) {
+			return handleGrpcProxyRequest(request, env)
+		}
+		// gRPC Proxy status page
+		if (url.pathname === '/grpc' || url.pathname === '/grpc/') {
+			return htmlResponse(generateGrpcProxyPage(env))
 		}
 
 		// Renewal API (x402 payment-gated, Nautilus TEE)

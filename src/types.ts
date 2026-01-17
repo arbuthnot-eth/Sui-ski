@@ -10,6 +10,9 @@ export interface Env {
 	MOVE_REGISTRY_PARENT_ID?: string
 	// Vortex privacy protocol API URL
 	VORTEX_API_URL?: string
+	// gRPC backend proxy configuration
+	GRPC_BACKEND_URL?: string
+	GRPC_BACKEND_API_KEY?: string
 }
 
 export type RouteType = 'suins' | 'mvr' | 'content' | 'rpc' | 'root'

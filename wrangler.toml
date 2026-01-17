@@ -25,6 +25,13 @@ MESSAGING_CONTRACT_ADDRESS = "0x9a814ab4f67fff8ec2a8bb1ddcf188b26119ae6866eea9f3
 #   If not set, anyone can use AI features (payment still required)
 # Note: Payments automatically go to the alias.sui address (target address of the SuiNS name)
 
+# gRPC Backend Proxy Configuration
+# Set backend URL as secret: wrangler secret put GRPC_BACKEND_URL
+# Set API key as secret: wrangler secret put GRPC_BACKEND_API_KEY
+# GRPC_BACKEND_URL - HTTP endpoint that translates to gRPC calls (e.g., https://grpc.example.com)
+# GRPC_BACKEND_API_KEY - Optional: API key for backend authentication
+# Benefits: Binary protocol efficiency, HTTP/2 multiplexing, connection pooling
+
 # KV namespace for caching resolved names
 [[kv_namespaces]]
 binding = "CACHE"
