@@ -295,7 +295,9 @@ async function maybeAutoSubmitBid(
 	bidder: string,
 	bid: QueuedBid,
 ): Promise<QueuedBid> {
-	if (!bid.txBytes || !Array.isArray(bid.signatures) || bid.signatures.length === 0) {
+	const txBytes = bid.txBytes
+	const signatures = bid.signatures
+	if (!txBytes || !Array.isArray(signatures) || signatures.length === 0) {
 		return bid
 	}
 
@@ -308,7 +310,7 @@ async function maybeAutoSubmitBid(
 
 	await saveBidRecord(env, bidKey, workingCopy)
 
-	const relay = await relaySignedTransaction(env, workingCopy.txBytes, workingCopy.signatures)
+	const relay = await relaySignedTransaction(env, txBytes, signatures)
 
 	if (relay.ok) {
 		workingCopy.status = 'submitted'

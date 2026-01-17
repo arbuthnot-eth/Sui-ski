@@ -19,7 +19,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>\${escapeHtml(cleanName)}.sui available | sui.ski</title>
+	<title>${escapeHtml(cleanName)}.sui available | sui.ski</title>
 	<style>
 		:root {
 			--bg: #05060c;
@@ -272,7 +272,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		<div class="card">
 			<div class="header">
 				<div class="badge ${isRegisterable ? 'success' : 'warning'}">${isRegisterable ? 'Name available for registration' : 'Minimum length is 3 characters'}</div>
-				<h1>\${escapeHtml(cleanName)}<span>.sui</span></h1>
+				<h1>${escapeHtml(cleanName)}<span>.sui</span></h1>
 				<p style="color: var(--muted); font-size: 0.95rem;">Network: ${escapeHtml(network)}</p>
 			</div>
 			<p style="color: var(--muted); text-align: center;">Queue a bid, attach offline-signed registrations for automatic relay, or broadcast your own transaction without exposing keys.</p>
@@ -414,7 +414,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 
 		async function loadBids() {
 			try {
-				const res = await fetch(\`/api/bids/\${NAME}\`);
+				const res = await fetch('/api/bids/' + NAME);
 				if (!res.ok) throw new Error('Request failed');
 				const data = await res.json();
 				const bids = Array.isArray(data.bids) ? data.bids : [];
@@ -447,7 +447,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			}
 		}
 
-		const HTML_ESCAPE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', ''': '&#39;' };
+		const HTML_ESCAPE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
 		function escapeHtml(value) {
 			return String(value ?? '').replace(/[&<>\"']/g, (char) => HTML_ESCAPE[char] || char);
@@ -482,14 +482,15 @@ export function generateRegistrationPage(name: string, env: Env): string {
 						chips.push('<span class=\"status-chip failed\">' + escapeHtml(limitText(bid.lastError, 40)) + '</span>');
 					}
 					const metaRow = chips.length ? '<div class=\"bid-meta\">' + chips.join('') + '</div>' : '';
-					return `<li>
-						<div class=\"bid-main\">
-							<span>\\\${escapeHtml(shortAddr)}</span>
-							<span>\\\${escapeHtml(amt)} SUI</span>
-							<span>\\\${escapeHtml(eta)}</span>
-						</div>
-						${metaRow}
-					</li>`;
+					let row = '<li>';
+					row += '<div class=\"bid-main\">';
+					row += '<span>' + escapeHtml(shortAddr) + '</span>';
+					row += '<span>' + escapeHtml(amt) + ' SUI</span>';
+					row += '<span>' + escapeHtml(eta) + '</span>';
+					row += '</div>';
+					row += metaRow;
+					row += '</li>';
+					return row;
 				})
 				.join('');
 			bidListEl.innerHTML = '<ul>' + items + '</ul>';
