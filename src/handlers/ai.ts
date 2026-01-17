@@ -67,6 +67,8 @@ export async function handleAIRequest(request: Request, env: Env): Promise<Respo
 				return handleGenerateAvatar(request, env)
 			case 'generate-image':
 				return handleGenerateImage(request, env)
+			case 'generate-description':
+				return handleGenerateDescription(request, env)
 			case 'create-payment-tx':
 				return handleCreatePaymentTransaction(request, env)
 			default:
@@ -191,6 +193,62 @@ async function handleGenerateAvatar(request: Request, env: Env): Promise<Respons
 			success: true,
 			description: aiResponse.content,
 			prompt: userDescription,
+		},
+		200,
+		CORS_HEADERS,
+	)
+}
+
+/**
+ * Generate an inspiring description for a SuiNS name using Gemini 3 Flash
+ * This description should inspire someone to build an identity with their SUINS name
+ */
+async function handleGenerateDescription(request: Request, env: Env): Promise<Response> {
+	let payload: { name?: string }
+	try {
+		payload = (await request.json()) as typeof payload
+	} catch {
+		return jsonResponse({ error: 'Invalid JSON body' }, 400, CORS_HEADERS)
+	}
+
+	if (!payload.name) {
+		return jsonResponse({ error: 'SuiNS name is required' }, 400, CORS_HEADERS)
+	}
+
+	// Extract the name without .sui suffix
+	const cleanName = payload.name.replace(/\.sui$/i, '').toLowerCase()
+
+	// Call Gemini 3 Flash via OpenRouter to generate inspiring description
+	const aiResponse = await callOpenRouter(env, {
+		messages: [
+			{
+				role: 'system',
+				content: `You are a creative identity consultant for the Sui blockchain. Generate inspiring, motivational descriptions for SuiNS names that encourage people to build their digital identity. Your descriptions should:
+- Be concise (2-3 sentences, max 150 words)
+- Capture the essence and potential of the name
+- Inspire creativity and identity building
+- Be positive and forward-looking
+- Connect the name to web3, blockchain, and digital identity concepts
+- Avoid generic phrases, be specific and evocative`,
+			},
+			{
+				role: 'user',
+				content: `Generate an inspiring description for the SuiNS name "${cleanName}". This description will be displayed on their profile page to inspire them to build their digital identity. Make it compelling and unique to this name.`,
+			},
+		],
+		temperature: 0.8,
+		max_tokens: 200,
+	})
+
+	if (!aiResponse.success) {
+		return jsonResponse({ error: aiResponse.error || 'Failed to generate description' }, 500, CORS_HEADERS)
+	}
+
+	return jsonResponse(
+		{
+			success: true,
+			name: cleanName,
+			description: aiResponse.content?.trim() || '',
 		},
 		200,
 		CORS_HEADERS,

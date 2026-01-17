@@ -269,6 +269,26 @@ export function generateProfilePage(
 			height: 85%;
 			border-radius: 8px;
 		}
+		.identity-description {
+			padding: 24px;
+			text-align: center;
+			color: var(--text);
+			font-size: 0.95rem;
+			line-height: 1.6;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			min-height: 100%;
+		}
+		.identity-description p {
+			margin: 0;
+			color: rgba(228, 228, 231, 0.9);
+			font-style: italic;
+		}
+		.identity-description.loading {
+			color: var(--text-muted);
+			font-style: normal;
+		}
 		.identity-qr-toggle {
 			position: absolute;
 			bottom: 8px;
@@ -4511,74 +4531,70 @@ ${generatePasskeyWalletStyles()}
 			});
 		}
 
-		// ===== IDENTITY CARD (NFT + QR) =====
-		function normalizeImageUrl(url) {
-			if (!url) return '';
-			if (url.startsWith('ipfs://')) {
-				return 'https://ipfs.io/ipfs/' + url.slice(7);
+		// ===== IDENTITY CARD (DESCRIPTION) =====
+		let nameDescription = null;
+		let descriptionLoaded = false;
+
+		function showIdentityDescription() {
+			if (!identityVisual) return;
+			// Hide QR canvas
+			if (identityCanvas) identityCanvas.style.display = 'none';
+			// Hide toggle button (not needed for descriptions)
+			if (qrToggle) qrToggle.style.display = 'none';
+			// Remove any existing description
+			const existingDesc = identityVisual.querySelector('.identity-description');
+			if (existingDesc) existingDesc.remove();
+			
+			// Create and show description
+			const descEl = document.createElement('div');
+			descEl.className = 'identity-description';
+			if (nameDescription) {
+				descEl.innerHTML = \`<p>\${nameDescription}</p>\`;
+			} else {
+				descEl.className += ' loading';
+				descEl.textContent = 'Loading inspiration...';
 			}
-			return url;
+			identityVisual.appendChild(descEl);
 		}
 
 		function showIdentityQr() {
 			if (!identityVisual || !identityCanvas) return;
-			// Remove any NFT image
-			const existingImg = identityVisual.querySelector('img');
-			if (existingImg) existingImg.remove();
-			// Show canvas
+			// Remove description
+			const existingDesc = identityVisual.querySelector('.identity-description');
+			if (existingDesc) existingDesc.remove();
+			// Show canvas (for QR overlay, not main view)
 			identityCanvas.style.display = 'block';
 			showingQr = true;
-			if (qrToggle) qrToggle.classList.remove('active');
 		}
 
-		function showIdentityNft() {
-			if (!identityVisual || !nftImageUrl) return;
-			// Hide canvas
-			if (identityCanvas) identityCanvas.style.display = 'none';
-			// Add/update NFT image
-			let img = identityVisual.querySelector('img');
-			if (!img) {
-				img = document.createElement('img');
-				img.alt = FULL_NAME;
-				identityVisual.insertBefore(img, identityVisual.firstChild);
-			}
-			img.src = nftImageUrl;
-			showingQr = false;
-			if (qrToggle) qrToggle.classList.add('active');
-		}
-
-		function toggleIdentityView() {
-			if (!nftImageUrl) return; // No NFT image to toggle to
-			if (showingQr) {
-				showIdentityNft();
-			} else {
-				showIdentityQr();
-			}
-		}
-
-		async function loadNftImage() {
-			if (!NFT_ID) return;
-			if (nftDisplayLoaded) return;
+		async function loadNameDescription() {
+			if (descriptionLoaded) return;
+			descriptionLoaded = true;
+			
 			try {
-				const suiClient = new SuiClient({ url: RPC_URL });
-				const response = await suiClient.getObject({
-					id: NFT_ID,
-					options: { showDisplay: true }
+				const response = await fetch('/api/ai/generate-description', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ name: NAME }),
 				});
-				const display = response?.data?.display?.data;
-				if (display) {
-					const imgUrl = normalizeImageUrl(display.image_url || display.image);
-					if (imgUrl) {
-						nftImageUrl = imgUrl;
-						// Show toggle button since we have an NFT image
-						if (qrToggle) qrToggle.style.display = 'flex';
-						// Auto-show NFT instead of QR
-						showIdentityNft();
-						nftDisplayLoaded = true;
+				
+				if (response.ok) {
+					const data = await response.json();
+					if (data.success && data.description) {
+						nameDescription = data.description;
+						showIdentityDescription();
+					} else {
+						// Fallback to QR if description fails
+						showIdentityQr();
 					}
+				} else {
+					// Fallback to QR if API fails
+					showIdentityQr();
 				}
 			} catch (error) {
-				console.error('Failed to load NFT image:', error);
+				console.error('Failed to load name description:', error);
+				// Fallback to QR on error
+				showIdentityQr();
 			}
 		}
 
@@ -4634,7 +4650,7 @@ ${generatePasskeyWalletStyles()}
 		// Click identity visual to expand QR
 		if (identityVisual) {
 			identityVisual.addEventListener('click', (e) => {
-				// Don't expand if clicking toggle button
+				// Don't expand if clicking toggle button (if it exists)
 				if (e.target.closest('.identity-qr-toggle')) return;
 				openQrOverlay();
 			});
@@ -4889,7 +4905,11 @@ ${generatePasskeyWalletStyles()}
 		}
 
 		initQR().catch(console.error);
-		loadNftImage().catch((err) => console.error('NFT image error:', err));
+		// Hide QR canvas initially, show description loading state
+		if (identityCanvas) identityCanvas.style.display = 'none';
+		if (qrToggle) qrToggle.style.display = 'none';
+		showIdentityDescription(); // Show loading state immediately
+		loadNameDescription().catch((err) => console.error('Name description error:', err));
 
 		// Set target address to connected wallet (direct transaction)
 		async function setToSelf() {
