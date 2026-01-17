@@ -6522,6 +6522,59 @@ ${generatePasskeyWalletStyles()}
 		let nftsHasMore = true;
 		let nftsLoading = false;
 
+		// Extract domain name from NFT object data
+		function extractDomainFromNFT(nftData) {
+			try {
+				// Try to get domain from content fields
+				if (nftData?.content?.dataType === 'moveObject' && nftData.content.fields) {
+					const fields = nftData.content.fields;
+					// Check various possible field names for domain
+					if (fields.domain) {
+						return fields.domain;
+					}
+					if (fields.name) {
+						return fields.name;
+					}
+					// Check nested structures
+					if (fields.registration && typeof fields.registration === 'object') {
+						if (fields.registration.fields?.domain) {
+							return fields.registration.fields.domain;
+						}
+						if (fields.registration.fields?.name) {
+							return fields.registration.fields.name;
+						}
+					}
+				}
+				// Try display data
+				if (nftData?.display?.data) {
+					const display = nftData.display.data;
+					if (display.name) return display.name;
+					if (display.domain) return display.domain;
+				}
+			} catch (e) {
+				console.error('Error extracting domain:', e);
+			}
+			return null;
+		}
+
+		// Extract expiration timestamp from NFT object data
+		function extractExpirationFromNFT(nftData) {
+			try {
+				if (nftData?.content?.dataType === 'moveObject' && nftData.content.fields) {
+					const fields = nftData.content.fields;
+					if (fields.expiration_timestamp_ms) {
+						return String(fields.expiration_timestamp_ms);
+					}
+					if (fields.expirationTimestampMs) {
+						return String(fields.expirationTimestampMs);
+					}
+				}
+			} catch (e) {
+				console.error('Error extracting expiration:', e);
+			}
+			return null;
+		}
+
 		// Fetch all SuiNS registration NFTs owned by the address
 		async function fetchNFTs(cursor = null) {
 			if (nftsLoading) return;
@@ -6530,61 +6583,108 @@ ${generatePasskeyWalletStyles()}
 			try {
 				const suiClient = new SuiClient({ url: RPC_URL });
 
-				// First, get all domain names owned by this address
-				const namesResponse = await suiClient.resolveNameServiceNames({
-					address: CURRENT_ADDRESS,
-					cursor: null,
-					limit: 1000
+				// Fetch owned objects filtered by SuiNS registration type
+				// The struct type includes "SuinsRegistration" in the name
+				const response = await suiClient.getOwnedObjects({
+					owner: CURRENT_ADDRESS,
+					filter: {
+						StructType: '0x2d0dee46d9f967ec56c2fb8d64f9b01bb3c5c8d11e8c03a42b149f2e90e8e9b::suins_registration::SuinsRegistration'
+					},
+					options: {
+						showType: true,
+						showContent: true,
+						showDisplay: true,
+						showOwner: true
+					},
+					cursor: cursor,
+					limit: 50
 				});
 
-				const domainNames = namesResponse.data || [];
-				
-				// For each domain, fetch the NFT object using SuinsClient
-				const suinsClient = new SuinsClient({
-					client: suiClient,
-					network: NETWORK
-				});
+				if (response.data && response.data.length > 0) {
+					// Process each NFT object
+					const processedNFTs = response.data.map(item => {
+						if (!item.data) return null;
+						
+						const objectId = item.data.objectId;
+						const domain = extractDomainFromNFT(item.data);
+						const expirationTimestampMs = extractExpirationFromNFT(item.data);
+						
+						return {
+							nftId: objectId,
+							domain: domain,
+							objectData: item.data,
+							expirationTimestampMs: expirationTimestampMs
+						};
+					}).filter(nft => nft !== null);
 
-				const nftPromises = domainNames.map(async (domainName) => {
-					try {
-						const nameRecord = await suinsClient.getNameRecord(domainName);
-						if (nameRecord?.nftId) {
-							// Fetch the full object data
-							const objectData = await suiClient.getObject({
-								id: nameRecord.nftId,
-								options: {
-									showType: true,
-									showContent: true,
-									showDisplay: true,
-									showOwner: true
-								}
-							});
-							
-							return {
-								domain: domainName,
-								nftId: nameRecord.nftId,
-								objectData: objectData.data,
-								expirationTimestampMs: nameRecord.expirationTimestampMs
-							};
-						}
-					} catch (e) {
-						console.error('Error fetching NFT for domain:', domainName, e);
-						return null;
-					}
-				});
+					allNFTs = cursor ? [...allNFTs, ...processedNFTs] : processedNFTs;
+				}
 
-				const nftResults = await Promise.all(nftPromises);
-				const validNFTs = nftResults.filter(nft => nft !== null);
-				
-				allNFTs = cursor ? [...allNFTs, ...validNFTs] : validNFTs;
-				nftsHasMore = false; // We fetched all domains at once
-				nftsNextCursor = null;
+				nftsNextCursor = response.nextCursor;
+				nftsHasMore = response.hasNextPage || false;
 
 				renderNFTs();
-				nftsCountEl.textContent = String(allNFTs.length);
+
+				// Continue fetching if there are more
+				if (nftsHasMore && nftsNextCursor) {
+					await fetchNFTs(nftsNextCursor);
+				} else {
+					nftsCountEl.textContent = String(allNFTs.length);
+				}
 			} catch (error) {
 				console.error('Failed to fetch NFTs:', error);
-				renderNFTsError(error.message || 'Failed to load NFTs');
+				// If the struct type filter fails, try fetching all owned objects and filtering client-side
+				try {
+					console.log('Trying alternative method: fetching all objects and filtering...');
+					const response = await suiClient.getOwnedObjects({
+						owner: CURRENT_ADDRESS,
+						options: {
+							showType: true,
+							showContent: true,
+							showDisplay: true,
+							showOwner: true
+						},
+						cursor: cursor,
+						limit: 50
+					});
+
+					if (response.data && response.data.length > 0) {
+						// Filter for SuiNS registration NFTs by checking object type
+						const suinsNFTs = response.data.filter(item => {
+							const objectType = item.data?.type || '';
+							return objectType.includes('SuinsRegistration') || objectType.includes('suins_registration');
+						}).map(item => {
+							if (!item.data) return null;
+							
+							const objectId = item.data.objectId;
+							const domain = extractDomainFromNFT(item.data);
+							const expirationTimestampMs = extractExpirationFromNFT(item.data);
+							
+							return {
+								nftId: objectId,
+								domain: domain,
+								objectData: item.data,
+								expirationTimestampMs: expirationTimestampMs
+							};
+						}).filter(nft => nft !== null);
+
+						allNFTs = cursor ? [...allNFTs, ...suinsNFTs] : suinsNFTs;
+					}
+
+					nftsNextCursor = response.nextCursor;
+					nftsHasMore = response.hasNextPage || false;
+
+					renderNFTs();
+
+					if (nftsHasMore && nftsNextCursor) {
+						await fetchNFTs(nftsNextCursor);
+					} else {
+						nftsCountEl.textContent = String(allNFTs.length);
+					}
+				} catch (fallbackError) {
+					console.error('Fallback method also failed:', fallbackError);
+					renderNFTsError(error.message || 'Failed to load NFTs');
+				}
 			} finally {
 				nftsLoading = false;
 			}
