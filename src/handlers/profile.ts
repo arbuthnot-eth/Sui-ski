@@ -157,28 +157,24 @@ export function generateProfilePage(
 			pointer-events: none;
 		}
 
-		/* Custom Scrollbar Styles - Blue Gradient */
+		/* Custom Scrollbar Styles - Clean & Subtle */
 		* {
 			scrollbar-width: thin;
-			scrollbar-color: rgba(96, 165, 250, 0.6) rgba(96, 165, 250, 0.1);
+			scrollbar-color: rgba(96, 165, 250, 0.4) transparent;
 		}
 		*::-webkit-scrollbar {
-			width: 10px;
-			height: 10px;
+			width: 6px;
+			height: 6px;
 		}
 		*::-webkit-scrollbar-track {
-			background: rgba(96, 165, 250, 0.1);
-			border-radius: 10px;
+			background: transparent;
 		}
 		*::-webkit-scrollbar-thumb {
-			background: linear-gradient(135deg, rgba(96, 165, 250, 0.8), rgba(96, 165, 250, 0.6));
-			border-radius: 10px;
-			border: 2px solid transparent;
-			background-clip: padding-box;
+			background: rgba(96, 165, 250, 0.4);
+			border-radius: 3px;
 		}
 		*::-webkit-scrollbar-thumb:hover {
-			background: linear-gradient(135deg, rgba(96, 165, 250, 1), rgba(96, 165, 250, 0.8));
-			background-clip: padding-box;
+			background: rgba(96, 165, 250, 0.6);
 		}
 
 		.container { max-width: 900px; margin: 0 auto; position: relative; }

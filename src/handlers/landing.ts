@@ -45,6 +45,17 @@ export async function handleLandingPage(request: Request, env: Env): Promise<Res
 		}
 	}
 
+	// API endpoint for SUI price
+	if (url.pathname === '/api/sui-price') {
+		try {
+			const price = await getSUIPrice()
+			return jsonResponse({ price })
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Failed to fetch SUI price'
+			return jsonResponse({ error: message }, 500)
+		}
+	}
+
 	// Landing page HTML
 	return htmlResponse(landingPageHTML(env.SUI_NETWORK, { canonicalUrl }))
 }
@@ -73,6 +84,30 @@ async function getSuiNSPricing(env: Env): Promise<Record<string, number>> {
 	}
 
 	return pricing
+}
+
+/**
+ * Fetch SUI price from CoinGecko API
+ */
+async function getSUIPrice(): Promise<number> {
+	try {
+		const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd', {
+			headers: {
+				'Accept': 'application/json',
+			},
+		})
+		if (!response.ok) {
+			throw new Error(`CoinGecko API error: ${response.status}`)
+		}
+		const data = await response.json() as { sui?: { usd?: number } }
+		if (!data.sui?.usd) {
+			throw new Error('Invalid price data from CoinGecko')
+		}
+		return data.sui.usd
+	} catch (error) {
+		console.error('Failed to fetch SUI price:', error)
+		throw error
+	}
 }
 
 function landingPageHTML(network: string, options: LandingPageOptions = {}): string {
@@ -241,10 +276,58 @@ ${socialMeta}
 		}
 		footer a { color: #60a5fa; }
 		footer a:hover { text-decoration: underline; }
+		#crypto-tracker {
+			position: fixed;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			background: rgba(10, 10, 15, 0.95);
+			backdrop-filter: blur(10px);
+			border-top: 1px solid rgba(96, 165, 250, 0.2);
+			padding: 12px 20px;
+			display: flex;
+			justify-content: center;
+			gap: 24px;
+			flex-wrap: wrap;
+			z-index: 1000;
+			font-size: 0.875rem;
+		}
+		#crypto-tracker span {
+			color: #c7d2fe;
+			font-weight: 500;
+		}
+		#sui-price {
+			color: #60a5fa;
+			font-weight: 600;
+		}
 		@media (max-width: 540px) {
 			h1 { font-size: 3rem; }
 			.example { flex-direction: column; align-items: flex-start; gap: 6px; }
 			.arrow { display: none; }
+			#crypto-tracker {
+				gap: 16px;
+				padding: 10px 16px;
+				font-size: 0.8rem;
+			}
+		}
+		/* Custom Scrollbar Styles - Clean & Subtle */
+		* {
+			scrollbar-width: thin;
+			scrollbar-color: rgba(96, 165, 250, 0.4) transparent;
+		}
+		*::-webkit-scrollbar {
+			width: 6px;
+			height: 6px;
+		}
+		*::-webkit-scrollbar-track {
+			background: transparent;
+		}
+		*::-webkit-scrollbar-thumb {
+			background: rgba(96, 165, 250, 0.4);
+			border-radius: 3px;
+		}
+		*::-webkit-scrollbar-thumb:hover {
+			background: rgba(96, 165, 250, 0.6);
 		}
 	</style>
 </head>
@@ -420,6 +503,10 @@ ${socialMeta}
 		</div>
 	</div>
 
+	<div id="crypto-tracker">
+		<span id="sui-price">SUI: $--</span>
+	</div>
+
 	<footer>
 		<p>Built on <a href="https://sui.io">Sui</a> · <a href="https://suins.io">SuiNS</a> · <a href="https://moveregistry.com">MVR</a> · <a href="https://walrus.xyz">Walrus</a></p>
 	</footer>
@@ -543,6 +630,26 @@ ${socialMeta}
 					window.location.href = 'https://' + slug + '.sui.ski'
 				})
 			}
+
+			// Update SUI price
+			const suiPriceEl = document.getElementById('sui-price')
+			async function updateSUIPrice() {
+				try {
+					const response = await fetch('/api/sui-price')
+					if (!response.ok) throw new Error('Failed to fetch price')
+					const data = await response.json()
+					if (data.price && suiPriceEl) {
+						suiPriceEl.textContent = 'SUI: $' + data.price.toFixed(2)
+					}
+				} catch (error) {
+					console.error('Failed to update SUI price:', error)
+					if (suiPriceEl) {
+						suiPriceEl.textContent = 'SUI: --'
+					}
+				}
+			}
+			updateSUIPrice()
+			setInterval(updateSUIPrice, 60000) // Update every minute
 		})()
 	</script>
 
