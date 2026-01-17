@@ -243,27 +243,21 @@ export function generateProfilePage(
 						<span id="grace-period-owner-info">The NFT owner</span> can renew it until <strong>${expiresAt ? new Date(expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong>.
 					</div>
 					<div class="grace-period-countdown">
-						<div class="grace-countdown-label">Time left to renew:</div>
-						<div class="grace-countdown-timer" id="grace-countdown-timer">
-							<div class="grace-countdown-unit">
-								<span class="grace-countdown-value" id="grace-days">--</span>
-								<span class="grace-countdown-unit-label">days</span>
+						<div class="grace-countdown-label">Top Bids & Bounties:</div>
+						<div class="grace-top-offers" id="grace-top-offers">
+							<div class="grace-offers-loading">
+								<span class="loading-spinner"></span>
+								Loading offers...
 							</div>
-							<span class="grace-countdown-separator">:</span>
-							<div class="grace-countdown-unit">
-								<span class="grace-countdown-value" id="grace-hours">--</span>
-								<span class="grace-countdown-unit-label">hrs</span>
-							</div>
-							<span class="grace-countdown-separator">:</span>
-							<div class="grace-countdown-unit">
-								<span class="grace-countdown-value" id="grace-mins">--</span>
-								<span class="grace-countdown-unit-label">min</span>
-							</div>
-							<span class="grace-countdown-separator">:</span>
-							<div class="grace-countdown-unit">
-								<span class="grace-countdown-value" id="grace-secs">--</span>
-								<span class="grace-countdown-unit-label">sec</span>
-							</div>
+						</div>
+						<div class="grace-countdown-mini">
+							<span class="grace-countdown-mini-label">Available in:</span>
+							<span class="grace-countdown-mini-timer" id="grace-countdown-mini">
+								<span id="grace-days">--</span>d
+								<span id="grace-hours">--</span>h
+								<span id="grace-mins">--</span>m
+								<span id="grace-secs">--</span>s
+							</span>
 						</div>
 						<div class="grace-skill-counter">
 							<div class="grace-skill-label">Premium Estimate</div>
@@ -5033,6 +5027,72 @@ export function generateProfilePage(
 			// Start countdown
 			updateGracePeriodCountdown();
 			setInterval(updateGracePeriodCountdown, 1000);
+			// Fetch and display top offers
+			fetchTopOffers();
+			setInterval(fetchTopOffers, 30000); // Refresh every 30 seconds
+		}
+
+		// Fetch top bids and bounties for this name
+		async function fetchTopOffers() {
+			const offersContainer = document.getElementById('grace-top-offers');
+			if (!offersContainer) return;
+
+			try {
+				// Fetch bids and bounties in parallel
+				const [bidsRes, bountiesRes] = await Promise.all([
+					fetch('/api/bids/' + NAME).catch(() => null),
+					fetch('/api/bounties/' + NAME).catch(() => null),
+				]);
+
+				const bidsData = bidsRes?.ok ? await bidsRes.json() : { bids: [] };
+				const bountiesData = bountiesRes?.ok ? await bountiesRes.json() : { bounties: [] };
+
+				const bids = (bidsData.bids || []).map(b => ({
+					type: 'bid',
+					amount: b.amount,
+					bidder: b.bidder,
+					status: b.status || 'pending',
+				}));
+
+				const bounties = (bountiesData.bounties || []).map(b => ({
+					type: 'bounty',
+					amount: Number(b.totalAmountMist) / 1e9, // Convert MIST to SUI
+					bidder: b.beneficiary,
+					status: b.status,
+				}));
+
+				// Combine and sort by amount (highest first)
+				const allOffers = [...bids, ...bounties].sort((a, b) => b.amount - a.amount);
+
+				// Display top 3 offers
+				const topOffers = allOffers.slice(0, 3);
+
+				if (topOffers.length === 0) {
+					offersContainer.innerHTML = '<div class="grace-offers-empty">No bids or bounties yet. Be the first!</div>';
+					return;
+				}
+
+				const formatAddress = (addr) => addr ? addr.slice(0, 6) + '...' + addr.slice(-4) : 'Unknown';
+				const formatAmount = (amount) => amount >= 1000 ? (amount / 1000).toFixed(1) + 'K' : amount.toFixed(2);
+				const getUsdValue = (amount) => suiPriceUsd ? '$' + (amount * suiPriceUsd).toLocaleString('en-US', { maximumFractionDigits: 0 }) : '';
+
+				offersContainer.innerHTML = topOffers.map(offer => \`
+					<div class="grace-offer-item">
+						<div class="grace-offer-left">
+							<span class="grace-offer-type \${offer.type}">\${offer.type}</span>
+							<span class="grace-offer-amount">\${formatAmount(offer.amount)} SUI</span>
+							<span class="grace-offer-usd">\${getUsdValue(offer.amount)}</span>
+						</div>
+						<div class="grace-offer-right">
+							<div class="grace-offer-bidder">\${formatAddress(offer.bidder)}</div>
+							<span class="grace-offer-status \${offer.status}">\${offer.status}</span>
+						</div>
+					</div>
+				\`).join('');
+			} catch (error) {
+				console.error('Failed to fetch top offers:', error);
+				offersContainer.innerHTML = '<div class="grace-offers-empty">Failed to load offers</div>';
+			}
 		}
 
 		if (premiumGraphContainer) {

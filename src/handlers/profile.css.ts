@@ -2011,6 +2011,134 @@ export const profileStyles = `
 			line-height: 1;
 			margin-bottom: 14px;
 		}
+		/* Top Offers Section */
+		.grace-top-offers {
+			background: linear-gradient(135deg, rgba(251, 191, 36, 0.08), rgba(245, 158, 11, 0.05));
+			border: 1px solid rgba(251, 191, 36, 0.2);
+			border-radius: 12px;
+			padding: 12px;
+			margin-bottom: 12px;
+			min-height: 80px;
+		}
+		.grace-offers-loading {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			color: var(--text-muted);
+			font-size: 0.8rem;
+			padding: 20px;
+		}
+		.loading-spinner {
+			width: 16px;
+			height: 16px;
+			border: 2px solid var(--border);
+			border-top-color: var(--warning);
+			border-radius: 50%;
+			animation: spin 0.8s linear infinite;
+		}
+		@keyframes spin {
+			to { transform: rotate(360deg); }
+		}
+		.grace-offers-empty {
+			text-align: center;
+			color: var(--text-muted);
+			font-size: 0.8rem;
+			padding: 16px;
+		}
+		.grace-offer-item {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 10px 12px;
+			background: rgba(0, 0, 0, 0.2);
+			border-radius: 8px;
+			margin-bottom: 8px;
+		}
+		.grace-offer-item:last-child {
+			margin-bottom: 0;
+		}
+		.grace-offer-left {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.grace-offer-type {
+			font-size: 0.65rem;
+			font-weight: 700;
+			text-transform: uppercase;
+			padding: 3px 6px;
+			border-radius: 4px;
+		}
+		.grace-offer-type.bid {
+			background: rgba(96, 165, 250, 0.2);
+			color: var(--accent);
+		}
+		.grace-offer-type.bounty {
+			background: rgba(251, 191, 36, 0.2);
+			color: var(--warning);
+		}
+		.grace-offer-amount {
+			font-size: 0.95rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.grace-offer-usd {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			margin-left: 6px;
+		}
+		.grace-offer-right {
+			text-align: right;
+		}
+		.grace-offer-bidder {
+			font-size: 0.7rem;
+			color: var(--text-muted);
+			font-family: var(--font-mono, monospace);
+		}
+		.grace-offer-status {
+			font-size: 0.6rem;
+			font-weight: 600;
+			text-transform: uppercase;
+			padding: 2px 5px;
+			border-radius: 3px;
+			margin-top: 4px;
+			display: inline-block;
+		}
+		.grace-offer-status.ready {
+			background: rgba(34, 197, 94, 0.2);
+			color: var(--success);
+		}
+		.grace-offer-status.pending {
+			background: rgba(251, 191, 36, 0.2);
+			color: var(--warning);
+		}
+		.grace-countdown-mini {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			padding: 8px 12px;
+			background: rgba(239, 68, 68, 0.1);
+			border: 1px solid rgba(239, 68, 68, 0.2);
+			border-radius: 8px;
+			margin-bottom: 12px;
+		}
+		.grace-countdown-mini-label {
+			font-size: 0.7rem;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.03em;
+		}
+		.grace-countdown-mini-timer {
+			font-family: var(--font-mono, monospace);
+			font-size: 0.85rem;
+			font-weight: 700;
+			color: var(--error);
+		}
+		.grace-countdown-mini-timer span {
+			color: var(--error);
+		}
 		.grace-skill-counter {
 			margin-top: 14px;
 			padding: 12px 14px;
