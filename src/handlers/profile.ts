@@ -811,19 +811,21 @@ export function generateProfilePage(
 		const FULL_NAME = ${serializeJson(fullName)};
 		const NETWORK = ${serializeJson(network)};
 		const RPC_URL = ${serializeJson(env.SUI_RPC_URL)};
-		const NFT_ID = ${serializeJson(record.nftId || '')};
-		const CURRENT_ADDRESS = ${serializeJson(record.address)};
-		const PROFILE_URL = ${serializeJson(`https://${cleanName}.sui.ski`)};
-		const NFT_EXPLORER_URL = ${serializeJson(nftExplorerUrl)};
-		const EXPLORER_BASE = ${serializeJson(explorerBase)};
-		const IS_SUBNAME = NAME.includes('.');
-		const STORAGE_KEY = 'sui_ski_wallet';
-		const EXPIRATION_MS = ${expiresMs || 0};
-		const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-		const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
-		const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
-		const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
-		const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
+	const NFT_ID = ${serializeJson(record.nftId || '')};
+	const CURRENT_ADDRESS = ${serializeJson(record.address)};
+	const PROFILE_URL = ${serializeJson(`https://${cleanName}.sui.ski`)};
+	const NFT_EXPLORER_URL = ${serializeJson(nftExplorerUrl)};
+	const EXPLORER_BASE = ${serializeJson(explorerBase)};
+	const IS_SUBNAME = NAME.includes('.');
+	const STORAGE_KEY = 'sui_ski_wallet';
+	const EXPIRATION_MS = ${expiresMs || 0};
+	const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+	const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
+	const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
+	const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
+	const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
+	const SKILL_CREATOR_MAX_SUPPLY = 100000000;
+	const numberFormatter = new Intl.NumberFormat('en-US');
 
 		let connectedWallet = null;
 		let connectedAccount = null;
@@ -2093,35 +2095,63 @@ export function generateProfilePage(
 			return cleanName + '<span class="suffix">.sui</span>';
 		}
 
-		// Fetch and display target address primary name
-		async function fetchTargetPrimaryName() {
+		// Fetch and display owner info
+		// For grace period names, show the NFT owner; otherwise show the target address
+		async function fetchAndDisplayOwnerInfo() {
 			const ownerNameEl = document.querySelector('.owner-name');
 			const ownerAddrEl = document.querySelector('.owner-addr');
+			const ownerLabelEl = document.querySelector('.owner-label');
 			const ownerInfo = document.getElementById('owner-info');
 			const visitArrow = ownerInfo?.querySelector('.visit-arrow');
 
-			// Always ensure address is displayed
-			if (ownerAddrEl && CURRENT_ADDRESS) {
-				ownerAddrEl.textContent = truncAddr(CURRENT_ADDRESS);
+			let displayAddress = CURRENT_ADDRESS;
+			let displayName = null;
+
+			// For grace period names, show the NFT owner instead of target address
+			if (IS_IN_GRACE_PERIOD && NFT_ID) {
+				// Update label to clarify this is the NFT owner
+				if (ownerLabelEl) {
+					ownerLabelEl.textContent = 'NFT Owner';
+				}
+
+				// Fetch NFT owner if not already fetched
+				if (!nftOwnerAddress) {
+					nftOwnerAddress = await fetchNftOwner();
+				}
+
+				if (nftOwnerAddress) {
+					displayAddress = nftOwnerAddress;
+					displayName = await fetchPrimaryName(nftOwnerAddress);
+				}
+			} else {
+				// For active names, show the target address
+				displayName = await fetchPrimaryName(CURRENT_ADDRESS);
+				if (displayName) {
+					targetPrimaryName = displayName;
+				}
 			}
 
-			const name = await fetchPrimaryName(CURRENT_ADDRESS);
-			if (name) {
-				targetPrimaryName = name;
+			// Always ensure address is displayed
+			if (ownerAddrEl && displayAddress) {
+				ownerAddrEl.textContent = truncAddr(displayAddress);
+				ownerAddrEl.title = displayAddress; // Full address on hover
+			}
 
+			if (displayName) {
 				if (ownerNameEl) {
-					ownerNameEl.innerHTML = formatSuiName(name);
+					ownerNameEl.innerHTML = formatSuiName(displayName);
+					ownerNameEl.style.display = '';
 				}
 
 				// Make the owner info clickable to visit their profile
 				if (ownerInfo) {
-					const cleanedName = name.replace(/\\.sui$/i, '');
+					const cleanedName = displayName.replace(/\\.sui$/i, '');
 					const ownerProfileUrl = \`https://\${cleanedName}.sui.ski\`;
 
 					// Add the link styling class
 					ownerInfo.classList.add('owner-info-link');
 					ownerInfo.style.cursor = 'pointer';
-					ownerInfo.title = \`Visit \${name} profile\`;
+					ownerInfo.title = \`Visit \${displayName} profile\`;
 
 					// Show the arrow
 					if (visitArrow) {
@@ -2152,7 +2182,7 @@ export function generateProfilePage(
 		renderWalletBar();
 		updateEditButton();
 		restoreWalletConnection();
-		fetchTargetPrimaryName();
+		fetchAndDisplayOwnerInfo();
 		updateGracePeriodOwnerInfo();
 
 		// ===== TRADEPORT MARKETPLACE FUNCTIONALITY =====
@@ -4121,11 +4151,12 @@ export function generateProfilePage(
 		}
 
 		// ========== GRACE PERIOD BANNER COUNTDOWN ==========
-		const graceDays = document.getElementById('grace-days');
-		const graceHours = document.getElementById('grace-hours');
-		const graceMins = document.getElementById('grace-mins');
-		const graceSecs = document.getElementById('grace-secs');
-		const graceBanner = document.getElementById('grace-period-banner');
+	const graceDays = document.getElementById('grace-days');
+	const graceHours = document.getElementById('grace-hours');
+	const graceMins = document.getElementById('grace-mins');
+	const graceSecs = document.getElementById('grace-secs');
+	const graceBanner = document.getElementById('grace-period-banner');
+	const graceSkillValue = document.getElementById('grace-skill-value');
 
 		function updateGracePeriodCountdown() {
 			if (!EXPIRATION_MS || !IS_IN_GRACE_PERIOD) return;
