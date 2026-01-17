@@ -20,9 +20,10 @@ MESSAGING_CONTRACT_ADDRESS = "0x9a814ab4f67fff8ec2a8bb1ddcf188b26119ae6866eea9f3
 # AI Features Configuration
 # Set OpenRouter API key as secret: wrangler secret put OPENROUTER_API_KEY
 # Optional: Set controlling wallet/NFT as secret: wrangler secret put CONTROLLING_WALLET_ADDRESS
-# OPENROUTER_API_KEY - Your OpenRouter API key for Gemini 3 Flash (required)
+# OPENROUTER_API_KEY - Your OpenRouter API key for Gemini Nano Banana 3 Flash (required)
 # CONTROLLING_WALLET_ADDRESS - Optional: Sui wallet address or NFT object ID that controls access
-#   If not set, anyone can use AI features (payment verification via dry-run still applies)
+#   If not set, anyone can use AI features (payment still required)
+# Note: Payments automatically go to the alias.sui address (target address of the SuiNS name)
 
 # KV namespace for caching resolved names
 [[kv_namespaces]]

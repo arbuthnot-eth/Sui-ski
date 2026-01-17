@@ -282,12 +282,9 @@ export function generateProfilePage(
 			color: white;
 		}
 		.ai-generate-btn {
-			position: absolute;
-			bottom: 8px;
-			right: 8px;
-			width: 32px;
-			height: 32px;
-			border-radius: 8px;
+			width: 28px;
+			height: 28px;
+			border-radius: 6px;
 			border: 1px solid rgba(255, 255, 255, 0.1);
 			background: rgba(139, 92, 246, 0.15);
 			backdrop-filter: blur(10px);
@@ -296,54 +293,32 @@ export function generateProfilePage(
 			justify-content: center;
 			cursor: pointer;
 			transition: all 0.2s;
-			z-index: 10;
+			flex-shrink: 0;
 		}
 		.ai-generate-btn:hover {
-			background: rgba(139, 92, 246, 0.3);
-			border-color: rgba(139, 92, 246, 0.5);
-			transform: scale(1.1);
-			box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
-		}
-		.ai-generate-btn:active {
-			transform: scale(0.95);
+			background: rgba(139, 92, 246, 0.25);
+			border-color: rgba(139, 92, 246, 0.4);
 		}
 		.ai-generate-btn svg {
-			width: 18px;
-			height: 18px;
+			width: 16px;
+			height: 16px;
 			color: #a78bfa;
-			transition: all 0.3s;
 		}
 		.ai-generate-btn:hover svg {
 			color: #c4b5fd;
-			filter: drop-shadow(0 0 4px rgba(167, 139, 250, 0.6));
 		}
 		.ai-generate-btn.loading svg {
-			animation: sparkle 1.5s ease-in-out infinite;
+			opacity: 0.6;
 		}
-		@keyframes sparkle {
-			0%, 100% { opacity: 1; transform: scale(1); }
-			50% { opacity: 0.7; transform: scale(1.2); }
-		}
-		.ai-generate-btn .sparkle-1,
-		.ai-generate-btn .sparkle-2,
-		.ai-generate-btn .sparkle-3 {
-			opacity: 0;
-			transition: opacity 0.3s;
-		}
-		.ai-generate-btn:hover .sparkle-1,
-		.ai-generate-btn:hover .sparkle-2,
-		.ai-generate-btn:hover .sparkle-3 {
-			opacity: 1;
-			animation: sparkle 1s ease-in-out infinite;
-		}
-		.ai-generate-btn .sparkle-2 {
-			animation-delay: 0.2s;
-		}
-		.ai-generate-btn .sparkle-3 {
-			animation-delay: 0.4s;
+		.identity-name-wrapper {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			padding: 10px;
+			border-top: 1px solid rgba(96, 165, 250, 0.15);
 		}
 		.identity-name {
-			padding: 10px;
 			text-align: center;
 			font-family: ui-monospace, SFMono-Regular, monospace;
 			font-size: 0.75rem;
@@ -352,7 +327,6 @@ export function generateProfilePage(
 			background: rgba(96, 165, 250, 0.08);
 			cursor: pointer;
 			transition: all 0.2s;
-			border-top: 1px solid rgba(96, 165, 250, 0.15);
 		}
 		.identity-name:hover {
 			background: rgba(96, 165, 250, 0.15);
@@ -3540,8 +3514,9 @@ export function generateProfilePage(
 			.identity-card { width: 140px; }
 			.identity-name { font-size: 0.7rem; padding: 8px; }
 			.identity-qr-toggle { width: 30px; height: 30px; bottom: 8px; left: 8px; right: auto; }
-			.ai-generate-btn { width: 30px; height: 30px; bottom: 8px; right: 8px; }
-			.ai-generate-btn svg { width: 16px; height: 16px; }
+			.identity-name-wrapper { flex-wrap: wrap; gap: 6px; }
+			.ai-generate-btn { width: 24px; height: 24px; }
+			.ai-generate-btn svg { width: 14px; height: 14px; }
 		}
 ${generatePasskeyWalletStyles()}
 	</style>
@@ -3587,16 +3562,15 @@ ${generatePasskeyWalletStyles()}
 						<button class="identity-qr-toggle" id="qr-toggle" title="Toggle QR code">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
 						</button>
+					</div>
+					<div class="identity-name-wrapper">
+						<div class="identity-name" id="identity-name" title="Click to copy">${escapeHtml(cleanName)}.sui.ski</div>
 						<button class="ai-generate-btn" id="ai-generate-btn" title="Generate AI image">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="lightbulb-icon">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<path d="M9 21h6M12 3a6 6 0 0 1 6 6c0 2.5-1.5 4.5-3 6l-3 3-3-3c-1.5-1.5-3-3.5-3-6a6 6 0 0 1 6-6z"></path>
-								<path d="M12 9v6M9 12h6" class="sparkle-1"></path>
-								<circle cx="8" cy="8" r="1" class="sparkle-2"></circle>
-								<circle cx="16" cy="8" r="1" class="sparkle-3"></circle>
 							</svg>
 						</button>
 					</div>
-					<div class="identity-name" id="identity-name" title="Click to copy">${escapeHtml(cleanName)}.sui.ski</div>
 				</div>
 				<div class="hero-main">
 					<div class="wallet-bar" id="wallet-bar">
@@ -4880,67 +4854,121 @@ ${generatePasskeyWalletStyles()}
 			});
 		}
 
-		// AI Image Generation
+		// AI Image Generation with Payment Transaction
 		const aiGenerateBtn = document.getElementById('ai-generate-btn');
 		if (aiGenerateBtn) {
 			aiGenerateBtn.addEventListener('click', async () => {
-				// Get wallet address if connected
-				const walletAddress = connectedAddress || null;
+				// Require wallet connection
+				if (!connectedWallet || !connectedAccount || !connectedAddress) {
+					await connectWallet();
+					if (!connectedWallet || !connectedAccount || !connectedAddress) {
+						alert('Please connect your wallet to generate images');
+						return;
+					}
+				}
 				
-				// Prompt user for image description
-				const prompt = prompt('Describe the image you want to generate:');
-				if (!prompt || !prompt.trim()) return;
+				// Prompt user for image description (use window.prompt to avoid shadowing)
+				const userPrompt = window.prompt('Describe the image you want to generate:');
+				if (!userPrompt || !userPrompt.trim()) return;
 				
 				aiGenerateBtn.classList.add('loading');
 				aiGenerateBtn.disabled = true;
 				
 				try {
-					const response = await fetch('/api/ai/generate-image', {
+					// Step 1: Get payment transaction details (payment goes to alias.sui address)
+					const paymentInfoResponse = await fetch('/api/ai/create-payment-tx', {
 						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							...(walletAddress ? { 'Authorization': \`Bearer \${walletAddress}\` } : {}),
-						},
-						body: JSON.stringify({
-							prompt: prompt.trim(),
-							style: 'modern, web3, blockchain, futuristic, digital art',
-							walletAddress,
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ 
+							walletAddress: connectedAddress,
+							name: NAME, // Pass the SuiNS name to resolve target address
 						}),
 					});
 					
-					const data = await response.json();
-					
-					if (!response.ok) {
-						throw new Error(data.error || 'Failed to generate image');
+					if (!paymentInfoResponse.ok) {
+						throw new Error('Failed to create payment transaction');
 					}
 					
-					if (data.success && data.imageUrl) {
-						// Open image in new tab
-						window.open(data.imageUrl, '_blank');
-						
-						// Show success message
-						const notification = document.createElement('div');
-						notification.style.cssText = \`
-							position: fixed;
-							top: 20px;
-							right: 20px;
-							background: rgba(16, 185, 129, 0.95);
-							color: white;
-							padding: 16px 20px;
-							border-radius: 12px;
-							box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-							z-index: 10000;
-							font-size: 0.9rem;
-							font-weight: 600;
-							animation: slideIn 0.3s ease-out;
-						\`;
-						notification.textContent = '✨ Image generated! Opening in new tab...';
-						document.body.appendChild(notification);
-						
-						setTimeout(() => {
-							notification.style.animation = 'slideOut 0.3s ease-out';
-							setTimeout(() => notification.remove(), 300);
-						}, 3000);
+					const paymentInfo = await paymentInfoResponse.json();
+					
+					// Step 2: Build and sign payment transaction
+					const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.45.2/client');
+					const { Transaction } = await import('https://esm.sh/@mysten/sui@1.45.2/transactions');
+					
+					const suiClient = new SuiClient({ url: RPC_URL });
+					const tx = new Transaction();
+					
+					// Transfer SUI to payment recipient
+					const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(paymentInfo.amount)]);
+					tx.transferObjects([coin], paymentInfo.recipient);
+					tx.setSender(connectedAddress);
+					
+					const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+					const builtTxBytes = await tx.build({ client: suiClient });
+					
+					const txWrapper = {
+						_bytes: builtTxBytes,
+						toJSON() { return btoa(String.fromCharCode.apply(null, this._bytes)); },
+						serialize() { return this._bytes; }
+					};
+					
+					// Step 3: Sign and execute transaction
+					const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+					const signFeature = connectedWallet.features?.['sui:signTransaction'];
+					
+					let result;
+					if (signExecFeature?.signAndExecuteTransaction) {
+						result = await signExecFeature.signAndExecuteTransaction({
+							transaction: txWrapper,
+							account: connectedAccount,
+							chain
+						});
+					} else if (signFeature?.signTransaction) {
+						const { signature } = await signFeature.signTransaction({
+							transaction: txWrapper,
+							account: connectedAccount,
+							chain
+						});
+						const executeResult = await suiClient.executeTransactionBlock({
+							transactionBlock: builtTxBytes,
+							signature: signature,
+							options: { showEffects: true }
+						});
+						result = { digest: executeResult.digest };
+					} else {
+						throw new Error('Wallet does not support transaction signing');
+					}
+					
+					if (!result?.digest) {
+						throw new Error('Transaction failed');
+					}
+					
+					// Step 4: Wait for transaction confirmation
+					await suiClient.waitForTransaction({ digest: result.digest });
+					
+					// Step 5: Generate image after payment confirmed
+					const imageResponse = await fetch('/api/ai/generate-image', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': \`Bearer \${connectedAddress}\`,
+						},
+						body: JSON.stringify({
+							prompt: userPrompt.trim(),
+							paymentTxDigest: result.digest,
+							walletAddress: connectedAddress,
+						}),
+					});
+					
+					const imageData = await imageResponse.json();
+					
+					if (!imageResponse.ok) {
+						throw new Error(imageData.error || 'Failed to generate image');
+					}
+					
+					if (imageData.success && imageData.imageUrl) {
+						// Show the generated description/image info
+						alert('Image description generated: ' + decodeURIComponent(imageData.imageUrl.replace('data:text/plain;charset=utf-8,', '')));
 					} else {
 						throw new Error('No image URL in response');
 					}

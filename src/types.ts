@@ -13,6 +13,7 @@ export interface Env {
 	// Optional: Wallet address or object ID (NFT) that controls access to AI features
 	// If not set, anyone can use the features (payment still required)
 	CONTROLLING_WALLET_ADDRESS?: string
+	// Note: Payments automatically go to the alias.sui address (target address of the SuiNS name)
 }
 
 export type RouteType = 'suins' | 'mvr' | 'content' | 'rpc' | 'root'

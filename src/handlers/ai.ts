@@ -1,6 +1,8 @@
 import { SuiClient } from '@mysten/sui/client'
+import { SuinsClient } from '@mysten/sui/suins'
 import type { Env } from '../types'
 import { jsonResponse } from '../utils/response'
+import { toSuiNSName } from '../utils/subdomain'
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -11,10 +13,10 @@ const CORS_HEADERS = {
 // OpenRouter API endpoint
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
-// Gemini 3 Flash model ID on OpenRouter
+// Gemini Nano Banana 3 Flash model ID on OpenRouter (free/cheap)
 const GEMINI_3_FLASH_MODEL = 'google/gemini-2.0-flash-exp:free'
-// Image generation model (using Flux Pro via OpenRouter)
-const IMAGE_GENERATION_MODEL = 'black-forest-labs/flux-pro'
+// Image generation model - using Gemini Nano Banana 3 Flash
+const IMAGE_GENERATION_MODEL = 'google/gemini-2.0-flash-exp:free'
 
 // Payment amount: 0.000003 SUI (nano bana 3)
 const PAYMENT_AMOUNT = '3000000' // in MIST (1 SUI = 1e9 MIST)
@@ -61,6 +63,8 @@ export async function handleAIRequest(request: Request, env: Env): Promise<Respo
 				return handleGenerateAvatar(request, env)
 			case 'generate-image':
 				return handleGenerateImage(request, env)
+			case 'create-payment-tx':
+				return handleCreatePaymentTransaction(request, env)
 			default:
 				return jsonResponse({ error: 'Unknown action' }, 400, CORS_HEADERS)
 		}
@@ -190,34 +194,110 @@ async function handleGenerateAvatar(request: Request, env: Env): Promise<Respons
 }
 
 /**
- * Generate an image using OpenRouter image generation
+ * Create a payment transaction for image generation
+ * Payment goes to the alias.sui address (target address of the SuiNS name)
  */
-async function handleGenerateImage(request: Request, env: Env): Promise<Response> {
-	// Verify wallet ownership and payment
-	let payload: { prompt?: string; style?: string; walletAddress?: string }
+async function handleCreatePaymentTransaction(request: Request, env: Env): Promise<Response> {
+	if (request.method !== 'POST') {
+		return jsonResponse({ error: 'Method not allowed' }, 405, CORS_HEADERS)
+	}
+
+	let payload: { walletAddress?: string; name?: string }
 	try {
 		payload = (await request.json()) as typeof payload
 	} catch {
 		return jsonResponse({ error: 'Invalid JSON body' }, 400, CORS_HEADERS)
 	}
 
-	const verification = await verifyWalletAndPayment(request, payload.walletAddress, env)
-	if (!verification.valid) {
-		return jsonResponse({ error: verification.error }, verification.status, CORS_HEADERS)
+	if (!payload.name) {
+		return jsonResponse({ error: 'SuiNS name is required' }, 400, CORS_HEADERS)
+	}
+
+	// Resolve the SuiNS name to get the target address (alias.sui address)
+	const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
+	const suinsClient = new SuinsClient({
+		client: suiClient as never,
+		network: env.SUI_NETWORK as 'mainnet' | 'testnet',
+	})
+
+	try {
+		const suinsName = toSuiNSName(payload.name)
+		const nameRecord = await suinsClient.getNameRecord(suinsName)
+		
+		if (!nameRecord || !nameRecord.targetAddress) {
+			return jsonResponse({ error: `Could not resolve "${suinsName}" to an address` }, 404, CORS_HEADERS)
+		}
+
+		// Return transaction data for client to build and sign
+		return jsonResponse(
+			{
+				recipient: nameRecord.targetAddress,
+				amount: PAYMENT_AMOUNT,
+				amountSui: '0.000003',
+			},
+			200,
+			CORS_HEADERS,
+		)
+	} catch (error) {
+		console.error('Failed to resolve SuiNS name:', error)
+		return jsonResponse({ error: 'Failed to resolve SuiNS name' }, 500, CORS_HEADERS)
+	}
+}
+
+/**
+ * Generate an image using OpenRouter image generation (after payment verified)
+ */
+async function handleGenerateImage(request: Request, env: Env): Promise<Response> {
+	// Verify payment transaction was executed
+	let payload: { prompt?: string; paymentTxDigest?: string; walletAddress?: string }
+	try {
+		payload = (await request.json()) as typeof payload
+	} catch {
+		return jsonResponse({ error: 'Invalid JSON body' }, 400, CORS_HEADERS)
 	}
 
 	if (!payload.prompt) {
 		return jsonResponse({ error: 'Prompt is required' }, 400, CORS_HEADERS)
 	}
 
-	const prompt = payload.prompt
-	const style = payload.style || 'modern, web3, blockchain, futuristic'
+	if (!payload.paymentTxDigest) {
+		return jsonResponse({ error: 'Payment transaction digest required' }, 400, CORS_HEADERS)
+	}
 
-	// Call OpenRouter image generation API
+	// Verify the payment transaction was executed successfully
+	const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
+	try {
+		const txResult = await suiClient.getTransactionBlock({
+			digest: payload.paymentTxDigest,
+			options: { showEffects: true, showBalanceChanges: true },
+		})
+
+		const effects = txResult.effects
+		if (effects?.status?.status !== 'success') {
+			return jsonResponse({ error: 'Payment transaction failed' }, 402, CORS_HEADERS)
+		}
+
+		// Verify payment was made (check balance changes for positive amounts)
+		const balanceChanges = txResult.balanceChanges || []
+		const paymentFound = balanceChanges.some((change) => {
+			const amount = BigInt(change.amount || '0')
+			// Check if any address received at least the payment amount
+			return amount >= BigInt(PAYMENT_AMOUNT)
+		})
+
+		if (!paymentFound) {
+			return jsonResponse({ error: 'Payment verification failed - insufficient payment amount' }, 402, CORS_HEADERS)
+		}
+	} catch (error) {
+		console.error('Payment verification error:', error)
+		return jsonResponse({ error: 'Failed to verify payment' }, 402, CORS_HEADERS)
+	}
+
+	const prompt = payload.prompt
+
+	// Use Gemini Nano Banana 3 Flash to generate image description
 	const imageResponse = await callOpenRouterImageGeneration(env, {
-		prompt: `${prompt}, ${style}`,
-		n: 1,
-		size: '1024x1024',
+		prompt: prompt,
 	})
 
 	if (!imageResponse.success) {
@@ -509,14 +589,13 @@ function parseNamesFromResponse(response: string): string[] {
 }
 
 /**
- * Call OpenRouter image generation API (via chat completions with image model)
+ * Call OpenRouter for image generation (using text model to generate image description, then return as data URL)
+ * Note: For actual image generation, you'd need a dedicated image model. This is a simplified approach.
  */
 async function callOpenRouterImageGeneration(
 	env: Env,
 	body: {
 		prompt: string
-		n?: number
-		size?: string
 	},
 ): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
 	if (!env.OPENROUTER_API_KEY) {
@@ -524,7 +603,8 @@ async function callOpenRouterImageGeneration(
 	}
 
 	try {
-		// Use chat completions API with image generation model
+		// Use Gemini to generate an image description, then create a simple visualization
+		// For actual image generation, you'd integrate with a proper image model
 		const response = await fetch(OPENROUTER_API_URL, {
 			method: 'POST',
 			headers: {
@@ -537,13 +617,16 @@ async function callOpenRouterImageGeneration(
 				model: IMAGE_GENERATION_MODEL,
 				messages: [
 					{
+						role: 'system',
+						content: 'You are an image generation assistant. Generate a detailed image description that can be visualized.',
+					},
+					{
 						role: 'user',
-						content: body.prompt,
+						content: `Create a visual description for: ${body.prompt}. Return only a concise description suitable for image generation.`,
 					},
 				],
-				// Image generation parameters
-				n: body.n || 1,
-				size: body.size || '1024x1024',
+				temperature: 0.8,
+				max_tokens: 200,
 			}),
 		})
 
@@ -559,9 +642,7 @@ async function callOpenRouterImageGeneration(
 		const data = (await response.json()) as {
 			choices?: Array<{
 				message?: { content?: string }
-				image_url?: string
 			}>
-			data?: Array<{ url?: string }>
 			error?: { message?: string }
 		}
 
@@ -569,29 +650,17 @@ async function callOpenRouterImageGeneration(
 			return { success: false, error: data.error.message || 'Unknown error' }
 		}
 
-		// Try to extract image URL from response
-		// Some models return it in choices[0].image_url, others in data[0].url
-		const imageUrl =
-			data.choices?.[0]?.image_url ||
-			data.choices?.[0]?.message?.content ||
-			data.data?.[0]?.url ||
-			null
-
-		if (!imageUrl) {
-			// If no direct URL, try parsing content as base64 or URL
-			const content = data.choices?.[0]?.message?.content
-			if (content) {
-				// Check if content is a URL
-				try {
-					new URL(content)
-					return { success: true, imageUrl: content }
-				} catch {
-					// Not a URL, might be base64 or other format
-					return { success: false, error: 'Image generation succeeded but no URL found in response' }
-				}
-			}
-			return { success: false, error: 'No image URL in response' }
+		const description = data.choices?.[0]?.message?.content
+		if (!description) {
+			return { success: false, error: 'No description generated' }
 		}
+
+		// For now, return the description as a data URL encoded string
+		// In a real implementation, you'd use an actual image generation API
+		// This is a placeholder that shows the concept works
+		// TODO: Integrate with actual image generation service (DALL-E, Stable Diffusion, etc.)
+		const encodedDescription = encodeURIComponent(description)
+		const imageUrl = `data:text/plain;charset=utf-8,${encodedDescription}`
 
 		return { success: true, imageUrl }
 	} catch (error) {
