@@ -266,12 +266,11 @@ export function generateProfilePage(
 							</div>
 						</div>
 						<div class="grace-skill-counter">
-							<div class="grace-skill-label">$skill-creator decay</div>
+							<div class="grace-skill-label">$skill-creator reserve estimate</div>
 							<div class="grace-skill-value">
 								<span id="grace-skill-value">100,000,000</span>
-								<span class="grace-skill-unit">of 100,000,000 remaining</span>
 							</div>
-							<div class="grace-skill-hint">Linearly burns across the full grace/premium window.</div>
+							<div class="grace-skill-hint">Exponential decay projected over the 30-day grace window.</div>
 						</div>
 					</div>
 				</div>
@@ -448,6 +447,148 @@ export function generateProfilePage(
 			`
 					: ''
 			}
+
+			<!-- Gateway Services Section -->
+			<div class="card" style="margin-top: 24px;">
+				<h2 style="font-size: 1.25rem; margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px; color: var(--accent);">
+						<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+					</svg>
+					Gateway Services
+				</h2>
+				<p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">Access Sui ecosystem services through sui.ski</p>
+				<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+					<a href="/mvr" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: linear-gradient(135deg, rgba(30, 30, 40, 0.5), rgba(20, 20, 30, 0.6)); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; transition: all 0.2s;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px; color: var(--accent); flex-shrink: 0;">
+							<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+							<polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+							<line x1="12" y1="22.08" x2="12" y2="12"></line>
+						</svg>
+						<div>
+							<div style="font-weight: 600; color: var(--text); font-size: 0.9rem;">Move Registry</div>
+							<div style="font-size: 0.75rem; color: var(--text-muted);">Manage packages</div>
+						</div>
+					</a>
+					<a href="/upload" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: linear-gradient(135deg, rgba(30, 30, 40, 0.5), rgba(20, 20, 30, 0.6)); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; transition: all 0.2s;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px; color: var(--accent); flex-shrink: 0;">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+							<polyline points="17 8 12 3 7 8"></polyline>
+							<line x1="12" y1="3" x2="12" y2="15"></line>
+						</svg>
+						<div>
+							<div style="font-weight: 600; color: var(--text); font-size: 0.9rem;">Upload Files</div>
+							<div style="font-size: 0.75rem; color: var(--text-muted);">To Walrus</div>
+						</div>
+					</a>
+					<a href="/messages" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: linear-gradient(135deg, rgba(30, 30, 40, 0.5), rgba(20, 20, 30, 0.6)); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; transition: all 0.2s;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px; color: var(--accent); flex-shrink: 0;">
+							<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+						</svg>
+						<div>
+							<div style="font-weight: 600; color: var(--text); font-size: 0.9rem;">Messaging</div>
+							<div style="font-size: 0.75rem; color: var(--text-muted);">Encrypted Web3</div>
+						</div>
+					</a>
+					<a href="/vortex" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: linear-gradient(135deg, rgba(30, 30, 40, 0.5), rgba(20, 20, 30, 0.6)); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; transition: all 0.2s;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px; color: var(--accent); flex-shrink: 0;">
+							<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+						</svg>
+						<div>
+							<div style="font-weight: 600; color: var(--text); font-size: 0.9rem;">Vortex Privacy</div>
+							<div style="font-size: 0.75rem; color: var(--text-muted);">ZK transactions</div>
+						</div>
+					</a>
+				</div>
+				<div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+					<div style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text-muted);">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+							<circle cx="12" cy="12" r="10"></circle>
+							<polyline points="12 6 12 12 16 14"></polyline>
+						</svg>
+						<span>RPC Proxy: <code style="background: rgba(96, 165, 250, 0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">rpc.sui.ski</code></span>
+					</div>
+				</div>
+			</div>
+
+			<!-- Vortex Privacy Protocol Section -->
+			<div class="card" style="margin-top: 24px; background: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(168, 85, 247, 0.08)); border: 1px solid rgba(96, 165, 250, 0.25);">
+				<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;">
+					<div style="flex: 1; min-width: 0;">
+						<h2 style="font-size: 1.5rem; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; background: linear-gradient(135deg, #60a5fa, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;">
+								<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+							</svg>
+							Vortex Privacy Protocol
+						</h2>
+						<p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; margin-bottom: 16px;">
+							Privacy-preserving transactions on Sui using zero-knowledge proofs. Break the on-chain link between deposits and withdrawals.
+						</p>
+					</div>
+					<a href="/vortex" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; background: linear-gradient(135deg, #60a5fa, #a855f7); color: white; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; white-space: nowrap;">
+						<span>Learn More</span>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+							<polyline points="9 18 15 12 9 6"></polyline>
+						</svg>
+					</a>
+				</div>
+
+				<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+					<div style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; background: rgba(30, 30, 40, 0.4); border: 1px solid var(--border); border-radius: 12px;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px; color: var(--accent); flex-shrink: 0; margin-top: 2px;">
+							<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+						</svg>
+						<div>
+							<div style="font-weight: 600; color: var(--text); font-size: 0.9rem; margin-bottom: 4px;">Zero-Knowledge Proofs</div>
+							<div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">Groth16 proof system for transaction verification</div>
+						</div>
+					</div>
+					<div style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; background: rgba(30, 30, 40, 0.4); border: 1px solid var(--border); border-radius: 12px;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px; color: var(--accent); flex-shrink: 0; margin-top: 2px;">
+							<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+						</svg>
+						<div>
+							<div style="font-weight: 600; color: var(--text); font-size: 0.9rem; margin-bottom: 4px;">UTXO Model</div>
+							<div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">2-input/2-output transaction architecture</div>
+						</div>
+					</div>
+					<div style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; background: rgba(30, 30, 40, 0.4); border: 1px solid var(--border); border-radius: 12px;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px; color: var(--accent); flex-shrink: 0; margin-top: 2px;">
+							<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+							<circle cx="12" cy="10" r="3"></circle>
+						</svg>
+						<div>
+							<div style="font-weight: 600; color: var(--text); font-size: 0.9rem; margin-bottom: 4px;">Merkle Tree</div>
+							<div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">Efficient commitment tracking and verification</div>
+						</div>
+					</div>
+					<div style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; background: rgba(30, 30, 40, 0.4); border: 1px solid var(--border); border-radius: 12px;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px; color: var(--accent); flex-shrink: 0; margin-top: 2px;">
+							<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+							<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+						</svg>
+						<div>
+							<div style="font-weight: 600; color: var(--text); font-size: 0.9rem; margin-bottom: 4px;">Client-Side Crypto</div>
+							<div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">All ZK proofs generated locally in your browser</div>
+						</div>
+					</div>
+				</div>
+
+				<div style="padding: 16px; background: rgba(0, 0, 0, 0.2); border-radius: 12px; border: 1px dashed rgba(96, 165, 250, 0.3);">
+					<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px; color: var(--accent);">
+							<circle cx="12" cy="12" r="10"></circle>
+							<polyline points="12 6 12 12 16 14"></polyline>
+						</svg>
+						<span style="font-size: 0.85rem; font-weight: 600; color: var(--text);">Quick Access</span>
+					</div>
+					<div style="display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.8rem;">
+						<a href="/vortex" style="color: var(--accent); text-decoration: none; padding: 6px 12px; background: rgba(96, 165, 250, 0.1); border-radius: 6px; transition: all 0.2s;">Vortex Dashboard</a>
+						<a href="/api/vortex/info" target="_blank" style="color: var(--accent); text-decoration: none; padding: 6px 12px; background: rgba(96, 165, 250, 0.1); border-radius: 6px; transition: all 0.2s;">API Info</a>
+						<a href="/api/vortex/health" target="_blank" style="color: var(--accent); text-decoration: none; padding: 6px 12px; background: rgba(96, 165, 250, 0.1); border-radius: 6px; transition: all 0.2s;">Health Check</a>
+						<a href="https://github.com/interest-protocol/vortex" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none; padding: 6px 12px; background: rgba(96, 165, 250, 0.1); border-radius: 6px; transition: all 0.2s;">Documentation</a>
+					</div>
+				</div>
+			</div>
 
 					</div>
 				</div><!-- end tab-overview -->
@@ -4350,8 +4491,12 @@ export function generateProfilePage(
 
 			const clampedTime = Math.min(Math.max(currentTime, EXPIRATION_MS), AVAILABLE_AT);
 			const elapsed = clampedTime - EXPIRATION_MS;
-			const remainingFraction = Math.max(0, 1 - elapsed / totalWindow);
-			const remainingValue = Math.max(0, Math.round(SKILL_CREATOR_MAX_SUPPLY * remainingFraction));
+			const decayRate = Math.log(SKILL_CREATOR_MAX_SUPPLY) / totalWindow;
+			const exponent = -decayRate * elapsed;
+			const remainingValue = Math.max(
+				0,
+				Math.round(SKILL_CREATOR_MAX_SUPPLY * Math.exp(exponent)),
+			);
 			graceSkillValue.textContent = numberFormatter.format(remainingValue);
 		}
 
@@ -4894,6 +5039,38 @@ export function generateProfilePage(
 		</div>
 		<div class="qr-expanded-close" id="qr-close">Click anywhere to close</div>
 	</div>
+
+	<!-- Crypto Tracker -->
+	<div id="crypto-tracker" style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(10px); border-top: 1px solid rgba(96, 165, 250, 0.2); padding: 12px 20px; display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; z-index: 1000; font-size: 0.875rem;">
+		<span style="color: #c7d2fe; font-weight: 500;">SUI: <span id="sui-price" style="color: #60a5fa; font-weight: 600;">$--</span></span>
+	</div>
+
+	<!-- Footer -->
+	<footer style="margin-top: 48px; padding-top: 32px; text-align: center; color: var(--text-muted); font-size: 0.875rem; border-top: 1px solid var(--border);">
+		<p style="margin: 0;">Built on <a href="https://sui.io" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Sui</a> · <a href="https://suins.io" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">SuiNS</a> · <a href="https://moveregistry.com" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">MVR</a> · <a href="https://walrus.xyz" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Walrus</a></p>
+	</footer>
+
+	<script>
+		// Update SUI price
+		const suiPriceEl = document.getElementById('sui-price');
+		async function updateSUIPrice() {
+			try {
+				const response = await fetch('/api/sui-price');
+				if (!response.ok) throw new Error('Failed to fetch price');
+				const data = await response.json();
+				if (data.price && suiPriceEl) {
+					suiPriceEl.textContent = '$' + data.price.toFixed(2);
+				}
+			} catch (error) {
+				console.error('Failed to update SUI price:', error);
+				if (suiPriceEl) {
+					suiPriceEl.textContent = '$--';
+				}
+			}
+		}
+		updateSUIPrice();
+		setInterval(updateSUIPrice, 60000); // Update every minute
+	</script>
 </body>
 </html>`
 }

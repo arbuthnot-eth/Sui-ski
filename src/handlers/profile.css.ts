@@ -3986,4 +3986,64 @@ export const profileStyles = `
 			.ai-generate-btn { width: 24px; height: 24px; }
 			.ai-generate-btn svg { width: 14px; height: 14px; }
 		}
+
+		/* Gateway Services Links Hover Effects */
+		.card a[href="/mvr"]:hover,
+		.card a[href="/upload"]:hover,
+		.card a[href="/messages"]:hover,
+		.card a[href="/vortex"]:hover {
+			border-color: var(--accent) !important;
+			background: rgba(96, 165, 250, 0.1) !important;
+			transform: translateY(-2px);
+			box-shadow: 0 4px 12px rgba(96, 165, 250, 0.2);
+		}
+
+		/* Vortex Section Styling */
+		.card a[href="/vortex"]:hover {
+			filter: brightness(1.1);
+			transform: translateY(-2px);
+			box-shadow: 0 6px 20px rgba(96, 165, 250, 0.4);
+		}
+
+		/* Vortex Quick Access Links */
+		.card .sdk-note a,
+		.card div[style*="Quick Access"] a {
+			transition: all 0.2s;
+		}
+		.card .sdk-note a:hover,
+		.card div[style*="Quick Access"] a:hover {
+			background: rgba(96, 165, 250, 0.2) !important;
+			border-color: var(--accent) !important;
+			transform: translateY(-1px);
+		}
+
+		/* Crypto Tracker Responsive */
+		@media (max-width: 540px) {
+			#crypto-tracker {
+				gap: 16px;
+				padding: 10px 16px;
+				font-size: 0.8rem;
+			}
+		}
+
+		/* Footer Styles */
+		footer {
+			margin-top: 48px;
+			padding-top: 32px;
+			text-align: center;
+			color: var(--text-muted);
+			font-size: 0.875rem;
+			border-top: 1px solid var(--border);
+		}
+		footer p {
+			margin: 0;
+		}
+		footer a {
+			color: var(--accent);
+			text-decoration: none;
+			font-weight: 600;
+		}
+		footer a:hover {
+			text-decoration: underline;
+		}
 `
