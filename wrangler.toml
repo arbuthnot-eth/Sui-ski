@@ -12,7 +12,7 @@ routes = [
 # Environment variables (non-sensitive)
 [vars]
 SUI_NETWORK = "mainnet"
-SUI_RPC_URL = "https://fullnode.mainnet.sui.io:443"
+SUI_RPC_URL = "https://sui-rpc.publicnode.com"
 WALRUS_NETWORK = "mainnet"
 # Sui Stack Messaging SDK contract (mainnet)
 MESSAGING_CONTRACT_ADDRESS = "0x9a814ab4f67fff8ec2a8bb1ddcf188b26119ae6866eea9f3f5d5e7eaf7a9c862"

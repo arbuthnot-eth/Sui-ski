@@ -36,6 +36,28 @@ const log = pino({
 	transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
 })
 
+// BigInt-safe JSON serialization helper
+// The Sui SDK returns BigInt values that JSON.stringify cannot handle natively
+function serializeBigInts<T>(obj: T): T {
+	if (obj === null || obj === undefined) {
+		return obj
+	}
+	if (typeof obj === 'bigint') {
+		return obj.toString() as unknown as T
+	}
+	if (Array.isArray(obj)) {
+		return obj.map(serializeBigInts) as unknown as T
+	}
+	if (typeof obj === 'object') {
+		const result: Record<string, unknown> = {}
+		for (const [key, value] of Object.entries(obj)) {
+			result[key] = serializeBigInts(value)
+		}
+		return result as T
+	}
+	return obj
+}
+
 // Sui client with connection pooling
 class SuiConnectionPool {
 	private clients: SuiClient[] = []
@@ -324,12 +346,15 @@ async function executeRpcRequest(request: {
 		const client = pool.getClient()
 		const result = await executeMethod(client, method, params)
 
-		// Cache the result
+		// Serialize BigInt values to strings for JSON compatibility
+		const serializedResult = serializeBigInts(result)
+
+		// Cache the serialized result
 		if (cache && CACHEABLE_METHODS.has(method)) {
-			cache.set(method, params, result)
+			cache.set(method, params, serializedResult)
 		}
 
-		return { jsonrpc: '2.0', id, result }
+		return { jsonrpc: '2.0', id, result: serializedResult }
 	} catch (error) {
 		stats.errors++
 		log.error({ method, error }, 'Method execution failed')
