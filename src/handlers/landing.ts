@@ -310,24 +310,24 @@ ${socialMeta}
 				font-size: 0.8rem;
 			}
 		}
-		/* Custom Scrollbar Styles - Clean & Subtle */
+		/* Custom Scrollbar Styles - Black track with SuiNS blue gradient */
 		* {
 			scrollbar-width: thin;
-			scrollbar-color: rgba(96, 165, 250, 0.4) transparent;
+			scrollbar-color: #60a5fa #000000;
 		}
 		*::-webkit-scrollbar {
 			width: 6px;
 			height: 6px;
 		}
 		*::-webkit-scrollbar-track {
-			background: transparent;
+			background: #000000;
 		}
 		*::-webkit-scrollbar-thumb {
-			background: rgba(96, 165, 250, 0.4);
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
 			border-radius: 3px;
 		}
 		*::-webkit-scrollbar-thumb:hover {
-			background: rgba(96, 165, 250, 0.6);
+			background: linear-gradient(135deg, #7ab8ff, #b99cff);
 		}
 	</style>
 </head>
