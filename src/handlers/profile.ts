@@ -1211,46 +1211,134 @@ export function generateProfilePage(
 			if (renewBtn) renewBtn.style.display = isOwner ? 'inline-flex' : 'none';
 		}
 
-		// Renewal relay: 10 SUI for 1 month, sent to atlas.sui
-		const RENEWAL_COST_MIST = 10 * 1_000_000_000;
-
-		async function getRelayAddress() {
-			const suiClient = new SuiClient({ url: RPC_URL });
-			const suinsClient = new SuinsClient({ client: suiClient, network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet' });
-			const rec = await suinsClient.getNameRecord('atlas.sui');
-			return rec?.targetAddress || null;
-		}
-
+		// x402 Renewal API - uses Payment Kit pattern
 		async function handleGiftRenewal() {
-			if (!connectedAddress || !connectedWallet) { showGracePeriodStatus('Connect wallet first', 'error'); return; }
+			if (!connectedAddress || !connectedWallet) {
+				showGracePeriodStatus('Connect wallet first', 'error');
+				return;
+			}
+
 			const btn = document.getElementById('gift-renewal-btn');
 			const txt = document.getElementById('gift-renewal-text');
 			const orig = txt?.textContent || 'Gift 1 Month (10 SUI)';
+
 			try {
 				if (btn) btn.disabled = true;
-				if (txt) txt.textContent = 'Resolving...';
-				const relay = await getRelayAddress();
-				if (!relay) throw new Error('Could not resolve atlas.sui');
-				if (txt) txt.textContent = 'Building...';
-				const tx = new Transaction();
-				const [coin] = tx.splitCoins(tx.gas, [RENEWAL_COST_MIST]);
-				tx.transferObjects([coin], relay);
-				if (txt) txt.textContent = 'Approve...';
-				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
-					transaction: tx, account: connectedAccount, chain: \`sui:\${NETWORK}\`
+				if (txt) txt.textContent = 'Requesting...';
+
+				// Step 1: Request renewal - get payment details (x402)
+				const reqResponse = await fetch('/api/renewal/request', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ name: FULL_NAME, walletAddress: connectedAddress })
 				});
-				if (result?.digest) {
-					showGracePeriodStatus(\`Sent! <a href="\${EXPLORER_BASE}/tx/\${result.digest}" target="_blank">View</a><br><small>Relay will renew \${FULL_NAME} for 1 month.</small>\`, 'success');
-				} else throw new Error('No digest');
+
+				const reqData = await reqResponse.json();
+
+				if (reqResponse.status === 402) {
+					// Payment required - build and send payment
+					const payment = reqData.payment;
+					if (!payment?.recipient || !payment?.amount) {
+						throw new Error('Invalid payment details from server');
+					}
+
+					if (txt) txt.textContent = 'Building payment...';
+
+					const tx = new Transaction();
+					const [coin] = tx.splitCoins(tx.gas, [BigInt(payment.amount)]);
+					tx.transferObjects([coin], payment.recipient);
+
+					if (txt) txt.textContent = 'Approve in wallet...';
+
+					const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
+						transaction: tx,
+						account: connectedAccount,
+						chain: \`sui:\${NETWORK}\`
+					});
+
+					if (!result?.digest) throw new Error('No transaction digest');
+
+					if (txt) txt.textContent = 'Verifying payment...';
+
+					// Step 2: Retry with payment proof
+					const verifyResponse = await fetch('/api/renewal/request', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'X-Payment-Tx-Digest': result.digest
+						},
+						body: JSON.stringify({ name: FULL_NAME, walletAddress: connectedAddress })
+					});
+
+					const verifyData = await verifyResponse.json();
+
+					if (!verifyResponse.ok) {
+						throw new Error(verifyData.error || 'Verification failed');
+					}
+
+					// Success - show result with status link
+					showGracePeriodStatus(
+						\`Queued! <a href="\${EXPLORER_BASE}/tx/\${result.digest}" target="_blank">Payment</a> ·
+						<a href="\${verifyData.statusUrl}" target="_blank">Status</a><br>
+						<small>Nautilus TEE will process renewal shortly.</small>\`,
+						'success'
+					);
+
+					// Poll for status updates
+					if (verifyData.requestId) {
+						pollRenewalStatus(verifyData.requestId);
+					}
+
+				} else if (reqResponse.ok) {
+					// Already processed or no payment needed
+					showGracePeriodStatus(reqData.message || 'Request processed', 'success');
+				} else {
+					throw new Error(reqData.error || 'Request failed');
+				}
+
 			} catch (e) {
 				const m = e.message || '';
-				if (m.includes('rejected') || m.includes('cancelled')) showGracePeriodStatus('Cancelled', 'error');
-				else if (m.includes('Insufficient')) showGracePeriodStatus('Need 10 SUI + gas', 'error');
-				else showGracePeriodStatus('Error: ' + m, 'error');
+				if (m.includes('rejected') || m.includes('cancelled')) {
+					showGracePeriodStatus('Cancelled', 'error');
+				} else if (m.includes('Insufficient')) {
+					showGracePeriodStatus('Need 10 SUI + gas', 'error');
+				} else {
+					showGracePeriodStatus('Error: ' + m, 'error');
+				}
 			} finally {
 				if (btn) btn.disabled = false;
 				if (txt) txt.textContent = orig;
 			}
+		}
+
+		// Poll renewal status from Nautilus
+		async function pollRenewalStatus(requestId) {
+			let attempts = 0;
+			const maxAttempts = 30; // 5 minutes max
+			const interval = setInterval(async () => {
+				attempts++;
+				try {
+					const res = await fetch(\`/api/renewal/status/\${requestId}\`);
+					const data = await res.json();
+
+					if (data.status === 'completed') {
+						clearInterval(interval);
+						showGracePeriodStatus(
+							\`Renewed! <a href="\${EXPLORER_BASE}/tx/\${data.renewalTxDigest}" target="_blank">View tx</a><br>
+							<small>Reload page to see updated expiration.</small>\`,
+							'success'
+						);
+					} else if (data.status === 'failed') {
+						clearInterval(interval);
+						showGracePeriodStatus('Renewal failed: ' + (data.error || 'Unknown error'), 'error');
+					} else if (attempts >= maxAttempts) {
+						clearInterval(interval);
+						showGracePeriodStatus('Still processing... check status later.', 'info');
+					}
+				} catch (e) {
+					// Ignore polling errors
+				}
+			}, 10000); // Every 10 seconds
 		}
 
 		function showGracePeriodStatus(msg, type) {

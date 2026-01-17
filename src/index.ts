@@ -6,6 +6,12 @@ import { handleMVRManagementRequest } from './handlers/mvr-management'
 import { handleMVRManagementPage } from './handlers/mvr-ui'
 import { generateProfilePage } from './handlers/profile'
 import { handlePWARequest } from './handlers/pwa'
+import {
+	handleRenewalRequest,
+	handleRenewalStatus,
+	handleNautilusCallback,
+	handleNautilusQueue,
+} from './handlers/renewal'
 import { handleTransaction } from './handlers/transaction'
 import { handleUploadPage } from './handlers/upload'
 import { handleRegistrationSubmission } from './handlers/register'
@@ -56,6 +62,20 @@ export default {
 		// AI-powered features (name generation, avatar creation)
 		if (url.pathname.startsWith('/api/ai')) {
 			return handleAIRequest(request, env)
+		}
+
+		// Renewal API (x402 payment-gated, Nautilus TEE)
+		if (url.pathname === '/api/renewal/request') {
+			return handleRenewalRequest(request, env)
+		}
+		if (url.pathname.startsWith('/api/renewal/status/')) {
+			return handleRenewalStatus(request, env)
+		}
+		if (url.pathname === '/api/renewal/nautilus-callback') {
+			return handleNautilusCallback(request, env)
+		}
+		if (url.pathname === '/api/renewal/nautilus-queue') {
+			return handleNautilusQueue(request, env)
 		}
 
 		// View tracking API
