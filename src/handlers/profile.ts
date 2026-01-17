@@ -1754,6 +1754,53 @@ export function generateProfilePage(
 			height: 14px;
 		}
 
+		/* Map Section */
+		.map-section {
+			width: 100%;
+		}
+		.map-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 16px;
+		}
+		.map-title {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.map-title svg {
+			width: 20px;
+			height: 20px;
+			color: var(--accent);
+		}
+		.map-title h3 {
+			margin: 0;
+			font-size: 1.1rem;
+			font-weight: 600;
+			color: var(--text);
+		}
+		.map-count {
+			font-size: 0.875rem;
+			color: var(--text-muted);
+			font-weight: 500;
+		}
+		.map-loading {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 12px;
+			color: var(--text-muted);
+		}
+		.map-loading .loading {
+			width: 24px;
+			height: 24px;
+		}
+		#domain-map-canvas {
+			display: block;
+			image-rendering: crisp-edges;
+		}
+
 		/* Messaging Section (Separate Tab - Legacy) */
 		.messaging-section {
 			padding: 8px;
@@ -3395,6 +3442,10 @@ ${generatePasskeyWalletStyles()}
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
 						<span>Names</span>
 					</button>
+					<button class="sidebar-tab" data-tab="map">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+						<span>Map</span>
+					</button>
 					<button class="sidebar-tab" data-tab="passkey">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
 						<span>Passkey</span>
@@ -3841,6 +3892,41 @@ ${generatePasskeyWalletStyles()}
 						</div>
 					</div>
 				</div><!-- end tab-names -->
+
+				<div class="tab-panel" id="tab-map">
+					<div class="map-section">
+						<div class="map-header">
+							<div class="map-title">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+									<circle cx="12" cy="10" r="3"></circle>
+								</svg>
+								<h3>Domain Map</h3>
+							</div>
+							<span class="map-count" id="map-count">Loading...</span>
+						</div>
+						<div id="map-content" style="position: relative; width: 100%; height: 600px; background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%); border-radius: 12px; overflow: hidden;">
+							<canvas id="domain-map-canvas" style="width: 100%; height: 100%; cursor: grab;"></canvas>
+							<div class="map-loading" id="map-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-muted); text-align: center;">
+								<span class="loading"></span>
+								<span>Loading domain map...</span>
+							</div>
+						</div>
+						<div class="map-legend" style="margin-top: 16px; padding: 12px; background: var(--card-bg); border-radius: 8px; font-size: 0.875rem; color: var(--text-muted);">
+							<p style="margin: 0 0 8px 0; font-weight: 500; color: var(--text);">Legend</p>
+							<div style="display: flex; gap: 16px; flex-wrap: wrap;">
+								<div style="display: flex; align-items: center; gap: 8px;">
+									<div style="width: 12px; height: 12px; border-radius: 50%; background: var(--accent);"></div>
+									<span>Current domain</span>
+								</div>
+								<div style="display: flex; align-items: center; gap: 8px;">
+									<div style="width: 12px; height: 12px; border-radius: 50%; background: rgba(255, 255, 255, 0.3);"></div>
+									<span>Other domains</span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div><!-- end tab-map -->
 
 				<div class="tab-panel" id="tab-passkey">
 					${generatePasskeyWalletHTML()}
@@ -6345,6 +6431,326 @@ ${generatePasskeyWalletStyles()}
 			namesLoaded = true;
 			// Small delay to ensure DOM is ready
 			setTimeout(() => fetchOwnedNames(), 100);
+		}
+
+		// ========== DOMAIN MAP ==========
+		const mapContent = document.getElementById('map-content');
+		const mapCanvas = document.getElementById('domain-map-canvas');
+		const mapLoading = document.getElementById('map-loading');
+		const mapCountEl = document.getElementById('map-count');
+		let mapDomains = [];
+		let mapNextCursor = null;
+		let mapHasMore = true;
+		let mapLoadingState = false;
+		let mapCtx = null;
+		let mapScale = 1;
+		let mapOffsetX = 0;
+		let mapOffsetY = 0;
+		let isDragging = false;
+		let dragStartX = 0;
+		let dragStartY = 0;
+		let hoveredDomain = null;
+
+		// Initialize canvas
+		function initMapCanvas() {
+			if (!mapCanvas) return;
+			mapCtx = mapCanvas.getContext('2d');
+			if (!mapCtx) return;
+
+			// Set canvas size
+			const rect = mapContent.getBoundingClientRect();
+			mapCanvas.width = rect.width;
+			mapCanvas.height = rect.height;
+
+			// Center the map initially
+			mapOffsetX = rect.width / 2;
+			mapOffsetY = rect.height / 2;
+			mapScale = 1;
+
+			// Handle resize
+			const resizeObserver = new ResizeObserver(() => {
+				const rect = mapContent.getBoundingClientRect();
+				mapCanvas.width = rect.width;
+				mapCanvas.height = rect.height;
+				renderMap();
+			});
+			resizeObserver.observe(mapContent);
+		}
+
+		// Hash function to convert domain name to consistent coordinates
+		function hashDomain(domain) {
+			let hash = 0;
+			for (let i = 0; i < domain.length; i++) {
+				const char = domain.charCodeAt(i);
+				hash = ((hash << 5) - hash) + char;
+				hash = hash & hash; // Convert to 32bit integer
+			}
+			return Math.abs(hash);
+		}
+
+		// Convert domain name to map coordinates (0-1 range)
+		function domainToCoords(domain) {
+			const hash = hashDomain(domain);
+			// Use hash to create pseudo-random but consistent coordinates
+			const x = (hash % 1000) / 1000;
+			const y = ((hash * 7) % 1000) / 1000; // Multiply by prime for better distribution
+			return { x, y };
+		}
+
+		// Fetch all domains for the map
+		async function fetchMapDomains(cursor = null) {
+			if (mapLoadingState) return;
+			mapLoadingState = true;
+
+			try {
+				const suiClient = new SuiClient({ url: RPC_URL });
+				const response = await suiClient.resolveNameServiceNames({
+					address: CURRENT_ADDRESS,
+					cursor: cursor,
+					limit: 50
+				});
+
+				if (response.data && response.data.length > 0) {
+					mapDomains = cursor ? [...mapDomains, ...response.data] : response.data;
+				}
+
+				mapNextCursor = response.nextCursor;
+				mapHasMore = response.hasNextPage || false;
+
+				if (mapHasMore && mapNextCursor) {
+					// Continue fetching until we have all domains
+					await fetchMapDomains(mapNextCursor);
+				} else {
+					// All domains loaded, render map
+					renderMap();
+					if (mapLoading) mapLoading.style.display = 'none';
+					mapCountEl.textContent = String(mapDomains.length);
+				}
+			} catch (error) {
+				console.error('Failed to fetch domains for map:', error);
+				if (mapLoading) {
+					mapLoading.innerHTML = \`
+						<div style="color: #f87171;">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px; margin: 0 auto 8px;">
+								<circle cx="12" cy="12" r="10"></circle>
+								<line x1="12" y1="8" x2="12" y2="12"></line>
+								<line x1="12" y1="16" x2="12.01" y2="16"></line>
+							</svg>
+							<p>\${escapeHtmlJs(error.message || 'Failed to load domains')}</p>
+							<button onclick="location.reload()" style="margin-top: 8px; padding: 6px 12px; background: #60a5fa; border: none; border-radius: 6px; color: white; cursor: pointer;">Retry</button>
+						</div>
+					\`;
+				}
+			} finally {
+				mapLoadingState = false;
+			}
+		}
+
+		// Render the map
+		function renderMap() {
+			if (!mapCtx || !mapCanvas) return;
+			
+			if (mapDomains.length === 0) {
+				// Show empty state
+				mapCtx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+				mapCtx.font = '16px system-ui';
+				mapCtx.textAlign = 'center';
+				mapCtx.fillText('No domains to display', mapCanvas.width / 2, mapCanvas.height / 2);
+				return;
+			}
+
+			const width = mapCanvas.width;
+			const height = mapCanvas.height;
+
+			// Clear canvas
+			mapCtx.clearRect(0, 0, width, height);
+
+			// Draw grid background
+			mapCtx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+			mapCtx.lineWidth = 1;
+			const gridSize = 50 * mapScale;
+			for (let x = -mapOffsetX % gridSize; x < width; x += gridSize) {
+				mapCtx.beginPath();
+				mapCtx.moveTo(x, 0);
+				mapCtx.lineTo(x, height);
+				mapCtx.stroke();
+			}
+			for (let y = -mapOffsetY % gridSize; y < height; y += gridSize) {
+				mapCtx.beginPath();
+				mapCtx.moveTo(0, y);
+				mapCtx.lineTo(width, y);
+				mapCtx.stroke();
+			}
+
+			// Draw connections between domains (light lines)
+			mapCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+			mapCtx.lineWidth = 1;
+			for (let i = 0; i < mapDomains.length; i++) {
+				for (let j = i + 1; j < mapDomains.length; j++) {
+					const coords1 = domainToCoords(mapDomains[i]);
+					const coords2 = domainToCoords(mapDomains[j]);
+					const x1 = (coords1.x - 0.5) * width * mapScale + mapOffsetX;
+					const y1 = (coords1.y - 0.5) * height * mapScale + mapOffsetY;
+					const x2 = (coords2.x - 0.5) * width * mapScale + mapOffsetX;
+					const y2 = (coords2.y - 0.5) * height * mapScale + mapOffsetY;
+					
+					// Only draw if domains are close enough
+					const dist = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+					if (dist < 200) {
+						mapCtx.beginPath();
+						mapCtx.moveTo(x1, y1);
+						mapCtx.lineTo(x2, y2);
+						mapCtx.stroke();
+					}
+				}
+			}
+
+			// Draw domain markers
+			mapDomains.forEach(domain => {
+				const cleanedName = domain.replace(/\\.sui$/i, '');
+				const isCurrentName = cleanedName.toLowerCase() === NAME.toLowerCase();
+				const coords = domainToCoords(domain);
+				// Center coordinates around 0,0 and scale
+				const x = (coords.x - 0.5) * width * mapScale + mapOffsetX;
+				const y = (coords.y - 0.5) * height * mapScale + mapOffsetY;
+
+				// Skip if outside viewport
+				if (x < -20 || x > width + 20 || y < -20 || y > height + 20) return;
+
+				// Draw marker
+				const radius = isCurrentName ? 8 : 5;
+				const color = isCurrentName ? '#60a5fa' : 'rgba(255, 255, 255, 0.5)';
+				
+				// Outer glow for current domain
+				if (isCurrentName) {
+					mapCtx.shadowBlur = 10;
+					mapCtx.shadowColor = '#60a5fa';
+				} else {
+					mapCtx.shadowBlur = 0;
+				}
+
+				mapCtx.fillStyle = color;
+				mapCtx.beginPath();
+				mapCtx.arc(x, y, radius, 0, Math.PI * 2);
+				mapCtx.fill();
+
+				// Draw domain name on hover
+				if (hoveredDomain === domain) {
+					mapCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+					mapCtx.fillRect(x - 40, y - 30, 80, 20);
+					mapCtx.fillStyle = 'white';
+					mapCtx.font = '12px system-ui';
+					mapCtx.textAlign = 'center';
+					mapCtx.fillText(cleanedName, x, y - 15);
+				}
+			});
+
+			// Reset shadow
+			mapCtx.shadowBlur = 0;
+		}
+
+		// Mouse interaction
+		if (mapCanvas) {
+			mapCanvas.addEventListener('mousedown', (e) => {
+				isDragging = true;
+				const rect = mapCanvas.getBoundingClientRect();
+				dragStartX = e.clientX - mapOffsetX;
+				dragStartY = e.clientY - mapOffsetY;
+				mapCanvas.style.cursor = 'grabbing';
+			});
+
+			mapCanvas.addEventListener('mousemove', (e) => {
+				const rect = mapCanvas.getBoundingClientRect();
+				if (isDragging) {
+					mapOffsetX = e.clientX - dragStartX;
+					mapOffsetY = e.clientY - dragStartY;
+					renderMap();
+				} else {
+					// Check hover
+					const x = e.clientX - rect.left;
+					const y = e.clientY - rect.top;
+					
+					let found = null;
+					const width = mapCanvas.width;
+					const height = mapCanvas.height;
+					
+					for (const domain of mapDomains) {
+						const coords = domainToCoords(domain);
+						const domX = (coords.x - 0.5) * width * mapScale + mapOffsetX;
+						const domY = (coords.y - 0.5) * height * mapScale + mapOffsetY;
+						const dist = Math.sqrt((x - domX) ** 2 + (y - domY) ** 2);
+						if (dist < 15) {
+							found = domain;
+							break;
+						}
+					}
+					
+					if (found !== hoveredDomain) {
+						hoveredDomain = found;
+						mapCanvas.style.cursor = found ? 'pointer' : 'grab';
+						renderMap();
+					}
+				}
+			});
+
+			mapCanvas.addEventListener('mouseup', () => {
+				isDragging = false;
+				mapCanvas.style.cursor = hoveredDomain ? 'pointer' : 'grab';
+			});
+
+			mapCanvas.addEventListener('mouseleave', () => {
+				isDragging = false;
+				hoveredDomain = null;
+				mapCanvas.style.cursor = 'grab';
+				renderMap();
+			});
+
+			mapCanvas.addEventListener('click', (e) => {
+				if (hoveredDomain) {
+					const cleanedName = hoveredDomain.replace(/\\.sui$/i, '');
+					window.location.href = \`https://\${cleanedName}.sui.ski\`;
+				}
+			});
+
+			// Zoom with wheel
+			mapCanvas.addEventListener('wheel', (e) => {
+				e.preventDefault();
+				const delta = e.deltaY > 0 ? 0.9 : 1.1;
+				const oldScale = mapScale;
+				mapScale = Math.max(0.5, Math.min(3, mapScale * delta));
+				
+				// Adjust offset to zoom towards mouse position
+				const rect = mapCanvas.getBoundingClientRect();
+				const mouseX = e.clientX - rect.left;
+				const mouseY = e.clientY - rect.top;
+				const scaleChange = mapScale / oldScale;
+				mapOffsetX = mouseX - (mouseX - mapOffsetX) * scaleChange;
+				mapOffsetY = mouseY - (mouseY - mapOffsetY) * scaleChange;
+				
+				renderMap();
+			});
+		}
+
+		// Load map when map tab is activated
+		let mapLoaded = false;
+		const mapTab = document.querySelector('[data-tab="map"]');
+		if (mapTab) {
+			mapTab.addEventListener('click', () => {
+				if (!mapLoaded) {
+					mapLoaded = true;
+					initMapCanvas();
+					fetchMapDomains();
+				}
+			});
+		}
+
+		// Also load if map tab is already active
+		if (activeTab === 'map' && !mapLoaded) {
+			mapLoaded = true;
+			setTimeout(() => {
+				initMapCanvas();
+				fetchMapDomains();
+			}, 100);
 		}
 
 		// ========== COUNTDOWN HERO ANIMATION ==========
