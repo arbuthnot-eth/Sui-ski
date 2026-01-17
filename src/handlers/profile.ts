@@ -6577,8 +6577,14 @@ ${generatePasskeyWalletStyles()}
 
 		// Fetch all SuiNS registration NFTs owned by the address
 		async function fetchNFTs(cursor = null) {
-			if (nftsLoading) return;
-			nftsLoading = true;
+			if (nftsLoading && cursor === null) return; // Only prevent if starting fresh fetch
+			if (cursor === null) {
+				// Starting fresh fetch - reset state
+				allNFTs = [];
+				nftsNextCursor = null;
+				nftsHasMore = true;
+				nftsLoading = true;
+			}
 
 			try {
 				const suiClient = new SuiClient({ url: RPC_URL });
@@ -6623,19 +6629,25 @@ ${generatePasskeyWalletStyles()}
 				nftsNextCursor = response.nextCursor;
 				nftsHasMore = response.hasNextPage || false;
 
-				renderNFTs();
-
-				// Continue fetching if there are more
+				// Continue fetching if there are more pages
 				if (nftsHasMore && nftsNextCursor) {
+					// Update count to show progress
+					nftsCountEl.textContent = \`\${allNFTs.length}+...\`;
+					// Continue fetching next page
 					await fetchNFTs(nftsNextCursor);
 				} else {
+					// All pages fetched, render final results
+					renderNFTs();
 					nftsCountEl.textContent = String(allNFTs.length);
 				}
 			} catch (error) {
-				console.error('Failed to fetch NFTs:', error);
+				console.error('Failed to fetch NFTs with struct filter:', error);
 				// If the struct type filter fails, try fetching all owned objects and filtering client-side
 				try {
-					console.log('Trying alternative method: fetching all objects and filtering...');
+					if (cursor === null) {
+						console.log('Trying alternative method: fetching all objects and filtering...');
+						allNFTs = [];
+					}
 					const response = await suiClient.getOwnedObjects({
 						owner: CURRENT_ADDRESS,
 						options: {
@@ -6674,19 +6686,27 @@ ${generatePasskeyWalletStyles()}
 					nftsNextCursor = response.nextCursor;
 					nftsHasMore = response.hasNextPage || false;
 
-					renderNFTs();
-
+					// Continue fetching if there are more pages
 					if (nftsHasMore && nftsNextCursor) {
+						// Update count to show progress
+						nftsCountEl.textContent = \`\${allNFTs.length}+...\`;
+						// Continue fetching next page (recursive call)
 						await fetchNFTs(nftsNextCursor);
 					} else {
+						// All pages fetched, render final results
+						renderNFTs();
 						nftsCountEl.textContent = String(allNFTs.length);
 					}
 				} catch (fallbackError) {
 					console.error('Fallback method also failed:', fallbackError);
-					renderNFTsError(error.message || 'Failed to load NFTs');
+					renderNFTsError(fallbackError.message || error.message || 'Failed to load NFTs');
+					nftsLoading = false;
 				}
 			} finally {
-				nftsLoading = false;
+				// Only set loading to false when we're completely done (no more pages)
+				if (!nftsHasMore || !nftsNextCursor) {
+					nftsLoading = false;
+				}
 			}
 		}
 
