@@ -89,7 +89,7 @@ async function getSuiNSPricing(env: Env): Promise<Record<string, number>> {
 /**
  * Fetch SUI price from CoinGecko API
  */
-async function getSUIPrice(): Promise<number> {
+export async function getSUIPrice(): Promise<number> {
 	try {
 		const response = await fetch(
 			'https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd',
