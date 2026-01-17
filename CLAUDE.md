@@ -80,8 +80,9 @@ The gateway parses hostnames to determine routing:
 - **@mysten/sui** - Sui TypeScript SDK for RPC calls
 - **@mysten/suins** - SuiNS client for name resolution
 - **@mysten/walrus** - Walrus client for blob storage
-- **@interest-protocol/vortex-sdk** - Vortex privacy protocol SDK
 - **wrangler** - Cloudflare Workers CLI
+
+Note: The Vortex SDK (`@interest-protocol/vortex-sdk`) is available in package.json but NOT imported in the worker due to its 9MB size exceeding Cloudflare's 3MB limit. The gateway proxies Vortex API requests, and the SDK should be loaded client-side from CDN.
 
 ## Environment Configuration
 
@@ -160,6 +161,10 @@ See `docs/SUI_TRANSACTION_BUILDING.md` for comprehensive documentation on:
 
 The gateway integrates with [Vortex](https://github.com/interest-protocol/vortex), a privacy protocol for confidential transactions on Sui using zero-knowledge proofs.
 
+**Architecture Note:** The Vortex SDK is ~9MB which exceeds Cloudflare's 3MB worker limit. This gateway uses a lightweight proxy approach:
+- Server-side: Proxies API requests to the Vortex API (no SDK import)
+- Client-side: Load the SDK from CDN for ZK proof generation in the browser
+
 **How Vortex Works:**
 - Breaks the on-chain link between deposit and withdrawal addresses
 - Uses 2-input/2-output UTXO model with Groth16 proofs
@@ -168,9 +173,10 @@ The gateway integrates with [Vortex](https://github.com/interest-protocol/vortex
 **UI Page** (`/vortex`):
 - Dashboard showing protocol status, pools, and relayer info
 - Real-time health monitoring of Vortex services
+- Instructions for loading the SDK client-side
 
-**API Endpoints** (`/api/vortex/*`):
-- `GET /api/vortex/info` - Protocol overview and status
+**API Endpoints** (`/api/vortex/*`) - Proxy to Vortex API:
+- `GET /api/vortex/info` - Protocol overview (local, no proxy)
 - `GET /api/vortex/health` - Service health check
 - `GET /api/vortex/pools` - List available privacy pools
 - `GET /api/vortex/pools/{coinType}` - Get pool details
@@ -179,21 +185,13 @@ The gateway integrates with [Vortex](https://github.com/interest-protocol/vortex
 - `POST /api/vortex/merkle-path` - Get merkle path for proof generation
 - `GET /api/vortex/accounts?hashedSecret=...` - Get accounts by hashed secret
 
-**Environment Variables:**
-- `VORTEX_API_URL` - Optional custom Vortex API URL (defaults to `https://api.vortexfi.xyz`)
-
-**SDK Usage:**
-```typescript
-import { VortexAPI, Vortex, VORTEX_PACKAGE_ID } from '@interest-protocol/vortex-sdk';
-
-// API client for indexer data
-const api = new VortexAPI({ apiUrl: 'https://api.vortexfi.xyz' });
-const health = await api.health();
-const pools = await api.getPools({ coinType: '0x2::sui::SUI' });
-
-// On-chain interactions
-const vortex = new Vortex({
-  packageId: VORTEX_PACKAGE_ID,
-  // ... other config
-});
+**Client-Side SDK Usage:**
+```html
+<!-- Load SDK from CDN in browser -->
+<script src="https://unpkg.com/@interest-protocol/vortex-sdk"></script>
+<script>
+  // All ZK proof generation happens client-side for privacy
+  const { VortexAPI, Vortex } = window.VortexSDK;
+  const api = new VortexAPI({ apiUrl: '/api/vortex' }); // Use gateway proxy
+</script>
 ```
