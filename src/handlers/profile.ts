@@ -301,7 +301,7 @@ export function generateProfilePage(
 									<line id="decay-marker-line" class="decay-marker-line" x1="0" y1="10" x2="0" y2="80"/>
 								</svg>
 								<div class="graph-labels">
-									<span class="graph-label-start">100M</span>
+									<span class="graph-label-start" id="graph-max-label">$100M</span>
 									<span class="graph-label-end">0</span>
 								</div>
 								<div class="graph-time-labels">
@@ -1043,12 +1043,23 @@ export function generateProfilePage(
 	const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
 	const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
 	const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
-	const SKILL_CREATOR_MAX_SUPPLY = 100_000_000;
+	const USD_TARGET_VALUE = 100_000_000; // $100M USD target
+	const DEFAULT_SUI_PRICE = 1; // Fallback price if CoinGecko fails
 	const numberFormatter =
 		typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function'
 			? new Intl.NumberFormat('en-US')
 			: { format: (value) => String(value ?? 0) };
-	const PREMIUM_DECAY_CONSTANT = Math.log(SKILL_CREATOR_MAX_SUPPLY); // Ensures near-zero premium at grace end
+
+	// Dynamic max SUI supply based on current price
+	function getMaxSuiSupply() {
+		const price = suiPriceUsd !== null ? suiPriceUsd : DEFAULT_SUI_PRICE;
+		return USD_TARGET_VALUE / price;
+	}
+
+	// Decay constant recalculated based on current max supply
+	function getPremiumDecayConstant() {
+		return Math.log(getMaxSuiSupply());
+	}
 
 		let connectedWallet = null;
 		let connectedAccount = null;
@@ -4645,6 +4656,7 @@ export function generateProfilePage(
 		const nsDecayHoverPath = document.getElementById('ns-decay-hover-path');
 		const premiumGraphContainer = document.getElementById('premium-graph-container');
 		const premiumTimeDisplay = document.getElementById('grace-premium-time');
+		const graphMaxLabel = document.getElementById('graph-max-label');
 
 		// SUI price state
 		let suiPriceUsd = null;
@@ -4658,13 +4670,42 @@ export function generateProfilePage(
 		let decayCurvePoints = [];
 		let nsDecayCurvePoints = [];
 
+		// Format large numbers for display (e.g., 50000000 -> "50M")
+		function formatMaxSuiLabel(value) {
+			if (value >= 1_000_000_000) {
+				return (value / 1_000_000_000).toFixed(value % 1_000_000_000 === 0 ? 0 : 1) + 'B';
+			} else if (value >= 1_000_000) {
+				return (value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1) + 'M';
+			} else if (value >= 1_000) {
+				return (value / 1_000).toFixed(value % 1_000 === 0 ? 0 : 1) + 'K';
+			}
+			return String(Math.round(value));
+		}
+
+		// Update graph label and re-render curves when price changes
+		function updateGraphForPrice() {
+			const maxSui = getMaxSuiSupply();
+			if (graphMaxLabel) {
+				graphMaxLabel.textContent = formatMaxSuiLabel(maxSui) + ' SUI';
+			}
+			// Re-initialize decay curves with new max supply
+			initDecayCurves();
+			// Update current premium display
+			updateGraceSkillCounter();
+		}
+
 		// Fetch SUI price from CoinGecko
 		async function fetchSuiPrice() {
 			try {
 				const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd');
 				const data = await res.json();
 				if (data.sui && data.sui.usd) {
+					const oldPrice = suiPriceUsd;
 					suiPriceUsd = data.sui.usd;
+					// Update graph if price changed (or first fetch)
+					if (oldPrice !== suiPriceUsd) {
+						updateGraphForPrice();
+					}
 				}
 			} catch (e) {
 				console.warn('Failed to fetch SUI price:', e);
@@ -4672,11 +4713,12 @@ export function generateProfilePage(
 		}
 
 		// Calculate exponential decay value at a given progress (0 to 1)
+		// Starts at $100M USD worth of SUI, decreases exponentially
 		function getDecayValue(progress) {
-			// Exponential decay: starts at 100M, approaches 0
-			// Using formula: value = maxSupply * e^(-k * progress) where k controls decay rate
+			const maxSupply = getMaxSuiSupply();
+			const decayConstant = getPremiumDecayConstant();
 			const clampedProgress = Math.max(0, Math.min(1, progress));
-			return SKILL_CREATOR_MAX_SUPPLY * Math.exp(-PREMIUM_DECAY_CONSTANT * clampedProgress);
+			return maxSupply * Math.exp(-decayConstant * clampedProgress);
 		}
 
 		// Generate SVG path for exponential decay curve with optional progress offset
@@ -4692,8 +4734,8 @@ export function generateProfilePage(
 				const adjustedProgress = Math.min(1, progress + progressOffset);
 				const value = getDecayValue(adjustedProgress);
 				const x = progress * width;
-				// Map value (0 to 100M) to y (height-padding to padding)
-				const normalizedValue = value / SKILL_CREATOR_MAX_SUPPLY;
+				// Map value (0 to max SUI) to y (height-padding to padding)
+				const normalizedValue = value / getMaxSuiSupply();
 				const y = padding + (1 - normalizedValue) * (height - padding * 2);
 				points.push({ x, y });
 			}
@@ -4777,7 +4819,7 @@ export function generateProfilePage(
 				const clampedProgress = Math.max(0, Math.min(1, progress));
 				const value = getDecayValue(clampedProgress);
 				const x = clampedProgress * width;
-				const normalizedValue = value / SKILL_CREATOR_MAX_SUPPLY;
+				const normalizedValue = value / getMaxSuiSupply();
 				const y = padding + (1 - normalizedValue) * (height - padding * 2);
 
 				decayMarker.setAttribute('cx', x.toString());
@@ -4792,7 +4834,7 @@ export function generateProfilePage(
 				const clampedProgress = Math.max(0, Math.min(1, progress));
 				const nsValue = getDecayValue(Math.min(1, nsProgress));
 				const x = clampedProgress * width;
-				const normalizedNsValue = nsValue / SKILL_CREATOR_MAX_SUPPLY;
+				const normalizedNsValue = nsValue / getMaxSuiSupply();
 				const nsY = padding + (1 - normalizedNsValue) * (height - padding * 2);
 
 				nsDecayMarker.setAttribute('cx', x.toString());
