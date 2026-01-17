@@ -359,57 +359,6 @@ export function generateProfilePage(
 			padding: 10px;
 			border-top: 1px solid rgba(96, 165, 250, 0.15);
 		}
-		.name-description-card {
-			margin-top: 20px;
-			background: linear-gradient(135deg, rgba(96, 165, 250, 0.08) 0%, rgba(139, 92, 246, 0.06) 100%);
-			border: 1px solid rgba(96, 165, 250, 0.2);
-			border-radius: 16px;
-			padding: 24px;
-			position: relative;
-			overflow: hidden;
-		}
-		.name-description-card::before {
-			content: '';
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			height: 2px;
-			background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.5), transparent);
-		}
-		.name-description-content {
-			position: relative;
-			z-index: 1;
-		}
-		.name-description-content p {
-			margin: 0;
-			color: rgba(228, 228, 231, 0.95);
-			font-size: 1rem;
-			line-height: 1.7;
-			font-style: italic;
-			text-align: center;
-		}
-		.name-description-loading {
-			color: rgba(161, 161, 170, 0.7);
-			font-style: normal;
-			text-align: center;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			gap: 8px;
-		}
-		.name-description-loading::after {
-			content: '';
-			width: 16px;
-			height: 16px;
-			border: 2px solid rgba(96, 165, 250, 0.3);
-			border-top-color: var(--accent);
-			border-radius: 50%;
-			animation: spin 0.8s linear infinite;
-		}
-		@keyframes spin {
-			to { transform: rotate(360deg); }
-		}
 		.identity-name {
 			text-align: center;
 			font-family: ui-monospace, SFMono-Regular, monospace;
@@ -3467,11 +3416,6 @@ ${generatePasskeyWalletStyles()}
 						<div class="identity-name" id="identity-name" title="Click to copy">${escapeHtml(cleanName)}.sui.ski</div>
 					</div>
 				</div>
-				<div class="name-description-card" id="name-description-card">
-					<div class="name-description-content" id="name-description-content">
-						<div class="name-description-loading">Loading inspiration...</div>
-					</div>
-				</div>
 				<div class="hero-main">
 					<div class="wallet-bar" id="wallet-bar">
 						<button class="search-btn" id="search-btn" title="Search SuiNS names (Press /)">
@@ -4582,62 +4526,6 @@ ${generatePasskeyWalletStyles()}
 			});
 		}
 
-		// ===== NAME DESCRIPTION CARD =====
-		let nameDescription = null;
-		let descriptionLoaded = false;
-		const nameDescriptionCard = document.getElementById('name-description-card');
-		const nameDescriptionContent = document.getElementById('name-description-content');
-
-		function showNameDescription() {
-			if (!nameDescriptionContent) return;
-			
-			if (nameDescription) {
-				nameDescriptionContent.innerHTML = \`<p>\${nameDescription}</p>\`;
-			} else {
-				nameDescriptionContent.innerHTML = '<div class="name-description-loading">Loading inspiration...</div>';
-			}
-		}
-
-		async function loadNameDescription() {
-			if (descriptionLoaded) return;
-			descriptionLoaded = true;
-			
-			// Show loading state immediately
-			showNameDescription();
-			
-			try {
-				const response = await fetch('/api/ai/generate-description', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ name: NAME }),
-				});
-				
-				if (response.ok) {
-					const data = await response.json();
-					if (data.success && data.description) {
-						nameDescription = data.description;
-						showNameDescription();
-					} else {
-						// Use fallback description if API returns without success
-						const cleanName = NAME.replace(/\\.sui$/i, '');
-						nameDescription = \`Welcome to \${cleanName}.sui! Build your digital identity on the Sui blockchain and connect with the decentralized web.\`;
-						showNameDescription();
-					}
-				} else {
-					// Use fallback description if API fails
-					const cleanName = NAME.replace(/\\.sui$/i, '');
-					nameDescription = \`Welcome to \${cleanName}.sui! Build your digital identity on the Sui blockchain and connect with the decentralized web.\`;
-					showNameDescription();
-				}
-			} catch (error) {
-				console.error('Failed to load name description:', error);
-				// Use fallback description on error
-				const cleanName = NAME.replace(/\\.sui$/i, '');
-				nameDescription = \`Welcome to \${cleanName}.sui! Build your digital identity on the Sui blockchain and connect with the decentralized web.\`;
-				showNameDescription();
-			}
-		}
-
 		// ===== IDENTITY CARD (QR CODE) =====
 		function showIdentityQr() {
 			if (!identityVisual || !identityCanvas) return;
@@ -4766,8 +4654,6 @@ ${generatePasskeyWalletStyles()}
 		// Hide QR canvas initially
 		if (identityCanvas) identityCanvas.style.display = 'none';
 		if (qrToggle) qrToggle.style.display = 'none';
-		// Load and display name description automatically
-		loadNameDescription().catch((err) => console.error('Name description error:', err));
 
 		// Set target address to connected wallet (direct transaction)
 		async function setToSelf() {
