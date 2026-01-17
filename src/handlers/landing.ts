@@ -3,12 +3,18 @@ import { SuinsClient } from '@mysten/suins'
 import { getNetworkStatus } from '../resolvers/rpc'
 import type { Env } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
+import { renderSocialMeta } from '../utils/social'
+
+interface LandingPageOptions {
+	canonicalUrl?: string
+}
 
 /**
  * Handle requests to the root domain (sui.ski)
  */
 export async function handleLandingPage(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url)
+	const canonicalUrl = `${url.protocol}//${url.hostname}${url.pathname || '/'}`
 
 	// API endpoint for status
 	if (url.pathname === '/api/status') {
@@ -40,7 +46,7 @@ export async function handleLandingPage(request: Request, env: Env): Promise<Res
 	}
 
 	// Landing page HTML
-	return htmlResponse(landingPageHTML(env.SUI_NETWORK))
+	return htmlResponse(landingPageHTML(env.SUI_NETWORK, { canonicalUrl }))
 }
 
 /**
@@ -69,14 +75,50 @@ async function getSuiNSPricing(env: Env): Promise<Record<string, number>> {
 	return pricing
 }
 
-function landingPageHTML(network: string): string {
+function landingPageHTML(network: string, options: LandingPageOptions = {}): string {
+	const escapeHtml = (value: string) =>
+		value.replace(/[&<>"']/g, (char) => {
+			switch (char) {
+				case '&':
+					return '&amp;'
+				case '<':
+					return '&lt;'
+				case '>':
+					return '&gt;'
+				case '"':
+					return '&quot;'
+				case "'":
+					return '&#39;'
+				default:
+					return char
+			}
+		})
+	const canonicalUrl = options.canonicalUrl || 'https://sui.ski'
+	let canonicalOrigin = 'https://sui.ski'
+	try {
+		canonicalOrigin = new URL(canonicalUrl).origin
+	} catch {
+		canonicalOrigin = 'https://sui.ski'
+	}
+	const pageDescription =
+		'Access Sui blockchain content through human-readable URLs. Resolve SuiNS names, Move Registry packages, and decentralized content.'
+	const socialMeta = renderSocialMeta({
+		title: 'sui.ski - Sui Gateway',
+		description: pageDescription,
+		url: canonicalUrl,
+		siteName: 'sui.ski',
+		image: `${canonicalOrigin}/icon-512.png`,
+		imageAlt: 'sui.ski icon',
+	})
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>sui.ski - Sui Gateway</title>
-	<meta name="description" content="Access Sui blockchain content through human-readable URLs. Resolve SuiNS names, Move Registry packages, and decentralized content.">
+	<link rel="canonical" href="${escapeHtml(canonicalUrl)}">
+	<meta name="description" content="${escapeHtml(pageDescription)}">
+${socialMeta}
 	<style>
 		* { box-sizing: border-box; margin: 0; padding: 0; }
 		body {

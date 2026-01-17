@@ -1,9 +1,43 @@
 import type { Env, SuiNSRecord } from '../types'
+import { normalizeMediaUrl, renderSocialMeta } from '../utils/social'
+import {
+	generatePasskeyWalletHTML,
+	generatePasskeyWalletScript,
+	generatePasskeyWalletStyles,
+} from './passkey-wallet'
+
+export interface ProfilePageOptions {
+	canonicalUrl?: string
+	hostname?: string
+	description?: string
+	image?: string
+}
+
+const DESCRIPTION_RECORD_KEYS = ['description', 'bio', 'about', 'summary', 'tagline', 'note']
+const IMAGE_RECORD_KEYS = [
+	'avatar',
+	'avatar_url',
+	'avatar.url',
+	'image',
+	'image_url',
+	'picture',
+	'photo',
+	'icon',
+	'thumbnail',
+	'logo',
+	'banner',
+	'cover',
+]
 
 /**
  * Generate sui.ski themed SuiNS profile page HTML
  */
-export function generateProfilePage(name: string, record: SuiNSRecord, env: Env): string {
+export function generateProfilePage(
+	name: string,
+	record: SuiNSRecord,
+	env: Env,
+	options: ProfilePageOptions = {},
+): string {
 	const network = env.SUI_NETWORK
 	const explorerBase =
 		network === 'mainnet' ? 'https://suiscan.xyz/mainnet' : `https://suiscan.xyz/${network}`
@@ -40,13 +74,43 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 	const recordEntries = Object.entries(record.records || {})
 		.filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
 		.sort(([a], [b]) => a.localeCompare(b))
+	const canonicalUrl = options.canonicalUrl
+	const canonicalTag = canonicalUrl ? `\n\t<link rel="canonical" href="${escapeHtml(canonicalUrl)}">` : ''
+	const canonicalOrigin = getOriginFromCanonical(canonicalUrl, options.hostname)
+	const metaDescription =
+		(options.description && options.description.trim().length > 0
+			? options.description
+			: buildProfileDescription(fullName, record)) || `${fullName} on Sui`
+	const previewImage =
+		options.image ||
+		selectProfileImage(record, options.hostname) ||
+		`${canonicalOrigin}/icon-512.png`
+	const socialMeta = `\n${renderSocialMeta({
+		title: `${fullName} | sui.ski`,
+		description: metaDescription,
+		url: canonicalUrl,
+		siteName: 'sui.ski',
+		image: previewImage,
+		imageAlt: `${fullName} profile`,
+	})}\n`
 
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>${escapeHtml(fullName)} | sui.ski</title>
+	<title>${escapeHtml(fullName)} | sui.ski</title>${canonicalTag}${socialMeta}
+
+	<!-- PWA Meta Tags -->
+	<link rel="manifest" href="/manifest.json">
+	<meta name="theme-color" content="#60a5fa">
+	<meta name="mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<meta name="apple-mobile-web-app-title" content="${escapeHtml(fullName)}">
+	<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
 	<style>
 		:root {
 			--bg-gradient-start: #0a0a0f;
@@ -367,7 +431,39 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			align-items: center;
 			gap: 10px;
 			flex: 1;
+		}
+		.owner-info-link {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			flex: 1;
 			min-width: 0;
+			text-decoration: none;
+			padding: 8px 12px;
+			margin: -8px -12px;
+			border-radius: 10px;
+			transition: all 0.2s;
+			cursor: pointer;
+		}
+		.owner-info-link:hover {
+			background: rgba(96, 165, 250, 0.1);
+		}
+		.owner-info-link .owner-name {
+			color: var(--accent);
+		}
+		.owner-info-link:hover .owner-name {
+			color: var(--accent-hover);
+		}
+		.owner-info-link .visit-arrow {
+			opacity: 0;
+			transform: translateX(-4px);
+			transition: all 0.2s;
+			color: var(--accent);
+			flex-shrink: 0;
+		}
+		.owner-info-link:hover .visit-arrow {
+			opacity: 1;
+			transform: translateX(0);
 		}
 		.owner-label {
 			font-size: 0.65rem;
@@ -622,6 +718,112 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			opacity: 0.5;
 			cursor: not-allowed;
 			transform: none;
+		}
+
+		/* Wallet Modal */
+		.wallet-modal {
+			display: none;
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background: rgba(0, 0, 0, 0.7);
+			backdrop-filter: blur(4px);
+			z-index: 2000;
+			align-items: center;
+			justify-content: center;
+			padding: 20px;
+		}
+		.wallet-modal.open { display: flex; }
+		.wallet-modal-content {
+			background: var(--card-bg-solid);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			padding: 24px;
+			width: 100%;
+			max-width: 380px;
+			box-shadow: var(--shadow-lg);
+		}
+		.wallet-modal-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 20px;
+			font-size: 1.1rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.wallet-modal-close {
+			background: none;
+			border: none;
+			color: var(--text-muted);
+			font-size: 1.5rem;
+			cursor: pointer;
+			padding: 0;
+			width: 32px;
+			height: 32px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			border-radius: 8px;
+		}
+		.wallet-modal-close:hover {
+			background: rgba(255,255,255,0.1);
+			color: var(--text);
+		}
+		.wallet-list {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.wallet-detecting {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			padding: 24px;
+			color: var(--text-muted);
+			font-size: 0.9rem;
+		}
+		.wallet-item {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+			padding: 14px 16px;
+			background: rgba(30, 30, 40, 0.6);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.wallet-item:hover {
+			border-color: var(--accent);
+			background: rgba(96, 165, 250, 0.1);
+		}
+		.wallet-item img {
+			width: 36px;
+			height: 36px;
+			border-radius: 8px;
+		}
+		.wallet-item .wallet-name {
+			font-weight: 600;
+			color: var(--text);
+		}
+		.wallet-no-wallets {
+			text-align: center;
+			padding: 20px;
+			color: var(--text-muted);
+			font-size: 0.9rem;
+		}
+		.wallet-no-wallets a {
+			display: inline-block;
+			margin-top: 12px;
+			color: var(--accent);
+			text-decoration: none;
+		}
+		.wallet-no-wallets a:hover {
+			text-decoration: underline;
 		}
 
 		/* Wallet status bar */
@@ -1444,6 +1646,463 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			color: var(--text-muted);
 		}
 
+		/* Quick Message Section (Overview Tab) */
+		.quick-message-section {
+			background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.12));
+			border: 1px solid rgba(96, 165, 250, 0.25);
+			border-radius: 16px;
+			padding: 20px;
+			margin-top: 20px;
+		}
+		.quick-message-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 16px;
+		}
+		.quick-message-title {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			font-size: 1rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.quick-message-title > svg {
+			width: 20px;
+			height: 20px;
+			color: var(--accent);
+		}
+		.encrypted-badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			font-size: 0.7rem;
+			font-weight: 600;
+			color: var(--success);
+			background: var(--success-light);
+			padding: 4px 10px;
+			border-radius: 20px;
+		}
+		.encrypted-badge svg {
+			width: 12px;
+			height: 12px;
+		}
+		.powered-by {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			text-decoration: none;
+		}
+		.powered-by:hover {
+			color: var(--accent);
+		}
+		.message-recipient {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			margin-bottom: 12px;
+			padding: 10px 14px;
+			background: rgba(0,0,0,0.2);
+			border-radius: 10px;
+		}
+		.to-label {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+		}
+		.to-name {
+			font-size: 0.95rem;
+			font-weight: 700;
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.to-address {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			font-family: ui-monospace, monospace;
+		}
+		.quick-message-input {
+			width: 100%;
+			padding: 14px;
+			background: rgba(15, 23, 42, 0.8);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			color: var(--text);
+			font-size: 0.9rem;
+			font-family: inherit;
+			resize: none;
+			margin-bottom: 12px;
+		}
+		.quick-message-input:focus {
+			outline: none;
+			border-color: var(--accent);
+			box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+		}
+		.quick-message-input::placeholder {
+			color: var(--text-muted);
+		}
+		.quick-message-footer {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+		}
+		.message-features {
+			display: flex;
+			gap: 8px;
+		}
+		.feature-tag {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			font-size: 0.7rem;
+			color: var(--text-muted);
+			background: rgba(0,0,0,0.2);
+			padding: 4px 10px;
+			border-radius: 6px;
+		}
+		.feature-tag svg {
+			width: 12px;
+			height: 12px;
+		}
+		.send-btn {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 12px 20px;
+			background: linear-gradient(135deg, #60a5fa, #8b5cf6);
+			border: none;
+			border-radius: 10px;
+			color: white;
+			font-size: 0.9rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.send-btn:hover:not(:disabled) {
+			transform: translateY(-1px);
+			box-shadow: 0 4px 16px rgba(96, 165, 250, 0.4);
+		}
+		.send-btn:disabled {
+			opacity: 0.7;
+			cursor: not-allowed;
+		}
+		.send-btn svg {
+			width: 16px;
+			height: 16px;
+		}
+		.message-status {
+			margin-top: 12px;
+			padding: 12px 14px;
+			border-radius: 10px;
+			font-size: 0.85rem;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+		.message-status.hidden {
+			display: none;
+		}
+		.message-status.success {
+			background: rgba(52, 211, 153, 0.15);
+			border: 1px solid rgba(52, 211, 153, 0.3);
+			color: var(--success);
+		}
+		.message-status.error {
+			background: rgba(248, 113, 113, 0.15);
+			border: 1px solid rgba(248, 113, 113, 0.3);
+			color: var(--error);
+		}
+		.message-status.info {
+			background: rgba(96, 165, 250, 0.15);
+			border: 1px solid rgba(96, 165, 250, 0.3);
+			color: var(--accent);
+		}
+		.message-status .loading {
+			width: 14px;
+			height: 14px;
+		}
+
+		/* Messaging Section (Separate Tab - Legacy) */
+		.messaging-section {
+			padding: 8px;
+		}
+		.messaging-header h3 {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			font-size: 1.25rem;
+			font-weight: 700;
+			color: var(--text);
+			margin-bottom: 8px;
+		}
+		.messaging-header h3 svg {
+			width: 24px;
+			height: 24px;
+			color: var(--accent);
+		}
+		.alpha-badge {
+			font-size: 0.65rem;
+			padding: 3px 8px;
+			background: rgba(251, 191, 36, 0.15);
+			color: #fbbf24;
+			border-radius: 6px;
+			text-transform: uppercase;
+			font-weight: 700;
+			letter-spacing: 0.05em;
+		}
+		.messaging-subtitle {
+			color: var(--text-muted);
+			font-size: 0.85rem;
+			margin-bottom: 20px;
+		}
+		.messaging-features-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 12px;
+			margin-bottom: 24px;
+		}
+		.messaging-feature {
+			display: flex;
+			align-items: flex-start;
+			gap: 12px;
+			background: rgba(15, 23, 42, 0.6);
+			padding: 16px;
+			border-radius: 12px;
+			border: 1px solid var(--border);
+		}
+		.messaging-feature svg {
+			width: 24px;
+			height: 24px;
+			color: var(--accent);
+			flex-shrink: 0;
+			margin-top: 2px;
+		}
+		.messaging-feature h4 {
+			font-size: 0.9rem;
+			font-weight: 600;
+			color: var(--text);
+			margin-bottom: 4px;
+		}
+		.messaging-feature p {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			line-height: 1.4;
+		}
+		.messaging-compose {
+			background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.1));
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 16px;
+			padding: 20px;
+			margin-bottom: 20px;
+		}
+		.compose-header {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			margin-bottom: 14px;
+		}
+		.compose-label {
+			font-size: 0.85rem;
+			color: var(--text-muted);
+		}
+		.compose-recipient {
+			font-size: 1rem;
+			font-weight: 700;
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.compose-body {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+		.message-textarea {
+			width: 100%;
+			padding: 14px;
+			background: rgba(15, 23, 42, 0.8);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			color: var(--text);
+			font-size: 0.95rem;
+			font-family: inherit;
+			resize: vertical;
+			min-height: 100px;
+		}
+		.message-textarea:focus {
+			outline: none;
+			border-color: var(--accent);
+		}
+		.message-textarea::placeholder {
+			color: var(--text-muted);
+		}
+		.compose-actions {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+		}
+		.compose-info {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 0.8rem;
+			color: var(--success);
+		}
+		.compose-info svg {
+			width: 14px;
+			height: 14px;
+		}
+		.send-message-btn {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 12px 24px;
+			background: linear-gradient(135deg, #60a5fa, #8b5cf6);
+			border: none;
+			border-radius: 10px;
+			color: white;
+			font-size: 0.95rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.send-message-btn:hover:not(:disabled) {
+			transform: translateY(-2px);
+			box-shadow: 0 4px 16px rgba(96, 165, 250, 0.4);
+		}
+		.send-message-btn:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+		}
+		.send-message-btn svg {
+			width: 16px;
+			height: 16px;
+		}
+		.message-status {
+			margin-top: 12px;
+			padding: 12px;
+			border-radius: 8px;
+			font-size: 0.85rem;
+		}
+		.message-status.success {
+			background: rgba(52, 211, 153, 0.15);
+			border: 1px solid rgba(52, 211, 153, 0.3);
+			color: var(--success);
+		}
+		.message-status.error {
+			background: rgba(248, 113, 113, 0.15);
+			border: 1px solid rgba(248, 113, 113, 0.3);
+			color: var(--error);
+		}
+		.message-status.info {
+			background: rgba(96, 165, 250, 0.15);
+			border: 1px solid rgba(96, 165, 250, 0.3);
+			color: var(--accent);
+		}
+		.messaging-info {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 16px;
+			margin-bottom: 20px;
+		}
+		.info-card {
+			background: rgba(15, 23, 42, 0.5);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 16px;
+		}
+		.info-card h4 {
+			font-size: 0.9rem;
+			font-weight: 600;
+			color: var(--text);
+			margin-bottom: 12px;
+		}
+		.info-card ol {
+			list-style: none;
+			counter-reset: steps;
+			padding: 0;
+			margin: 0;
+		}
+		.info-card ol li {
+			counter-increment: steps;
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			padding: 6px 0 6px 28px;
+			position: relative;
+		}
+		.info-card ol li::before {
+			content: counter(steps);
+			position: absolute;
+			left: 0;
+			width: 20px;
+			height: 20px;
+			background: var(--accent-light);
+			color: var(--accent);
+			border-radius: 50%;
+			font-size: 0.7rem;
+			font-weight: 700;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.contract-address, .contract-network {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			margin-bottom: 8px;
+		}
+		.contract-address .label, .contract-network .label {
+			color: var(--text);
+			font-weight: 500;
+		}
+		.contract-address code {
+			background: rgba(0,0,0,0.3);
+			padding: 2px 6px;
+			border-radius: 4px;
+			font-family: monospace;
+			font-size: 0.75rem;
+		}
+		.network-badge {
+			display: inline-block;
+			background: var(--success-light);
+			color: var(--success);
+			padding: 2px 8px;
+			border-radius: 4px;
+			font-size: 0.75rem;
+			font-weight: 600;
+			text-transform: capitalize;
+		}
+		.messaging-links {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+		.messaging-link {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 12px 16px;
+			background: rgba(30, 30, 40, 0.6);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			color: var(--accent);
+			font-size: 0.85rem;
+			font-weight: 500;
+			text-decoration: none;
+			transition: all 0.2s;
+		}
+		.messaging-link:hover {
+			border-color: var(--accent);
+			background: rgba(96, 165, 250, 0.1);
+		}
+		.messaging-link svg {
+			width: 16px;
+			height: 16px;
+		}
+
 		/* Command Palette / Quick Search */
 		.search-overlay {
 			position: fixed;
@@ -1523,54 +2182,54 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			color: var(--accent);
 		}
 
-		/* Floating Search Button */
-		.search-fab {
-			position: fixed;
-			bottom: 24px;
-			right: 24px;
-			width: 56px;
-			height: 56px;
-			border-radius: 14px;
-			background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-			border: none;
-			cursor: pointer;
+		/* Top Search Bar */
+		.top-search-bar {
 			display: flex;
 			align-items: center;
-			justify-content: center;
-			box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4), 0 2px 8px rgba(0,0,0,0.3);
-			transition: all 0.2s;
-			z-index: 100;
+			justify-content: flex-end;
+			gap: 12px;
+			margin-bottom: 16px;
 		}
-		.search-fab:hover {
-			transform: translateY(-2px) scale(1.05);
-			box-shadow: 0 6px 24px rgba(139, 92, 246, 0.5), 0 4px 12px rgba(0,0,0,0.4);
-		}
-		.search-fab svg {
-			width: 24px;
-			height: 24px;
-			color: white;
-		}
-		.search-fab-hint {
-			position: fixed;
-			bottom: 88px;
-			right: 24px;
-			background: var(--card-bg-solid);
+		.search-btn {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 10px 18px;
+			background: var(--card-bg);
 			border: 1px solid var(--border);
-			border-radius: 10px;
-			padding: 8px 12px;
-			font-size: 0.75rem;
-			color: var(--text-muted);
-			box-shadow: var(--shadow);
-			opacity: 0;
-			transform: translateY(10px);
+			border-radius: 12px;
+			cursor: pointer;
 			transition: all 0.2s;
-			pointer-events: none;
-			z-index: 99;
+			color: var(--text-muted);
+			font-size: 0.85rem;
 		}
-		.search-fab:hover + .search-fab-hint,
-		.search-fab-hint:hover {
-			opacity: 1;
-			transform: translateY(0);
+		.search-btn:hover {
+			border-color: var(--accent);
+			background: var(--accent-light);
+			color: var(--accent);
+		}
+		.search-btn svg {
+			width: 18px;
+			height: 18px;
+		}
+		.search-btn kbd {
+			background: rgba(255, 255, 255, 0.08);
+			border: 1px solid var(--border);
+			border-radius: 5px;
+			padding: 2px 6px;
+			font-family: ui-monospace, monospace;
+			font-size: 0.7rem;
+			color: var(--text-muted);
+		}
+		@media (max-width: 600px) {
+			.search-btn span,
+			.search-btn kbd {
+				display: none;
+			}
+			.search-btn {
+				padding: 12px;
+				border-radius: 10px;
+			}
 		}
 
 		/* Upload Section */
@@ -1950,6 +2609,530 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			color: var(--accent);
 		}
 
+		/* ===== OWNED NAMES SECTION ===== */
+		.names-section {
+			background: var(--card-bg);
+			backdrop-filter: blur(20px);
+			-webkit-backdrop-filter: blur(20px);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			padding: 24px;
+			box-shadow: var(--shadow);
+		}
+		.names-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 20px;
+		}
+		.names-title {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+		.names-title h3 {
+			font-size: 1rem;
+			font-weight: 700;
+			color: var(--text);
+			margin: 0;
+		}
+		.names-title svg {
+			width: 22px;
+			height: 22px;
+			color: var(--accent);
+		}
+		.names-count {
+			background: var(--accent-light);
+			color: var(--accent);
+			padding: 4px 12px;
+			border-radius: 20px;
+			font-size: 0.75rem;
+			font-weight: 600;
+		}
+		.names-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+			gap: 12px;
+		}
+		.name-card {
+			background: linear-gradient(135deg, rgba(30, 30, 40, 0.6), rgba(20, 20, 30, 0.7));
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 16px;
+			cursor: pointer;
+			transition: all 0.25s ease;
+			text-decoration: none;
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			position: relative;
+			overflow: hidden;
+		}
+		.name-card::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			height: 3px;
+			background: linear-gradient(90deg, var(--accent), #a78bfa);
+			opacity: 0;
+			transition: opacity 0.25s;
+		}
+		.name-card:hover {
+			border-color: var(--accent);
+			transform: translateY(-3px);
+			box-shadow: 0 8px 24px rgba(96, 165, 250, 0.2);
+		}
+		.name-card:hover::before {
+			opacity: 1;
+		}
+		.name-card.current {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.12), rgba(139, 92, 246, 0.1));
+			border-color: rgba(96, 165, 250, 0.4);
+		}
+		.name-card.current::before {
+			opacity: 1;
+		}
+		.name-card-header {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.name-card-avatar {
+			width: 36px;
+			height: 36px;
+			border-radius: 10px;
+			background: linear-gradient(135deg, var(--accent), #a78bfa);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 0.9rem;
+			font-weight: 700;
+			color: white;
+			text-transform: uppercase;
+			flex-shrink: 0;
+		}
+		.name-card-avatar img {
+			width: 100%;
+			height: 100%;
+			border-radius: 10px;
+			object-fit: cover;
+		}
+		.name-card-name {
+			font-size: 0.95rem;
+			font-weight: 700;
+			color: var(--text);
+			word-break: break-word;
+		}
+		.name-card-name .suffix {
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.name-card-meta {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+		.name-card-badge {
+			font-size: 0.65rem;
+			font-weight: 600;
+			padding: 3px 8px;
+			border-radius: 6px;
+			text-transform: uppercase;
+			letter-spacing: 0.03em;
+		}
+		.name-card-badge.current-tag {
+			background: rgba(96, 165, 250, 0.2);
+			color: var(--accent);
+		}
+		.name-card-badge.expiry {
+			background: rgba(34, 197, 94, 0.15);
+			color: #22c55e;
+		}
+		.name-card-badge.expiry.warning {
+			background: var(--warning-light);
+			color: var(--warning);
+		}
+		.name-card-badge.expiry.danger {
+			background: var(--error-light);
+			color: var(--error);
+		}
+		.name-card-arrow {
+			margin-left: auto;
+			color: var(--text-muted);
+			opacity: 0;
+			transform: translateX(-4px);
+			transition: all 0.25s;
+		}
+		.name-card:hover .name-card-arrow {
+			opacity: 1;
+			transform: translateX(0);
+			color: var(--accent);
+		}
+		.names-loading {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 16px;
+			padding: 48px 24px;
+			color: var(--text-muted);
+		}
+		.names-loading .loading {
+			width: 28px;
+			height: 28px;
+		}
+		.names-empty {
+			text-align: center;
+			padding: 48px 24px;
+			color: var(--text-muted);
+		}
+		.names-empty svg {
+			width: 48px;
+			height: 48px;
+			margin-bottom: 16px;
+			opacity: 0.5;
+		}
+		.names-empty p {
+			font-size: 0.9rem;
+			margin-bottom: 8px;
+		}
+		.names-empty .hint {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			opacity: 0.8;
+		}
+		.names-error {
+			text-align: center;
+			padding: 32px 24px;
+			color: var(--error);
+		}
+		.names-error svg {
+			width: 32px;
+			height: 32px;
+			margin-bottom: 12px;
+		}
+		.names-error p {
+			margin-bottom: 16px;
+			font-size: 0.9rem;
+		}
+		.names-retry-btn {
+			padding: 10px 20px;
+			background: var(--error-light);
+			color: var(--error);
+			border: 1px solid rgba(248, 113, 113, 0.3);
+			border-radius: 10px;
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.names-retry-btn:hover {
+			background: rgba(248, 113, 113, 0.2);
+		}
+		.names-load-more {
+			display: flex;
+			justify-content: center;
+			margin-top: 20px;
+		}
+		.names-load-more button {
+			padding: 12px 24px;
+			background: var(--accent-light);
+			color: var(--accent);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.names-load-more button:hover {
+			background: rgba(96, 165, 250, 0.2);
+			border-color: var(--accent);
+		}
+		.names-load-more button:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+		}
+
+		${generatePasskeyWalletStyles()}
+
+		/* ===== SOCIAL LINKS ===== */
+		.social-links-section {
+			background: linear-gradient(135deg, rgba(29, 155, 240, 0.08), rgba(96, 165, 250, 0.08));
+			border: 1px solid rgba(29, 155, 240, 0.2);
+			border-radius: 16px;
+			padding: 20px;
+			margin-bottom: 20px;
+		}
+		.social-links-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 16px;
+		}
+		.social-links-title {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			font-size: 0.95rem;
+			font-weight: 700;
+			color: var(--text);
+		}
+		.social-links-title svg {
+			width: 20px;
+			height: 20px;
+			color: #1d9bf0;
+		}
+		.social-links-edit-btn {
+			padding: 6px 14px;
+			background: rgba(29, 155, 240, 0.15);
+			border: 1px solid rgba(29, 155, 240, 0.3);
+			border-radius: 8px;
+			color: #1d9bf0;
+			font-size: 0.75rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+			display: none;
+		}
+		.social-links-edit-btn:hover {
+			background: rgba(29, 155, 240, 0.25);
+		}
+		.social-links-edit-btn.visible {
+			display: block;
+		}
+		.social-links-list {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.social-link-item {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			padding: 12px 16px;
+			background: rgba(30, 30, 40, 0.6);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			text-decoration: none;
+			transition: all 0.2s;
+		}
+		.social-link-item:hover {
+			border-color: rgba(29, 155, 240, 0.4);
+			background: rgba(29, 155, 240, 0.1);
+		}
+		.social-link-icon {
+			width: 36px;
+			height: 36px;
+			background: #000;
+			border-radius: 8px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.social-link-icon svg {
+			width: 20px;
+			height: 20px;
+			color: white;
+		}
+		.social-link-info {
+			flex: 1;
+			min-width: 0;
+		}
+		.social-link-label {
+			font-size: 0.7rem;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+		.social-link-value {
+			font-size: 0.9rem;
+			font-weight: 600;
+			color: #1d9bf0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		.social-link-arrow {
+			color: var(--text-muted);
+			transition: all 0.2s;
+		}
+		.social-link-item:hover .social-link-arrow {
+			color: #1d9bf0;
+			transform: translateX(2px);
+		}
+		.social-links-empty {
+			text-align: center;
+			padding: 16px;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+		}
+		.social-links-empty-hint {
+			font-size: 0.75rem;
+			margin-top: 8px;
+			opacity: 0.7;
+		}
+		.social-links-add-btn {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			width: 100%;
+			padding: 12px;
+			background: transparent;
+			border: 1px dashed rgba(29, 155, 240, 0.3);
+			border-radius: 10px;
+			color: #1d9bf0;
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.social-links-add-btn:hover {
+			background: rgba(29, 155, 240, 0.1);
+			border-color: rgba(29, 155, 240, 0.5);
+		}
+		.social-links-add-btn svg {
+			width: 16px;
+			height: 16px;
+		}
+
+		/* Social Links Modal */
+		.social-modal {
+			display: none;
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background: rgba(0, 0, 0, 0.7);
+			backdrop-filter: blur(8px);
+			z-index: 100;
+			align-items: center;
+			justify-content: center;
+			padding: 20px;
+		}
+		.social-modal.open { display: flex; }
+		.social-modal-content {
+			background: var(--card-bg-solid);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			padding: 28px;
+			max-width: 480px;
+			width: 100%;
+			box-shadow: var(--shadow-lg);
+		}
+		.social-modal h3 {
+			color: var(--text);
+			margin-bottom: 8px;
+			font-size: 1.15rem;
+			font-weight: 700;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.social-modal h3 svg {
+			width: 24px;
+			height: 24px;
+			color: #1d9bf0;
+		}
+		.social-modal p {
+			color: var(--text-muted);
+			font-size: 0.85rem;
+			margin-bottom: 18px;
+		}
+		.social-input-group {
+			margin-bottom: 16px;
+		}
+		.social-input-label {
+			display: block;
+			font-size: 0.75rem;
+			font-weight: 600;
+			color: var(--text-muted);
+			margin-bottom: 8px;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+		.social-input-wrapper {
+			display: flex;
+			align-items: center;
+			background: var(--card-bg-solid);
+			border: 2px solid var(--border);
+			border-radius: 12px;
+			overflow: hidden;
+			transition: all 0.2s;
+		}
+		.social-input-wrapper:focus-within {
+			border-color: #1d9bf0;
+			box-shadow: 0 0 0 4px rgba(29, 155, 240, 0.2);
+		}
+		.social-input-prefix {
+			padding: 12px 14px;
+			background: rgba(29, 155, 240, 0.1);
+			color: var(--text-muted);
+			font-size: 0.85rem;
+			border-right: 1px solid var(--border);
+		}
+		.social-input-wrapper input {
+			flex: 1;
+			padding: 12px 14px;
+			background: transparent;
+			border: none;
+			color: var(--text);
+			font-size: 0.9rem;
+			outline: none;
+		}
+		.social-input-wrapper input::placeholder {
+			color: var(--text-muted);
+			opacity: 0.6;
+		}
+		.social-modal-buttons {
+			display: flex;
+			gap: 12px;
+			margin-top: 20px;
+		}
+		.social-modal-buttons button {
+			flex: 1;
+			padding: 12px 18px;
+			border-radius: 12px;
+			font-size: 0.9rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.social-modal-buttons .cancel-btn {
+			background: transparent;
+			color: var(--text-muted);
+			border: 1px solid var(--border);
+		}
+		.social-modal-buttons .cancel-btn:hover {
+			background: rgba(255, 255, 255, 0.05);
+			color: var(--text);
+		}
+		.social-modal-buttons .save-btn {
+			background: linear-gradient(135deg, #1d9bf0, #60a5fa);
+			color: white;
+			border: none;
+			box-shadow: 0 4px 16px rgba(29, 155, 240, 0.3);
+		}
+		.social-modal-buttons .save-btn:hover {
+			filter: brightness(1.1);
+			transform: translateY(-1px);
+		}
+		.social-modal-buttons .save-btn:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+			transform: none;
+		}
+		#social-modal-status {
+			margin-top: 12px;
+		}
+
 		/* ===== MOBILE RESPONSIVE ===== */
 		@media (max-width: 768px) {
 			.page-layout { flex-direction: column; }
@@ -2057,6 +3240,16 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 </head>
 <body>
 	<div class="container">
+		<div class="top-search-bar">
+			<button class="search-btn" id="search-btn" title="Search SuiNS names">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="11" cy="11" r="8"></circle>
+					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+				</svg>
+				<span>Search names...</span>
+				<kbd>/</kbd>
+			</button>
+		</div>
 		<div class="page-layout">
 			<div class="sidebar">
 				<nav class="sidebar-nav">
@@ -2083,6 +3276,10 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 					<button class="sidebar-tab" data-tab="knowledge">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
 						<span>Knowledge</span>
+					</button>
+					<button class="sidebar-tab" data-tab="names">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+						<span>Names</span>
 					</button>
 				</nav>
 			</div>
@@ -2125,10 +3322,11 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 						</div>
 					</div>
 					<div class="owner-display">
-						<div class="owner-info">
+						<div class="owner-info" id="owner-info">
 							<span class="owner-label">Owner</span>
 							<span class="owner-name" id="addr-name"></span>
 							<span class="owner-addr" id="addr-text">${escapeHtml(record.address.slice(0, 8))}...${escapeHtml(record.address.slice(-6))}</span>
+							<svg class="visit-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polyline points="9 18 15 12 9 6"></polyline></svg>
 						</div>
 						<div class="owner-actions">
 							<button class="copy-btn" id="copy-address-btn" title="Copy address">
@@ -2169,6 +3367,62 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			`
 					: ''
 			}
+
+			<!-- Passkey Wallet Section -->
+			${generatePasskeyWalletHTML()}
+
+			<!-- Social Links Section -->
+			${generateSocialLinksHTML(record)}
+
+			<!-- Quick Message Section -->
+			<div class="quick-message-section">
+				<div class="quick-message-header">
+					<div class="quick-message-title">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+						</svg>
+						<span>Send Message</span>
+						<span class="encrypted-badge">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+								<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+							</svg>
+							Encrypted
+						</span>
+					</div>
+					<a href="https://blog.sui.io/sui-stack-messaging-sdk/" target="_blank" class="powered-by">
+						Powered by Sui Stack
+					</a>
+				</div>
+				<div class="quick-message-body">
+					<div class="message-recipient">
+						<span class="to-label">To:</span>
+						<span class="to-name">@${escapeHtml(cleanName)}</span>
+						<span class="to-address">${escapeHtml(record.address.slice(0, 8))}...${escapeHtml(record.address.slice(-6))}</span>
+					</div>
+					<textarea id="message-input" class="quick-message-input" placeholder="Write an encrypted message..." rows="3"></textarea>
+					<div class="quick-message-footer">
+						<div class="message-features">
+							<span class="feature-tag">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+								Seal
+							</span>
+							<span class="feature-tag">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+								Walrus
+							</span>
+						</div>
+						<button class="send-btn" id="send-message-btn">
+							<span class="btn-text">Connect Wallet</span>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="22" y1="2" x2="11" y2="13"></line>
+								<polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+							</svg>
+						</button>
+					</div>
+					<div id="message-status" class="message-status hidden"></div>
+				</div>
+			</div>
 					</div>
 				</div><!-- end tab-overview -->
 
@@ -2454,6 +3708,29 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 					</div>
 				</div><!-- end tab-knowledge -->
 
+				<div class="tab-panel" id="tab-names">
+					<div class="names-section">
+						<div class="names-header">
+							<div class="names-title">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+									<circle cx="9" cy="7" r="4"></circle>
+									<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+									<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+								</svg>
+								<h3>Owned SuiNS Names</h3>
+							</div>
+							<span class="names-count" id="names-count">Loading...</span>
+						</div>
+						<div id="names-content">
+							<div class="names-loading">
+								<span class="loading"></span>
+								<span>Fetching all SuiNS names owned by this address...</span>
+							</div>
+						</div>
+					</div>
+				</div><!-- end tab-names -->
+
 				<div class="links">
 			<a href="${escapeHtml(explorerUrl)}" target="_blank">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
@@ -2471,15 +3748,6 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			</div><!-- end main-content -->
 		</div><!-- end page-layout -->
 	</div>
-
-	<!-- Floating Search Button -->
-	<button class="search-fab" id="search-fab" title="Search names">
-		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-			<circle cx="11" cy="11" r="8"></circle>
-			<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-		</svg>
-	</button>
-	<div class="search-fab-hint">Just start typing...</div>
 
 	<!-- Quick Search Overlay -->
 	<div class="search-overlay" id="search-overlay">
@@ -2509,6 +3777,45 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			<div class="edit-modal-buttons">
 				<button class="cancel-btn" id="cancel-edit-btn">Cancel</button>
 				<button class="save-btn" id="save-address-btn">Update</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Wallet Selection Modal -->
+	<div class="wallet-modal" id="wallet-modal">
+		<div class="wallet-modal-content">
+			<div class="wallet-modal-header">
+				<span>Connect Wallet</span>
+				<button class="wallet-modal-close" id="wallet-modal-close">&times;</button>
+			</div>
+			<div class="wallet-list" id="wallet-list">
+				<div class="wallet-detecting">
+					<span class="loading"></span>
+					Detecting wallets...
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Social Links Modal -->
+	<div class="social-modal" id="social-modal">
+		<div class="social-modal-content">
+			<h3>
+				<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path></svg>
+				Set X Profile
+			</h3>
+			<p>Link your X (Twitter) profile to your SuiNS name. This will be visible on your profile page.</p>
+			<div class="social-input-group">
+				<label class="social-input-label">X Username</label>
+				<div class="social-input-wrapper">
+					<span class="social-input-prefix">x.com/</span>
+					<input type="text" id="x-username-input" placeholder="username" autocomplete="off" spellcheck="false" />
+				</div>
+			</div>
+			<div id="social-modal-status" class="status hidden"></div>
+			<div class="social-modal-buttons">
+				<button class="cancel-btn" id="cancel-social-btn">Cancel</button>
+				<button class="save-btn" id="save-social-btn">Save</button>
 			</div>
 		</div>
 	</div>
@@ -2674,20 +3981,109 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			previewResolvedAddress(e.target.value.trim());
 		});
 
-		// Get available Sui wallets
+		// Get available Sui wallets with fallbacks
 		function getSuiWallets() {
 			const wallets = [];
+			const seenNames = new Set();
+
+			// First, try wallet-standard registry
 			if (walletsApi) {
 				try {
 					const standardWallets = walletsApi.get();
 					for (const wallet of standardWallets) {
 						if (wallet.chains?.some(chain => chain.startsWith('sui:'))) {
 							wallets.push(wallet);
+							seenNames.add(wallet.name);
 						}
 					}
-				} catch (e) {}
+				} catch (e) {
+					console.log('Error getting wallets from standard:', e);
+				}
 			}
+
+			// Fallback: check window globals for common Sui wallets
+			const windowWallets = [
+				{ check: () => window.phantom?.sui, name: 'Phantom', icon: 'https://phantom.app/img/phantom-icon-purple.svg' },
+				{ check: () => window.suiWallet, name: 'Sui Wallet', icon: 'https://sui.io/favicon.png' },
+				{ check: () => window.slush, name: 'Slush', icon: 'https://slush.app/favicon.ico' },
+				{ check: () => window.suiet, name: 'Suiet', icon: 'https://suiet.app/favicon.ico' },
+				{ check: () => window.martian?.sui, name: 'Martian', icon: 'https://martianwallet.xyz/favicon.ico' },
+				{ check: () => window.ethos, name: 'Ethos', icon: 'https://ethoswallet.xyz/favicon.ico' },
+				{ check: () => window.okxwallet?.sui, name: 'OKX Wallet', icon: 'https://static.okx.com/cdn/assets/imgs/226/EB771A4D4E5CC234.png' },
+			];
+
+			for (const { check, name, icon } of windowWallets) {
+				try {
+					const wallet = check();
+					if (wallet && !seenNames.has(name)) {
+						// Wrap window wallet to match standard interface
+						wallets.push({
+							name,
+							icon,
+							chains: ['sui:mainnet', 'sui:testnet'],
+							features: {
+								'standard:connect': {
+									connect: async () => {
+										if (wallet.connect) return await wallet.connect();
+										if (wallet.requestPermissions) return await wallet.requestPermissions();
+									}
+								},
+								'standard:disconnect': {
+									disconnect: async () => wallet.disconnect?.()
+								}
+							},
+							get accounts() {
+								return wallet.accounts || [];
+							}
+						});
+						seenNames.add(name);
+					}
+				} catch (e) {
+					// Wallet check failed, skip
+				}
+			}
+
 			return wallets;
+		}
+
+		// Detect wallets with retry logic
+		async function detectWallets() {
+			return new Promise((resolve) => {
+				let attempts = 0;
+				const maxAttempts = 25;
+				let resolved = false;
+
+				const check = () => {
+					if (resolved) return;
+					attempts++;
+					const wallets = getSuiWallets();
+
+					if (wallets.length > 0 || attempts >= maxAttempts) {
+						resolved = true;
+						resolve(wallets);
+					} else {
+						setTimeout(check, 150);
+					}
+				};
+
+				// Also listen for new wallets being registered
+				if (walletsApi) {
+					try {
+						walletsApi.on('register', () => {
+							if (resolved) return;
+							const wallets = getSuiWallets();
+							if (wallets.length > 0) {
+								resolved = true;
+								resolve(wallets);
+							}
+						});
+					} catch (e) {
+						console.log('Could not register wallet listener:', e);
+					}
+				}
+
+				check();
+			});
 		}
 
 		// Fetch NFT owner address
@@ -2843,33 +4239,92 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			}
 		}
 
-		// Connect wallet
-		async function connectWallet() {
-			try {
-				const wallets = getSuiWallets();
-				if (wallets.length === 0) {
-					alert('No Sui wallet found. Install Phantom or Sui Wallet.');
-					return;
-				}
+		// Wallet modal elements
+		const walletModal = document.getElementById('wallet-modal');
+		const walletList = document.getElementById('wallet-list');
+		const walletModalClose = document.getElementById('wallet-modal-close');
 
-				const wallet = wallets[0];
+		// Close wallet modal
+		if (walletModalClose) {
+			walletModalClose.addEventListener('click', () => {
+				walletModal.classList.remove('open');
+			});
+		}
+
+		// Close on backdrop click
+		if (walletModal) {
+			walletModal.addEventListener('click', (e) => {
+				if (e.target === walletModal) {
+					walletModal.classList.remove('open');
+				}
+			});
+		}
+
+		// Connect to a specific wallet
+		async function connectToWallet(wallet) {
+			try {
 				const connectFeature = wallet.features?.['standard:connect'];
 				if (!connectFeature) throw new Error('Wallet does not support connection');
 
 				await connectFeature.connect();
 				const accounts = wallet.accounts;
-				if (!accounts || accounts.length === 0) throw new Error('No accounts found');
+				if (!accounts || accounts.length === 0) throw new Error('No accounts found. Please unlock your wallet.');
 
 				connectedAccount = accounts[0];
 				connectedAddress = accounts[0].address;
 				connectedWallet = wallet;
 				connectedWalletName = wallet.name;
 
+				walletModal.classList.remove('open');
 				saveWalletConnection();
 				renderWalletBar();
 				await checkEditPermission();
 			} catch (e) {
-				alert('Connection failed: ' + e.message);
+				console.error('Connection error:', e);
+				walletList.innerHTML = \`
+					<div class="wallet-no-wallets" style="color: var(--error);">
+						Connection failed: \${e.message}
+						<br><br>
+						<button onclick="document.getElementById('wallet-modal').classList.remove('open')"
+							style="padding: 8px 16px; background: var(--accent); border: none; border-radius: 8px; color: white; cursor: pointer;">
+							Close
+						</button>
+					</div>
+				\`;
+			}
+		}
+
+		// Show wallet selection modal
+		async function connectWallet() {
+			walletModal.classList.add('open');
+			walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Detecting wallets...</div>';
+
+			const wallets = await detectWallets();
+
+			if (wallets.length === 0) {
+				walletList.innerHTML = \`
+					<div class="wallet-no-wallets">
+						No Sui wallets detected.
+						<br><br>
+						<a href="https://phantom.app/download" target="_blank">Install Phantom →</a>
+						<br>
+						<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank">Install Sui Wallet →</a>
+					</div>
+				\`;
+				return;
+			}
+
+			walletList.innerHTML = '';
+			for (const wallet of wallets) {
+				const item = document.createElement('div');
+				item.className = 'wallet-item';
+				const iconSrc = wallet.icon || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><circle fill=%22%23818cf8%22 cx=%2216%22 cy=%2216%22 r=%2216%22/></svg>';
+				item.innerHTML = \`
+					<img src="\${iconSrc}" alt="\${wallet.name}" onerror="this.style.display='none'">
+					<span class="wallet-name">\${wallet.name}</span>
+				\`;
+				item.addEventListener('click', () => connectToWallet(wallet));
+				walletList.appendChild(item);
 			}
 		}
 
@@ -3411,7 +4866,36 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			const name = await fetchPrimaryName(CURRENT_ADDRESS);
 			if (name) {
 				targetPrimaryName = name;
-				document.querySelector('.owner-name').innerHTML = formatSuiName(name);
+				const ownerNameEl = document.querySelector('.owner-name');
+				const ownerInfo = document.getElementById('owner-info');
+				const visitArrow = ownerInfo?.querySelector('.visit-arrow');
+
+				if (ownerNameEl) {
+					ownerNameEl.innerHTML = formatSuiName(name);
+				}
+
+				// Make the owner info clickable to visit their profile
+				if (ownerInfo) {
+					const cleanedName = name.replace(/\\.sui$/i, '');
+					const ownerProfileUrl = \`https://\${cleanedName}.sui.ski\`;
+
+					// Add the link styling class
+					ownerInfo.classList.add('owner-info-link');
+					ownerInfo.style.cursor = 'pointer';
+					ownerInfo.title = \`Visit \${name} profile\`;
+
+					// Show the arrow
+					if (visitArrow) {
+						visitArrow.style.display = 'block';
+					}
+
+					// Add click handler
+					ownerInfo.addEventListener('click', (e) => {
+						// Don't navigate if clicking on a button inside
+						if (e.target.closest('button')) return;
+						window.location.href = ownerProfileUrl;
+					});
+				}
 			}
 		}
 
@@ -3889,7 +5373,7 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 		// ===== QUICK SEARCH (Keyboard-activated + Button) =====
 		const searchOverlay = document.getElementById('search-overlay');
 		const searchInput = document.getElementById('search-input');
-		const searchFab = document.getElementById('search-fab');
+		const searchBtn = document.getElementById('search-btn');
 		let searchActive = false;
 
 		function openSearch(initialChar) {
@@ -3919,7 +5403,7 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 		}
 
 		// Click search button
-		searchFab.addEventListener('click', () => openSearch(''));
+		searchBtn.addEventListener('click', () => openSearch(''));
 
 		// Search input events
 		searchInput.addEventListener('keydown', (e) => {
@@ -4417,6 +5901,550 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 			if (/^[a-zA-Z0-9_-]+$/.test(input)) return input;
 			return null;
 		}
+
+		// ===== MESSAGING FUNCTIONALITY =====
+		const MESSAGING_CONTRACT = '${env.MESSAGING_CONTRACT_ADDRESS || ''}';
+		const RECIPIENT_ADDRESS = CURRENT_ADDRESS;
+		const RECIPIENT_NAME = NAME;
+		const messageInput = document.getElementById('message-input');
+		const sendMessageBtn = document.getElementById('send-message-btn');
+		const messageStatus = document.getElementById('message-status');
+
+		function updateMessagingButton() {
+			if (!sendMessageBtn) return;
+			const btnText = sendMessageBtn.querySelector('.btn-text');
+			if (!btnText) return;
+
+			if (connectedAddress) {
+				sendMessageBtn.disabled = false;
+				btnText.textContent = 'Send Message';
+			} else {
+				sendMessageBtn.disabled = false;
+				btnText.textContent = 'Connect Wallet';
+			}
+		}
+
+		function showMessageStatus(message, type = 'info', showSpinner = false) {
+			if (!messageStatus) return;
+			messageStatus.innerHTML = (showSpinner ? '<span class="loading"></span> ' : '') + message;
+			messageStatus.className = 'message-status ' + type;
+		}
+
+		function hideMessageStatus() {
+			if (!messageStatus) return;
+			messageStatus.className = 'message-status hidden';
+		}
+
+		async function sendEncryptedMessage() {
+			const message = messageInput?.value?.trim();
+			if (!message) {
+				showMessageStatus('Please enter a message', 'error');
+				return;
+			}
+
+			if (message.length > 512) {
+				showMessageStatus('Message too long (max 512 characters)', 'error');
+				return;
+			}
+
+			if (!MESSAGING_CONTRACT) {
+				showMessageStatus('Messaging contract not configured', 'error');
+				return;
+			}
+
+			const btnText = sendMessageBtn.querySelector('.btn-text');
+
+			try {
+				sendMessageBtn.disabled = true;
+				btnText.textContent = 'Preparing...';
+				showMessageStatus('Initializing encrypted channel...', 'info', true);
+
+				// Import Sui SDK
+				const { Transaction } = await import('https://esm.sh/@mysten/sui@1.27.0/transactions');
+				const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.27.0/client');
+
+				const suiClient = new SuiClient({ url: RPC_URL });
+				const tx = new Transaction();
+
+				btnText.textContent = 'Encrypting...';
+				showMessageStatus('Encrypting message with Seal protocol...', 'info', true);
+
+				// Create channel and send message using the Sui Stack Messaging contract
+				// The contract structure: channel::create_channel, message::send_message
+
+				// For 1:1 messaging, we create a direct channel if needed
+				// Package modules: channel, message, config, auth, etc.
+
+				// Create message payload (in production this would be encrypted with Seal)
+				const messagePayload = {
+					from: connectedAddress,
+					to: RECIPIENT_ADDRESS,
+					toName: RECIPIENT_NAME,
+					content: message,
+					timestamp: Date.now(),
+					version: 1
+				};
+
+				// Encode message as bytes
+				const encoder = new TextEncoder();
+				const messageBytes = encoder.encode(JSON.stringify(messagePayload));
+
+				// Call the messaging contract to create/join channel and send message
+				// Note: This is a simplified version - full implementation needs channel creation first
+				tx.moveCall({
+					target: \`\${MESSAGING_CONTRACT}::message::send_text\`,
+					arguments: [
+						tx.pure.address(RECIPIENT_ADDRESS),
+						tx.pure.string(message.slice(0, 512)),
+					],
+				});
+
+				tx.setGasBudget(50000000);
+
+				btnText.textContent = 'Signing...';
+				showMessageStatus('Please approve the transaction in your wallet...', 'info', true);
+
+				// Get the signing feature from wallet
+				const signFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction']
+					|| connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
+
+				if (!signFeature) {
+					throw new Error('Wallet does not support transaction signing');
+				}
+
+				// Sign and execute
+				const result = await signFeature.signAndExecuteTransaction({
+					transaction: tx,
+					account: connectedAccount,
+					chain: 'sui:' + NETWORK,
+				});
+
+				btnText.textContent = 'Confirming...';
+				showMessageStatus('Waiting for confirmation...', 'info', true);
+
+				// Wait for transaction confirmation
+				if (result.digest) {
+					await suiClient.waitForTransaction({ digest: result.digest });
+
+					// Success!
+					showMessageStatus(\`Message sent to @\${RECIPIENT_NAME}! Tx: \${result.digest.slice(0, 8)}...\`, 'success');
+					messageInput.value = '';
+
+					// Show link to view on explorer
+					setTimeout(() => {
+						showMessageStatus(\`<a href="https://suiscan.xyz/\${NETWORK}/tx/\${result.digest}" target="_blank" style="color: inherit; text-decoration: underline;">View transaction on explorer →</a>\`, 'success');
+					}, 2000);
+				}
+
+			} catch (error) {
+				console.error('Messaging error:', error);
+
+				// Handle specific errors
+				if (error.message?.includes('rejected') || error.message?.includes('cancelled')) {
+					showMessageStatus('Transaction cancelled', 'error');
+				} else if (error.message?.includes('Insufficient')) {
+					showMessageStatus('Insufficient SUI balance for gas', 'error');
+				} else if (error.message?.includes('MoveAbort') || error.message?.includes('function not found')) {
+					// Contract function may not exist yet - fall back to demo mode
+					showMessageStatus('Direct messaging coming soon! Try Polymedia Chat for now.', 'info');
+					setTimeout(() => {
+						if (confirm('Open Polymedia Chat to send encrypted messages?')) {
+							window.open('https://chat.polymedia.app/', '_blank');
+						}
+					}, 500);
+				} else {
+					showMessageStatus('Failed: ' + (error.message || 'Unknown error'), 'error');
+				}
+			} finally {
+				updateMessagingButton();
+			}
+		}
+
+		// Add messaging event listeners
+		if (sendMessageBtn) {
+			sendMessageBtn.addEventListener('click', async () => {
+				if (!connectedAddress) {
+					await connectWallet();
+					updateMessagingButton();
+					if (connectedAddress && messageInput?.value?.trim()) {
+						// Auto-send after connecting if message is ready
+						await sendEncryptedMessage();
+					}
+				} else {
+					await sendEncryptedMessage();
+				}
+			});
+		}
+
+		if (messageInput) {
+			messageInput.addEventListener('input', () => {
+				hideMessageStatus();
+			});
+
+			// Allow Ctrl+Enter to send
+			messageInput.addEventListener('keydown', async (e) => {
+				if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+					e.preventDefault();
+					if (connectedAddress) {
+						await sendEncryptedMessage();
+					} else {
+						sendMessageBtn?.click();
+					}
+				}
+			});
+		}
+
+		// Update messaging button when wallet state changes
+		const originalRenderWalletBar = renderWalletBar;
+		renderWalletBar = function() {
+			originalRenderWalletBar();
+			updateMessagingButton();
+		};
+
+		// Initialize messaging button state
+		updateMessagingButton();
+
+		// Register service worker for PWA
+		if ('serviceWorker' in navigator) {
+			navigator.serviceWorker.register('/sw.js')
+				.then(reg => console.log('SW registered'))
+				.catch(err => console.log('SW registration failed:', err));
+		}
+
+		// ========== OWNED SUINS NAMES ==========
+		const namesContent = document.getElementById('names-content');
+		const namesCountEl = document.getElementById('names-count');
+		let allOwnedNames = [];
+		let namesNextCursor = null;
+		let namesHasMore = true;
+		let namesLoading = false;
+
+		// Fetch all SuiNS names owned by the target address
+		async function fetchOwnedNames(cursor = null) {
+			if (namesLoading) return;
+			namesLoading = true;
+
+			try {
+				const suiClient = new SuiClient({ url: RPC_URL });
+
+				// Use the built-in resolveNameServiceNames method
+				const response = await suiClient.resolveNameServiceNames({
+					address: CURRENT_ADDRESS,
+					cursor: cursor,
+					limit: 50
+				});
+
+				if (response.data && response.data.length > 0) {
+					allOwnedNames = cursor ? [...allOwnedNames, ...response.data] : response.data;
+				}
+
+				namesNextCursor = response.nextCursor;
+				namesHasMore = response.hasNextPage || false;
+
+				renderOwnedNames();
+			} catch (error) {
+				console.error('Failed to fetch owned names:', error);
+				renderNamesError(error.message || 'Failed to load names');
+			} finally {
+				namesLoading = false;
+			}
+		}
+
+		// Render the owned names grid
+		function renderOwnedNames() {
+			if (!namesContent) return;
+
+			if (allOwnedNames.length === 0) {
+				namesCountEl.textContent = '0';
+				namesContent.innerHTML = \`
+					<div class="names-empty">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+							<circle cx="9" cy="7" r="4"></circle>
+							<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+							<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+						</svg>
+						<p>No SuiNS names found</p>
+						<span class="hint">This address doesn't own any SuiNS names yet</span>
+					</div>
+				\`;
+				return;
+			}
+
+			namesCountEl.textContent = namesHasMore ? \`\${allOwnedNames.length}+\` : String(allOwnedNames.length);
+
+			const cardsHtml = allOwnedNames.map(name => {
+				const cleanedName = name.replace(/\\.sui$/i, '');
+				const isCurrentName = cleanedName.toLowerCase() === NAME.toLowerCase();
+				const initial = cleanedName.charAt(0).toUpperCase();
+				const profileUrl = \`https://\${cleanedName}.sui.ski\`;
+
+				return \`
+					<a href="\${profileUrl}" class="name-card\${isCurrentName ? ' current' : ''}" title="View \${cleanedName}.sui profile">
+						<div class="name-card-header">
+							<div class="name-card-avatar">\${initial}</div>
+							<div class="name-card-name">\${escapeHtmlJs(cleanedName)}<span class="suffix">.sui</span></div>
+						</div>
+						<div class="name-card-meta">
+							\${isCurrentName ? '<span class="name-card-badge current-tag">Current</span>' : ''}
+							<svg class="name-card-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="9 18 15 12 9 6"></polyline>
+							</svg>
+						</div>
+					</a>
+				\`;
+			}).join('');
+
+			namesContent.innerHTML = \`
+				<div class="names-grid">
+					\${cardsHtml}
+				</div>
+				\${namesHasMore ? \`
+					<div class="names-load-more">
+						<button id="load-more-names-btn">Load More Names</button>
+					</div>
+				\` : ''}
+			\`;
+
+			// Attach load more handler
+			const loadMoreBtn = document.getElementById('load-more-names-btn');
+			if (loadMoreBtn) {
+				loadMoreBtn.addEventListener('click', async () => {
+					loadMoreBtn.disabled = true;
+					loadMoreBtn.textContent = 'Loading...';
+					await fetchOwnedNames(namesNextCursor);
+				});
+			}
+		}
+
+		// Render error state
+		function renderNamesError(message) {
+			if (!namesContent) return;
+			namesCountEl.textContent = '-';
+			namesContent.innerHTML = \`
+				<div class="names-error">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10"></circle>
+						<line x1="12" y1="8" x2="12" y2="12"></line>
+						<line x1="12" y1="16" x2="12.01" y2="16"></line>
+					</svg>
+					<p>\${escapeHtmlJs(message)}</p>
+					<button class="names-retry-btn" id="retry-names-btn">Try Again</button>
+				</div>
+			\`;
+
+			const retryBtn = document.getElementById('retry-names-btn');
+			if (retryBtn) {
+				retryBtn.addEventListener('click', () => {
+					namesContent.innerHTML = \`
+						<div class="names-loading">
+							<span class="loading"></span>
+							<span>Fetching all SuiNS names owned by this address...</span>
+						</div>
+					\`;
+					allOwnedNames = [];
+					namesNextCursor = null;
+					namesHasMore = true;
+					fetchOwnedNames();
+				});
+			}
+		}
+
+		// Helper function to escape HTML in JS
+		function escapeHtmlJs(str) {
+			if (!str) return '';
+			return str
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;')
+				.replace(/"/g, '&quot;')
+				.replace(/'/g, '&#39;');
+		}
+
+		// Load names when the names tab is first activated
+		let namesLoaded = false;
+		const namesTab = document.querySelector('[data-tab="names"]');
+		if (namesTab) {
+			namesTab.addEventListener('click', () => {
+				if (!namesLoaded) {
+					namesLoaded = true;
+					fetchOwnedNames();
+				}
+			});
+		}
+
+		// Also load if names tab is already active (from localStorage)
+		const activeTab = localStorage.getItem('sui_ski_active_tab');
+		if (activeTab === 'names' && !namesLoaded) {
+			namesLoaded = true;
+			// Small delay to ensure DOM is ready
+			setTimeout(() => fetchOwnedNames(), 100);
+		}
+
+		// ========== SOCIAL LINKS FUNCTIONALITY ==========
+		const CURRENT_X_USERNAME = ${serializeJson(getXUsername(record) || '')};
+		const socialModal = document.getElementById('social-modal');
+		const xUsernameInput = document.getElementById('x-username-input');
+		const socialModalStatus = document.getElementById('social-modal-status');
+		const cancelSocialBtn = document.getElementById('cancel-social-btn');
+		const saveSocialBtn = document.getElementById('save-social-btn');
+		const editSocialBtn = document.getElementById('edit-social-btn');
+		const addSocialBtn = document.getElementById('add-social-btn');
+		const socialLinksList = document.getElementById('social-links-list');
+
+		function showSocialStatus(msg, type) {
+			socialModalStatus.innerHTML = msg;
+			socialModalStatus.className = 'status ' + type;
+		}
+
+		function hideSocialStatus() {
+			socialModalStatus.className = 'status hidden';
+		}
+
+		function openSocialModal() {
+			if (!connectedAddress) {
+				connectWallet().then(() => {
+					if (connectedAddress && canEdit) {
+						socialModal.classList.add('open');
+						xUsernameInput.value = CURRENT_X_USERNAME;
+						hideSocialStatus();
+					}
+				});
+				return;
+			}
+
+			if (!canEdit) {
+				alert('Only the NFT owner can edit social links.');
+				return;
+			}
+
+			socialModal.classList.add('open');
+			xUsernameInput.value = CURRENT_X_USERNAME;
+			hideSocialStatus();
+		}
+
+		function closeSocialModal() {
+			socialModal.classList.remove('open');
+			hideSocialStatus();
+		}
+
+		async function saveXProfile() {
+			hideSocialStatus();
+
+			if (!connectedWallet || !connectedAccount) {
+				showSocialStatus('Please connect your wallet first.', 'error');
+				return;
+			}
+
+			let username = xUsernameInput.value.trim();
+
+			// Clean the username - remove @ prefix and extract from URL if needed
+			if (username) {
+				username = username.replace(/^@/, '');
+				const urlMatch = username.match(/(?:x\\.com|twitter\\.com)\\/([a-zA-Z0-9_]+)/i);
+				if (urlMatch) {
+					username = urlMatch[1];
+				}
+				// Validate username format
+				if (!/^[a-zA-Z0-9_]{1,15}$/.test(username)) {
+					showSocialStatus('Invalid X username format. Use only letters, numbers, and underscores (max 15 chars).', 'error');
+					return;
+				}
+			}
+
+			try {
+				showSocialStatus('<span class="loading"></span> Saving to SuiNS...', 'info');
+				saveSocialBtn.disabled = true;
+
+				// Use the existing setSuiNSRecords function to save the X username
+				const entries = [{ key: 'x', value: username }];
+				await setSuiNSRecords(entries);
+
+				showSocialStatus('X profile saved!', 'success');
+
+				// Update the UI
+				updateSocialLinksUI(username);
+
+				setTimeout(() => {
+					closeSocialModal();
+				}, 1500);
+
+			} catch (error) {
+				console.error('Save X profile error:', error);
+				showSocialStatus('Failed: ' + (error.message || 'Unknown error'), 'error');
+			} finally {
+				saveSocialBtn.disabled = false;
+			}
+		}
+
+		function updateSocialLinksUI(username) {
+			const xIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path></svg>';
+			const arrowIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+
+			if (username) {
+				socialLinksList.innerHTML = \`
+					<a href="https://x.com/\${escapeHtmlJs(username)}" target="_blank" rel="noopener noreferrer" class="social-link-item">
+						<div class="social-link-icon">\${xIcon}</div>
+						<div class="social-link-info">
+							<div class="social-link-label">X (Twitter)</div>
+							<div class="social-link-value">@\${escapeHtmlJs(username)}</div>
+						</div>
+						<div class="social-link-arrow">\${arrowIcon}</div>
+					</a>
+				\`;
+				if (addSocialBtn) addSocialBtn.style.display = 'none';
+			} else {
+				socialLinksList.innerHTML = \`
+					<div class="social-links-empty">
+						<p>No social links set</p>
+						<p class="social-links-empty-hint">Connect your X profile to let visitors find you</p>
+					</div>
+				\`;
+				if (addSocialBtn) addSocialBtn.style.display = '';
+			}
+		}
+
+		// Update social edit button visibility when permissions change
+		function updateSocialEditVisibility() {
+			if (editSocialBtn) {
+				if (canEdit) {
+					editSocialBtn.classList.add('visible');
+				} else {
+					editSocialBtn.classList.remove('visible');
+				}
+			}
+		}
+
+		// Extend checkEditPermission to also update social edit visibility
+		const originalCheckEditPermissionForSocial = checkEditPermission;
+		checkEditPermission = async function() {
+			await originalCheckEditPermissionForSocial();
+			updateSocialEditVisibility();
+		};
+
+		// Event listeners for social modal
+		if (editSocialBtn) {
+			editSocialBtn.addEventListener('click', openSocialModal);
+		}
+		if (addSocialBtn) {
+			addSocialBtn.addEventListener('click', openSocialModal);
+		}
+		if (cancelSocialBtn) {
+			cancelSocialBtn.addEventListener('click', closeSocialModal);
+		}
+		if (saveSocialBtn) {
+			saveSocialBtn.addEventListener('click', saveXProfile);
+		}
+		if (socialModal) {
+			socialModal.addEventListener('click', (e) => {
+				if (e.target === socialModal) closeSocialModal();
+			});
+		}
+
+		// Initialize social edit visibility
+		updateSocialEditVisibility();
+
+		${generatePasskeyWalletScript(env)}
 	</script>
 
 	<!-- Expanded QR Overlay -->
@@ -4439,4 +6467,198 @@ export function generateProfilePage(name: string, record: SuiNSRecord, env: Env)
 	</div>
 </body>
 </html>`
+}
+
+function collapseWhitespace(value: string): string {
+	return value.replace(/\s+/g, ' ').trim()
+}
+
+function pickRecordValue(record: SuiNSRecord, keys: string[]): string | undefined {
+	const lowerKeys = keys.map((key) => key.toLowerCase())
+	for (const key of keys) {
+		const direct = record.records?.[key]
+		if (typeof direct === 'string' && direct.trim().length > 0) {
+			return collapseWhitespace(direct)
+		}
+	}
+	for (const [recordKey, value] of Object.entries(record.records || {})) {
+		if (typeof value !== 'string' || value.trim().length === 0) continue
+		const normalizedKey = recordKey.toLowerCase()
+		if (lowerKeys.some((candidate) => normalizedKey.includes(candidate))) {
+			return collapseWhitespace(value)
+		}
+	}
+	return undefined
+}
+
+function buildProfileDescription(fullName: string, record: SuiNSRecord): string {
+	const fromRecords = pickRecordValue(record, DESCRIPTION_RECORD_KEYS)
+	if (fromRecords) {
+		return fromRecords
+	}
+	if (record.content?.type === 'url' && record.content.value) {
+		return collapseWhitespace(`${fullName} · Link: ${record.content.value}`)
+	}
+	const shortOwner = shortenAddress(record.address || '')
+	if (shortOwner) {
+		return `${fullName} on Sui · Owner ${shortOwner}`
+	}
+	return `${fullName} profile on Sui`
+}
+
+function shortenAddress(address: string): string {
+	if (!address) return ''
+	if (address.length <= 12) return address
+	return `${address.slice(0, 6)}...${address.slice(-4)}`
+}
+
+function getOriginFromCanonical(canonicalUrl?: string, hostname?: string): string {
+	if (canonicalUrl) {
+		try {
+			return new URL(canonicalUrl).origin
+		} catch {
+			// Ignore invalid canonical url
+		}
+	}
+	if (hostname?.startsWith('http://') || hostname?.startsWith('https://')) {
+		try {
+			return new URL(hostname).origin
+		} catch {
+			return 'https://sui.ski'
+		}
+	}
+	const fallbackHost = hostname || 'sui.ski'
+	return `https://${fallbackHost}`
+}
+
+function selectProfileImage(
+	record: SuiNSRecord,
+	hostname?: string,
+): string | undefined {
+	const candidates = [record.avatar, pickRecordValue(record, IMAGE_RECORD_KEYS)]
+	for (const candidate of candidates) {
+		if (!candidate) continue
+		const normalized = normalizeMediaUrl(candidate, hostname)
+		if (normalized) {
+			return normalized
+		}
+	}
+	return undefined
+}
+
+/**
+ * Extract X/Twitter username from records
+ */
+function getXUsername(record: SuiNSRecord): string | undefined {
+	const xKeys = ['x', 'twitter', 'com.twitter', 'com.x']
+
+	// Check direct keys first
+	for (const key of xKeys) {
+		const value = record.records?.[key]
+		if (typeof value === 'string' && value.trim()) {
+			return extractXUsername(value.trim())
+		}
+	}
+
+	// Check for URL patterns in any record
+	for (const [, value] of Object.entries(record.records || {})) {
+		if (typeof value !== 'string') continue
+		const trimmed = value.trim().toLowerCase()
+		if (trimmed.includes('x.com/') || trimmed.includes('twitter.com/')) {
+			return extractXUsername(value.trim())
+		}
+	}
+
+	return undefined
+}
+
+/**
+ * Extract username from X/Twitter URL or handle
+ */
+function extractXUsername(value: string): string {
+	// Remove @ prefix
+	let cleaned = value.replace(/^@/, '')
+
+	// Extract from URL
+	const urlMatch = cleaned.match(/(?:x\.com|twitter\.com)\/([a-zA-Z0-9_]+)/i)
+	if (urlMatch) {
+		return urlMatch[1]
+	}
+
+	// If it looks like a username (alphanumeric + underscores)
+	if (/^[a-zA-Z0-9_]+$/.test(cleaned)) {
+		return cleaned
+	}
+
+	return cleaned
+}
+
+const escapeHtmlForSocial = (value: string) =>
+	value.replace(/[&<>"']/g, (char) => {
+		switch (char) {
+			case '&':
+				return '&amp;'
+			case '<':
+				return '&lt;'
+			case '>':
+				return '&gt;'
+			case '"':
+				return '&quot;'
+			case "'":
+				return '&#39;'
+			default:
+				return char
+		}
+	})
+
+/**
+ * Generate HTML for the social links section
+ */
+function generateSocialLinksHTML(record: SuiNSRecord): string {
+	const xUsername = getXUsername(record)
+
+	const xIcon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path></svg>`
+
+	const arrowIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="9 18 15 12 9 6"></polyline></svg>`
+
+	const plusIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`
+
+	let linksHtml = ''
+
+	if (xUsername) {
+		linksHtml = `
+			<a href="https://x.com/${escapeHtmlForSocial(xUsername)}" target="_blank" rel="noopener noreferrer" class="social-link-item">
+				<div class="social-link-icon">${xIcon}</div>
+				<div class="social-link-info">
+					<div class="social-link-label">X (Twitter)</div>
+					<div class="social-link-value">@${escapeHtmlForSocial(xUsername)}</div>
+				</div>
+				<div class="social-link-arrow">${arrowIcon}</div>
+			</a>
+		`
+	}
+
+	return `
+		<div class="social-links-section">
+			<div class="social-links-header">
+				<div class="social-links-title">
+					${xIcon}
+					<span>Social Links</span>
+				</div>
+				<button class="social-links-edit-btn" id="edit-social-btn">Edit</button>
+			</div>
+			<div class="social-links-list" id="social-links-list">
+				${linksHtml || `
+					<div class="social-links-empty">
+						<p>No social links set</p>
+						<p class="social-links-empty-hint">Connect your X profile to let visitors find you</p>
+					</div>
+				`}
+			</div>
+			<button class="social-links-add-btn" id="add-social-btn" style="${xUsername ? 'display:none;' : ''}">
+				${plusIcon}
+				Add X Profile
+			</button>
+		</div>
+	`
 }

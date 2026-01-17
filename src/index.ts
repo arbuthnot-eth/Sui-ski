@@ -4,6 +4,7 @@ import { handleLandingPage } from './handlers/landing'
 import { handlePlayerEntryPage, handlePlayRequest } from './handlers/media'
 import { handleMessagingPage, handleMessagingRequest } from './handlers/messaging'
 import { generateProfilePage } from './handlers/profile'
+import { handlePWARequest } from './handlers/pwa'
 import { handleTransaction } from './handlers/transaction'
 import { handleUploadPage } from './handlers/upload'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
@@ -12,6 +13,7 @@ import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
 import { isWalrusSiteId, resolveWalrusSite } from './resolvers/walrus-site'
 import type { Env, MVRPackage, SuiNSRecord } from './types'
+import { isTwitterPreviewBot } from './utils/social'
 import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils/response'
 import { parseSubdomain } from './utils/subdomain'
 
@@ -30,6 +32,13 @@ export default {
 		}
 
 		const url = new URL(request.url)
+		const userAgent = request.headers.get('user-agent')
+
+		// PWA assets (manifest, service worker, icons)
+		const pwaResponse = handlePWARequest(url.pathname)
+		if (pwaResponse) {
+			return pwaResponse
+		}
 
 		// Messaging API endpoints
 		if (url.pathname.startsWith('/api/messaging')) {
@@ -92,7 +101,10 @@ export default {
 					return handleRPCRequest(request, env)
 
 				case 'suins':
-					return handleSuiNSRequest(parsed.subdomain, url, env)
+					return handleSuiNSRequest(parsed.subdomain, url, env, {
+						isTwitterBot: isTwitterPreviewBot(userAgent),
+						originalHostname: hostname,
+					})
 
 				case 'mvr':
 					if (!parsed.packageName) {
@@ -120,7 +132,17 @@ export default {
 /**
  * Handle SuiNS name resolution requests
  */
-async function handleSuiNSRequest(name: string, url: URL, env: Env): Promise<Response> {
+interface SuiRequestOptions {
+	isTwitterBot?: boolean
+	originalHostname?: string
+}
+
+async function handleSuiNSRequest(
+	name: string,
+	url: URL,
+	env: Env,
+	options: SuiRequestOptions = {},
+): Promise<Response> {
 	const skipCache = url.searchParams.has('nocache') || url.searchParams.has('refresh')
 	const result = await resolveSuiNS(name, env, skipCache)
 
@@ -129,6 +151,18 @@ async function handleSuiNSRequest(name: string, url: URL, env: Env): Promise<Res
 	}
 
 	const record = result.data as SuiNSRecord
+	const hostname = options.originalHostname || url.hostname
+	const normalizedPath = url.pathname || '/'
+	const canonicalUrl = `${url.protocol}//${hostname}${normalizedPath}`
+	const profileOptions = { canonicalUrl, hostname }
+	const shouldServeProfileForTwitter = Boolean(options.isTwitterBot) && normalizedPath === '/'
+	let cachedProfileHtml: string | null = null
+	const renderProfilePage = () => {
+		if (cachedProfileHtml === null) {
+			cachedProfileHtml = generateProfilePage(name, record, env, profileOptions)
+		}
+		return cachedProfileHtml
+	}
 
 	// If requesting JSON data explicitly
 	if (url.pathname === '/json' || url.searchParams.has('json')) {
@@ -137,7 +171,11 @@ async function handleSuiNSRequest(name: string, url: URL, env: Env): Promise<Res
 
 	// Force profile view
 	if (url.pathname === '/profile' || url.searchParams.has('profile')) {
-		return htmlResponse(generateProfilePage(name, record, env))
+		return htmlResponse(renderProfilePage())
+	}
+
+	if (shouldServeProfileForTwitter) {
+		return htmlResponse(renderProfilePage())
 	}
 
 	// If the name has a Walrus Site ID, resolve and serve the site
@@ -149,7 +187,7 @@ async function handleSuiNSRequest(name: string, url: URL, env: Env): Promise<Res
 			`${name}.sui`,
 		)
 		if (!siteResponse.ok && (url.pathname === '/' || url.pathname === '')) {
-			return htmlResponse(generateProfilePage(name, record, env))
+			return htmlResponse(renderProfilePage())
 		}
 		return siteResponse
 	}
@@ -158,13 +196,13 @@ async function handleSuiNSRequest(name: string, url: URL, env: Env): Promise<Res
 	if (record.content) {
 		const contentResponse = await resolveContent(record.content, env)
 		if (!contentResponse.ok && (url.pathname === '/' || url.pathname === '')) {
-			return htmlResponse(generateProfilePage(name, record, env))
+			return htmlResponse(renderProfilePage())
 		}
 		return contentResponse
 	}
 
 	// Otherwise, show the name's profile page
-	return htmlResponse(generateProfilePage(name, record, env))
+	return htmlResponse(renderProfilePage())
 }
 
 /**
