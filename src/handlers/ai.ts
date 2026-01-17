@@ -26,7 +26,7 @@ const PAYMENT_AMOUNT = '3000000' // in MIST (1 SUI = 1e9 MIST)
  * 
  * POST /api/ai/generate-names - Generate Sui name suggestions
  * POST /api/ai/generate-avatar - Generate avatar description/image
- * POST /api/ai/generate-image - Generate image description (x402 payment gated)
+ * POST /api/ai/generate-image - Retrieve Grokipedia article (x402 payment gated)
  * POST /api/ai/create-payment-tx - Get payment transaction details
  * 
  * x402 Payment Protocol (for generate-image):
@@ -249,7 +249,7 @@ async function handleCreatePaymentTransaction(request: Request, env: Env): Promi
 }
 
 /**
- * Generate an image using OpenRouter image generation (x402 payment gating)
+ * Retrieve Grokipedia article for SuiNS name (x402 payment gating)
  * Supports both browser users and agents via x402 protocol
  */
 async function handleGenerateImage(request: Request, env: Env): Promise<Response> {
@@ -258,10 +258,6 @@ async function handleGenerateImage(request: Request, env: Env): Promise<Response
 		payload = (await request.json()) as typeof payload
 	} catch {
 		return jsonResponse({ error: 'Invalid JSON body' }, 400, CORS_HEADERS)
-	}
-
-	if (!payload.prompt) {
-		return jsonResponse({ error: 'Prompt is required' }, 400, CORS_HEADERS)
 	}
 
 	if (!payload.name) {
@@ -481,22 +477,22 @@ async function handleGenerateImage(request: Request, env: Env): Promise<Response
 		)
 	}
 
-	const prompt = payload.prompt
+	const suinsName = payload.name
 
-	// Use Gemini Nano Banana 3 Flash to generate image description
-	const imageResponse = await callOpenRouterImageGeneration(env, {
-		prompt: prompt,
-	})
+	// Retrieve Grokipedia article for the SuiNS name
+	const grokipediaResponse = await fetchGrokipediaArticle(env, suinsName)
 
-	if (!imageResponse.success) {
-		return jsonResponse({ error: imageResponse.error || 'Failed to generate image' }, 500, CORS_HEADERS)
+	if (!grokipediaResponse.success) {
+		return jsonResponse({ error: grokipediaResponse.error || 'Failed to retrieve Grokipedia article' }, 500, CORS_HEADERS)
 	}
 
 	return jsonResponse(
 		{
 			success: true,
-			imageUrl: imageResponse.imageUrl,
-			prompt,
+			article: grokipediaResponse.article,
+			title: grokipediaResponse.title,
+			url: grokipediaResponse.url,
+			name: suinsName,
 		},
 		200,
 		CORS_HEADERS,
@@ -780,105 +776,151 @@ function parseNamesFromResponse(response: string): string[] {
  * Call OpenRouter for image generation (using text model to generate image description, then return as data URL)
  * Note: For actual image generation, you'd need a dedicated image model. This is a simplified approach.
  */
-async function callOpenRouterImageGeneration(
+/**
+ * Fetch Grokipedia article by searching for the SuiNS name
+ */
+async function fetchGrokipediaArticle(
 	env: Env,
-	body: {
-		prompt: string
-	},
-): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
-	if (!env.OPENROUTER_API_KEY) {
-		return { success: false, error: 'OpenRouter API key not configured' }
-	}
-
+	suinsName: string,
+): Promise<{ success: boolean; article?: string; title?: string; url?: string; error?: string }> {
 	try {
-		// Use Gemini 3 Pro Image Preview to generate actual images (paid model)
-		const response = await fetch(OPENROUTER_API_URL, {
-			method: 'POST',
+		// Clean the SuiNS name for search (remove .sui suffix, handle special chars)
+		const searchQuery = suinsName.replace(/\.sui$/i, '').trim()
+		
+		// Grokipedia search URL - search for the name
+		const searchUrl = `https://grokxpedia.us/search?q=${encodeURIComponent(searchQuery)}`
+		
+		// Fetch the search results page
+		const searchResponse = await fetch(searchUrl, {
 			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-				'HTTP-Referer': 'https://sui.ski',
-				'X-Title': 'Sui.ski AI Image Generator',
+				'User-Agent': 'Mozilla/5.0 (compatible; Sui.ski/1.0)',
+				'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 			},
-			body: JSON.stringify({
-				model: IMAGE_GENERATION_MODEL,
-				messages: [
-					{
-						role: 'user',
-						content: body.prompt,
-					},
-				],
-				modalities: ['image', 'text'], // Request both image and text output
-				image_config: {
-					aspect_ratio: '1:1', // Square images by default
-					image_size: '2K', // 2K resolution (~$0.134 per image)
-				},
-				temperature: 0.8,
-			}),
 		})
 
-		if (!response.ok) {
-			const errorText = await response.text()
-			console.error('OpenRouter Image API error:', response.status, errorText)
+		if (!searchResponse.ok) {
 			return {
 				success: false,
-				error: `OpenRouter Image API error: ${response.status} ${errorText}`,
+				error: `Grokipedia search failed: ${searchResponse.status} ${searchResponse.statusText}`,
 			}
 		}
 
-		const data = (await response.json()) as {
-			choices?: Array<{
-				message?: {
-					content?: string
-					images?: Array<{
-						type?: string
-						image_url?: { url?: string }
-						imageUrl?: { url?: string }
-					}>
-				}
-			}>
-			error?: { message?: string }
-		}
-
-		if (data.error) {
-			return { success: false, error: data.error.message || 'Unknown error' }
-		}
-
-		// Extract image URL from response
-		const message = data.choices?.[0]?.message
-		const images = message?.images || []
+		const searchHtml = await searchResponse.text()
 		
-		// Look for image URL in various possible formats
-		let imageUrl: string | undefined
-		for (const img of images) {
-			if (img.image_url?.url) {
-				imageUrl = img.image_url.url
-				break
+		// Parse search results to find the article URL
+		// Grokipedia typically shows results with links like /page/ArticleName
+		const articleUrlMatch = searchHtml.match(/href=["'](\/page\/[^"']+)["']/i)
+		let articleUrl = articleUrlMatch ? articleUrlMatch[1] : null
+		
+		// If no direct match, try to construct URL from search query
+		if (!articleUrl) {
+			// Convert search query to article slug format (capitalize first letter, replace spaces/hyphens)
+			const articleSlug = searchQuery
+				.split(/[\s-]+/)
+				.map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+				.join('_')
+			articleUrl = `/page/${articleSlug}`
+		}
+
+		// Fetch the article page
+		const articleFullUrl = articleUrl.startsWith('http') ? articleUrl : `https://grokxpedia.us${articleUrl}`
+		const articleResponse = await fetch(articleFullUrl, {
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (compatible; Sui.ski/1.0)',
+				'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+			},
+		})
+
+		if (!articleResponse.ok) {
+			// If article not found, return a message indicating no article exists
+			if (articleResponse.status === 404) {
+				return {
+					success: true,
+					article: `No Grokipedia article found for "${searchQuery}". This could be a new or uncommon topic.`,
+					title: `Article not found: ${searchQuery}`,
+					url: articleFullUrl,
+				}
 			}
-			if (img.imageUrl?.url) {
-				imageUrl = img.imageUrl.url
-				break
+			return {
+				success: false,
+				error: `Failed to fetch Grokipedia article: ${articleResponse.status} ${articleResponse.statusText}`,
 			}
 		}
 
-		if (!imageUrl) {
-			// Fallback: if no image but we have text content, return that
-			const textContent = message?.content
-			if (textContent) {
-				console.warn('No image generated, returning text description')
-				const encodedDescription = encodeURIComponent(textContent)
-				imageUrl = `data:text/plain;charset=utf-8,${encodedDescription}`
-			} else {
-				return { success: false, error: 'No image generated' }
+		const articleHtml = await articleResponse.text()
+		
+		// Extract article content from HTML
+		// Grokipedia articles are typically in a main content area
+		// Try to find the article text content
+		let articleContent = ''
+		let articleTitle = searchQuery
+
+		// Extract title (usually in <h1> or title tag)
+		const titleMatch = articleHtml.match(/<h1[^>]*>([^<]+)<\/h1>/i) || articleHtml.match(/<title>([^<]+)<\/title>/i)
+		if (titleMatch) {
+			articleTitle = titleMatch[1].trim()
+		}
+
+		// Extract main content (look for common article content selectors)
+		const contentSelectors = [
+			/<article[^>]*>([\s\S]*?)<\/article>/i,
+			/<div[^>]*class=["'][^"']*content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+			/<main[^>]*>([\s\S]*?)<\/main>/i,
+			/<div[^>]*id=["']content["'][^>]*>([\s\S]*?)<\/div>/i,
+		]
+
+		for (const selector of contentSelectors) {
+			const match = articleHtml.match(selector)
+			if (match && match[1]) {
+				// Remove HTML tags and clean up
+				articleContent = match[1]
+					.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+					.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+					.replace(/<[^>]+>/g, ' ')
+					.replace(/\s+/g, ' ')
+					.trim()
+				
+				if (articleContent.length > 100) {
+					break
+				}
 			}
 		}
 
-		return { success: true, imageUrl }
+		// If no structured content found, extract text from body
+		if (!articleContent || articleContent.length < 100) {
+			const bodyMatch = articleHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+			if (bodyMatch) {
+				articleContent = bodyMatch[1]
+					.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+					.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+					.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+					.replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+					.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+					.replace(/<[^>]+>/g, ' ')
+					.replace(/\s+/g, ' ')
+					.trim()
+					.substring(0, 5000) // Limit length
+			}
+		}
+
+		if (!articleContent || articleContent.length < 50) {
+			return {
+				success: false,
+				error: 'Could not extract article content from Grokipedia page',
+			}
+		}
+
+		return {
+			success: true,
+			article: articleContent,
+			title: articleTitle,
+			url: articleFullUrl,
+		}
 	} catch (error) {
-		console.error('OpenRouter image request error:', error)
+		console.error('Grokipedia fetch error:', error)
 		return {
 			success: false,
-			error: error instanceof Error ? error.message : 'Unknown error',
+			error: error instanceof Error ? error.message : 'Unknown error fetching Grokipedia article',
 		}
 	}
 }

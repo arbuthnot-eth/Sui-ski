@@ -3565,7 +3565,7 @@ ${generatePasskeyWalletStyles()}
 					</div>
 					<div class="identity-name-wrapper">
 						<div class="identity-name" id="identity-name" title="Click to copy">${escapeHtml(cleanName)}.sui.ski</div>
-						<button class="ai-generate-btn" id="ai-generate-btn" title="Generate AI image">
+						<button class="ai-generate-btn" id="ai-generate-btn" title="View Grokipedia article">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<path d="M9 21h6M12 3a6 6 0 0 1 6 6c0 2.5-1.5 4.5-3 6l-3 3-3-3c-1.5-1.5-3-3.5-3-6a6 6 0 0 1 6-6z"></path>
 							</svg>
@@ -4867,10 +4867,8 @@ ${generatePasskeyWalletStyles()}
 					}
 				}
 				
-				// Use SuiNS name as default prompt, allow user to modify
-				const defaultPrompt = FULL_NAME; // e.g., "barnacle.sui"
-				const userPrompt = window.prompt('Describe the image you want to generate:', defaultPrompt);
-				if (!userPrompt || !userPrompt.trim()) return;
+				// Use SuiNS name to search Grokipedia (no prompt needed)
+				// The name will be used to search Grokipedia automatically
 				
 				aiGenerateBtn.classList.add('loading');
 				aiGenerateBtn.disabled = true;
@@ -4956,8 +4954,8 @@ ${generatePasskeyWalletStyles()}
 						// Continue anyway - transaction might still be processing
 					}
 					
-					// Step 5: Generate image after payment confirmed (x402 protocol)
-					const imageResponse = await fetch('/api/ai/generate-image', {
+					// Step 5: Retrieve Grokipedia article after payment confirmed (x402 protocol)
+					const articleResponse = await fetch('/api/ai/generate-image', {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/json',
@@ -4965,15 +4963,14 @@ ${generatePasskeyWalletStyles()}
 							'X-Payment-Tx-Digest': result.digest, // x402 payment proof header
 						},
 						body: JSON.stringify({
-							prompt: userPrompt.trim(),
-							name: NAME, // SuiNS name for resolving payment recipient
+							name: NAME, // SuiNS name to search on Grokipedia
 							walletAddress: connectedAddress,
 						}),
 					});
 					
 					// Handle x402 Payment Required response
-					if (imageResponse.status === 402) {
-						const paymentInfo = await imageResponse.json();
+					if (articleResponse.status === 402) {
+						const paymentInfo = await articleResponse.json();
 						let errorMsg = paymentInfo.error || 'Payment verification failed';
 						
 						// Include debug info if available
@@ -4988,30 +4985,56 @@ ${generatePasskeyWalletStyles()}
 						throw new Error(errorMsg);
 					}
 					
-					const imageData = await imageResponse.json();
+					const articleData = await articleResponse.json();
 					
-					if (!imageResponse.ok) {
-						throw new Error(imageData.error || 'Failed to generate image');
+					if (!articleResponse.ok) {
+						throw new Error(articleData.error || 'Failed to retrieve Grokipedia article');
 					}
 					
-					if (imageData.success && imageData.imageUrl) {
-						// Check if it's an actual image (data:image) or text description
-						if (imageData.imageUrl.startsWith('data:image/')) {
-							// Display the generated image in a modal
-							const imgModal = document.createElement('div');
-							imgModal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center; cursor: pointer;';
-							const img = document.createElement('img');
-							img.src = imageData.imageUrl;
-							img.style.cssText = 'max-width: 90vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);';
-							imgModal.appendChild(img);
-							imgModal.addEventListener('click', () => imgModal.remove());
-							document.body.appendChild(imgModal);
-						} else {
-							// Fallback: show text description if image wasn't generated
-							alert('Image description: ' + decodeURIComponent(imageData.imageUrl.replace('data:text/plain;charset=utf-8,', '')));
-						}
+					if (articleData.success && articleData.article) {
+						// Display the Grokipedia article in a modal
+						const articleModal = document.createElement('div');
+						articleModal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto;';
+						
+						const articleContainer = document.createElement('div');
+						articleContainer.style.cssText = 'position: relative; max-width: 800px; max-height: 90vh; background: var(--card-bg, #1a1a2e); border-radius: 12px; padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); overflow-y: auto;';
+						
+						// Title
+						const title = document.createElement('h2');
+						title.textContent = articleData.title || FULL_NAME;
+						title.style.cssText = 'margin: 0 0 16px 0; color: var(--accent, #60a5fa); font-size: 1.5rem;';
+						
+						// Article content
+						const content = document.createElement('div');
+						content.textContent = articleData.article;
+						content.style.cssText = 'color: var(--text, #e0e0e0); line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; margin-bottom: 16px; max-height: 60vh; overflow-y: auto;';
+						
+						// Link to Grokipedia
+						const link = document.createElement('a');
+						link.href = articleData.url || '#';
+						link.target = '_blank';
+						link.textContent = 'View on Grokipedia →';
+						link.style.cssText = 'color: var(--accent, #60a5fa); text-decoration: none; display: inline-block; margin-top: 16px;';
+						
+						// Close button
+						const closeBtn = document.createElement('button');
+						closeBtn.textContent = '×';
+						closeBtn.style.cssText = 'position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.1); border: none; color: var(--text, #e0e0e0); font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center;';
+						closeBtn.addEventListener('click', () => articleModal.remove());
+						
+						articleContainer.appendChild(closeBtn);
+						articleContainer.appendChild(title);
+						articleContainer.appendChild(content);
+						articleContainer.appendChild(link);
+						articleModal.appendChild(articleContainer);
+						
+						articleModal.addEventListener('click', (e) => {
+							if (e.target === articleModal) articleModal.remove();
+						});
+						
+						document.body.appendChild(articleModal);
 					} else {
-						throw new Error('No image URL in response');
+						throw new Error(imageData.error || 'No article in response');
 					}
 				} catch (error) {
 					console.error('AI image generation error:', error);
