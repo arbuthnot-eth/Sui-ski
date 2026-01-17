@@ -4653,8 +4653,8 @@ export function generateProfilePage(
 		const GRACE_PERIOD_DAYS = 30;
 		const NS_DISCOUNT_PROGRESS = NS_DISCOUNT_DAYS / GRACE_PERIOD_DAYS; // 0.1 (10%)
 		let premiumHoverProgress = null;
-		let decayCurvePoints: { x: number; y: number }[] = [];
-		let nsDecayCurvePoints: { x: number; y: number }[] = [];
+		let decayCurvePoints = [];
+		let nsDecayCurvePoints = [];
 
 		// Fetch SUI price from CoinGecko
 		async function fetchSuiPrice() {

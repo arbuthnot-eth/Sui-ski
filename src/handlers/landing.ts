@@ -91,22 +91,38 @@ async function getSuiNSPricing(env: Env): Promise<Record<string, number>> {
  */
 export async function getSUIPrice(): Promise<number> {
 	try {
-		const response = await fetch(
-			'https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd',
-			{
-				headers: {
-					Accept: 'application/json',
+		const controller = new AbortController()
+		const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+
+		try {
+			const response = await fetch(
+				'https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd',
+				{
+					headers: {
+						Accept: 'application/json',
+						'User-Agent': 'sui.ski-gateway/1.0',
+					},
+					signal: controller.signal,
 				},
-			},
-		)
-		if (!response.ok) {
-			throw new Error(`CoinGecko API error: ${response.status}`)
+			)
+			clearTimeout(timeoutId)
+
+			if (!response.ok) {
+				throw new Error(`CoinGecko API error: ${response.status} ${response.statusText}`)
+			}
+
+			const data = (await response.json()) as { sui?: { usd?: number } }
+			if (!data.sui?.usd || typeof data.sui.usd !== 'number' || !Number.isFinite(data.sui.usd)) {
+				throw new Error('Invalid price data from CoinGecko')
+			}
+			return data.sui.usd
+		} catch (fetchError) {
+			clearTimeout(timeoutId)
+			if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+				throw new Error('Request timeout: CoinGecko API did not respond in time')
+			}
+			throw fetchError
 		}
-		const data = (await response.json()) as { sui?: { usd?: number } }
-		if (!data.sui?.usd) {
-			throw new Error('Invalid price data from CoinGecko')
-		}
-		return data.sui.usd
 	} catch (error) {
 		console.error('Failed to fetch SUI price:', error)
 		throw error
