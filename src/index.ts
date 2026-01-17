@@ -1,5 +1,5 @@
 import { handleBidsRequest } from './handlers/bids'
-import { handleLandingPage } from './handlers/landing'
+import { handleLandingPage, getSUIPrice } from './handlers/landing'
 import { handleMessagingPage, handleMessagingRequest } from './handlers/messaging'
 import { handleMVRManagementRequest } from './handlers/mvr-management'
 import { handleMVRManagementPage } from './handlers/mvr-ui'
@@ -133,6 +133,17 @@ export default {
 		// View tracking API
 		if (url.pathname.startsWith('/api/views')) {
 			return handleViewsRequest(request, env)
+		}
+
+		// API endpoint for SUI price (available from any subdomain)
+		if (url.pathname === '/api/sui-price') {
+			try {
+				const price = await getSUIPrice()
+				return jsonResponse({ price })
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'Failed to fetch SUI price'
+				return jsonResponse({ error: message }, 500)
+			}
 		}
 
 		// NFT details API

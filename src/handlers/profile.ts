@@ -4652,7 +4652,7 @@ export function generateProfilePage(
 		const NS_DISCOUNT_DAYS = 3;
 		const GRACE_PERIOD_DAYS = 30;
 		const NS_DISCOUNT_PROGRESS = NS_DISCOUNT_DAYS / GRACE_PERIOD_DAYS; // 0.1 (10%)
-		let premiumHoverProgress: number | null = null;
+		let premiumHoverProgress = null;
 		let decayCurvePoints: { x: number; y: number }[] = [];
 		let nsDecayCurvePoints: { x: number; y: number }[] = [];
 
