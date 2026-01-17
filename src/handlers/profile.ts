@@ -3306,7 +3306,17 @@ ${generatePasskeyWalletStyles()}
 					<div class="identity-name" id="identity-name" title="Click to copy">${escapeHtml(cleanName)}.sui.ski</div>
 				</div>
 				<div class="hero-main">
-					<div class="wallet-bar" id="wallet-bar"></div>
+					<div class="wallet-bar" id="wallet-bar">
+						<button class="search-btn" id="search-btn" title="Search SuiNS names (Press /)">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<circle cx="11" cy="11" r="8"></circle>
+								<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+							</svg>
+							<span>Search...</span>
+							<kbd>/</kbd>
+						</button>
+						<span class="badge network">${network}</span>
+					</div>
 					<div class="header">
 						<div class="header-top">
 							<h1>${escapeHtml(cleanName)}<span class="suffix">.sui</span></h1>
@@ -4281,37 +4291,34 @@ ${generatePasskeyWalletStyles()}
 			updateEditButton();
 		}
 
-		// Render wallet bar at top
+		// Render wallet connection status (preserves search btn and network badge)
 		function renderWalletBar() {
-			const searchBtn = \`<button class="search-btn" id="search-btn" title="Search SuiNS names">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<circle cx="11" cy="11" r="8"></circle>
-					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-				</svg>
-				<span>Search names...</span>
-				<kbd>/</kbd>
-			</button>\`;
-			const networkBadge = '<span class="badge network">' + NETWORK + '</span>';
-			const leftSection = searchBtn + networkBadge;
+			// Remove old wallet elements but keep search btn and network badge
+			const existingWalletStatus = walletBar.querySelector('.wallet-status');
+			const existingConnectBtn = walletBar.querySelector('.connect-btn');
+			if (existingWalletStatus) existingWalletStatus.remove();
+			if (existingConnectBtn) existingConnectBtn.remove();
+
 			if (!connectedAddress) {
-				walletBar.innerHTML = leftSection + '<button class="connect-btn" id="connect-wallet-btn">Connect Wallet</button>';
-				const connectBtn = document.getElementById('connect-wallet-btn');
-				if (connectBtn) connectBtn.addEventListener('click', connectWallet);
+				const connectBtn = document.createElement('button');
+				connectBtn.className = 'connect-btn';
+				connectBtn.id = 'connect-wallet-btn';
+				connectBtn.textContent = 'Connect Wallet';
+				connectBtn.addEventListener('click', connectWallet);
+				walletBar.appendChild(connectBtn);
 			} else {
 				const displayName = connectedPrimaryName || truncAddr(connectedAddress);
-				walletBar.innerHTML = leftSection + \`
-					<div class="wallet-status">
-						<span class="wallet-addr">\${displayName}</span>
-						\${connectedPrimaryName ? \`<span class="wallet-name">\${truncAddr(connectedAddress)}</span>\` : ''}
-						<button id="disconnect-wallet-btn">×</button>
-					</div>
+				const walletStatus = document.createElement('div');
+				walletStatus.className = 'wallet-status';
+				walletStatus.innerHTML = \`
+					<span class="wallet-addr">\${displayName}</span>
+					\${connectedPrimaryName ? \`<span class="wallet-name">\${truncAddr(connectedAddress)}</span>\` : ''}
+					<button id="disconnect-wallet-btn">×</button>
 				\`;
+				walletBar.appendChild(walletStatus);
 				const disconnectBtn = document.getElementById('disconnect-wallet-btn');
 				if (disconnectBtn) disconnectBtn.addEventListener('click', disconnectWallet);
 			}
-			// Re-attach search button listener
-			const newSearchBtn = document.getElementById('search-btn');
-			if (newSearchBtn) newSearchBtn.addEventListener('click', () => openSearch(''));
 		}
 
 		// Copy address to clipboard
@@ -5474,6 +5481,12 @@ ${generatePasskeyWalletStyles()}
 					closeSearch();
 				}
 			});
+		}
+
+		// Search button click handler
+		const searchBtn = document.getElementById('search-btn');
+		if (searchBtn) {
+			searchBtn.addEventListener('click', () => openSearch(''));
 		}
 
 		// ===== UPLOAD & CONTENT FUNCTIONALITY =====

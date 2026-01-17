@@ -1,4 +1,5 @@
 import type { Env } from '../types'
+import { relaySignedTransaction } from '../utils/transactions'
 
 interface QueuedBid {
 	name: string
@@ -6,6 +7,14 @@ interface QueuedBid {
 	amount: number
 	executeAt: number
 	createdAt: number
+	autoRelay?: boolean
+	txBytes?: string
+	signatures?: string[]
+	status?: 'queued' | 'submitting' | 'submitted' | 'failed'
+	submittedAt?: number
+	lastAttemptAt?: number
+	lastError?: string
+	resultDigest?: string
 }
 
 /**
@@ -67,6 +76,8 @@ async function handleCreateBid(
 		bidder?: string
 		amount?: number
 		executeAt?: number
+		txBytes?: string
+		signatures?: string[] | string
 	}
 
 	const { name, bidder, amount, executeAt } = body
@@ -84,6 +95,16 @@ async function handleCreateBid(
 	}
 
 	const cleanName = name.toLowerCase().replace(/\.sui$/i, '')
+	const offlineTxBytes = typeof body.txBytes === 'string' ? body.txBytes.trim() : ''
+	const offlineSignatures = parseSignatureInput(body.signatures)
+
+	if (offlineTxBytes && offlineSignatures.length === 0) {
+		return jsonResponse(
+			{ error: 'Signatures required when attaching offline transaction bytes' },
+			400,
+			corsHeaders,
+		)
+	}
 
 	// Create the bid object
 	const bid: QueuedBid = {
@@ -92,14 +113,15 @@ async function handleCreateBid(
 		amount,
 		executeAt,
 		createdAt: Date.now(),
+		autoRelay: Boolean(offlineTxBytes && offlineSignatures.length),
+		txBytes: offlineTxBytes || undefined,
+		signatures: offlineSignatures.length ? offlineSignatures : undefined,
+		status: offlineTxBytes ? 'queued' : undefined,
 	}
 
 	// Store in KV with composite key: bid:{name}:{bidder}
-	const bidKey = `bid:${cleanName}:${bidder}`
-	await env.CACHE.put(bidKey, JSON.stringify(bid), {
-		// Expire after execution time + 1 day buffer
-		expirationTtl: Math.max(Math.ceil((executeAt - Date.now()) / 1000) + 86400, 86400),
-	})
+	const bidKey = buildBidKey(cleanName, bidder)
+	await saveBidRecord(env, bidKey, bid)
 
 	// Also maintain an index of all bids for this name
 	const indexKey = `bids:${cleanName}`
@@ -109,7 +131,7 @@ async function handleCreateBid(
 	if (!bidders.includes(bidder)) {
 		bidders.push(bidder)
 		await env.CACHE.put(indexKey, JSON.stringify(bidders), {
-			expirationTtl: Math.max(Math.ceil((executeAt - Date.now()) / 1000) + 86400, 86400),
+			expirationTtl: Math.max(getBidTtl(bid), 86400),
 		})
 	}
 
@@ -150,14 +172,30 @@ async function handleGetBids(
 
 	const bidders: string[] = JSON.parse(index)
 	const bids: QueuedBid[] = []
+	const nextBidders: string[] = []
 
-	for (const b of bidders) {
-		const bidKey = `bid:${cleanName}:${b}`
+	for (const bidderId of bidders) {
+		const bidKey = buildBidKey(cleanName, bidderId)
 		const bidData = await env.CACHE.get(bidKey)
-		if (bidData) {
-			bids.push(JSON.parse(bidData))
+		if (!bidData) {
+			continue
 		}
+
+		let bid = JSON.parse(bidData) as QueuedBid
+		if (shouldAttemptAutoRelay(bid)) {
+			bid = await maybeAutoSubmitBid(env, cleanName, bidderId, bid)
+		}
+		bids.push(bid)
+		nextBidders.push(bidderId)
 	}
+
+	if (nextBidders.length === 0) {
+		await env.CACHE.delete(indexKey)
+		return jsonResponse({ bids: [] }, 200, corsHeaders)
+	}
+
+	const indexTtl = bids.reduce((max, bid) => Math.max(max, getBidTtl(bid)), 86400)
+	await env.CACHE.put(indexKey, JSON.stringify(nextBidders), { expirationTtl: indexTtl })
 
 	// Sort by amount descending (highest bid first)
 	bids.sort((a, b) => b.amount - a.amount)

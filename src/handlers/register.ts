@@ -1,5 +1,6 @@
 import type { Env } from '../types'
 import { jsonResponse } from '../utils/response'
+import { relaySignedTransaction } from '../utils/transactions'
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -514,38 +515,27 @@ export async function handleRegistrationSubmission(request: Request, env: Env): 
 		return jsonResponse({ error: 'At least one signature is required' }, 400, CORS_HEADERS)
 	}
 
-	const executionParams = [
+	const relay = await relaySignedTransaction(
+		env,
 		txBytes,
 		signatures,
-		{
-			showEffects: true,
-			showEvents: true,
-			showBalanceChanges: false,
-			showInput: false,
-			...(payload.options || {}),
-		},
+		(payload.options as Record<string, unknown>) || {},
 		payload.requestType || 'WaitForLocalExecution',
-	]
+	)
+	const status = relay.ok ? 200 : relay.status || 502
+	const body =
+		typeof relay.response === 'undefined'
+			? relay.ok
+				? { ok: true }
+				: { error: relay.error || 'Relay failed' }
+			: relay.response
 
-	try {
-		const rpcResponse = await fetch(env.SUI_RPC_URL, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				jsonrpc: '2.0',
-				id: Date.now(),
-				method: 'sui_executeTransactionBlock',
-				params: executionParams,
-			}),
-		})
-
-		const rpcJson = await rpcResponse.json()
-		const status = rpcJson?.error ? 502 : rpcResponse.status
-		return jsonResponse(rpcJson, status, CORS_HEADERS)
-	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Unable to reach Sui RPC'
-		return jsonResponse({ error: message }, 502, CORS_HEADERS)
+	// Ensure error message is surfaced even if RPC response omits details
+	if (!relay.ok && relay.error && body && typeof body === 'object' && !('error' in body)) {
+		Object.assign(body as Record<string, unknown>, { error: relay.error })
 	}
+
+	return jsonResponse(body, status, CORS_HEADERS)
 }
 
 function escapeHtml(value: string): string {
