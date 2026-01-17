@@ -1754,51 +1754,142 @@ export function generateProfilePage(
 			height: 14px;
 		}
 
-		/* Map Section */
-		.map-section {
+		/* NFTs Section */
+		.nfts-section {
 			width: 100%;
 		}
-		.map-header {
+		.nfts-header {
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
 			margin-bottom: 16px;
 		}
-		.map-title {
+		.nfts-title {
 			display: flex;
 			align-items: center;
 			gap: 10px;
 		}
-		.map-title svg {
+		.nfts-title svg {
 			width: 20px;
 			height: 20px;
 			color: var(--accent);
 		}
-		.map-title h3 {
+		.nfts-title h3 {
 			margin: 0;
 			font-size: 1.1rem;
 			font-weight: 600;
 			color: var(--text);
 		}
-		.map-count {
+		.nfts-count {
 			font-size: 0.875rem;
 			color: var(--text-muted);
 			font-weight: 500;
 		}
-		.map-loading {
+		.nfts-loading {
 			display: flex;
-			flex-direction: column;
 			align-items: center;
 			gap: 12px;
+			padding: 40px;
+			justify-content: center;
 			color: var(--text-muted);
 		}
-		.map-loading .loading {
-			width: 24px;
-			height: 24px;
+		.nfts-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+			gap: 16px;
 		}
-		#domain-map-canvas {
+		.nft-card {
+			background: var(--card-bg);
+			border: 1px solid rgba(255, 255, 255, 0.1);
+			border-radius: 12px;
+			padding: 16px;
+			transition: all 0.2s;
+			cursor: pointer;
+			position: relative;
+			overflow: hidden;
+		}
+		.nft-card:hover {
+			border-color: var(--accent);
+			transform: translateY(-2px);
+			box-shadow: 0 8px 24px rgba(96, 165, 250, 0.15);
+		}
+		.nft-card-header {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			margin-bottom: 12px;
+		}
+		.nft-card-avatar {
+			width: 48px;
+			height: 48px;
+			border-radius: 8px;
+			background: linear-gradient(135deg, var(--accent), rgba(139, 92, 246, 0.8));
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 1.25rem;
+			font-weight: 700;
+			color: white;
+			flex-shrink: 0;
+		}
+		.nft-card-name {
+			flex: 1;
+			min-width: 0;
+		}
+		.nft-card-name .domain {
+			font-size: 0.95rem;
+			font-weight: 600;
+			color: var(--text);
 			display: block;
-			image-rendering: crisp-edges;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		.nft-card-name .suffix {
+			color: var(--text-muted);
+			font-weight: 400;
+		}
+		.nft-card-meta {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+			font-size: 0.875rem;
+		}
+		.nft-card-meta-item {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+		.nft-card-meta-label {
+			color: var(--text-muted);
+		}
+		.nft-card-meta-value {
+			color: var(--text);
+			font-weight: 500;
+			word-break: break-all;
+			text-align: right;
+		}
+		.nft-card-badge {
+			display: inline-block;
+			padding: 4px 8px;
+			border-radius: 6px;
+			font-size: 0.75rem;
+			font-weight: 600;
+			background: var(--accent-light);
+			color: var(--accent);
+		}
+		.nft-card-badge.current-tag {
+			background: var(--accent-light);
+			color: var(--accent);
+		}
+		.nft-card-arrow {
+			width: 16px;
+			height: 16px;
+			color: var(--text-muted);
+			transition: transform 0.2s;
+		}
+		.nft-card:hover .nft-card-arrow {
+			transform: translateX(4px);
 		}
 
 		/* Messaging Section (Separate Tab - Legacy) */
@@ -3442,9 +3533,9 @@ ${generatePasskeyWalletStyles()}
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
 						<span>Names</span>
 					</button>
-					<button class="sidebar-tab" data-tab="map">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-						<span>Map</span>
+					<button class="sidebar-tab" data-tab="nfts">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg>
+						<span>NFTs</span>
 					</button>
 					<button class="sidebar-tab" data-tab="passkey">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
@@ -3893,40 +3984,29 @@ ${generatePasskeyWalletStyles()}
 					</div>
 				</div><!-- end tab-names -->
 
-				<div class="tab-panel" id="tab-map">
-					<div class="map-section">
-						<div class="map-header">
-							<div class="map-title">
+				<div class="tab-panel" id="tab-nfts">
+					<div class="nfts-section">
+						<div class="nfts-header">
+							<div class="nfts-title">
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-									<circle cx="12" cy="10" r="3"></circle>
+									<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+									<line x1="9" y1="3" x2="9" y2="21"></line>
+									<line x1="15" y1="3" x2="15" y2="21"></line>
+									<line x1="3" y1="9" x2="21" y2="9"></line>
+									<line x1="3" y1="15" x2="21" y2="15"></line>
 								</svg>
-								<h3>Domain Map</h3>
+								<h3>SuiNS Registration NFTs</h3>
 							</div>
-							<span class="map-count" id="map-count">Loading...</span>
+							<span class="nfts-count" id="nfts-count">Loading...</span>
 						</div>
-						<div id="map-content" style="position: relative; width: 100%; height: 600px; background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%); border-radius: 12px; overflow: hidden;">
-							<canvas id="domain-map-canvas" style="width: 100%; height: 100%; cursor: grab;"></canvas>
-							<div class="map-loading" id="map-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-muted); text-align: center;">
+						<div id="nfts-content">
+							<div class="nfts-loading">
 								<span class="loading"></span>
-								<span>Loading domain map...</span>
-							</div>
-						</div>
-						<div class="map-legend" style="margin-top: 16px; padding: 12px; background: var(--card-bg); border-radius: 8px; font-size: 0.875rem; color: var(--text-muted);">
-							<p style="margin: 0 0 8px 0; font-weight: 500; color: var(--text);">Legend</p>
-							<div style="display: flex; gap: 16px; flex-wrap: wrap;">
-								<div style="display: flex; align-items: center; gap: 8px;">
-									<div style="width: 12px; height: 12px; border-radius: 50%; background: var(--accent);"></div>
-									<span>Current domain</span>
-								</div>
-								<div style="display: flex; align-items: center; gap: 8px;">
-									<div style="width: 12px; height: 12px; border-radius: 50%; background: rgba(255, 255, 255, 0.3);"></div>
-									<span>Other domains</span>
-								</div>
+								<span>Fetching SuiNS registration NFTs...</span>
 							</div>
 						</div>
 					</div>
-				</div><!-- end tab-map -->
+				</div><!-- end tab-nfts -->
 
 				<div class="tab-panel" id="tab-passkey">
 					${generatePasskeyWalletHTML()}
@@ -6433,324 +6513,242 @@ ${generatePasskeyWalletStyles()}
 			setTimeout(() => fetchOwnedNames(), 100);
 		}
 
-		// ========== DOMAIN MAP ==========
-		const mapContent = document.getElementById('map-content');
-		const mapCanvas = document.getElementById('domain-map-canvas');
-		const mapLoading = document.getElementById('map-loading');
-		const mapCountEl = document.getElementById('map-count');
-		let mapDomains = [];
-		let mapNextCursor = null;
-		let mapHasMore = true;
-		let mapLoadingState = false;
-		let mapCtx = null;
-		let mapScale = 1;
-		let mapOffsetX = 0;
-		let mapOffsetY = 0;
-		let isDragging = false;
-		let dragStartX = 0;
-		let dragStartY = 0;
-		let hoveredDomain = null;
+		// ========== SUINS REGISTRATION NFTS ==========
+		const nftsContent = document.getElementById('nfts-content');
+		const nftsCountEl = document.getElementById('nfts-count');
+		let allNFTs = [];
+		let nftsNextCursor = null;
+		let nftsHasMore = true;
+		let nftsLoading = false;
 
-		// Initialize canvas
-		function initMapCanvas() {
-			if (!mapCanvas) return;
-			mapCtx = mapCanvas.getContext('2d');
-			if (!mapCtx) return;
-
-			// Set canvas size
-			const rect = mapContent.getBoundingClientRect();
-			mapCanvas.width = rect.width;
-			mapCanvas.height = rect.height;
-
-			// Center the map initially
-			mapOffsetX = rect.width / 2;
-			mapOffsetY = rect.height / 2;
-			mapScale = 1;
-
-			// Handle resize
-			const resizeObserver = new ResizeObserver(() => {
-				const rect = mapContent.getBoundingClientRect();
-				mapCanvas.width = rect.width;
-				mapCanvas.height = rect.height;
-				renderMap();
-			});
-			resizeObserver.observe(mapContent);
-		}
-
-		// Hash function to convert domain name to consistent coordinates
-		function hashDomain(domain) {
-			let hash = 0;
-			for (let i = 0; i < domain.length; i++) {
-				const char = domain.charCodeAt(i);
-				hash = ((hash << 5) - hash) + char;
-				hash = hash & hash; // Convert to 32bit integer
-			}
-			return Math.abs(hash);
-		}
-
-		// Convert domain name to map coordinates (0-1 range)
-		function domainToCoords(domain) {
-			const hash = hashDomain(domain);
-			// Use hash to create pseudo-random but consistent coordinates
-			const x = (hash % 1000) / 1000;
-			const y = ((hash * 7) % 1000) / 1000; // Multiply by prime for better distribution
-			return { x, y };
-		}
-
-		// Fetch all domains for the map
-		async function fetchMapDomains(cursor = null) {
-			if (mapLoadingState) return;
-			mapLoadingState = true;
+		// Fetch all SuiNS registration NFTs owned by the address
+		async function fetchNFTs(cursor = null) {
+			if (nftsLoading) return;
+			nftsLoading = true;
 
 			try {
 				const suiClient = new SuiClient({ url: RPC_URL });
-				const response = await suiClient.resolveNameServiceNames({
+
+				// First, get all domain names owned by this address
+				const namesResponse = await suiClient.resolveNameServiceNames({
 					address: CURRENT_ADDRESS,
-					cursor: cursor,
-					limit: 50
+					cursor: null,
+					limit: 1000
 				});
 
+				const domainNames = namesResponse.data || [];
+				
+				// For each domain, fetch the NFT object using SuinsClient
+				const suinsClient = new SuinsClient({
+					client: suiClient as never,
+					network: NETWORK
+				});
+
+				const nftPromises = domainNames.map(async (domainName) => {
+					try {
+						const nameRecord = await suinsClient.getNameRecord(domainName);
+						if (nameRecord?.nftId) {
+							// Fetch the full object data
+							const objectData = await suiClient.getObject({
+								id: nameRecord.nftId,
+								options: {
+									showType: true,
+									showContent: true,
+									showDisplay: true,
+									showOwner: true
+								}
+							});
+							
+							return {
+								domain: domainName,
+								nftId: nameRecord.nftId,
+								objectData: objectData.data,
+								expirationTimestampMs: nameRecord.expirationTimestampMs
+							};
+						}
+					} catch (e) {
+						console.error('Error fetching NFT for domain:', domainName, e);
+						return null;
+					}
+				});
+
+				const nftResults = await Promise.all(nftPromises);
+				const validNFTs = nftResults.filter(nft => nft !== null);
+				
+				allNFTs = cursor ? [...allNFTs, ...validNFTs] : validNFTs;
+				nftsHasMore = false; // We fetched all domains at once
+				nftsNextCursor = null;
+
 				if (response.data && response.data.length > 0) {
-					mapDomains = cursor ? [...mapDomains, ...response.data] : response.data;
+					allNFTs = cursor ? [...allNFTs, ...response.data] : response.data;
 				}
 
-				mapNextCursor = response.nextCursor;
-				mapHasMore = response.hasNextPage || false;
+				nftsNextCursor = response.nextCursor;
+				nftsHasMore = response.hasNextPage || false;
 
-				if (mapHasMore && mapNextCursor) {
-					// Continue fetching until we have all domains
-					await fetchMapDomains(mapNextCursor);
+				renderNFTs();
+
+				// Continue fetching if there are more
+				if (nftsHasMore && nftsNextCursor) {
+					await fetchNFTs(nftsNextCursor);
 				} else {
-					// All domains loaded, render map
-					renderMap();
-					if (mapLoading) mapLoading.style.display = 'none';
-					mapCountEl.textContent = String(mapDomains.length);
+					nftsCountEl.textContent = nftsHasMore ? \`\${allNFTs.length}+\` : String(allNFTs.length);
 				}
 			} catch (error) {
-				console.error('Failed to fetch domains for map:', error);
-				if (mapLoading) {
-					mapLoading.innerHTML = \`
-						<div style="color: #f87171;">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px; margin: 0 auto 8px;">
-								<circle cx="12" cy="12" r="10"></circle>
-								<line x1="12" y1="8" x2="12" y2="12"></line>
-								<line x1="12" y1="16" x2="12.01" y2="16"></line>
-							</svg>
-							<p>\${escapeHtmlJs(error.message || 'Failed to load domains')}</p>
-							<button onclick="location.reload()" style="margin-top: 8px; padding: 6px 12px; background: #60a5fa; border: none; border-radius: 6px; color: white; cursor: pointer;">Retry</button>
-						</div>
-					\`;
-				}
+				console.error('Failed to fetch NFTs:', error);
+				renderNFTsError(error.message || 'Failed to load NFTs');
 			} finally {
-				mapLoadingState = false;
+				nftsLoading = false;
 			}
 		}
 
-		// Render the map
-		function renderMap() {
-			if (!mapCtx || !mapCanvas) return;
-			
-			if (mapDomains.length === 0) {
-				// Show empty state
-				mapCtx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-				mapCtx.font = '16px system-ui';
-				mapCtx.textAlign = 'center';
-				mapCtx.fillText('No domains to display', mapCanvas.width / 2, mapCanvas.height / 2);
+
+		// Render the NFTs grid
+		function renderNFTs() {
+			if (!nftsContent) return;
+
+			if (allNFTs.length === 0) {
+				nftsCountEl.textContent = '0';
+				nftsContent.innerHTML = \`
+					<div class="names-empty">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+							<line x1="9" y1="3" x2="9" y2="21"></line>
+							<line x1="15" y1="3" x2="15" y2="21"></line>
+							<line x1="3" y1="9" x2="21" y2="9"></line>
+							<line x1="3" y1="15" x2="21" y2="15"></line>
+						</svg>
+						<p>No SuiNS registration NFTs found</p>
+						<span class="hint">This address doesn't own any SuiNS registration NFTs</span>
+					</div>
+				\`;
 				return;
 			}
 
-			const width = mapCanvas.width;
-			const height = mapCanvas.height;
+			nftsCountEl.textContent = nftsHasMore ? \`\${allNFTs.length}+\` : String(allNFTs.length);
 
-			// Clear canvas
-			mapCtx.clearRect(0, 0, width, height);
+			const cardsHtml = allNFTs.map(nft => {
+				const objectId = nft.nftId || 'Unknown';
+				const domain = nft.domain || '';
+				const cleanedName = domain ? domain.replace(/\\.sui$/i, '') : null;
+				const isCurrentName = cleanedName && cleanedName.toLowerCase() === NAME.toLowerCase();
+				const initial = cleanedName ? cleanedName.charAt(0).toUpperCase() : '?';
+				const profileUrl = cleanedName ? \`https://\${cleanedName}.sui.ski\` : null;
+				const explorerUrl = \`\${explorerBase}/object/\${objectId}\`;
 
-			// Draw grid background
-			mapCtx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-			mapCtx.lineWidth = 1;
-			const gridSize = 50 * mapScale;
-			for (let x = -mapOffsetX % gridSize; x < width; x += gridSize) {
-				mapCtx.beginPath();
-				mapCtx.moveTo(x, 0);
-				mapCtx.lineTo(x, height);
-				mapCtx.stroke();
-			}
-			for (let y = -mapOffsetY % gridSize; y < height; y += gridSize) {
-				mapCtx.beginPath();
-				mapCtx.moveTo(0, y);
-				mapCtx.lineTo(width, y);
-				mapCtx.stroke();
-			}
-
-			// Draw connections between domains (light lines)
-			mapCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-			mapCtx.lineWidth = 1;
-			for (let i = 0; i < mapDomains.length; i++) {
-				for (let j = i + 1; j < mapDomains.length; j++) {
-					const coords1 = domainToCoords(mapDomains[i]);
-					const coords2 = domainToCoords(mapDomains[j]);
-					const x1 = (coords1.x - 0.5) * width * mapScale + mapOffsetX;
-					const y1 = (coords1.y - 0.5) * height * mapScale + mapOffsetY;
-					const x2 = (coords2.x - 0.5) * width * mapScale + mapOffsetX;
-					const y2 = (coords2.y - 0.5) * height * mapScale + mapOffsetY;
-					
-					// Only draw if domains are close enough
-					const dist = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-					if (dist < 200) {
-						mapCtx.beginPath();
-						mapCtx.moveTo(x1, y1);
-						mapCtx.lineTo(x2, y2);
-						mapCtx.stroke();
-					}
-				}
-			}
-
-			// Draw domain markers
-			mapDomains.forEach(domain => {
-				const cleanedName = domain.replace(/\\.sui$/i, '');
-				const isCurrentName = cleanedName.toLowerCase() === NAME.toLowerCase();
-				const coords = domainToCoords(domain);
-				// Center coordinates around 0,0 and scale
-				const x = (coords.x - 0.5) * width * mapScale + mapOffsetX;
-				const y = (coords.y - 0.5) * height * mapScale + mapOffsetY;
-
-				// Skip if outside viewport
-				if (x < -20 || x > width + 20 || y < -20 || y > height + 20) return;
-
-				// Draw marker
-				const radius = isCurrentName ? 8 : 5;
-				const color = isCurrentName ? '#60a5fa' : 'rgba(255, 255, 255, 0.5)';
-				
-				// Outer glow for current domain
-				if (isCurrentName) {
-					mapCtx.shadowBlur = 10;
-					mapCtx.shadowColor = '#60a5fa';
-				} else {
-					mapCtx.shadowBlur = 0;
-				}
-
-				mapCtx.fillStyle = color;
-				mapCtx.beginPath();
-				mapCtx.arc(x, y, radius, 0, Math.PI * 2);
-				mapCtx.fill();
-
-				// Draw domain name on hover
-				if (hoveredDomain === domain) {
-					mapCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-					mapCtx.fillRect(x - 40, y - 30, 80, 20);
-					mapCtx.fillStyle = 'white';
-					mapCtx.font = '12px system-ui';
-					mapCtx.textAlign = 'center';
-					mapCtx.fillText(cleanedName, x, y - 15);
-				}
-			});
-
-			// Reset shadow
-			mapCtx.shadowBlur = 0;
-		}
-
-		// Mouse interaction
-		if (mapCanvas) {
-			mapCanvas.addEventListener('mousedown', (e) => {
-				isDragging = true;
-				const rect = mapCanvas.getBoundingClientRect();
-				dragStartX = e.clientX - mapOffsetX;
-				dragStartY = e.clientY - mapOffsetY;
-				mapCanvas.style.cursor = 'grabbing';
-			});
-
-			mapCanvas.addEventListener('mousemove', (e) => {
-				const rect = mapCanvas.getBoundingClientRect();
-				if (isDragging) {
-					mapOffsetX = e.clientX - dragStartX;
-					mapOffsetY = e.clientY - dragStartY;
-					renderMap();
-				} else {
-					// Check hover
-					const x = e.clientX - rect.left;
-					const y = e.clientY - rect.top;
-					
-					let found = null;
-					const width = mapCanvas.width;
-					const height = mapCanvas.height;
-					
-					for (const domain of mapDomains) {
-						const coords = domainToCoords(domain);
-						const domX = (coords.x - 0.5) * width * mapScale + mapOffsetX;
-						const domY = (coords.y - 0.5) * height * mapScale + mapOffsetY;
-						const dist = Math.sqrt((x - domX) ** 2 + (y - domY) ** 2);
-						if (dist < 15) {
-							found = domain;
-							break;
+				// Extract expiration if available
+				let expirationText = '';
+				try {
+					if (nft.expirationTimestampMs) {
+						const expMs = Number(nft.expirationTimestampMs);
+						if (expMs) {
+							const expDate = new Date(expMs);
+							expirationText = expDate.toLocaleDateString();
 						}
 					}
-					
-					if (found !== hoveredDomain) {
-						hoveredDomain = found;
-						mapCanvas.style.cursor = found ? 'pointer' : 'grab';
-						renderMap();
-					}
+				} catch (e) {}
+
+				return \`
+					<div class="nft-card" onclick="\${profileUrl ? \`window.location.href='\${profileUrl}'\` : ''}">
+						<div class="nft-card-header">
+							<div class="nft-card-avatar">\${initial}</div>
+							<div class="nft-card-name">
+								<span class="domain">\${cleanedName ? escapeHtmlJs(cleanedName) : 'Unknown'}<span class="suffix">.sui</span></span>
+							</div>
+							\${isCurrentName ? '<span class="nft-card-badge current-tag">Current</span>' : ''}
+						</div>
+						<div class="nft-card-meta">
+							<div class="nft-card-meta-item">
+								<span class="nft-card-meta-label">Object ID:</span>
+								<span class="nft-card-meta-value" style="font-family: monospace; font-size: 0.75rem;">\${objectId.slice(0, 8)}...</span>
+							</div>
+							\${expirationText ? \`
+								<div class="nft-card-meta-item">
+									<span class="nft-card-meta-label">Expires:</span>
+									<span class="nft-card-meta-value">\${expirationText}</span>
+								</div>
+							\` : ''}
+							<div class="nft-card-meta-item" style="margin-top: 8px;">
+								<a href="\${explorerUrl}" target="_blank" onclick="event.stopPropagation();" style="color: var(--accent); text-decoration: none; font-size: 0.875rem;">
+									View on Explorer →
+								</a>
+							</div>
+						</div>
+					</div>
+				\`;
+			}).join('');
+
+			nftsContent.innerHTML = \`
+				<div class="nfts-grid">
+					\${cardsHtml}
+				</div>
+				\${nftsHasMore ? \`
+					<div class="names-load-more" style="margin-top: 16px; text-align: center;">
+						<button id="load-more-nfts-btn" style="padding: 10px 20px; background: var(--accent-light); color: var(--accent); border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Load More NFTs</button>
+					</div>
+				\` : ''}
+			\`;
+
+			// Attach load more handler
+			const loadMoreBtn = document.getElementById('load-more-nfts-btn');
+			if (loadMoreBtn) {
+				loadMoreBtn.addEventListener('click', async () => {
+					loadMoreBtn.disabled = true;
+					loadMoreBtn.textContent = 'Loading...';
+					await fetchNFTs(nftsNextCursor);
+				});
+			}
+		}
+
+		// Render error state
+		function renderNFTsError(message) {
+			if (!nftsContent) return;
+			nftsCountEl.textContent = '-';
+			nftsContent.innerHTML = \`
+				<div class="names-error">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10"></circle>
+						<line x1="12" y1="8" x2="12" y2="12"></line>
+						<line x1="12" y1="16" x2="12.01" y2="16"></line>
+					</svg>
+					<p>\${escapeHtmlJs(message)}</p>
+					<button class="names-retry-btn" id="retry-nfts-btn">Try Again</button>
+				</div>
+			\`;
+
+			const retryBtn = document.getElementById('retry-nfts-btn');
+			if (retryBtn) {
+				retryBtn.addEventListener('click', () => {
+					nftsContent.innerHTML = \`
+						<div class="nfts-loading">
+							<span class="loading"></span>
+							<span>Fetching SuiNS registration NFTs...</span>
+						</div>
+					\`;
+					allNFTs = [];
+					nftsNextCursor = null;
+					nftsHasMore = true;
+					fetchNFTs();
+				});
+			}
+		}
+
+		// Load NFTs when NFTs tab is first activated
+		let nftsLoaded = false;
+		const nftsTab = document.querySelector('[data-tab="nfts"]');
+		if (nftsTab) {
+			nftsTab.addEventListener('click', () => {
+				if (!nftsLoaded) {
+					nftsLoaded = true;
+					fetchNFTs();
 				}
-			});
-
-			mapCanvas.addEventListener('mouseup', () => {
-				isDragging = false;
-				mapCanvas.style.cursor = hoveredDomain ? 'pointer' : 'grab';
-			});
-
-			mapCanvas.addEventListener('mouseleave', () => {
-				isDragging = false;
-				hoveredDomain = null;
-				mapCanvas.style.cursor = 'grab';
-				renderMap();
-			});
-
-			mapCanvas.addEventListener('click', (e) => {
-				if (hoveredDomain) {
-					const cleanedName = hoveredDomain.replace(/\\.sui$/i, '');
-					window.location.href = \`https://\${cleanedName}.sui.ski\`;
-				}
-			});
-
-			// Zoom with wheel
-			mapCanvas.addEventListener('wheel', (e) => {
-				e.preventDefault();
-				const delta = e.deltaY > 0 ? 0.9 : 1.1;
-				const oldScale = mapScale;
-				mapScale = Math.max(0.5, Math.min(3, mapScale * delta));
-				
-				// Adjust offset to zoom towards mouse position
-				const rect = mapCanvas.getBoundingClientRect();
-				const mouseX = e.clientX - rect.left;
-				const mouseY = e.clientY - rect.top;
-				const scaleChange = mapScale / oldScale;
-				mapOffsetX = mouseX - (mouseX - mapOffsetX) * scaleChange;
-				mapOffsetY = mouseY - (mouseY - mapOffsetY) * scaleChange;
-				
-				renderMap();
 			});
 		}
 
-		// Load map when map tab is activated
-		let mapLoaded = false;
-		const mapTab = document.querySelector('[data-tab="map"]');
-		if (mapTab) {
-			mapTab.addEventListener('click', () => {
-				if (!mapLoaded) {
-					mapLoaded = true;
-					initMapCanvas();
-					fetchMapDomains();
-				}
-			});
-		}
-
-		// Also load if map tab is already active
-		if (activeTab === 'map' && !mapLoaded) {
-			mapLoaded = true;
-			setTimeout(() => {
-				initMapCanvas();
-				fetchMapDomains();
-			}, 100);
+		// Also load if NFTs tab is already active (from localStorage)
+		if (activeTab === 'nfts' && !nftsLoaded) {
+			nftsLoaded = true;
+			setTimeout(() => fetchNFTs(), 100);
 		}
 
 		// ========== COUNTDOWN HERO ANIMATION ==========
