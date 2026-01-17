@@ -2048,6 +2048,66 @@ export const profileStyles = `
 			color: var(--text-muted);
 			line-height: 1.4;
 		}
+		.grace-skill-usd {
+			font-size: 0.85rem;
+			color: var(--text-muted);
+			font-family: var(--font-mono, SFMono-Regular, monospace);
+		}
+		.premium-graph-container {
+			margin: 10px 0;
+			position: relative;
+		}
+		.premium-decay-graph {
+			width: 100%;
+			height: 80px;
+			border-radius: 6px;
+			background: rgba(0, 0, 0, 0.2);
+			overflow: visible;
+		}
+		.graph-grid {
+			stroke: rgba(255, 255, 255, 0.1);
+			stroke-width: 1;
+			stroke-dasharray: 4 4;
+		}
+		.decay-area {
+			fill: url(#decayGradient);
+		}
+		.decay-curve {
+			fill: none;
+			stroke: var(--accent);
+			stroke-width: 2;
+			stroke-linecap: round;
+		}
+		.decay-marker {
+			fill: var(--accent);
+			stroke: var(--bg);
+			stroke-width: 2;
+			filter: drop-shadow(0 0 4px var(--accent));
+			transition: cx 0.3s ease, cy 0.3s ease;
+		}
+		.decay-marker-line {
+			stroke: var(--accent);
+			stroke-width: 1;
+			stroke-dasharray: 3 3;
+			opacity: 0.5;
+			transition: x1 0.3s ease, y1 0.3s ease, x2 0.3s ease;
+		}
+		.graph-labels {
+			display: flex;
+			justify-content: space-between;
+			font-size: 0.65rem;
+			color: var(--text-muted);
+			margin-top: 4px;
+			padding: 0 2px;
+		}
+		.graph-time-labels {
+			display: flex;
+			justify-content: space-between;
+			font-size: 0.6rem;
+			color: var(--text-muted);
+			opacity: 0.7;
+			padding: 0 2px;
+		}
 		.grace-period-actions {
 			flex-shrink: 0;
 			display: flex;

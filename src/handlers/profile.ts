@@ -266,11 +266,44 @@ export function generateProfilePage(
 							</div>
 						</div>
 						<div class="grace-skill-counter">
-							<div class="grace-skill-label">$skill-creator reserve estimate</div>
+							<div class="grace-skill-label">Premium Estimate</div>
+							<div class="premium-graph-container">
+								<svg class="premium-decay-graph" viewBox="0 0 300 80" preserveAspectRatio="none">
+									<defs>
+										<linearGradient id="decayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+											<stop offset="0%" style="stop-color:var(--accent);stop-opacity:0.3"/>
+											<stop offset="100%" style="stop-color:var(--accent);stop-opacity:0.05"/>
+										</linearGradient>
+									</defs>
+									<!-- Grid lines -->
+									<line x1="0" y1="20" x2="300" y2="20" class="graph-grid"/>
+									<line x1="0" y1="40" x2="300" y2="40" class="graph-grid"/>
+									<line x1="0" y1="60" x2="300" y2="60" class="graph-grid"/>
+									<!-- Exponential decay curve (filled area) -->
+									<path id="decay-area" class="decay-area" d="M0,10 Q75,12 150,30 T300,70 L300,80 L0,80 Z"/>
+									<!-- Exponential decay curve (line) -->
+									<path id="decay-curve" class="decay-curve" d="M0,10 Q75,12 150,30 T300,70"/>
+									<!-- Current position marker -->
+									<circle id="decay-marker" class="decay-marker" cx="0" cy="10" r="5"/>
+									<!-- Vertical line from marker to bottom -->
+									<line id="decay-marker-line" class="decay-marker-line" x1="0" y1="10" x2="0" y2="80"/>
+								</svg>
+								<div class="graph-labels">
+									<span class="graph-label-start">100M SUI</span>
+									<span class="graph-label-end">0 SUI</span>
+								</div>
+								<div class="graph-time-labels">
+									<span>Day 0</span>
+									<span>Day 30</span>
+								</div>
+							</div>
 							<div class="grace-skill-value">
 								<span id="grace-skill-value">100,000,000</span>
+								<span class="grace-skill-unit">SUI</span>
 							</div>
-							<div class="grace-skill-hint">Exponential decay projected over the 30-day grace window.</div>
+							<div class="grace-skill-usd">
+								≈ $<span id="grace-skill-usd">--</span> USD
+							</div>
 						</div>
 					</div>
 				</div>
@@ -4479,6 +4512,94 @@ export function generateProfilePage(
 		const graceSecs = document.getElementById('grace-secs');
 		const graceBanner = document.getElementById('grace-period-banner');
 		const graceSkillValue = document.getElementById('grace-skill-value');
+		const graceSkillUsd = document.getElementById('grace-skill-usd');
+		const decayMarker = document.getElementById('decay-marker');
+		const decayMarkerLine = document.getElementById('decay-marker-line');
+		const decayCurve = document.getElementById('decay-curve');
+		const decayArea = document.getElementById('decay-area');
+
+		// SUI price state
+		let suiPriceUsd = null;
+		const usdFormatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+		// Fetch SUI price from CoinGecko
+		async function fetchSuiPrice() {
+			try {
+				const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd');
+				const data = await res.json();
+				if (data.sui && data.sui.usd) {
+					suiPriceUsd = data.sui.usd;
+				}
+			} catch (e) {
+				console.warn('Failed to fetch SUI price:', e);
+			}
+		}
+
+		// Calculate exponential decay value at a given progress (0 to 1)
+		function getDecayValue(progress) {
+			// Exponential decay: starts at 100M, approaches 0
+			// Using formula: value = maxSupply * e^(-k * progress) where k controls decay rate
+			const k = 5; // Decay constant - higher = faster initial decay
+			return SKILL_CREATOR_MAX_SUPPLY * Math.exp(-k * progress);
+		}
+
+		// Generate SVG path for exponential decay curve
+		function generateDecayCurvePath() {
+			const width = 300;
+			const height = 80;
+			const padding = 10;
+			const points = [];
+
+			for (let i = 0; i <= 100; i++) {
+				const progress = i / 100;
+				const value = getDecayValue(progress);
+				const x = progress * width;
+				// Map value (0 to 100M) to y (height-padding to padding)
+				const normalizedValue = value / SKILL_CREATOR_MAX_SUPPLY;
+				const y = padding + (1 - normalizedValue) * (height - padding * 2);
+				points.push({ x, y });
+			}
+
+			// Build curve path
+			let curvePath = 'M' + points[0].x + ',' + points[0].y;
+			for (let i = 1; i < points.length; i++) {
+				curvePath += ' L' + points[i].x + ',' + points[i].y;
+			}
+
+			// Build area path (curve + bottom edge)
+			const areaPath = curvePath + ' L' + width + ',' + height + ' L0,' + height + ' Z';
+
+			return { curvePath, areaPath };
+		}
+
+		// Update graph marker position based on progress
+		function updateGraphMarker(progress) {
+			if (!decayMarker || !decayMarkerLine) return;
+
+			const width = 300;
+			const height = 80;
+			const padding = 10;
+
+			const clampedProgress = Math.max(0, Math.min(1, progress));
+			const value = getDecayValue(clampedProgress);
+			const x = clampedProgress * width;
+			const normalizedValue = value / SKILL_CREATOR_MAX_SUPPLY;
+			const y = padding + (1 - normalizedValue) * (height - padding * 2);
+
+			decayMarker.setAttribute('cx', x.toString());
+			decayMarker.setAttribute('cy', y.toString());
+			decayMarkerLine.setAttribute('x1', x.toString());
+			decayMarkerLine.setAttribute('y1', y.toString());
+			decayMarkerLine.setAttribute('x2', x.toString());
+		}
+
+		// Initialize the decay curve
+		function initDecayCurve() {
+			if (!decayCurve || !decayArea) return;
+			const { curvePath, areaPath } = generateDecayCurvePath();
+			decayCurve.setAttribute('d', curvePath);
+			decayArea.setAttribute('d', areaPath);
+		}
 
 		function updateGraceSkillCounter(currentTime = Date.now()) {
 			if (!graceSkillValue || !EXPIRATION_MS) return;
@@ -4486,18 +4607,27 @@ export function generateProfilePage(
 			const totalWindow = AVAILABLE_AT - EXPIRATION_MS;
 			if (totalWindow <= 0) {
 				graceSkillValue.textContent = '0';
+				if (graceSkillUsd) graceSkillUsd.textContent = '0';
+				updateGraphMarker(1);
 				return;
 			}
 
 			const clampedTime = Math.min(Math.max(currentTime, EXPIRATION_MS), AVAILABLE_AT);
 			const elapsed = clampedTime - EXPIRATION_MS;
-			const decayRate = Math.log(SKILL_CREATOR_MAX_SUPPLY) / totalWindow;
-			const exponent = -decayRate * elapsed;
-			const remainingValue = Math.max(
-				0,
-				Math.round(SKILL_CREATOR_MAX_SUPPLY * Math.exp(exponent)),
-			);
+			const progress = elapsed / totalWindow;
+
+			// Calculate remaining value using same exponential decay
+			const remainingValue = Math.max(0, Math.round(getDecayValue(progress)));
 			graceSkillValue.textContent = numberFormatter.format(remainingValue);
+
+			// Update USD value if price is available
+			if (graceSkillUsd && suiPriceUsd !== null) {
+				const usdValue = remainingValue * suiPriceUsd;
+				graceSkillUsd.textContent = usdFormatter.format(usdValue);
+			}
+
+			// Update graph marker
+			updateGraphMarker(progress);
 		}
 
 		function updateGracePeriodCountdown() {
@@ -4538,6 +4668,12 @@ export function generateProfilePage(
 		}
 
 		if (IS_IN_GRACE_PERIOD && EXPIRATION_MS) {
+			// Initialize decay curve visualization
+			initDecayCurve();
+			// Fetch SUI price initially and every 60 seconds
+			fetchSuiPrice();
+			setInterval(fetchSuiPrice, 60000);
+			// Start countdown
 			updateGracePeriodCountdown();
 			setInterval(updateGracePeriodCountdown, 1000);
 		}
