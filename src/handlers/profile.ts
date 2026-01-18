@@ -4960,7 +4960,7 @@ export function generateProfilePage(
 			}
 
 			try {
-				// Fetch all names owned by this address
+				// Fetch all names owned by this address (grouped by target address)
 				const res = await fetch('/api/names/' + ownerAddr);
 				if (!res.ok) throw new Error('Failed to fetch');
 				const data = await res.json();
@@ -4976,7 +4976,7 @@ export function generateProfilePage(
 					return;
 				}
 
-				// Render grouped names
+				// Render grouped names by target address
 				let html = '';
 				const addresses = Object.keys(grouped).sort((a, b) => {
 					// Put 'unset' last

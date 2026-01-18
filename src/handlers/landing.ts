@@ -176,6 +176,7 @@ const LINKED_NAMES_CACHE_TTL = 300 // 5 minutes
 
 /**
  * Fetch all SuiNS names owned by an address with expiration and target address data
+ * Uses parallel batch fetching for target addresses to maximize performance
  */
 async function handleNamesByAddress(address: string, env: Env): Promise<Response> {
 	const corsHeaders = {
@@ -248,14 +249,21 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			cursor = response.hasNextPage ? response.nextCursor : null
 		} while (cursor)
 
-		// Fetch target addresses for each name
-		for (const nameInfo of allNames) {
+		// Fetch target addresses for all names in parallel (with concurrency limit)
+		const CONCURRENCY_LIMIT = 10
+		const fetchTargetAddress = async (nameInfo: NameInfo) => {
 			try {
 				const record = await suinsClient.getNameRecord(nameInfo.name)
 				nameInfo.targetAddress = record?.targetAddress || null
 			} catch {
 				// Skip if we can't fetch the record
 			}
+		}
+
+		// Process in batches to limit concurrent RPC calls
+		for (let i = 0; i < allNames.length; i += CONCURRENCY_LIMIT) {
+			const batch = allNames.slice(i, i + CONCURRENCY_LIMIT)
+			await Promise.all(batch.map(fetchTargetAddress))
 		}
 
 		// For each address group, mark the first name (alphabetically) as primary
