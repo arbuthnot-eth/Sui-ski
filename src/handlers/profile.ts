@@ -724,6 +724,22 @@ export function generateProfilePage(
 
 					<form id="mvr-register-form" style="display: none;">
 						<div style="display: grid; gap: 16px;">
+							<!-- Auto-fill section -->
+							<div style="padding: 16px; background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.2); border-radius: 10px;">
+								<label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--accent); margin-bottom: 8px;">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; display: inline; vertical-align: middle; margin-right: 4px;">
+										<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+									</svg>
+									Quick Fill (paste deployment output or MVR name)
+								</label>
+								<textarea id="mvr-autofill" placeholder="Paste deployment output, @name/package, or package ID..." style="width: 100%; padding: 12px; background: rgba(15, 18, 32, 0.8); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.85rem; font-family: monospace; min-height: 60px; resize: vertical;"></textarea>
+								<div style="display: flex; gap: 8px; margin-top: 8px;">
+									<button type="button" id="mvr-parse-btn" style="padding: 8px 16px; background: rgba(96, 165, 250, 0.2); border: 1px solid rgba(96, 165, 250, 0.3); border-radius: 6px; color: var(--accent); font-size: 0.85rem; cursor: pointer;">Parse & Fill</button>
+									<button type="button" id="mvr-ai-parse-btn" style="padding: 8px 16px; background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 6px; color: #a855f7; font-size: 0.85rem; cursor: pointer;">AI Parse</button>
+									<span id="mvr-parse-status" style="font-size: 0.8rem; color: var(--text-muted); align-self: center;"></span>
+								</div>
+							</div>
+
 							<div>
 								<label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">SuiNS Name</label>
 								<input type="text" id="mvr-suins-name" readonly style="width: 100%; padding: 12px; background: rgba(15, 18, 32, 0.6); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.95rem;" />
@@ -6285,6 +6301,157 @@ export function generateProfilePage(
 
 		// Make MVR update function globally available for wallet state changes
 		window.updateMvrSectionVisibility = updateMvrSectionVisibility;
+
+		// MVR Auto-fill parsing
+		const mvrAutofill = document.getElementById('mvr-autofill');
+		const mvrParseBtn = document.getElementById('mvr-parse-btn');
+		const mvrAiParseBtn = document.getElementById('mvr-ai-parse-btn');
+		const mvrParseStatus = document.getElementById('mvr-parse-status');
+
+		function parseMvrInput(text) {
+			const result = { packageName: null, packageAddress: null, upgradeCap: null };
+
+			// Try to parse MVR name format: @name/package or name/package
+			const mvrMatch = text.match(/@?([a-zA-Z0-9_-]+)\\/([a-zA-Z0-9_-]+)/);
+			if (mvrMatch) {
+				result.packageName = mvrMatch[2].toLowerCase();
+			}
+
+			// Find all 0x addresses (64 hex chars after 0x)
+			const addresses = text.match(/0x[a-fA-F0-9]{64}/g) || [];
+
+			// Try to identify which is package vs upgrade cap from context
+			const lines = text.split('\\n');
+			for (const line of lines) {
+				const lineLower = line.toLowerCase();
+				const addrMatch = line.match(/0x[a-fA-F0-9]{64}/);
+				if (addrMatch) {
+					if (lineLower.includes('package') && !lineLower.includes('upgrade') && !lineLower.includes('cap')) {
+						result.packageAddress = addrMatch[0];
+					} else if (lineLower.includes('upgradecap') || lineLower.includes('upgrade_cap') || (lineLower.includes('upgrade') && lineLower.includes('cap'))) {
+						result.upgradeCap = addrMatch[0];
+					}
+				}
+			}
+
+			// If we found addresses but couldn't identify them, use position heuristics
+			if (addresses.length >= 1 && !result.packageAddress) {
+				// First address is usually package ID in deployment output
+				result.packageAddress = addresses[0];
+			}
+			if (addresses.length >= 2 && !result.upgradeCap) {
+				// Second unique address might be upgrade cap
+				const unique = [...new Set(addresses)];
+				if (unique.length >= 2) {
+					result.upgradeCap = unique[1];
+				}
+			}
+
+			// Try to extract package name from text if not found
+			if (!result.packageName) {
+				// Look for common patterns in deployment output
+				const namePatterns = [
+					/package[:\\s]+["']?([a-zA-Z0-9_-]+)["']?/i,
+					/name[:\\s]+["']?([a-zA-Z0-9_-]+)["']?/i,
+					/publishing\\s+["']?([a-zA-Z0-9_-]+)["']?/i,
+				];
+				for (const pattern of namePatterns) {
+					const match = text.match(pattern);
+					if (match && match[1] && !['id', 'address', 'cap'].includes(match[1].toLowerCase())) {
+						result.packageName = match[1].toLowerCase().replace(/_/g, '-');
+						break;
+					}
+				}
+			}
+
+			return result;
+		}
+
+		function applyParsedResult(result) {
+			let filled = 0;
+			if (result.packageName && mvrPackageName) {
+				mvrPackageName.value = result.packageName;
+				filled++;
+			}
+			if (result.packageAddress && mvrPackageAddress) {
+				mvrPackageAddress.value = result.packageAddress;
+				filled++;
+			}
+			if (result.upgradeCap && mvrUpgradeCap) {
+				mvrUpgradeCap.value = result.upgradeCap;
+				filled++;
+			}
+			return filled;
+		}
+
+		if (mvrParseBtn) {
+			mvrParseBtn.addEventListener('click', () => {
+				const text = mvrAutofill?.value || '';
+				if (!text.trim()) {
+					mvrParseStatus.textContent = 'Paste some text first';
+					mvrParseStatus.style.color = '#f87171';
+					return;
+				}
+
+				const result = parseMvrInput(text);
+				const filled = applyParsedResult(result);
+
+				if (filled > 0) {
+					mvrParseStatus.textContent = 'Filled ' + filled + ' field(s)';
+					mvrParseStatus.style.color = '#34d399';
+				} else {
+					mvrParseStatus.textContent = 'Could not parse - try AI Parse';
+					mvrParseStatus.style.color = '#fbbf24';
+				}
+			});
+		}
+
+		if (mvrAiParseBtn) {
+			mvrAiParseBtn.addEventListener('click', async () => {
+				const text = mvrAutofill?.value || '';
+				if (!text.trim()) {
+					mvrParseStatus.textContent = 'Paste some text first';
+					mvrParseStatus.style.color = '#f87171';
+					return;
+				}
+
+				mvrAiParseBtn.disabled = true;
+				mvrParseStatus.textContent = 'AI parsing...';
+				mvrParseStatus.style.color = 'var(--text-muted)';
+
+				try {
+					const response = await fetch('/api/ai/parse-mvr', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ text, suinsName: NAME })
+					});
+
+					if (!response.ok) {
+						throw new Error('AI parsing failed');
+					}
+
+					const data = await response.json();
+					const filled = applyParsedResult(data);
+
+					if (filled > 0) {
+						mvrParseStatus.textContent = 'AI filled ' + filled + ' field(s)';
+						mvrParseStatus.style.color = '#a855f7';
+					} else {
+						mvrParseStatus.textContent = 'AI could not extract fields';
+						mvrParseStatus.style.color = '#fbbf24';
+					}
+				} catch (error) {
+					console.error('AI parse error:', error);
+					// Fall back to regex parsing
+					const result = parseMvrInput(text);
+					const filled = applyParsedResult(result);
+					mvrParseStatus.textContent = filled > 0 ? 'Filled ' + filled + ' (regex fallback)' : 'Parse failed';
+					mvrParseStatus.style.color = filled > 0 ? '#34d399' : '#f87171';
+				} finally {
+					mvrAiParseBtn.disabled = false;
+				}
+			});
+		}
 
 		if (premiumGraphContainer) {
 			const handlePointer = (event) => {

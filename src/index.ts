@@ -170,6 +170,11 @@ export default {
 			return handleMVRManagementRequest(request, env)
 		}
 
+		// AI parsing endpoint for MVR
+		if (url.pathname === '/api/ai/parse-mvr' && request.method === 'POST') {
+			return handleAiParseMvr(request, env)
+		}
+
 		// Messaging page
 		if (url.pathname === '/messages' || url.pathname === '/messages/') {
 			return handleMessagingPage(env)
@@ -1189,4 +1194,140 @@ async function handleNFTDetailsRequest(request: Request, env: Env): Promise<Resp
 		const message = error instanceof Error ? error.message : 'Failed to fetch NFT details'
 		return jsonResponse({ error: message }, 500)
 	}
+}
+
+/**
+ * Handle AI parsing request for MVR registration fields
+ * Uses OpenRouter to parse deployment output and extract package info
+ */
+async function handleAiParseMvr(request: Request, env: Env): Promise<Response> {
+	try {
+		const body = (await request.json()) as { text: string; suinsName?: string }
+		const { text, suinsName } = body
+
+		if (!text || typeof text !== 'string') {
+			return jsonResponse({ error: 'text field is required' }, 400)
+		}
+
+		// Check for OpenRouter API key
+		if (!env.OPENROUTER_API_KEY) {
+			// Fall back to regex parsing
+			return jsonResponse(parseWithRegex(text))
+		}
+
+		const prompt = `Extract package registration information from this text. Return ONLY a JSON object with these fields (use null if not found):
+- packageName: the package name (lowercase, hyphens ok, no underscores)
+- packageAddress: the package ID/address (0x followed by 64 hex characters)
+- upgradeCap: the UpgradeCap object ID (0x followed by 64 hex characters)
+
+Text to parse:
+${text.slice(0, 4000)}
+
+Respond with ONLY the JSON object, no explanation.`
+
+		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+				'Content-Type': 'application/json',
+				'HTTP-Referer': 'https://sui.ski',
+				'X-Title': 'sui.ski MVR Parser',
+			},
+			body: JSON.stringify({
+				model: 'google/gemini-2.0-flash-001',
+				messages: [{ role: 'user', content: prompt }],
+				max_tokens: 200,
+				temperature: 0,
+			}),
+		})
+
+		if (!response.ok) {
+			// Fall back to regex on API error
+			return jsonResponse(parseWithRegex(text))
+		}
+
+		const data = (await response.json()) as {
+			choices?: Array<{ message?: { content?: string } }>
+		}
+
+		const content = data.choices?.[0]?.message?.content?.trim() || ''
+
+		// Try to parse JSON from response
+		try {
+			// Extract JSON from response (handle markdown code blocks)
+			const jsonMatch = content.match(/\{[\s\S]*\}/)
+			if (jsonMatch) {
+				const parsed = JSON.parse(jsonMatch[0])
+				return jsonResponse({
+					packageName: parsed.packageName || null,
+					packageAddress: parsed.packageAddress || null,
+					upgradeCap: parsed.upgradeCap || null,
+				})
+			}
+		} catch {
+			// JSON parse failed, fall back to regex
+		}
+
+		return jsonResponse(parseWithRegex(text))
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'AI parsing failed'
+		return jsonResponse({ error: message }, 500)
+	}
+}
+
+/**
+ * Regex-based fallback parsing for MVR fields
+ */
+function parseWithRegex(text: string): {
+	packageName: string | null
+	packageAddress: string | null
+	upgradeCap: string | null
+} {
+	const result: { packageName: string | null; packageAddress: string | null; upgradeCap: string | null } = {
+		packageName: null,
+		packageAddress: null,
+		upgradeCap: null,
+	}
+
+	// Find all 0x addresses
+	const addresses = text.match(/0x[a-fA-F0-9]{64}/g) || []
+
+	// Try to identify addresses from context
+	const lines = text.split('\n')
+	for (const line of lines) {
+		const lower = line.toLowerCase()
+		const addr = line.match(/0x[a-fA-F0-9]{64}/)
+		if (addr) {
+			if (lower.includes('package') && !lower.includes('upgrade') && !lower.includes('cap')) {
+				result.packageAddress = addr[0]
+			} else if (lower.includes('upgradecap') || lower.includes('upgrade_cap') || (lower.includes('upgrade') && lower.includes('cap'))) {
+				result.upgradeCap = addr[0]
+			}
+		}
+	}
+
+	// Use position heuristics if needed
+	const unique = [...new Set(addresses)]
+	if (!result.packageAddress && unique.length >= 1) {
+		result.packageAddress = unique[0]
+	}
+	if (!result.upgradeCap && unique.length >= 2) {
+		result.upgradeCap = unique[1]
+	}
+
+	// Try to extract package name
+	const namePatterns = [
+		/package[:\s]+["']?([a-zA-Z0-9_-]+)["']?/i,
+		/name[:\s]+["']?([a-zA-Z0-9_-]+)["']?/i,
+		/publishing\s+["']?([a-zA-Z0-9_-]+)["']?/i,
+	]
+	for (const pattern of namePatterns) {
+		const match = text.match(pattern)
+		if (match && match[1] && !['id', 'address', 'cap', 'sui'].includes(match[1].toLowerCase())) {
+			result.packageName = match[1].toLowerCase().replace(/_/g, '-')
+			break
+		}
+	}
+
+	return result
 }

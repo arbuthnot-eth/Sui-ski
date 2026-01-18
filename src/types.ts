@@ -19,6 +19,8 @@ export interface Env {
 	// gRPC backend proxy configuration
 	GRPC_BACKEND_URL?: string
 	GRPC_BACKEND_API_KEY?: string
+	// OpenRouter API key for AI features
+	OPENROUTER_API_KEY?: string
 }
 
 export type RouteType = 'suins' | 'mvr' | 'content' | 'rpc' | 'root'
