@@ -4128,7 +4128,7 @@ export function generateProfilePage(
 				// Call the messaging contract to create/join channel and send message
 				// Note: This is a simplified version - full implementation needs channel creation first
 				tx.moveCall({
-					target: \`\${MESSAGING_CONTRACT}::message::send_text\`,
+					target: MESSAGING_CONTRACT + '::message::send_text',
 					arguments: [
 						tx.pure.address(RECIPIENT_ADDRESS),
 						tx.pure.string(message.slice(0, 512)),
