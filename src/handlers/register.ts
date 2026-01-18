@@ -13,6 +13,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 	const network = env.SUI_NETWORK || 'mainnet'
 	const isRegisterable = cleanName.length >= 3
 	const defaultExec = new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16)
+	const serializeJson = (value: unknown) =>
+		JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -371,8 +373,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 
 	<script>
 	(() => {
-		const NAME = '${escapeHtml(cleanName)}';
-		const NETWORK = '${escapeHtml(network)}';
+		const NAME = ${serializeJson(cleanName)};
+		const NETWORK = ${serializeJson(network)};
 		const CAN_REGISTER = ${isRegisterable ? 'true' : 'false'};
 
 		const bidListEl = document.getElementById('bid-list');

@@ -69,6 +69,28 @@ export function generateMessagingUI(suinsName: string, ownerAddress: string, env
 		env.MESSAGING_CONTRACT_ADDRESS ===
 		'0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d'
 	const isMainnetDeployment = isMainnet && hasContract && !isTestnetContract
+	const escapeHtml = (value: string) =>
+		value.replace(/[&<>"']/g, (char) => {
+			switch (char) {
+				case '&':
+					return '&amp;'
+				case '<':
+					return '&lt;'
+				case '>':
+					return '&gt;'
+				case '"':
+					return '&quot;'
+				case "'":
+					return '&#39;'
+				default:
+					return char
+			}
+		})
+	const serializeJson = (value: unknown) =>
+		JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
+	const safeSuinsName = escapeHtml(suinsName)
+	const suinsNameJson = serializeJson(suinsName)
+	const ownerAddressJson = serializeJson(ownerAddress)
 
 	return `
 		<div class="messaging-section">
@@ -117,11 +139,11 @@ export function generateMessagingUI(suinsName: string, ownerAddress: string, env
 				hasContract && (isMainnetDeployment || !isMainnet)
 					? `
 			<div class="messaging-cta">
-				<button class="messaging-button primary" onclick="openMessaging('${suinsName}', '${ownerAddress}')">
+				<button class="messaging-button primary" onclick='openMessaging(${suinsNameJson}, ${ownerAddressJson})'>
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
 					</svg>
-					Send Message to @${suinsName}
+					Send Message to @${safeSuinsName}
 				</button>
 				<p class="network-badge-small">${isMainnetDeployment ? '🚀 Mainnet (Alpha)' : '⚠️ Testnet'}</p>
 			</div>
