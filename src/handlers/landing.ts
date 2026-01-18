@@ -230,44 +230,33 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			cursor = response.hasNextPage ? response.nextCursor : null
 		} while (cursor)
 
-		// Fetch target addresses and check for primary names
-		const targetAddresses = new Map<string, string | null>() // address -> primary name
-
+		// Fetch target addresses for each name
 		for (const nameInfo of allNames) {
 			try {
 				const record = await suinsClient.getNameRecord(nameInfo.name)
 				nameInfo.targetAddress = record?.targetAddress || null
-
-				// Track unique target addresses
-				if (nameInfo.targetAddress && !targetAddresses.has(nameInfo.targetAddress)) {
-					targetAddresses.set(nameInfo.targetAddress, null)
-				}
 			} catch {
 				// Skip if we can't fetch the record
 			}
 		}
 
-		// Get primary name for each unique target address
-		for (const [targetAddr] of targetAddresses) {
-			try {
-				const primaryName = await suinsClient.getName(targetAddr)
-				if (primaryName) {
-					targetAddresses.set(targetAddr, primaryName)
+		// For each address group, mark the first name (alphabetically) as primary
+		// This is a heuristic since we can't easily query the on-chain default name
+		const addressFirstName = new Map<string, string>()
+		for (const nameInfo of allNames) {
+			if (nameInfo.targetAddress) {
+				const existing = addressFirstName.get(nameInfo.targetAddress)
+				if (!existing || nameInfo.name.localeCompare(existing) < 0) {
+					addressFirstName.set(nameInfo.targetAddress, nameInfo.name)
 				}
-			} catch {
-				// Skip if we can't fetch primary name
 			}
 		}
 
-		// Mark primary names
+		// Mark primary names (first alphabetically per address)
 		for (const nameInfo of allNames) {
 			if (nameInfo.targetAddress) {
-				const primaryName = targetAddresses.get(nameInfo.targetAddress)
-				if (primaryName) {
-					const cleanPrimary = primaryName.replace(/\.sui$/, '')
-					const cleanName = nameInfo.name.replace(/\.sui$/, '')
-					nameInfo.isPrimary = cleanPrimary.toLowerCase() === cleanName.toLowerCase()
-				}
+				const primaryName = addressFirstName.get(nameInfo.targetAddress)
+				nameInfo.isPrimary = primaryName === nameInfo.name
 			}
 		}
 

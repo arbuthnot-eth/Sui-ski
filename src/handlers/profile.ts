@@ -4942,6 +4942,12 @@ export function generateProfilePage(
 			}
 		}
 
+		// Shorten address for display
+		function shortAddr(addr) {
+			if (!addr || addr.length < 12) return addr || 'Unknown';
+			return addr.slice(0, 6) + '...' + addr.slice(-4);
+		}
+
 		async function fetchLinkedNames() {
 			// Use owner address to find other names owned by the same wallet
 			const ownerAddr = OWNER_ADDRESS || TARGET_ADDRESS;
@@ -4958,6 +4964,7 @@ export function generateProfilePage(
 				const res = await fetch('/api/names/' + ownerAddr);
 				if (!res.ok) throw new Error('Failed to fetch');
 				const data = await res.json();
+				const grouped = data.grouped || {};
 				const names = data.names || [];
 
 				if (linkedNamesCount) {
@@ -4969,19 +4976,50 @@ export function generateProfilePage(
 					return;
 				}
 
-				// Render clickable name chips with expiration tags
-				linkedNamesList.innerHTML = names.map(item => {
-					const nameStr = typeof item === 'string' ? item : item.name;
-					const expirationMs = typeof item === 'object' ? item.expirationMs : null;
-					const cleanName = nameStr.replace(/\\.sui$/, '');
-					const isCurrent = cleanName.toLowerCase() === NAME.toLowerCase();
-					const tag = getExpirationTag(expirationMs);
+				// Render grouped names
+				let html = '';
+				const addresses = Object.keys(grouped).sort((a, b) => {
+					// Put 'unset' last
+					if (a === 'unset') return 1;
+					if (b === 'unset') return -1;
+					// Sort by number of names (most first)
+					return grouped[b].length - grouped[a].length;
+				});
 
-					return '<a href="https://' + cleanName + '.sui.ski" class="linked-name-chip' + (isCurrent ? ' current' : '') + '">' +
-						'<span class="linked-name-text">' + cleanName + '.sui</span>' +
-						'<span class="linked-name-tag ' + tag.color + '">' + tag.text + '</span>' +
-						'</a>';
-				}).join('');
+				for (const addr of addresses) {
+					const group = grouped[addr];
+					if (!group || group.length === 0) continue;
+
+					// Address header
+					const addrLabel = addr === 'unset' ? 'No target set' : shortAddr(addr);
+					html += '<div class="linked-group">';
+					html += '<div class="linked-group-header">';
+					html += '<span class="linked-group-addr">' + addrLabel + '</span>';
+					html += '<span class="linked-group-count">' + group.length + '</span>';
+					html += '</div>';
+					html += '<div class="linked-group-names">';
+
+					for (const item of group) {
+						const cleanName = item.name.replace(/\\.sui$/, '');
+						const isCurrent = cleanName.toLowerCase() === NAME.toLowerCase();
+						const tag = getExpirationTag(item.expirationMs);
+						const classes = ['linked-name-chip'];
+						if (isCurrent) classes.push('current');
+						if (item.isPrimary) classes.push('primary');
+
+						html += '<a href="https://' + cleanName + '.sui.ski" class="' + classes.join(' ') + '">';
+						if (item.isPrimary) {
+							html += '<svg class="primary-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>';
+						}
+						html += '<span class="linked-name-text">' + cleanName + '.sui</span>';
+						html += '<span class="linked-name-tag ' + tag.color + '">' + tag.text + '</span>';
+						html += '</a>';
+					}
+
+					html += '</div></div>';
+				}
+
+				linkedNamesList.innerHTML = html;
 			} catch (error) {
 				console.error('Failed to fetch linked names:', error);
 				linkedNamesList.innerHTML = '<div class="linked-names-empty">Could not load linked names</div>';
