@@ -67,7 +67,167 @@ export async function handleLandingApiRequest(
 		}
 	}
 
+	// SuiNS NFT image proxy - /api/suins-image/{name}.sui
+	if (url.pathname.startsWith('/api/suins-image/')) {
+		const namePart = url.pathname.replace('/api/suins-image/', '')
+		const cleanName = namePart.replace(/\.sui$/i, '')
+		if (!cleanName) {
+			return jsonResponse({ error: 'Name required' }, 400)
+		}
+		const expParam = url.searchParams.get('exp')
+		// Use api-mainnet.suins.io which is the working endpoint
+		const suinsApiUrl = expParam
+			? `https://api-mainnet.suins.io/nfts/${encodeURIComponent(cleanName)}.sui/${expParam}`
+			: `https://api-mainnet.suins.io/nfts/${encodeURIComponent(cleanName)}.sui`
+		
+		return proxyImageRequest(suinsApiUrl)
+	}
+
+	// Generic image proxy - /api/image-proxy?url={url}
+	if (url.pathname === '/api/image-proxy') {
+		const targetUrl = url.searchParams.get('url')
+		if (!targetUrl) {
+			return jsonResponse({ error: 'URL parameter required' }, 400)
+		}
+		return proxyImageRequest(targetUrl)
+	}
+
+	// NFT details endpoint - /api/nft-details?objectId={id}
+	if (url.pathname === '/api/nft-details') {
+		const objectId = url.searchParams.get('objectId')
+		if (!objectId) {
+			return jsonResponse({ error: 'objectId parameter required' }, 400)
+		}
+		return handleNftDetails(objectId, env)
+	}
+
+	// Tradeport proxy - /api/tradeport/name/{name} or /api/tradeport/bid
+	if (url.pathname.startsWith('/api/tradeport/')) {
+		return handleTradeportProxy(restRequest, url)
+	}
+
 	return null
+}
+
+/**
+ * Fetch NFT details from Sui RPC
+ */
+async function handleNftDetails(objectId: string, env: Env): Promise<Response> {
+	const corsHeaders = {
+		'Access-Control-Allow-Origin': '*',
+		'Content-Type': 'application/json',
+	}
+
+	try {
+		const client = new SuiClient({ url: env.SUI_RPC_URL })
+		const object = await client.getObject({
+			id: objectId,
+			options: {
+				showContent: true,
+				showDisplay: true,
+				showOwner: true,
+			},
+		})
+
+		if (!object.data) {
+			return new Response(JSON.stringify({ error: 'Object not found' }), {
+				status: 404,
+				headers: corsHeaders,
+			})
+		}
+
+		return new Response(JSON.stringify(object.data), {
+			status: 200,
+			headers: corsHeaders,
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch NFT details'
+		return new Response(JSON.stringify({ error: message }), {
+			status: 500,
+			headers: corsHeaders,
+		})
+	}
+}
+
+/**
+ * Proxy requests to Tradeport API
+ */
+async function handleTradeportProxy(request: Request, url: URL): Promise<Response> {
+	const corsHeaders = {
+		'Access-Control-Allow-Origin': '*',
+		'Content-Type': 'application/json',
+	}
+
+	try {
+		// Build Tradeport API URL
+		const tradeportPath = url.pathname.replace('/api/tradeport', '')
+		const tradeportUrl = `https://api.tradeport.xyz${tradeportPath}${url.search}`
+
+		const controller = new AbortController()
+		const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+		const response = await fetch(tradeportUrl, {
+			method: request.method,
+			headers: {
+				'Content-Type': 'application/json',
+				'User-Agent': 'sui.ski-gateway/1.0',
+			},
+			body: request.method !== 'GET' ? await request.text() : undefined,
+			signal: controller.signal,
+		})
+		clearTimeout(timeoutId)
+
+		const data = await response.text()
+
+		return new Response(data, {
+			status: response.status,
+			headers: corsHeaders,
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to proxy Tradeport request'
+		return new Response(JSON.stringify({ error: message }), {
+			status: 502,
+			headers: corsHeaders,
+		})
+	}
+}
+
+/**
+ * Proxy an image request to avoid CORS issues
+ */
+async function proxyImageRequest(targetUrl: string): Promise<Response> {
+	try {
+		const controller = new AbortController()
+		const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+		const response = await fetch(targetUrl, {
+			headers: {
+				'User-Agent': 'sui.ski-gateway/1.0',
+				Accept: 'image/*,*/*',
+			},
+			signal: controller.signal,
+		})
+		clearTimeout(timeoutId)
+
+		if (!response.ok) {
+			return new Response(null, { status: response.status })
+		}
+
+		const contentType = response.headers.get('content-type') || 'image/png'
+		const body = await response.arrayBuffer()
+
+		return new Response(body, {
+			status: 200,
+			headers: {
+				'Content-Type': contentType,
+				'Cache-Control': 'public, max-age=3600',
+				'Access-Control-Allow-Origin': '*',
+			},
+		})
+	} catch (error) {
+		console.error('Image proxy error:', error)
+		return new Response(null, { status: 502 })
+	}
 }
 
 /**

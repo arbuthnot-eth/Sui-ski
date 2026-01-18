@@ -6606,7 +6606,7 @@ export function generateProfilePage(
 							if (ownerObj.data.owner && typeof ownerObj.data.owner === 'object' && 'AddressOwner' in ownerObj.data.owner) {
 								const parentOwner = ownerObj.data.owner.AddressOwner;
 								if (parentOwner !== connectedAddress) {
-									showMvrStatus('UpgradeCap is owned by an object ID, but you don\'t own that object. Cannot make it shared.', 'error');
+									showMvrStatus('UpgradeCap is owned by an object ID, but you do not own that object. Cannot make it shared.', 'error');
 									mvrShareUpgradeCapBtn.disabled = false;
 									mvrShareUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>Make UpgradeCap Shared</span>';
 									return;

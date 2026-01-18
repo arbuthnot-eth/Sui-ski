@@ -4,6 +4,8 @@ import { handlePWARequest } from './handlers/pwa'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
+import { handleBidsRequest } from './handlers/bids'
+import { handleBountiesRequest } from './handlers/bounties'
 import type { Env, SuiNSRecord } from './types'
 import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils/response'
 import { isTwitterPreviewBot } from './utils/social'
@@ -62,7 +64,16 @@ export default {
 					return handleRPCRequest(request, env)
 
 				case 'suins': {
+					// Handle API requests on suins subdomains
 					if (url.pathname.startsWith('/api/')) {
+						// Route to specific API handlers
+						if (url.pathname.startsWith('/api/bids')) {
+							return handleBidsRequest(request, env)
+						}
+						if (url.pathname.startsWith('/api/bounties')) {
+							return handleBountiesRequest(request, env)
+						}
+						// Try landing API handlers (sui-price, suins-image, image-proxy, etc.)
 						const apiResponse = await handleLandingApiRequest(request, env)
 						if (apiResponse) {
 							return apiResponse
