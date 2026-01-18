@@ -180,6 +180,11 @@ export default {
 			return handleMessagingPage(env)
 		}
 
+		// Tradeport API (stub - marketplace integration removed)
+		if (url.pathname.startsWith('/api/tradeport/')) {
+			return handleTradeportRequest(request, env)
+		}
+
 		// SuiNS image proxy (to avoid CORS issues)
 		if (url.pathname.startsWith('/api/suins-image/')) {
 			return handleSuiNSImageProxy(request, env)
@@ -990,6 +995,46 @@ async function handleUploadProxy(request: Request, env: Env): Promise<Response> 
 }
 
 /**
+ * Handle Tradeport API requests (stub - marketplace integration removed)
+ * Returns empty data to prevent frontend errors
+ */
+async function handleTradeportRequest(request: Request, env: Env): Promise<Response> {
+	try {
+		const url = new URL(request.url)
+		
+		// GET /api/tradeport/name/{name} - Get marketplace data for a name
+		if (url.pathname.startsWith('/api/tradeport/name/')) {
+			const name = url.pathname.replace('/api/tradeport/name/', '').replace(/\.sui$/i, '')
+			if (!name) {
+				return jsonResponse({ error: 'Name parameter required' }, 400)
+			}
+			
+			// Return empty marketplace data (integration removed)
+			return jsonResponse({
+				isListed: false,
+				listing: null,
+				bids: [],
+				nft: null,
+			})
+		}
+		
+		// POST /api/tradeport/bid - Build bid transaction (stub)
+		if (url.pathname === '/api/tradeport/bid' && request.method === 'POST') {
+			return jsonResponse({ 
+				success: false, 
+				error: 'Tradeport marketplace integration has been removed' 
+			}, 501)
+		}
+		
+		return jsonResponse({ error: 'Tradeport endpoint not found' }, 404)
+	} catch (error) {
+		console.error('Tradeport API error:', error)
+		const message = error instanceof Error ? error.message : 'Unknown error'
+		return jsonResponse({ error: message }, 500)
+	}
+}
+
+/**
  * Proxy SuiNS NFT images to avoid CORS issues
  * Endpoint: /api/suins-image/{domain}.sui?exp={expirationTimestamp}
  * The expiration timestamp is required as it's part of the SuiNS API URL
@@ -1031,8 +1076,8 @@ async function handleSuiNSImageProxy(request: Request, env: Env): Promise<Respon
 		})
 
 		if (!response.ok) {
-			// Try alternative endpoint without timestamp
-			if (expirationTs) {
+			// Try alternative endpoint without timestamp if we have one
+			if (expirationTs && response.status === 404) {
 				const altUrl = `${suinsApiBase}/nfts/${domain}`
 				const altResponse = await fetch(altUrl, {
 					headers: {
@@ -1053,10 +1098,13 @@ async function handleSuiNSImageProxy(request: Request, env: Env): Promise<Respon
 					})
 				}
 			}
+			// Return 404 for missing images (don't return 500 for expected 404s)
+			const status = response.status === 404 ? 404 : response.status
 			return new Response(`Failed to fetch image: ${response.status}`, {
-				status: response.status,
+				status,
 				headers: {
 					'Access-Control-Allow-Origin': '*',
+					'Content-Type': 'text/plain',
 				},
 			})
 		}

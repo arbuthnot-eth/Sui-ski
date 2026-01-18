@@ -3034,6 +3034,15 @@ export function generateProfilePage(
 					throw new Error(\`API error: \${res.status}\`);
 				}
 
+				// Check content-type before parsing JSON
+				const contentType = res.headers.get('content-type') || '';
+				if (!contentType.includes('application/json')) {
+					// If we got HTML or other non-JSON, it's likely a 404 page
+					const text = await res.text();
+					console.error('Non-JSON response from Tradeport API:', text.substring(0, 200));
+					throw new Error('Invalid response format from API');
+				}
+
 				const data = await res.json();
 
 				// Store NFT ID for bidding
@@ -6282,7 +6291,19 @@ export function generateProfilePage(
 
 			} catch (error) {
 				console.error('MVR registration error:', error);
-				const msg = error.message || 'Unknown error';
+				
+				// Extract error message from various error object structures
+				let msg = 'Unknown error';
+				if (error instanceof Error) {
+					msg = error.message;
+				} else if (typeof error === 'string') {
+					msg = error;
+				} else if (error && typeof error === 'object') {
+					// Handle error objects that might have different structures
+					msg = error.message || error.error || error.msg || error.toString();
+					// Remove any weird prefixes like "Me:"
+					msg = msg.replace(/^Me:\s*/i, '').trim();
+				}
 
 				if (msg.includes('rejected') || msg.includes('cancelled') || msg.includes('User rejected')) {
 					showMvrStatus('Transaction cancelled by user.', 'error');
