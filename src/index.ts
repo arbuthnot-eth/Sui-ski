@@ -37,7 +37,7 @@ import { isWalrusSiteId, resolveWalrusSite } from './resolvers/walrus-site'
 import type { Env, MVRPackage, SuiNSRecord } from './types'
 import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils/response'
 import { isTwitterPreviewBot, renderSocialMeta } from './utils/social'
-import { parseSubdomain } from './utils/subdomain'
+import { parseSubdomain, toSuiNSName } from './utils/subdomain'
 import { fetchSuiNSObjectData } from './utils/suins-object'
 import { ensureRpcEnv } from './utils/rpc'
 
@@ -378,7 +378,7 @@ async function handleSuiNSRequest(
 			record.walrusSiteId,
 			url.pathname,
 			env,
-			`${name}.sui`,
+			toSuiNSName(name),
 		)
 		if (!siteResponse.ok && (url.pathname === '/' || url.pathname === '')) {
 			return htmlResponse(renderProfilePage())
