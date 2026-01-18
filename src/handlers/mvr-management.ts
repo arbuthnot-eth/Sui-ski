@@ -6,7 +6,6 @@ import {
 	buildRegisterPackageTx,
 	buildTransferOwnershipTx,
 	buildUpdateMetadataTx,
-	getMVRRegistryId,
 	getTransactionDigest,
 	type PublishVersionParams,
 	type RegisterPackageParams,
@@ -365,7 +364,9 @@ function isRegisterPackageParams(body: unknown): body is RegisterPackageParams {
 		'packageName' in body &&
 		typeof body.packageName === 'string' &&
 		'packageAddress' in body &&
-		typeof body.packageAddress === 'string'
+		typeof body.packageAddress === 'string' &&
+		'upgradeCapId' in body &&
+		typeof body.upgradeCapId === 'string'
 	)
 }
 
@@ -379,6 +380,8 @@ function isPublishVersionParams(body: unknown): body is PublishVersionParams {
 		typeof body.packageName === 'string' &&
 		'packageAddress' in body &&
 		typeof body.packageAddress === 'string' &&
+		'packageInfoId' in body &&
+		typeof body.packageInfoId === 'string' &&
 		'version' in body &&
 		typeof body.version === 'number'
 	)
@@ -392,6 +395,8 @@ function isUpdateMetadataParams(body: unknown): body is UpdateMetadataParams {
 		typeof body.suinsName === 'string' &&
 		'packageName' in body &&
 		typeof body.packageName === 'string' &&
+		'packageInfoId' in body &&
+		typeof body.packageInfoId === 'string' &&
 		'metadata' in body &&
 		typeof body.metadata === 'object'
 	)
@@ -405,6 +410,8 @@ function isTransferOwnershipParams(body: unknown): body is TransferOwnershipPara
 		typeof body.suinsName === 'string' &&
 		'packageName' in body &&
 		typeof body.packageName === 'string' &&
+		'packageInfoId' in body &&
+		typeof body.packageInfoId === 'string' &&
 		'newOwner' in body &&
 		typeof body.newOwner === 'string'
 	)

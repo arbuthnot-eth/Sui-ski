@@ -1,4 +1,4 @@
-import type { Env, MVRPackage } from '../types'
+import type { Env } from '../types'
 import { htmlResponse } from '../utils/response'
 import { renderSocialMeta } from '../utils/social'
 
@@ -787,7 +787,7 @@ function generateMVRManagementHTML(env: Env): string {
 </html>`
 }
 
-function generatePackageBrowserHTML(suinsName: string, env: Env): string {
+function generatePackageBrowserHTML(suinsName: string, _env: Env): string {
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
