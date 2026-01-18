@@ -318,10 +318,52 @@ export function generateProfilePage(
 			${
 				expiresMs
 					? `
-			<!-- Bounty Section - Timer + Top Bounties Split -->
+			<!-- Bounty Section - Active Bounties + Fitted Timer -->
 			<div class="bounty-split-section" id="bounty-split-section">
 				<div class="bounty-split-container">
-					<!-- Left: Countdown Timer -->
+					<!-- Left: Active Bounties -->
+					<div class="bounty-list-side">
+						<div class="bounty-list-header">
+							<h4>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="8" r="7"></circle>
+									<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+								</svg>
+								Active Bounties
+							</h4>
+							<button class="bounty-refresh-btn" id="bounty-refresh-btn" title="Refresh">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="23 4 23 10 17 10"></polyline>
+									<polyline points="1 20 1 14 7 14"></polyline>
+									<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+								</svg>
+							</button>
+						</div>
+						<div class="bounty-queue-list" id="bounty-queue-list">
+							<div class="bounty-queue-loading">
+								<span class="loading-spinner"></span>
+								Loading...
+							</div>
+						</div>
+						<div class="bounty-queue-empty hidden" id="bounty-queue-empty">
+							<span>No bounties yet</span>
+						</div>
+						
+						<!-- Set New Highest Bounty Button -->
+						<div class="bounty-action-box">
+							<button class="bounty-create-btn" id="quick-bounty-btn">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="8" r="7"></circle>
+									<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+								</svg>
+								<span>Set New Highest Bounty</span>
+							</button>
+							<div class="bounty-create-info">1 year • 1 SUI reward</div>
+							<div class="bounty-create-status hidden" id="create-bounty-status"></div>
+						</div>
+					</div>
+
+					<!-- Right: Fitted Countdown Timer -->
 					<div class="bounty-timer-side">
 						<div class="bounty-timer-header">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -330,7 +372,7 @@ export function generateProfilePage(
 							</svg>
 							<span>Available In</span>
 						</div>
-						<div class="bounty-timer-display" id="bounty-timer-display">
+						<div class="bounty-timer-display fitted" id="bounty-timer-display">
 							<div class="bounty-timer-unit">
 								<span class="bounty-timer-value" id="bounty-days">--</span>
 								<span class="bounty-timer-label">Days</span>
@@ -355,48 +397,6 @@ export function generateProfilePage(
 							Opens ${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
 						</div>
 					</div>
-
-					<!-- Right: Top Bounties -->
-					<div class="bounty-list-side">
-						<div class="bounty-list-header">
-							<h4>
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<circle cx="12" cy="8" r="7"></circle>
-									<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
-								</svg>
-								Top Bounties
-							</h4>
-							<button class="bounty-refresh-btn" id="bounty-refresh-btn" title="Refresh">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<polyline points="23 4 23 10 17 10"></polyline>
-									<polyline points="1 20 1 14 7 14"></polyline>
-									<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-								</svg>
-							</button>
-						</div>
-						<div class="bounty-queue-list" id="bounty-queue-list">
-							<div class="bounty-queue-loading">
-								<span class="loading-spinner"></span>
-								Loading...
-							</div>
-						</div>
-						<div class="bounty-queue-empty hidden" id="bounty-queue-empty">
-							<span>No bounties yet</span>
-						</div>
-					</div>
-				</div>
-
-				<!-- Bottom: Create Bounty -->
-				<div class="bounty-create-row">
-					<button class="bounty-create-btn" id="quick-bounty-btn">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<circle cx="12" cy="8" r="7"></circle>
-							<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
-						</svg>
-						<span>Create 10 SUI Bounty</span>
-					</button>
-					<div class="bounty-create-info">1 year • 1 SUI reward</div>
-					<div class="bounty-create-status hidden" id="create-bounty-status"></div>
 				</div>
 			</div>
 					`
@@ -881,210 +881,47 @@ export function generateProfilePage(
 					${
 						expiresAt
 							? `
-					<!-- Registration Queue Section -->
-					<div class="queue-bid-section" id="queue-bid-section">
-						<h3>
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<circle cx="12" cy="12" r="10"></circle>
-								<polyline points="12 6 12 12 16 14"></polyline>
-							</svg>
-							Registration Queue
-						</h3>
-						<p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px;">
-							Queue a bid for when this name expires and becomes available.
-						</p>
-						<div class="queue-bid-info">
-							<div class="queue-bid-stat">
-								<div class="queue-bid-stat-label">Expires</div>
-								<div class="queue-bid-stat-value">${expiresAt.toLocaleDateString()}</div>
-							</div>
-							<div class="queue-bid-stat">
-								<div class="queue-bid-stat-label">Available</div>
-								<div class="queue-bid-stat-value warning" id="grace-period-end">${new Date(expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</div>
-							</div>
-							<div class="queue-bid-stat">
-								<div class="queue-bid-stat-label">Countdown</div>
-								<div class="queue-bid-stat-value countdown" id="countdown-timer">Calculating...</div>
-							</div>
-						</div>
-						<div id="existing-bid-container"></div>
-						<div class="queue-bid-grid">
-							<div class="queue-bid-form" id="queue-bid-form">
-								<div class="queue-bid-input-group">
-									<label for="bid-amount">Bid Amount (SUI)</label>
-									<input type="number" id="bid-amount" min="0.1" step="0.1" value="1.0" />
-								</div>
-								<div class="queue-bid-input-group">
-									<label>Execution Time</label>
-									<div class="queue-bid-existing-value">Auto-exec at grace release (${new Date(
-										expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000,
-									).toLocaleString()})</div>
-								</div>
-								<label class="queue-bid-existing-label" style="display:flex;align-items:center;gap:8px;">
-									<input type="checkbox" id="bid-offline-toggle" />
-									<span>Attach offline-signed registration for auto relay</span>
-								</label>
-								<div class="queue-offline-fields" id="queue-offline-fields">
-									<div class="queue-bid-input-group">
-										<label for="bid-tx-bytes">Transaction Bytes (base64)</label>
-										<textarea id="bid-tx-bytes" placeholder="AAACAA..."></textarea>
-									</div>
-									<div class="queue-bid-input-group">
-										<label for="bid-tx-signatures">Signatures (comma or newline separated)</label>
-										<textarea id="bid-tx-signatures" placeholder="AAQw..."></textarea>
-									</div>
-									<p class="queue-bid-note">We encrypt attachments and auto-relay them via the worker the moment the name is free.</p>
-								</div>
-								<button class="queue-bid-btn" id="queue-bid-btn">
-									Queue Bid with Wallet
-								</button>
-								<div class="queue-bid-status hidden" id="queue-bid-status"></div>
-							</div>
-						</div>
-						<div class="queue-bid-note">
-							The connected wallet address is used as the bidder identity. Offline attachments are optional but unlock automatic submission.
-						</div>
-						<div class="queue-bid-list" id="queue-bid-list">
-							<div class="queue-bid-empty">No queued bids yet.</div>
-						</div>
-					</div>
-
-					<!-- Bounty Section -->
-					<div class="bounty-section" id="bounty-section">
-						<h3>
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<circle cx="12" cy="8" r="7"></circle>
-								<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
-							</svg>
-							Place Bounty
-						</h3>
-						<p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px;">
-							Offer a reward to have this name registered for you when it becomes available.
-							Funds are held in escrow until execution.
-						</p>
-
-						<!-- Active Bounties List -->
-						<div class="bounty-list" id="bounty-list">
-							<div class="bounty-empty">No active bounties for this name.</div>
-						</div>
-
-						<!-- Create Bounty Form -->
-						<div class="bounty-form" id="bounty-form">
-							<div class="bounty-amount-row">
-								<div class="bounty-input-group">
-									<label for="bounty-amount">Bounty Amount</label>
-									<div class="bounty-amount-input">
-										<input type="number" id="bounty-amount" min="1" step="0.1" value="10" />
-										<select id="bounty-currency">
-											<option value="sui">SUI</option>
-											<option value="ns">$NS</option>
-										</select>
-									</div>
-								</div>
-								<div class="bounty-usd-display">
-									<span class="bounty-usd-label">≈ $</span>
-									<span id="bounty-usd-value">--</span>
-								</div>
-							</div>
-
-							<div class="bounty-input-group">
-								<label for="executor-reward">Executor Reward</label>
-								<div class="bounty-reward-input">
-									<input type="number" id="executor-reward" min="1" step="0.1" value="1" />
-									<span class="bounty-reward-unit">SUI (min 1 SUI)</span>
-								</div>
-							</div>
-
-							<div class="bounty-input-group">
-								<label for="bounty-years">Registration Duration</label>
-								<select id="bounty-years">
-									<option value="1">1 Year</option>
-									<option value="2">2 Years</option>
-									<option value="3">3 Years</option>
-									<option value="5">5 Years</option>
-								</select>
-							</div>
-
-							<div class="bounty-cost-breakdown" id="bounty-cost-breakdown">
-								<div class="bounty-cost-row">
-									<span>Registration Premium (estimated)</span>
-									<span id="bounty-premium-cost">-- SUI</span>
-								</div>
-								<div class="bounty-cost-row">
-									<span>Base Registration (1 year)</span>
-									<span id="bounty-base-cost">-- SUI</span>
-								</div>
-								<div class="bounty-cost-row">
-									<span>Executor Reward</span>
-									<span id="bounty-reward-display">1 SUI</span>
-								</div>
-								<div class="bounty-cost-row total">
-									<span>Total Escrow Required</span>
-									<span id="bounty-total-cost">-- SUI</span>
-								</div>
-							</div>
-
-							<button class="bounty-create-btn" id="bounty-create-btn">
+					<!-- Expiration Timer Section -->
+					<div class="expiration-timer-section">
+						<div class="expiration-timer-card">
+							<div class="expiration-timer-header">
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+									<circle cx="12" cy="12" r="10"></circle>
+									<polyline points="12 6 12 12 16 14"></polyline>
 								</svg>
-								Create Bounty & Deposit to Escrow
-							</button>
-							<div class="bounty-status hidden" id="bounty-status"></div>
-						</div>
-
-						<!-- Pre-sign Section (shown after bounty created) -->
-						<div class="bounty-presign hidden" id="bounty-presign">
-							<h4>Pre-sign Registration Transaction</h4>
-							<p>Sign this transaction now. It will be broadcast automatically the moment the grace period ends.</p>
-							<button class="bounty-sign-btn" id="bounty-sign-btn">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-								</svg>
-								Sign Transaction
-							</button>
-						</div>
-
-						<!-- Your Bounties Section -->
-						<div class="your-bounties-section" id="your-bounties-section">
-							<h4>
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-									<polyline points="14 2 14 8 20 8"></polyline>
-									<line x1="16" y1="13" x2="8" y2="13"></line>
-									<line x1="16" y1="17" x2="8" y2="17"></line>
-								</svg>
-								Your Bounties
-							</h4>
-							<p class="your-bounties-description">Bounties you've created. Sign pending transactions to enable automatic execution.</p>
-
-							<div class="your-bounties-connect hidden" id="your-bounties-connect">
-								<p>Connect your wallet to see your bounties.</p>
-								<button class="your-bounties-connect-btn" id="your-bounties-connect-btn">
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<rect x="2" y="6" width="20" height="12" rx="2"></rect>
-										<circle cx="12" cy="12" r="2"></circle>
-									</svg>
-									Connect Wallet
-								</button>
+								<span>Name Expires</span>
 							</div>
-
-							<div class="your-bounties-list hidden" id="your-bounties-list">
-								<div class="your-bounties-loading">
-									<span class="loading-spinner"></span>
-									Loading your bounties...
+							<div class="expiration-timer-display" id="expiration-timer-display">
+								<div class="expiration-timer-unit">
+									<span class="expiration-timer-value" id="exp-days">--</span>
+									<span class="expiration-timer-label">Days</span>
+								</div>
+								<span class="expiration-timer-sep">:</span>
+								<div class="expiration-timer-unit">
+									<span class="expiration-timer-value" id="exp-hours">--</span>
+									<span class="expiration-timer-label">Hours</span>
+								</div>
+								<span class="expiration-timer-sep">:</span>
+								<div class="expiration-timer-unit">
+									<span class="expiration-timer-value" id="exp-mins">--</span>
+									<span class="expiration-timer-label">Min</span>
+								</div>
+								<span class="expiration-timer-sep">:</span>
+								<div class="expiration-timer-unit">
+									<span class="expiration-timer-value" id="exp-secs">--</span>
+									<span class="expiration-timer-label">Sec</span>
 								</div>
 							</div>
-
-							<div class="your-bounties-empty hidden" id="your-bounties-empty">
-								<p>You haven't created any bounties for this name yet.</p>
+							<div class="expiration-timer-dates">
+								<div class="expiration-date-row">
+									<span class="expiration-date-label">Expires:</span>
+									<span class="expiration-date-value">${expiresAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+								</div>
+								<div class="expiration-date-row">
+									<span class="expiration-date-label">Available:</span>
+									<span class="expiration-date-value accent">${new Date(expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+								</div>
 							</div>
-						</div>
-
-						<div class="bounty-note">
-							<strong>How it works:</strong> Your funds are deposited into an on-chain escrow contract.
-							When the grace period ends, anyone can execute the bounty to register the name for you and claim the executor reward.
-							The name NFT is transferred to you atomically - no registration, no reward.
 						</div>
 					</div>
 					`
@@ -2856,7 +2693,7 @@ export function generateProfilePage(
 			marketplaceError.style.display = 'none';
 
 			try {
-				const res = await fetch(\`/api/tradeport/name/\${NAME}\`);
+				const res = await fetch(\`/api/tradeport/v1/sui/suins/name/\${FULL_NAME}\`);
 				if (!res.ok) {
 					// Handle 502 and other errors gracefully
 					if (res.status === 502 || res.status >= 500) {
@@ -2990,7 +2827,7 @@ export function generateProfilePage(
 
 			try {
 				// Build transaction via server-side API
-				const buildRes = await fetch('/api/tradeport/bid', {
+				const buildRes = await fetch('/api/tradeport/v1/sui/suins/bid', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
@@ -3044,9 +2881,8 @@ export function generateProfilePage(
 		// Load marketplace data on page load
 		loadMarketplaceData();
 
-		// ===== QUEUE BID FUNCTIONALITY =====
-		const queueBidSection = document.getElementById('queue-bid-section');
-		if (queueBidSection && EXPIRATION_MS > 0) {
+		// Queue bid functionality removed - using expiration timer instead
+		if (false) {
 			const countdownEl = document.getElementById('countdown-timer');
 			const bidAmountInput = document.getElementById('bid-amount');
 			const queueBidBtn = document.getElementById('queue-bid-btn');
@@ -3321,11 +3157,6 @@ export function generateProfilePage(
 					loadExistingBid();
 				}
 			};
-
-			// Initial load if already connected
-			if (connectedAddress) {
-				loadExistingBid();
-			}
 		}
 
 		// ===== QUICK SEARCH (Keyboard-activated + Button) =====
@@ -4712,6 +4543,12 @@ export function generateProfilePage(
 		const quickBountyBtn = document.getElementById('quick-bounty-btn');
 		const createBountyStatus = document.getElementById('create-bounty-status');
 
+		// Expiration timer elements
+		const expDays = document.getElementById('exp-days');
+		const expHours = document.getElementById('exp-hours');
+		const expMins = document.getElementById('exp-mins');
+		const expSecs = document.getElementById('exp-secs');
+
 		// Track bounties
 		let currentBounties = [];
 
@@ -4752,6 +4589,32 @@ export function generateProfilePage(
 			if (bountyHours) bountyHours.textContent = String(hours).padStart(2, '0');
 			if (bountyMins) bountyMins.textContent = String(mins).padStart(2, '0');
 			if (bountySecs) bountySecs.textContent = String(secs).padStart(2, '0');
+		}
+
+		// Update the expiration countdown timer
+		function updateExpirationCountdown() {
+			if (!EXPIRATION_MS) return;
+
+			const now = Date.now();
+			const diff = EXPIRATION_MS - now;
+
+			if (diff <= 0) {
+				if (expDays) expDays.textContent = '00';
+				if (expHours) expHours.textContent = '00';
+				if (expMins) expMins.textContent = '00';
+				if (expSecs) expSecs.textContent = '00';
+				return;
+			}
+
+			const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+			const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+			const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+			const secs = Math.floor((diff % (60 * 1000)) / 1000);
+
+			if (expDays) expDays.textContent = String(days).padStart(2, '0');
+			if (expHours) expHours.textContent = String(hours).padStart(2, '0');
+			if (expMins) expMins.textContent = String(mins).padStart(2, '0');
+			if (expSecs) expSecs.textContent = String(secs).padStart(2, '0');
 		}
 
 		// Fetch and display bounties
@@ -4872,8 +4735,18 @@ export function generateProfilePage(
 				return;
 			}
 
-			// Fixed values: 10 SUI total, 1 SUI reward, 1 year
-			const totalAmountMist = BigInt(10 * 1_000_000_000);
+			// Determine amount: 1 SUI higher than current highest, or 10 SUI minimum
+			let highestAmountMist = 0n;
+			if (currentBounties && currentBounties.length > 0) {
+				// currentBounties is already sorted highest first
+				highestAmountMist = BigInt(currentBounties[0].totalAmountMist);
+			}
+
+			const minAmountMist = BigInt(10 * 1_000_000_000);
+			const totalAmountMist = highestAmountMist >= minAmountMist
+				? highestAmountMist + BigInt(1 * 1_000_000_000)
+				: minAmountMist;
+
 			const executorRewardMist = BigInt(1 * 1_000_000_000);
 			const years = 1;
 
@@ -5035,6 +4908,8 @@ export function generateProfilePage(
 			setInterval(fetchBountyQueue, 30000);
 			updateBountyCountdown();
 			setInterval(updateBountyCountdown, 1000);
+			updateExpirationCountdown();
+			setInterval(updateExpirationCountdown, 1000);
 		}
 
 		// ========== GRACE PERIOD BANNER COUNTDOWN ==========

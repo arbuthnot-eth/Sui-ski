@@ -1390,7 +1390,110 @@ export const profileStyles = `
 			border-color: var(--accent);
 		}
 
-		/* Queue Bid Section */
+		/* Expiration Timer Section */
+		.expiration-timer-section {
+			display: flex;
+			justify-content: center;
+			padding: 20px 0;
+		}
+		.expiration-timer-card {
+			background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(245, 158, 11, 0.08));
+			border: 1px solid rgba(251, 191, 36, 0.3);
+			border-radius: 16px;
+			padding: 24px 32px;
+			text-align: center;
+			max-width: 400px;
+			width: 100%;
+		}
+		.expiration-timer-header {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			font-size: 0.9rem;
+			font-weight: 600;
+			color: var(--warning);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			margin-bottom: 20px;
+		}
+		.expiration-timer-header svg {
+			width: 20px;
+			height: 20px;
+		}
+		.expiration-timer-display {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			margin-bottom: 20px;
+		}
+		.expiration-timer-unit {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			min-width: 60px;
+			padding: 14px 10px;
+			background: rgba(0, 0, 0, 0.3);
+			border: 1px solid rgba(251, 191, 36, 0.3);
+			border-radius: 10px;
+		}
+		.expiration-timer-value {
+			font-family: var(--font-mono, ui-monospace, monospace);
+			font-size: 1.75rem;
+			font-weight: 800;
+			color: var(--warning);
+			line-height: 1;
+		}
+		.expiration-timer-label {
+			font-size: 0.6rem;
+			font-weight: 600;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.03em;
+			margin-top: 6px;
+		}
+		.expiration-timer-sep {
+			font-size: 1.5rem;
+			font-weight: 700;
+			color: var(--warning);
+			opacity: 0.5;
+			margin-bottom: 20px;
+		}
+		.expiration-timer-dates {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+		.expiration-date-row {
+			display: flex;
+			justify-content: space-between;
+			font-size: 0.8rem;
+		}
+		.expiration-date-label {
+			color: var(--text-muted);
+		}
+		.expiration-date-value {
+			color: var(--text);
+			font-weight: 600;
+		}
+		.expiration-date-value.accent {
+			color: var(--accent);
+		}
+		@media (max-width: 480px) {
+			.expiration-timer-card {
+				padding: 20px 16px;
+			}
+			.expiration-timer-unit {
+				min-width: 50px;
+				padding: 10px 8px;
+			}
+			.expiration-timer-value {
+				font-size: 1.35rem;
+			}
+		}
+
+		/* Queue Bid Section (legacy) */
 		.queue-bid-section {
 			background: var(--card-bg);
 			backdrop-filter: blur(20px);
@@ -4057,8 +4160,9 @@ export const profileStyles = `
 		}
 		.bounty-split-container {
 			display: grid;
-			grid-template-columns: 1fr 1fr;
+			grid-template-columns: 1.2fr 0.8fr;
 			gap: 24px;
+			align-items: start;
 		}
 		@media (max-width: 700px) {
 			.bounty-split-container {
@@ -4098,12 +4202,15 @@ export const profileStyles = `
 			gap: 6px;
 			margin-bottom: 12px;
 		}
+		.bounty-timer-display.fitted {
+			gap: 4px;
+		}
 		.bounty-timer-unit {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			min-width: 54px;
-			padding: 12px 8px;
+			min-width: 48px;
+			padding: 10px 6px;
 			background: rgba(139, 92, 246, 0.15);
 			border: 1px solid rgba(139, 92, 246, 0.3);
 			border-radius: 10px;
@@ -4178,16 +4285,15 @@ export const profileStyles = `
 			font-size: 0.85rem;
 		}
 
-		/* Create Bounty Row */
-		.bounty-create-row {
+		/* Bounty Action Box (Under List) */
+		.bounty-action-box {
 			display: flex;
+			flex-direction: column;
 			align-items: center;
-			justify-content: center;
-			gap: 16px;
-			margin-top: 20px;
-			padding-top: 20px;
+			gap: 12px;
+			margin-top: 16px;
+			padding-top: 16px;
 			border-top: 1px solid rgba(139, 92, 246, 0.15);
-			flex-wrap: wrap;
 		}
 		.bounty-create-btn {
 			display: inline-flex;
