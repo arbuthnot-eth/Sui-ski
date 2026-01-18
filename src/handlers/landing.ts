@@ -723,9 +723,15 @@ ${socialMeta}
 			async function updateSUIPrice() {
 				try {
 					const response = await fetch('/api/sui-price')
-					if (!response.ok) throw new Error('Failed to fetch price')
+					if (!response.ok) {
+						throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+					}
+					const contentType = response.headers.get('content-type')
+					if (!contentType || !contentType.includes('application/json')) {
+						throw new Error('Response is not JSON')
+					}
 					const data = await response.json()
-					if (data.price && suiPriceEl) {
+					if (data && typeof data.price === 'number' && !isNaN(data.price) && suiPriceEl) {
 						suiPriceEl.textContent = 'SUI: $' + data.price.toFixed(2)
 					}
 				} catch (error) {

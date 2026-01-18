@@ -5005,11 +5005,14 @@ export function generateProfilePage(
 			try {
 				const res = await fetch('/api/sui-price');
 				if (res.ok) {
-					const data = await res.json();
-					if (data.price) {
-						bidBountySuiPrice = data.price;
-						updateBidUsdEstimate();
-						updateBountyEstimates();
+					const contentType = res.headers.get('content-type');
+					if (contentType && contentType.includes('application/json')) {
+						const data = await res.json();
+						if (data && typeof data.price === 'number' && !isNaN(data.price)) {
+							bidBountySuiPrice = data.price;
+							updateBidUsdEstimate();
+							updateBountyEstimates();
+						}
 					}
 				}
 			} catch (e) {
@@ -7484,8 +7487,11 @@ export function generateProfilePage(
 			try {
 				const response = await fetch('/api/sui-price');
 				if (!response.ok) {
-					const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-					throw new Error(errorData.error || 'Failed to fetch price');
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+				const contentType = response.headers.get('content-type');
+				if (!contentType || !contentType.includes('application/json')) {
+					throw new Error('Response is not JSON');
 				}
 				const data = await response.json();
 				if (data && typeof data.price === 'number' && !isNaN(data.price)) {

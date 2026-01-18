@@ -1024,9 +1024,18 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 		async function fetchSuiPrice() {
 			try {
 				const res = await fetch('/api/sui-price');
+				if (!res.ok) {
+					throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+				}
+				const contentType = res.headers.get('content-type');
+				if (!contentType || !contentType.includes('application/json')) {
+					throw new Error('Response is not JSON');
+				}
 				const data = await res.json();
-				suiPrice = data.price;
-				updatePriceDisplay();
+				if (data && typeof data.price === 'number' && !isNaN(data.price)) {
+					suiPrice = data.price;
+					updatePriceDisplay();
+				}
 			} catch (e) {
 				console.error('Failed to fetch SUI price:', e);
 			}
