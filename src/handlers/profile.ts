@@ -7484,20 +7484,26 @@ export function generateProfilePage(
 			try {
 				const response = await fetch('/api/sui-price');
 				if (!response.ok) {
-					const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-					throw new Error(errorData.error || 'Failed to fetch price');
+					throw new Error('Failed to fetch price');
 				}
-				const data = await response.json();
-				if (data && typeof data.price === 'number' && !isNaN(data.price)) {
+				const contentType = response.headers.get('content-type') || '';
+				if (!contentType.includes('application/json')) {
+					throw new Error('Invalid price response type');
+				}
+				let data;
+				try {
+					data = await response.json();
+				} catch (parseError) {
+					throw new Error('Failed to parse price response');
+				}
+				if (data && typeof data.price === 'number' && Number.isFinite(data.price)) {
 					suiPriceEl.textContent = '$' + data.price.toFixed(2);
 				} else {
-					suiPriceEl.textContent = '$--';
+					throw new Error('Malformed price payload');
 				}
 			} catch (error) {
 				console.error('Failed to update SUI price:', error);
-				if (suiPriceEl) {
-					suiPriceEl.textContent = '$--';
-				}
+				suiPriceEl.textContent = '$--';
 			}
 		}
 		if (suiPriceEl) {

@@ -1,4 +1,4 @@
-import { handleLandingPage } from './handlers/landing'
+import { handleLandingPage, handleLandingApiRequest } from './handlers/landing'
 import { generateProfilePage } from './handlers/profile'
 import { handlePWARequest } from './handlers/pwa'
 import { handleRPCRequest } from './resolvers/rpc'
@@ -61,11 +61,18 @@ export default {
 				case 'rpc':
 					return handleRPCRequest(request, env)
 
-				case 'suins':
+				case 'suins': {
+					if (url.pathname.startsWith('/api/')) {
+						const apiResponse = await handleLandingApiRequest(request, env)
+						if (apiResponse) {
+							return apiResponse
+						}
+					}
 					return handleSuiNSRequest(parsed.subdomain, url, env, {
 						isTwitterBot: isTwitterPreviewBot(userAgent),
 						originalHostname: hostname,
 					})
+				}
 
 				case 'content':
 					return handleContentRequest(parsed.subdomain, env, {

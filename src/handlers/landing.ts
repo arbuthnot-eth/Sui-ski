@@ -13,28 +13,39 @@ interface LandingPageOptions {
  * Handle requests to the root domain (sui.ski)
  */
 export async function handleLandingPage(request: Request, env: Env): Promise<Response> {
+	const apiResponse = await handleLandingApiRequest(request, env)
+	if (apiResponse) {
+		return apiResponse
+	}
+
 	const url = new URL(request.url)
 	const canonicalUrl = `${url.protocol}//${url.hostname}${url.pathname || '/'}`
 
-	// API endpoint for status
+	// Landing page HTML
+	return htmlResponse(landingPageHTML(env.SUI_NETWORK, { canonicalUrl }))
+}
+
+export async function handleLandingApiRequest(
+	restRequest: Request,
+	env: Env,
+): Promise<Response | null> {
+	const url = new URL(restRequest.url)
+
 	if (url.pathname === '/api/status') {
 		const status = await getGatewayStatus(env)
 		return jsonResponse(status)
 	}
 
-	// API endpoint for resolving names programmatically
-	if (url.pathname === '/api/resolve' && url.searchParams.has('name')) {
+	if (url.pathname === '/api/resolve') {
 		const name = url.searchParams.get('name')
 		if (!name) {
 			return jsonResponse({ error: 'Name parameter required' }, 400)
 		}
-		// Import dynamically to avoid circular dependencies
 		const { resolveSuiNS } = await import('../resolvers/suins')
 		const result = await resolveSuiNS(name, env)
 		return jsonResponse(result)
 	}
 
-	// API endpoint for SuiNS pricing
 	if (url.pathname === '/api/pricing') {
 		try {
 			const pricing = await getSuiNSPricing(env)
@@ -45,22 +56,18 @@ export async function handleLandingPage(request: Request, env: Env): Promise<Res
 		}
 	}
 
-	// API endpoint for SUI price
 	if (url.pathname === '/api/sui-price') {
 		try {
 			const price = await getSUIPrice(env)
 			return jsonResponse({ price })
 		} catch (error) {
-			// Even on error, return a default price to prevent UI breakage
 			const message = error instanceof Error ? error.message : 'Failed to fetch SUI price'
 			console.error('SUI price API error:', message)
-			// Return default price instead of error to keep UI functional
 			return jsonResponse({ price: 1.0, error: message, cached: true })
 		}
 	}
 
-	// Landing page HTML
-	return htmlResponse(landingPageHTML(env.SUI_NETWORK, { canonicalUrl }))
+	return null
 }
 
 /**
@@ -721,18 +728,28 @@ ${socialMeta}
 			// Update SUI price
 			const suiPriceEl = document.getElementById('sui-price')
 			async function updateSUIPrice() {
+				if (!suiPriceEl) return
 				try {
 					const response = await fetch('/api/sui-price')
 					if (!response.ok) throw new Error('Failed to fetch price')
-					const data = await response.json()
-					if (data.price && suiPriceEl) {
-						suiPriceEl.textContent = 'SUI: $' + data.price.toFixed(2)
+					const contentType = response.headers.get('content-type') || ''
+					if (!contentType.includes('application/json')) {
+						throw new Error('Invalid price response type')
 					}
+					let data
+					try {
+						data = await response.json()
+					} catch (parseError) {
+						throw new Error('Failed to parse price response')
+					}
+					if (data && typeof data.price === 'number' && Number.isFinite(data.price)) {
+						suiPriceEl.textContent = 'SUI: $' + data.price.toFixed(2)
+						return
+					}
+					throw new Error('Malformed price payload')
 				} catch (error) {
 					console.error('Failed to update SUI price:', error)
-					if (suiPriceEl) {
-						suiPriceEl.textContent = 'SUI: --'
-					}
+					suiPriceEl.textContent = 'SUI: --'
 				}
 			}
 			updateSUIPrice()
