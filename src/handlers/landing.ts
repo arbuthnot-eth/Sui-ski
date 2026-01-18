@@ -724,7 +724,7 @@ ${socialMeta}
 				try {
 					const response = await fetch('/api/sui-price')
 					if (!response.ok) {
-						throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+						throw new Error('HTTP ' + response.status + ': ' + response.statusText)
 					}
 					const contentType = response.headers.get('content-type')
 					if (!contentType || !contentType.includes('application/json')) {

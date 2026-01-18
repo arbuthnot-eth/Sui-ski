@@ -1025,7 +1025,7 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 			try {
 				const res = await fetch('/api/sui-price');
 				if (!res.ok) {
-					throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+					throw new Error('HTTP ' + res.status + ': ' + res.statusText);
 				}
 				const contentType = res.headers.get('content-type');
 				if (!contentType || !contentType.includes('application/json')) {
