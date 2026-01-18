@@ -906,7 +906,7 @@ export function generateProfilePage(
 										([key, value]) => `
 						<tr>
 							<td class="record-key">${escapeHtml(key)}</td>
-							<td class="record-value">${/^https?:\/\//i.test(value) ? `<a href="${escapeHtml(value)}" target="_blank">${escapeHtml(value)}</a>` : escapeHtml(value)}</td>
+							<td class="record-value">${(function() { const isUrl = value && (value.toLowerCase().startsWith('http://') || value.toLowerCase().startsWith('https://')); return isUrl ? `<a href="${escapeHtml(value)}" target="_blank">${escapeHtml(value)}</a>` : escapeHtml(value); })()}</td>
 						</tr>
 					`,
 									)
@@ -1585,7 +1585,9 @@ export function generateProfilePage(
 		function isSuiNSName(input) {
 			if (!input || input.startsWith('0x')) return false;
 			const cleaned = input.toLowerCase().replace(/\\.sui$/i, '');
-			return /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(cleaned);
+			const pattern1 = new RegExp('^[a-z0-9][a-z0-9-]*[a-z0-9]$');
+			const pattern2 = new RegExp('^[a-z0-9]$');
+			return pattern1.test(cleaned) || pattern2.test(cleaned);
 		}
 
 		// Resolve a SuiNS name to its target address
@@ -2323,7 +2325,7 @@ export function generateProfilePage(
 			// Find the current name's NFT, or use the first one
 			let selectedNft = allNFTs.find(nft => {
 				const domain = nft.domain || '';
-				const cleanedName = domain.replace(/.sui$/i, '');
+				const cleanedName = domain.replace(/\\.sui$/i, '');
 				return cleanedName.toLowerCase() === NAME.toLowerCase();
 			});
 
@@ -3576,7 +3578,8 @@ export function generateProfilePage(
 		function cleanNameInput(input) {
 			let name = input?.trim()?.toLowerCase() || '';
 			name = name.replace(/\\.sui$/i, '');
-			name = name.replace(/[^a-z0-9-]/g, '');
+			const invalidChars = new RegExp('[^a-z0-9-]', 'g');
+			name = name.replace(invalidChars, '');
 			return name;
 		}
 
@@ -6370,9 +6373,9 @@ export function generateProfilePage(
 				
 				// Clean up the message - remove weird prefixes and normalize
 				msg = msg
-					.replace(/^Me:\s*/i, '')
-					.replace(/^Error:\s*/i, '')
-					.replace(/^SuiError:\s*/i, '')
+					.replace(new RegExp('^Me:\\s*', 'i'), '')
+					.replace(new RegExp('^Error:\\s*', 'i'), '')
+					.replace(new RegExp('^SuiError:\\s*', 'i'), '')
 					.trim();
 				
 				// If message is still generic or empty, try to get more info
@@ -6416,7 +6419,7 @@ export function generateProfilePage(
 			var result = { packageName: null, packageAddress: null, upgradeCap: null };
 			var addrRegex = new RegExp('0x[a-fA-F0-9]{64}', 'g');
 			var addresses = text.match(addrRegex) || [];
-			var lines = text.split(/[\r\n]+/);
+			var lines = text.split(new RegExp('[\\r\\n]+'));
 
 			for (var i = 0; i < lines.length; i++) {
 				var line = lines[i];
@@ -6577,7 +6580,7 @@ export function generateProfilePage(
 			// Clean the username - remove @ prefix and extract from URL if needed
 			if (username) {
 				username = username.replace(/^@/, '');
-				const urlMatch = username.match(/(?:x\\.com|twitter\\.com)\\/([a-zA-Z0-9_]+)/i);
+				const urlMatch = username.match(new RegExp('(?:x\\.com|twitter\\.com)\\/([a-zA-Z0-9_]+)', 'i'));
 				if (urlMatch) {
 					username = urlMatch[1];
 				}
@@ -6991,7 +6994,8 @@ export function generateProfilePage(
 }
 
 function collapseWhitespace(value: string): string {
-	return value.replace(/\s+/g, ' ').trim()
+	const whitespacePattern = new RegExp('\\s+', 'g');
+	return value.replace(whitespacePattern, ' ').trim()
 }
 
 function pickRecordValue(record: SuiNSRecord, keys: string[]): string | undefined {
@@ -7098,7 +7102,7 @@ function extractXUsername(value: string): string {
 	const cleaned = value.replace(/^@/, '')
 
 	// Extract from URL
-	const urlMatch = cleaned.match(/(?:x\.com|twitter\.com)\/([a-zA-Z0-9_]+)/i)
+	const urlMatch = cleaned.match(new RegExp('(?:x\\.com|twitter\\.com)\\/([a-zA-Z0-9_]+)', 'i'))
 	if (urlMatch) {
 		return urlMatch[1]
 	}
