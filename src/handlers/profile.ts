@@ -318,101 +318,55 @@ export function generateProfilePage(
 			${
 				expiresMs
 					? `
-			<div class="bid-bounty-hero" id="bid-bounty-hero">
-				<div class="bid-bounty-header">
-					<div class="bid-bounty-title">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-						</svg>
-						<span>Bids & Bounties</span>
-					</div>
-					<div class="bid-bounty-status-bar">
-						<span class="bid-bounty-status-badge ${options.inGracePeriod ? 'warning' : 'active'}" id="bid-bounty-badge">
-							${
-								options.inGracePeriod
-									? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`
-									: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`
-							}
-							<span>${options.inGracePeriod ? 'Grace Period' : 'Active'}</span>
-						</span>
-						<span class="bid-bounty-timer">
-							Available in: <span id="bid-bounty-countdown">--d --h --m</span>
-						</span>
-					</div>
-				</div>
-
-				<div class="bid-bounty-content">
-					<!-- Bid Queue Section -->
-					<div class="bid-queue-section">
-						<div class="bid-queue-header">
-							<h4>
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-									<line x1="16" y1="2" x2="16" y2="6"></line>
-									<line x1="8" y1="2" x2="8" y2="6"></line>
-									<line x1="3" y1="10" x2="21" y2="10"></line>
-								</svg>
-								Bid Queue
-							</h4>
-							<button class="bid-refresh-btn" id="bid-refresh-btn" title="Refresh bids">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<polyline points="23 4 23 10 17 10"></polyline>
-									<polyline points="1 20 1 14 7 14"></polyline>
-									<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-								</svg>
-							</button>
-						</div>
-						<div class="bid-queue-list" id="bid-queue-list">
-							<div class="bid-queue-loading">
-								<span class="loading-spinner"></span>
-								Loading bids...
-							</div>
-						</div>
-						<div class="bid-queue-empty hidden" id="bid-queue-empty">
+			<!-- Bounty Section - Timer + Top Bounties Split -->
+			<div class="bounty-split-section" id="bounty-split-section">
+				<div class="bounty-split-container">
+					<!-- Left: Countdown Timer -->
+					<div class="bounty-timer-side">
+						<div class="bounty-timer-header">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<circle cx="12" cy="12" r="10"></circle>
-								<line x1="8" y1="12" x2="16" y2="12"></line>
+								<polyline points="12 6 12 12 16 14"></polyline>
 							</svg>
-							<span>No bids yet. Be the first!</span>
+							<span>Available In</span>
 						</div>
-
-						<!-- Create Bid Form -->
-						<div class="create-bid-form" id="create-bid-form">
-							<div class="create-bid-header">
-								<span>Place a Bid</span>
+						<div class="bounty-timer-display" id="bounty-timer-display">
+							<div class="bounty-timer-unit">
+								<span class="bounty-timer-value" id="bounty-days">--</span>
+								<span class="bounty-timer-label">Days</span>
 							</div>
-							<div class="create-bid-row">
-								<div class="create-bid-input-group">
-									<input type="number" id="bid-amount-input" min="1" step="0.1" placeholder="Amount" />
-									<span class="bid-input-suffix">SUI</span>
-								</div>
-								<button class="create-bid-btn" id="create-bid-btn">
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<line x1="12" y1="5" x2="12" y2="19"></line>
-										<line x1="5" y1="12" x2="19" y2="12"></line>
-									</svg>
-									Place Bid
-								</button>
+							<span class="bounty-timer-sep">:</span>
+							<div class="bounty-timer-unit">
+								<span class="bounty-timer-value" id="bounty-hours">--</span>
+								<span class="bounty-timer-label">Hours</span>
 							</div>
-							<div class="create-bid-info">
-								<span class="create-bid-usd" id="bid-usd-estimate">≈ $--</span>
-								<span class="create-bid-note">Bid will execute when grace period ends</span>
+							<span class="bounty-timer-sep">:</span>
+							<div class="bounty-timer-unit">
+								<span class="bounty-timer-value" id="bounty-mins">--</span>
+								<span class="bounty-timer-label">Min</span>
 							</div>
-							<div class="create-bid-status hidden" id="create-bid-status"></div>
+							<span class="bounty-timer-sep">:</span>
+							<div class="bounty-timer-unit">
+								<span class="bounty-timer-value" id="bounty-secs">--</span>
+								<span class="bounty-timer-label">Sec</span>
+							</div>
+						</div>
+						<div class="bounty-timer-date">
+							Opens ${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
 						</div>
 					</div>
 
-					<!-- Bounty Section -->
-					<div class="bounty-queue-section">
-						<div class="bounty-queue-header">
+					<!-- Right: Top Bounties -->
+					<div class="bounty-list-side">
+						<div class="bounty-list-header">
 							<h4>
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 									<circle cx="12" cy="8" r="7"></circle>
 									<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
 								</svg>
-								Bounties
+								Top Bounties
 							</h4>
-							<button class="bounty-refresh-btn" id="bounty-refresh-btn" title="Refresh bounties">
+							<button class="bounty-refresh-btn" id="bounty-refresh-btn" title="Refresh">
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 									<polyline points="23 4 23 10 17 10"></polyline>
 									<polyline points="1 20 1 14 7 14"></polyline>
@@ -423,47 +377,26 @@ export function generateProfilePage(
 						<div class="bounty-queue-list" id="bounty-queue-list">
 							<div class="bounty-queue-loading">
 								<span class="loading-spinner"></span>
-								Loading bounties...
+								Loading...
 							</div>
 						</div>
 						<div class="bounty-queue-empty hidden" id="bounty-queue-empty">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<circle cx="12" cy="12" r="10"></circle>
-								<line x1="8" y1="12" x2="16" y2="12"></line>
-							</svg>
 							<span>No bounties yet</span>
-						</div>
-
-						<!-- Simple Bounty Button -->
-						<div class="create-bounty-simple">
-							<button class="create-bounty-btn-simple" id="quick-bounty-btn">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<circle cx="12" cy="8" r="7"></circle>
-									<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
-								</svg>
-								<span>Create 10 SUI Bounty</span>
-							</button>
-							<div class="create-bounty-simple-info">1 year registration • 1 SUI executor reward</div>
-							<div class="create-bounty-status hidden" id="create-bounty-status"></div>
 						</div>
 					</div>
 				</div>
 
-				<div class="bid-bounty-footer">
-					<div class="bid-bounty-info-row">
-						<div class="bid-bounty-info-item">
-							<span class="bid-bounty-info-label">Expires</span>
-							<span class="bid-bounty-info-value">${new Date(expiresMs).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-						</div>
-						<div class="bid-bounty-info-item">
-							<span class="bid-bounty-info-label">Grace Period Ends</span>
-							<span class="bid-bounty-info-value">${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-						</div>
-						<div class="bid-bounty-info-item">
-							<span class="bid-bounty-info-label">Available</span>
-							<span class="bid-bounty-info-value" id="bid-bounty-available-date">${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-						</div>
-					</div>
+				<!-- Bottom: Create Bounty -->
+				<div class="bounty-create-row">
+					<button class="bounty-create-btn" id="quick-bounty-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="12" cy="8" r="7"></circle>
+							<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+						</svg>
+						<span>Create 10 SUI Bounty</span>
+					</button>
+					<div class="bounty-create-info">1 year • 1 SUI reward</div>
+					<div class="bounty-create-status hidden" id="create-bounty-status"></div>
 				</div>
 			</div>
 					`
@@ -4768,25 +4701,19 @@ export function generateProfilePage(
 			}, 500);
 		}
 
-		// ========== BID & BOUNTY HERO SECTION ==========
-		const bidBountyCountdown = document.getElementById('bid-bounty-countdown');
-		const bidQueueList = document.getElementById('bid-queue-list');
-		const bidQueueEmpty = document.getElementById('bid-queue-empty');
+		// ========== BOUNTY SECTION ==========
+		const bountyDays = document.getElementById('bounty-days');
+		const bountyHours = document.getElementById('bounty-hours');
+		const bountyMins = document.getElementById('bounty-mins');
+		const bountySecs = document.getElementById('bounty-secs');
 		const bountyQueueList = document.getElementById('bounty-queue-list');
 		const bountyQueueEmpty = document.getElementById('bounty-queue-empty');
-		const bidRefreshBtn = document.getElementById('bid-refresh-btn');
 		const bountyRefreshBtn = document.getElementById('bounty-refresh-btn');
-		const bidAmountInput = document.getElementById('bid-amount-input');
-		const bidUsdEstimate = document.getElementById('bid-usd-estimate');
-		const createBidBtn = document.getElementById('create-bid-btn');
-		const createBidStatus = document.getElementById('create-bid-status');
 		const quickBountyBtn = document.getElementById('quick-bounty-btn');
 		const createBountyStatus = document.getElementById('create-bounty-status');
 
-		// Track bids and bounties
-		let currentBids = [];
+		// Track bounties
 		let currentBounties = [];
-		let bidBountySuiPrice = null;
 
 		// Format address for display
 		function formatAddress(addr) {
@@ -4801,93 +4728,30 @@ export function generateProfilePage(
 			return amount.toFixed(2);
 		}
 
-		// Get USD value string
-		function getUsdValue(suiAmount) {
-			if (!bidBountySuiPrice) return '';
-			const usd = suiAmount * bidBountySuiPrice;
-			return '$' + usd.toLocaleString('en-US', { maximumFractionDigits: 0 });
-		}
-
-		// Fetch SUI price for bid/bounty section
-		async function fetchBidBountySuiPrice() {
-			try {
-				const res = await fetch('/api/sui-price');
-				if (res.ok) {
-					const data = await res.json();
-					if (data.price) {
-						bidBountySuiPrice = data.price;
-						updateBidUsdEstimate();
-					}
-				}
-			} catch (e) {
-				console.warn('Failed to fetch SUI price for bids:', e);
-			}
-		}
-
-		// Update the bid/bounty countdown timer
-		function updateBidBountyCountdown() {
-			if (!bidBountyCountdown || !AVAILABLE_AT) return;
+		// Update the bounty countdown timer
+		function updateBountyCountdown() {
+			if (!AVAILABLE_AT) return;
 
 			const now = Date.now();
 			const diff = AVAILABLE_AT - now;
 
 			if (diff <= 0) {
-				bidBountyCountdown.textContent = 'Available now!';
+				if (bountyDays) bountyDays.textContent = '00';
+				if (bountyHours) bountyHours.textContent = '00';
+				if (bountyMins) bountyMins.textContent = '00';
+				if (bountySecs) bountySecs.textContent = '00';
 				return;
 			}
 
 			const days = Math.floor(diff / (24 * 60 * 60 * 1000));
 			const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
 			const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+			const secs = Math.floor((diff % (60 * 1000)) / 1000);
 
-			bidBountyCountdown.textContent = days + 'd ' + hours + 'h ' + mins + 'm';
-		}
-
-		// Fetch and display bids
-		async function fetchBidQueue() {
-			if (!bidQueueList) return;
-
-			try {
-				const res = await fetch('/api/bids/' + NAME);
-				if (!res.ok) throw new Error('Failed to fetch bids');
-
-				const data = await res.json();
-				currentBids = data.bids || [];
-
-				if (currentBids.length === 0) {
-					bidQueueList.innerHTML = '';
-					if (bidQueueEmpty) bidQueueEmpty.classList.remove('hidden');
-					return;
-				}
-
-				if (bidQueueEmpty) bidQueueEmpty.classList.add('hidden');
-
-				// Sort by amount (highest first)
-				currentBids.sort((a, b) => b.amount - a.amount);
-
-				bidQueueList.innerHTML = currentBids.map((bid, index) => {
-					const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
-					const isOwnBid = connectedAddress && bid.bidder === connectedAddress;
-					return \`
-						<div class="bid-queue-item \${isOwnBid ? 'own-bid' : ''}">
-							<div class="bid-item-left">
-								<div class="bid-item-rank \${rankClass}">\${index + 1}</div>
-								<div class="bid-item-info">
-									<div class="bid-item-amount">\${formatAmount(bid.amount)} SUI</div>
-									<div class="bid-item-bidder">\${formatAddress(bid.bidder)}\${isOwnBid ? ' (you)' : ''}</div>
-								</div>
-							</div>
-							<div class="bid-item-right">
-								<div class="bid-item-usd">\${getUsdValue(bid.amount)}</div>
-								<div class="bid-item-status \${bid.status || 'pending'}">\${bid.status || 'pending'}</div>
-							</div>
-						</div>
-					\`;
-				}).join('');
-			} catch (error) {
-				console.error('Failed to fetch bid queue:', error);
-				bidQueueList.innerHTML = '<div class="bid-queue-loading">Failed to load bids</div>';
-			}
+			if (bountyDays) bountyDays.textContent = String(days).padStart(2, '0');
+			if (bountyHours) bountyHours.textContent = String(hours).padStart(2, '0');
+			if (bountyMins) bountyMins.textContent = String(mins).padStart(2, '0');
+			if (bountySecs) bountySecs.textContent = String(secs).padStart(2, '0');
 		}
 
 		// Fetch and display bounties
@@ -4942,13 +4806,6 @@ export function generateProfilePage(
 			}
 		}
 
-		// Update bid USD estimate
-		function updateBidUsdEstimate() {
-			if (!bidAmountInput || !bidUsdEstimate) return;
-			const amount = parseFloat(bidAmountInput.value) || 0;
-			bidUsdEstimate.textContent = getUsdValue(amount) || '≈ $--';
-		}
-
 		function buildTxWrapper(bytes) {
 			return {
 				_bytes: bytes,
@@ -4994,108 +4851,6 @@ export function generateProfilePage(
 			} catch (error) {
 				console.error('Failed to fetch finalized transaction:', error)
 				return null
-			}
-		}
-
-		// Create a new bid with one-click SUI transaction
-		async function createBid() {
-			if (!connectedAddress) {
-				showBidBountyStatus(createBidStatus, 'Please connect your wallet first', 'error');
-				return;
-			}
-
-			const amount = parseFloat(bidAmountInput?.value) || 0;
-			if (amount <= 0) {
-				showBidBountyStatus(createBidStatus, 'Please enter a valid bid amount', 'error');
-				return;
-			}
-
-			if (createBidBtn) createBidBtn.disabled = true;
-			showBidBountyStatus(createBidStatus, 'Preparing transaction...', 'loading');
-
-			try {
-				// Build transaction directly using SUI SDK (browser ESM imports)
-				const { Transaction } = await import('https://esm.sh/@mysten/sui@1.45.2/transactions');
-				const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.45.2/client');
-				
-				const suiClient = getSuiClient();
-				const tx = new Transaction();
-				
-				// Get gas coins
-				const coins = await suiClient.getCoins({
-					owner: connectedAddress,
-					coinType: '0x2::sui::SUI',
-				});
-				
-				if (coins.data.length === 0) {
-					throw new Error('No SUI coins found in wallet');
-				}
-				
-				const amountMist = BigInt(Math.floor(amount * 1_000_000_000));
-				
-				// Merge coins if needed
-				const primaryCoin = coins.data[0].coinObjectId;
-				if (coins.data.length > 1) {
-					tx.mergeCoins(tx.object(primaryCoin), coins.data.slice(1).map(c => tx.object(c.coinObjectId)));
-				}
-				
-				// Split the bid amount (this will be used for the bid escrow)
-				const [bidCoin] = tx.splitCoins(tx.object(primaryCoin), [amountMist]);
-				
-				// For now, transfer to self as a placeholder (this would be replaced with actual bid escrow contract)
-				// In a real implementation, this would call a bid contract to create an escrow
-				tx.transferObjects([bidCoin], connectedAddress);
-				
-				// Set gas budget and payment
-				tx.setGasBudget(BigInt(10_000_000));
-				tx.setGasPayment(coins.data.slice(0, 1).map(c => ({
-					objectId: c.coinObjectId,
-					version: c.version,
-					digest: c.digest,
-				})));
-				
-				// Build transaction
-				const txBytes = await tx.build({ client: suiClient });
-				
-				// Sign and execute transaction
-				showBidBountyStatus(createBidStatus, 'Sign transaction in wallet...', 'loading');
-				
-				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
-					transaction: txBytes,
-					account: connectedAccount,
-					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-				});
-				
-				// Create bid record after successful transaction
-				const res = await fetch('/api/bids', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						name: NAME,
-						bidder: connectedAddress,
-						amount: amount,
-						executeAt: AVAILABLE_AT,
-					}),
-				});
-
-				const data = await res.json();
-				if (!res.ok) {
-					console.warn('Transaction succeeded but bid record creation failed:', data.error);
-					// Transaction already succeeded, so show success but warn about record
-					showBidBountyStatus(createBidStatus, 'Transaction sent! <a href="https://suivision.xyz/txblock/' + result.digest + '" target="_blank">View tx</a> (Note: Bid record may not be saved)', 'success');
-				} else {
-					showBidBountyStatus(createBidStatus, 'Bid placed! <a href="https://suivision.xyz/txblock/' + result.digest + '" target="_blank">View tx</a>', 'success');
-				}
-				
-				if (bidAmountInput) bidAmountInput.value = '';
-				fetchBidQueue();
-
-				setTimeout(() => hideBidBountyStatus(createBidStatus), 5000);
-			} catch (error) {
-				console.error('Failed to create bid:', error);
-				showBidBountyStatus(createBidStatus, error.message || 'Failed to create bid', 'error');
-			} finally {
-				if (createBidBtn) createBidBtn.disabled = false;
 			}
 		}
 
@@ -5266,33 +5021,20 @@ export function generateProfilePage(
 			element.className = (base + ' hidden').trim();
 		}
 
-		// Event listeners for bid/bounty section
-		if (bidRefreshBtn) {
-			bidRefreshBtn.addEventListener('click', fetchBidQueue);
-		}
+		// Event listeners for bounty section
 		if (bountyRefreshBtn) {
 			bountyRefreshBtn.addEventListener('click', fetchBountyQueue);
-		}
-		if (bidAmountInput) {
-			bidAmountInput.addEventListener('input', updateBidUsdEstimate);
-		}
-		if (createBidBtn) {
-			createBidBtn.addEventListener('click', createBid);
 		}
 		if (quickBountyBtn) {
 			quickBountyBtn.addEventListener('click', createQuickBounty);
 		}
 
-		// Initialize bid/bounty section
+		// Initialize bounty section
 		if (EXPIRATION_MS) {
-			fetchBidBountySuiPrice();
-			setInterval(fetchBidBountySuiPrice, 60000);
-			fetchBidQueue();
 			fetchBountyQueue();
-			setInterval(fetchBidQueue, 30000);
 			setInterval(fetchBountyQueue, 30000);
-			updateBidBountyCountdown();
-			setInterval(updateBidBountyCountdown, 60000);
+			updateBountyCountdown();
+			setInterval(updateBountyCountdown, 1000);
 		}
 
 		// ========== GRACE PERIOD BANNER COUNTDOWN ==========
