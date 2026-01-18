@@ -14,6 +14,8 @@ routes = [
 SUI_NETWORK = "mainnet"
 SUI_RPC_URL = "https://fullnode.mainnet.sui.io:443"
 WALRUS_NETWORK = "mainnet"
+# Move Registry (MVR) parent object ID for mainnet
+MOVE_REGISTRY_PARENT_ID = "0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727"
 # Bounty escrow Move package IDs (set these before enabling bounties)
 # BOUNTY_ESCROW_PACKAGE_MAINNET = "0x..."
 # BOUNTY_ESCROW_PACKAGE_TESTNET = "0x..."
