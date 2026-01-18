@@ -6416,7 +6416,7 @@ export function generateProfilePage(
 			const addresses = text.match(/0x[a-fA-F0-9]{64}/g) || [];
 
 			// Try to identify which is package vs upgrade cap from context
-			const lines = text.split('\\n');
+			const lines = text.split(/\\r?\\n/);
 			for (const line of lines) {
 				const lineLower = line.toLowerCase();
 				const addrMatch = line.match(/0x[a-fA-F0-9]{64}/);
@@ -6445,12 +6445,11 @@ export function generateProfilePage(
 			// Try to extract package name from text if not found
 			if (!result.packageName) {
 				// Look for common patterns in deployment output
-				const namePatterns = [
-					/package[:\\s]+["']?([a-zA-Z0-9_-]+)["']?/i,
-					/name[:\\s]+["']?([a-zA-Z0-9_-]+)["']?/i,
-					/publishing\\s+["']?([a-zA-Z0-9_-]+)["']?/i,
-				];
-				for (const pattern of namePatterns) {
+				const pkgPattern = /package[: ]+["']?([a-zA-Z0-9_-]+)["']?/i;
+				const namePattern = /name[: ]+["']?([a-zA-Z0-9_-]+)["']?/i;
+				const pubPattern = /publishing +["']?([a-zA-Z0-9_-]+)["']?/i;
+				const patterns = [pkgPattern, namePattern, pubPattern];
+				for (const pattern of patterns) {
 					const match = text.match(pattern);
 					if (match && match[1] && !['id', 'address', 'cap'].includes(match[1].toLowerCase())) {
 						result.packageName = match[1].toLowerCase().replace(/_/g, '-');
