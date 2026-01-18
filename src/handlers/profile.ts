@@ -6218,51 +6218,60 @@ export function generateProfilePage(
 				canUseMvr = canEdit || connectedAddress === nftOwnerAddress || connectedAddress === CURRENT_ADDRESS;
 				
 				// Also check if UpgradeCap is owned by connected wallet or is shared
-				if (!canUseMvr && mvrUpgradeCap && mvrUpgradeCap.value && mvrUpgradeCap.value.trim()) {
-					try {
-						const upgradeCapId = mvrUpgradeCap.value.trim();
-						if (/^0x[a-f0-9]{64}$/i.test(upgradeCapId)) {
-							const suiClient = new SuiClient({ url: RPC_URL });
-							const upgradeCapObj = await suiClient.getObject({
-								id: upgradeCapId,
-								options: { showOwner: true }
-							});
-							if (upgradeCapObj.data) {
-								const owner = upgradeCapObj.data.owner;
-								// If shared or immutable, anyone can use it
-								if (owner && typeof owner === 'object') {
-									if ('Shared' in owner || 'Immutable' in owner) {
-										canUseMvr = true;
-									} else if ('AddressOwner' in owner) {
-										// Check if owned by connected wallet
-										const ownerAddr = owner.AddressOwner;
-										if (ownerAddr === connectedAddress) {
+				// Only check if we don't already have permission and if UpgradeCap field has a value
+				if (!canUseMvr) {
+					// Set default UpgradeCap value first if empty
+					if (mvrUpgradeCap && !mvrUpgradeCap.value.trim()) {
+						mvrUpgradeCap.value = '0x6ba7ed57e524dae7945d0a4a4a574f76b2317918bfe07cf1baf0bead7ff6c711';
+					}
+					
+					// Now check UpgradeCap ownership if we have a value
+					if (mvrUpgradeCap && mvrUpgradeCap.value && mvrUpgradeCap.value.trim()) {
+						try {
+							const upgradeCapId = mvrUpgradeCap.value.trim();
+							if (/^0x[a-f0-9]{64}$/i.test(upgradeCapId)) {
+								const suiClient = new SuiClient({ url: RPC_URL });
+								const upgradeCapObj = await suiClient.getObject({
+									id: upgradeCapId,
+									options: { showOwner: true }
+								});
+								if (upgradeCapObj.data) {
+									const owner = upgradeCapObj.data.owner;
+									// If shared or immutable, anyone can use it
+									if (owner && typeof owner === 'object') {
+										if ('Shared' in owner || 'Immutable' in owner) {
 											canUseMvr = true;
-										}
-									} else if ('ObjectOwner' in owner) {
-										// Check if owned by an object ID that we own (like brando.sui NFT)
-										const ownerObjId = owner.ObjectOwner;
-										try {
-											const ownerObj = await suiClient.getObject({
-												id: ownerObjId,
-												options: { showOwner: true }
-											});
-											if (ownerObj.data && ownerObj.data.owner && typeof ownerObj.data.owner === 'object' && 'AddressOwner' in ownerObj.data.owner) {
-												if (ownerObj.data.owner.AddressOwner === connectedAddress) {
-													canUseMvr = true;
-												}
+										} else if ('AddressOwner' in owner) {
+											// Check if owned by connected wallet
+											const ownerAddr = owner.AddressOwner;
+											if (ownerAddr === connectedAddress) {
+												canUseMvr = true;
 											}
-										} catch (e) {
-											// Not an object or can't fetch, ignore
+										} else if ('ObjectOwner' in owner) {
+											// Check if owned by an object ID that we own (like brando.sui NFT)
+											const ownerObjId = owner.ObjectOwner;
+											try {
+												const ownerObj = await suiClient.getObject({
+													id: ownerObjId,
+													options: { showOwner: true }
+												});
+												if (ownerObj.data && ownerObj.data.owner && typeof ownerObj.data.owner === 'object' && 'AddressOwner' in ownerObj.data.owner) {
+													if (ownerObj.data.owner.AddressOwner === connectedAddress) {
+														canUseMvr = true;
+													}
+												}
+											} catch (e) {
+												// Not an object or can't fetch, ignore
+											}
 										}
 									}
 								}
 							}
+						} catch (e) {
+							// If we can't check, fall back to original logic
+							const errorMsg = e && typeof e === 'object' && 'message' in e ? e.message : String(e);
+							console.log('Could not check UpgradeCap ownership:', errorMsg);
 						}
-					} catch (e) {
-						// If we can't check, fall back to original logic
-						const errorMsg = e && typeof e === 'object' && 'message' in e ? e.message : String(e);
-						console.log('Could not check UpgradeCap ownership:', errorMsg);
 					}
 				}
 			}
