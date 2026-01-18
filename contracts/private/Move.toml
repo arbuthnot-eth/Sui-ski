@@ -1,0 +1,9 @@
+[package]
+name = "private"
+edition = "2024.beta"
+license = "MIT"
+
+[dependencies]
+
+[addresses]
+private = "0x0"

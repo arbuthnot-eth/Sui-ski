@@ -52,6 +52,23 @@ module bounty_escrow::escrow {
         created_at: u64,
     }
 
+    /// A gift bounty for someone to register/renew a name for the beneficiary
+    /// In this model, the executor provides the registration SUI, and the
+    /// bounty creator provides only the reward.
+    public struct GiftBounty has key, store {
+        id: UID,
+        /// SuiNS name to claim
+        name: String,
+        /// Address that will receive the registered name NFT
+        beneficiary: address,
+        /// Address that created the bounty
+        creator: address,
+        /// Escrowed reward for the executor
+        reward: Balance<SUI>,
+        /// Whether the bounty has been executed
+        executed: bool,
+    }
+
     /// Receipt proving bounty execution (for off-chain verification)
     public struct ExecutionReceipt has key, store {
         id: UID,
@@ -97,6 +114,26 @@ module bounty_escrow::escrow {
         }
     }
 
+    /// Create a new gift bounty
+    ///
+    /// The deposited SUI is solely for the executor's reward.
+    /// The executor is expected to provide their own SUI for the registration.
+    public fun create_gift_bounty(
+        name: String,
+        beneficiary: address,
+        payment: Coin<SUI>,
+        ctx: &mut TxContext
+    ): GiftBounty {
+        GiftBounty {
+            id: object::new(ctx),
+            name,
+            beneficiary,
+            creator: ctx.sender(),
+            reward: coin::into_balance(payment),
+            executed: false,
+        }
+    }
+
     /// Create bounty and share it (convenience function)
     public entry fun create_and_share_bounty(
         name: String,
@@ -118,6 +155,17 @@ module bounty_escrow::escrow {
             clock,
             ctx
         );
+        transfer::share_object(bounty);
+    }
+
+    /// Create gift bounty and share it (convenience function)
+    public entry fun create_and_share_gift_bounty(
+        name: String,
+        beneficiary: address,
+        payment: Coin<SUI>,
+        ctx: &mut TxContext
+    ) {
+        let bounty = create_gift_bounty(name, beneficiary, payment, ctx);
         transfer::share_object(bounty);
     }
 
@@ -179,6 +227,26 @@ module bounty_escrow::escrow {
     ): (Coin<SUI>, Coin<SUI>, address) {
         let (registration_coin, reward_coin) = release_for_registration(bounty, clock, ctx);
         (registration_coin, reward_coin, bounty.beneficiary)
+    }
+
+    /// Claim gift reward by providing the registered NFT
+    /// The NFT will be transferred to the beneficiary
+    public fun claim_gift_reward(
+        bounty: &mut GiftBounty,
+        nft: 0x2::suins_registration::SuinsRegistration,
+        ctx: &mut TxContext
+    ) {
+        assert!(!bounty.executed, EBountyAlreadyExecuted);
+        
+        bounty.executed = true;
+        
+        // Transfer NFT to beneficiary
+        transfer::public_transfer(nft, bounty.beneficiary);
+        
+        // Release reward to executor (sender)
+        let reward_amount = balance::value(&bounty.reward);
+        let reward_coin = coin::from_balance(balance::split(&mut bounty.reward, reward_amount), ctx);
+        transfer::public_transfer(reward_coin, ctx.sender());
     }
 
     /// Convenience entry function that executes and transfers reward to executor

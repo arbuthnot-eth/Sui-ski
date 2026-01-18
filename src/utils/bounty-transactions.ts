@@ -212,6 +212,40 @@ export async function buildCreateBountyTx(
 }
 
 /**
+ * Build transaction to create a gift bounty escrow (reward only)
+ *
+ * This transaction deposits SUI as a reward into the escrow contract.
+ * The executor provides their own SUI for the registration.
+ */
+export async function buildCreateGiftBountyTx(
+	params: Pick<CreateBountyParams, 'name' | 'beneficiary' | 'coinObjectId' | 'executorRewardMist' | 'gasBudget'>,
+	env: Env,
+	networkOverride?: 'mainnet' | 'testnet',
+): Promise<Transaction> {
+	const packageId = await resolveBountyPackageId(env, networkOverride)
+	const tx = new Transaction()
+
+	if (params.gasBudget) {
+		tx.setGasBudget(BigInt(params.gasBudget))
+	}
+
+	const [rewardCoin] = tx.splitCoins(tx.object(params.coinObjectId), [
+		tx.pure.u64(BigInt(params.executorRewardMist)),
+	])
+
+	tx.moveCall({
+		target: `${packageId}::escrow::create_and_share_gift_bounty`,
+		arguments: [
+			tx.pure.string(params.name),
+			tx.pure.address(params.beneficiary),
+			rewardCoin,
+		],
+	})
+
+	return tx
+}
+
+/**
  * Build transaction to execute a bounty (register name and claim reward)
  *
  * This PTB performs the following atomically in a single transaction:
@@ -274,6 +308,64 @@ export async function buildExecuteBountyTx(params: ExecuteBountyParams, env: Env
 
 	// Step 4: Transfer reward to executor (tx sender)
 	tx.transferObjects([rewardCoin], tx.gas)
+
+	return tx
+}
+
+/**
+ * Build transaction to execute a gift bounty (executor pays for registration)
+ *
+ * This PTB performs the following atomically:
+ * 1. Registers the SuiNS name using the executor's own funds (gas coin)
+ * 2. Calls claim_gift_reward with the resulting NFT
+ * 3. The contract transfers the NFT to the beneficiary and the reward to the executor
+ */
+export async function buildExecuteGiftBountyTx(
+	params: Pick<ExecuteBountyParams, 'bountyObjectId' | 'name' | 'beneficiary' | 'years' | 'gasBudget'>,
+	env: Env,
+): Promise<Transaction> {
+	const network = resolveNetwork(env)
+	const bountyPackageId = await resolveBountyPackageId(env, network)
+	const tx = new Transaction()
+
+	if (params.gasBudget) {
+		tx.setGasBudget(BigInt(params.gasBudget))
+	}
+
+	const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
+	const suinsClient = new SuinsClient({
+		client: suiClient,
+		network,
+	})
+	const suinsTx = new SuinsTransaction(suinsClient, tx)
+	const coinConfig = suinsClient.config.coins.SUI
+	if (!coinConfig) {
+		throw new Error('SuiNS configuration for SUI coin is missing')
+	}
+
+	const domain = params.name.endsWith('.sui') ? params.name.toLowerCase() : `${params.name.toLowerCase()}.sui`
+	
+	// Step 1: Register the SuiNS name using executor's funds
+	// Split from gas for registration payment
+	// We need to estimate the price or get it from params
+	// For now, assume the caller adds the payment coin or we split from gas
+	const [regCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(10_000_000_000)]) // Placeholder 10 SUI, should be dynamic
+
+	const nft = suinsTx.register({
+		domain,
+		years: params.years,
+		coinConfig,
+		coin: regCoin,
+	})
+
+	// Step 2: Claim reward by providing the NFT
+	tx.moveCall({
+		target: `${bountyPackageId}::escrow::claim_gift_reward`,
+		arguments: [
+			tx.object(params.bountyObjectId),
+			nft,
+		],
+	})
 
 	return tx
 }

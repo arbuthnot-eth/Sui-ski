@@ -4265,6 +4265,41 @@ export const profileStyles = `
 			font-weight: 600;
 			color: var(--text);
 			margin-bottom: 10px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+		.bounty-mode-toggle {
+			display: flex;
+			background: rgba(0, 0, 0, 0.3);
+			border-radius: 8px;
+			padding: 2px;
+			border: 1px solid var(--border);
+		}
+		.bounty-mode-btn {
+			padding: 4px 10px;
+			border-radius: 6px;
+			font-size: 0.7rem;
+			font-weight: 700;
+			cursor: pointer;
+			border: none;
+			background: transparent;
+			color: var(--text-muted);
+			transition: all 0.2s;
+		}
+		.bounty-mode-btn.active {
+			background: var(--accent);
+			color: white;
+		}
+		.create-bounty-mode-desc {
+			margin-top: 12px;
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			background: rgba(96, 165, 250, 0.05);
+			padding: 10px 12px;
+			border-radius: 10px;
+			border-left: 3px solid var(--accent);
+			line-height: 1.4;
 		}
 		.create-bid-row {
 			display: flex;

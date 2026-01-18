@@ -1,6 +1,7 @@
 import { handleLandingPage, handleLandingApiRequest } from './handlers/landing'
 import { generateProfilePage } from './handlers/profile'
 import { handlePWARequest } from './handlers/pwa'
+import { handlePrivateRequest } from './handlers/private'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
@@ -64,6 +65,11 @@ export default {
 					return handleRPCRequest(request, env)
 
 				case 'suins': {
+					// Special handling for private.sui.ski -> Private Protocol
+					if (parsed.subdomain === 'private') {
+						return handlePrivateRequest(request, env)
+					}
+
 					// Handle API requests on suins subdomains
 					if (url.pathname.startsWith('/api/')) {
 						// Route to specific API handlers
@@ -90,6 +96,23 @@ export default {
 						isTwitterBot: isTwitterPreviewBot(userAgent),
 						url,
 					})
+
+				case 'mvr': {
+					// Handle MVR package routes (pkg--name.sui.ski)
+					const { packageName, suinsName } = parsed.mvrInfo!
+
+					// Special handling for @iousd/private
+					if (suinsName === 'iousd' && packageName === 'private') {
+						return handlePrivateRequest(request, env)
+					}
+
+					// Generic MVR packages - resolve via MVR registry
+					return jsonResponse({
+						mvrPackage: `@${suinsName}/${packageName}`,
+						version: parsed.mvrInfo?.version || 'latest',
+						message: 'MVR package resolution coming soon',
+					})
+				}
 
 				default:
 					return errorResponse('Unknown route type', 'UNKNOWN_ROUTE', 400)

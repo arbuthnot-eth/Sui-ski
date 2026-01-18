@@ -1,6 +1,6 @@
 import type { Env, Bounty, PublicBounty } from '../types'
 import { relaySignedTransaction } from '../utils/transactions'
-import { buildExecuteBountyTx, serializeTransaction } from '../utils/bounty-transactions'
+import { buildExecuteBountyTx, buildExecuteGiftBountyTx, serializeTransaction } from '../utils/bounty-transactions'
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -168,6 +168,7 @@ async function handleCreateBounty(request: Request, env: Env): Promise<Response>
 		createdAt: now,
 		updatedAt: now,
 		attempts: 0,
+		type: (body as { type?: 'standard' | 'gift' }).type || 'standard',
 	}
 
 	// Store bounty
@@ -325,15 +326,28 @@ async function handleBuildTx(
 	}
 
 	// Build the execution transaction
-	const tx = await buildExecuteBountyTx(
-		{
-			bountyObjectId: bounty.escrowObjectId,
-			name: bounty.name,
-			beneficiary: bounty.beneficiary,
-			years: bounty.years,
-		},
-		env,
-	)
+	let tx: Transaction
+	if (bounty.type === 'gift') {
+		tx = await buildExecuteGiftBountyTx(
+			{
+				bountyObjectId: bounty.escrowObjectId,
+				name: bounty.name,
+				beneficiary: bounty.beneficiary,
+				years: bounty.years,
+			},
+			env,
+		)
+	} else {
+		tx = await buildExecuteBountyTx(
+			{
+				bountyObjectId: bounty.escrowObjectId,
+				name: bounty.name,
+				beneficiary: bounty.beneficiary,
+				years: bounty.years,
+			},
+			env,
+		)
+	}
 
 	// Serialize for signing
 	const { txBytes, digest } = await serializeTransaction(tx, env, executorAddress)

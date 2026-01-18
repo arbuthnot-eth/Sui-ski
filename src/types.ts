@@ -15,7 +15,16 @@ export interface Env {
 	MOVE_REGISTRY_PARENT_ID?: string
 }
 
-export type RouteType = 'suins' | 'content' | 'rpc' | 'root'
+export type RouteType = 'suins' | 'content' | 'rpc' | 'root' | 'mvr'
+
+export interface MVRInfo {
+	/** Package name (e.g., "private" from "private--iousd.sui.ski") */
+	packageName: string
+	/** SuiNS name (e.g., "iousd" from "private--iousd.sui.ski") */
+	suinsName: string
+	/** Optional version number (e.g., 2 from "private--iousd--v2.sui.ski") */
+	version?: number
+}
 
 export interface ParsedSubdomain {
 	type: RouteType
@@ -23,6 +32,8 @@ export interface ParsedSubdomain {
 	subdomain: string
 	/** Original hostname */
 	hostname: string
+	/** MVR package info (only present when type === 'mvr') */
+	mvrInfo?: MVRInfo
 }
 
 export interface SuiNSRecord {
@@ -87,6 +98,8 @@ export interface Bounty {
 	signatures?: string[]
 	resultDigest?: string
 	lastError?: string
+	/** Type of bounty: 'standard' (creator pays all) or 'gift' (creator pays reward only) */
+	type?: 'standard' | 'gift'
 }
 
 /** Public bounty data (without sensitive tx data) */
