@@ -196,6 +196,10 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 		}
 
 		const client = new SuiClient({ url: env.SUI_RPC_URL })
+		const suinsClient = new SuinsClient({
+			client: client as never,
+			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
+		})
 
 		// SuiNS NFT types
 		const suinsNftTypes = [
@@ -247,23 +251,48 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			cursor = response.hasNextPage ? response.nextCursor : null
 		} while (cursor)
 
-		// For each address group, mark the first name (alphabetically) as primary
-		// This is a heuristic since we can't easily query the on-chain default name
-		const addressFirstName = new Map<string, string>()
-		for (const nameInfo of allNames) {
-			if (nameInfo.targetAddress) {
-				const existing = addressFirstName.get(nameInfo.targetAddress)
-				if (!existing || nameInfo.name.localeCompare(existing) < 0) {
-					addressFirstName.set(nameInfo.targetAddress, nameInfo.name)
+		// Get unique target addresses to check reverse resolution
+		const uniqueAddresses = [...new Set(allNames.map(n => n.targetAddress).filter(Boolean))] as string[]
+
+		// Fetch reverse resolution for each unique address in parallel
+		// Query the reverse_registry dynamic field on the suins object
+		const addressDefaultName = new Map<string, string>()
+		const suinsObjectId = suinsClient.config.suins
+		const CONCURRENCY_LIMIT = 10
+
+		for (let i = 0; i < uniqueAddresses.length; i += CONCURRENCY_LIMIT) {
+			const batch = uniqueAddresses.slice(i, i + CONCURRENCY_LIMIT)
+			await Promise.all(batch.map(async (addr) => {
+				try {
+					// Query the reverse lookup dynamic field
+					const reverseRecord = await client.getDynamicFieldObject({
+						parentId: suinsObjectId,
+						name: {
+							type: 'address',
+							value: addr,
+						},
+					})
+					if (reverseRecord.data?.content?.dataType === 'moveObject') {
+						const fields = (reverseRecord.data.content as { fields?: { value?: string; domain_name?: string } }).fields
+						const defaultName = fields?.value || fields?.domain_name
+						if (defaultName) {
+							addressDefaultName.set(addr, defaultName)
+						}
+					}
+				} catch {
+					// Skip if reverse resolution fails (no default name set)
 				}
-			}
+			}))
 		}
 
-		// Mark primary names (first alphabetically per address)
+		// Mark primary names only if they match the reverse resolution
 		for (const nameInfo of allNames) {
 			if (nameInfo.targetAddress) {
-				const primaryName = addressFirstName.get(nameInfo.targetAddress)
-				nameInfo.isPrimary = primaryName === nameInfo.name
+				const defaultName = addressDefaultName.get(nameInfo.targetAddress)
+				// Compare without .sui suffix
+				const cleanName = nameInfo.name.replace(/\.sui$/, '')
+				const cleanDefault = defaultName?.replace(/\.sui$/, '')
+				nameInfo.isPrimary = cleanName === cleanDefault
 			}
 		}
 
