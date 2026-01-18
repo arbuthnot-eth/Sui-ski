@@ -1788,7 +1788,7 @@ export function generateProfilePage(
 					}
 				}
 			} catch (e) {
-				console.log('Failed to fetch NFT owner:', e);
+				console.log('Failed to fetch NFT owner:', e.message);
 			}
 			return null;
 		}
@@ -1803,7 +1803,7 @@ export function generateProfilePage(
 					return result.data[0];
 				}
 			} catch (e) {
-				console.log('Failed to fetch primary name:', e);
+				console.log('Failed to fetch primary name:', e.message);
 			}
 			return null;
 		}
@@ -1969,7 +1969,7 @@ export function generateProfilePage(
 				}
 
 			} catch (e) {
-				const m = e || '';
+				const m = e.message || '';
 				if (m.includes('rejected') || m.includes('cancelled')) {
 					showGracePeriodStatus('Cancelled', 'error');
 				} else if (m.includes('Insufficient')) {
@@ -2102,7 +2102,7 @@ export function generateProfilePage(
 				updateBountiesSectionVisibility();
 				return true;
 			} catch (e) {
-				console.log('Failed to restore wallet:', e);
+				console.log('Failed to restore wallet:', e.message);
 				clearWalletConnection();
 				return false;
 			}
@@ -2151,7 +2151,7 @@ export function generateProfilePage(
 				updateBountiesSectionVisibility();
 			} catch (e) {
 				console.error('Connection error:', e);
-				const errorMsg = e || 'Unknown error';
+				const errorMsg = e.message || 'Unknown error';
 				walletList.innerHTML = '<div class="wallet-no-wallets" style="color: var(--error);">' +
 					'Connection failed: ' + errorMsg +
 					'<br><br>' +
@@ -2817,7 +2817,7 @@ export function generateProfilePage(
 					newAddress = resolved.address;
 					resolvedFromName = resolved.name;
 				} catch (e) {
-					showStatus(modalStatus, e || 'Could not resolve name', 'error');
+					showStatus(modalStatus, e.message || 'Could not resolve name', 'error');
 					return;
 				}
 			}
@@ -2894,7 +2894,7 @@ export function generateProfilePage(
 							chain
 						});
 					} catch (e) {
-						console.log('signAndExecuteTransaction failed:', e);
+						console.log('signAndExecuteTransaction failed:', e.message);
 					}
 				}
 
@@ -3505,7 +3505,7 @@ export function generateProfilePage(
 						showBidStatus(data.error || 'Failed to submit bid', 'error');
 					}
 				} catch (e) {
-					showBidStatus('Failed to submit bid: ' + e, 'error');
+					showBidStatus('Failed to submit bid: ' + e.message, 'error');
 				} finally {
 					queueBidBtn.disabled = false;
 					queueBidBtn.textContent = 'Queue Bid';
@@ -3533,7 +3533,7 @@ export function generateProfilePage(
 						showBidStatus(data.error || 'Failed to cancel bid', 'error');
 					}
 				} catch (e) {
-					showBidStatus('Failed to cancel bid: ' + e, 'error');
+					showBidStatus('Failed to cancel bid: ' + e.message, 'error');
 				}
 			}
 
@@ -6258,9 +6258,9 @@ export function generateProfilePage(
 								}
 							}
 						}
-					} catch (e) {
+					} catch (err) {
 						// If we can't check, fall back to original logic
-						console.log('Could not check UpgradeCap ownership:', e);
+						console.log('Could not check UpgradeCap ownership');
 					}
 				}
 			}
@@ -6382,7 +6382,7 @@ export function generateProfilePage(
 					return;
 				}
 
-			// Special case: If UpgradeCap is owned by an object ID (like alias.sui NFT),
+			// Special case: If UpgradeCap is owned by an object ID (like vortex.sui NFT),
 			// and the connected wallet owns that NFT, we can transfer it
 			let canTransfer = false;
 			let parentObjectId = null;
