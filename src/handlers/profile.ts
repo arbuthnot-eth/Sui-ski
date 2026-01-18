@@ -6152,6 +6152,17 @@ export function generateProfilePage(
 				mvrWalletRequired.style.display = 'none';
 				mvrNotOwner.style.display = 'none';
 				mvrRegisterForm.style.display = 'block';
+				
+				// Set default values for bounty-escrow package if fields are empty
+				if (mvrPackageName && !mvrPackageName.value.trim()) {
+					mvrPackageName.value = 'bounty-escrow';
+				}
+				if (mvrPackageAddress && !mvrPackageAddress.value.trim()) {
+					mvrPackageAddress.value = '0x8d169b13d5cbdec20ad0a215f27ba8fe6e97daa9f6fa5a41e5e53d62928b1026';
+				}
+				if (mvrUpgradeCap && !mvrUpgradeCap.value.trim()) {
+					mvrUpgradeCap.value = '0x6ba7ed57e524dae7945d0a4a4a574f76b2317918bfe07cf1baf0bead7ff6c711';
+				}
 			}
 		}
 
@@ -6293,16 +6304,67 @@ export function generateProfilePage(
 				console.error('MVR registration error:', error);
 				
 				// Extract error message from various error object structures
+				// Sui SDK errors can have nested structures with cause, details, etc.
 				let msg = 'Unknown error';
+				
+				// Helper to extract message from an object
+				const extractMsg = (obj: unknown): string | null => {
+					if (!obj || typeof obj !== 'object') return null;
+					const err = obj as Record<string, unknown>;
+					return (err.message as string) 
+						|| (err.error as string)
+						|| (err.msg as string)
+						|| (err.details as string)
+						|| (err.code as string)
+						|| null;
+				};
+				
 				if (error instanceof Error) {
-					msg = error.message;
+					msg = error.message || error.name || 'Error';
+					// Check for nested error in cause property
+					if (error.cause) {
+						const causeMsg = extractMsg(error.cause);
+						if (causeMsg) msg = causeMsg;
+					}
 				} else if (typeof error === 'string') {
 					msg = error;
 				} else if (error && typeof error === 'object') {
-					// Handle error objects that might have different structures
-					msg = error.message || error.error || error.msg || error.toString();
-					// Remove any weird prefixes like "Me:"
-					msg = msg.replace(/^Me:\s*/i, '').trim();
+					// Try to extract from error object directly
+					const directMsg = extractMsg(error);
+					if (directMsg) {
+						msg = directMsg;
+					} else {
+						// Check nested cause
+						const cause = (error as { cause?: unknown }).cause;
+						if (cause) {
+							const causeMsg = extractMsg(cause);
+							if (causeMsg) msg = causeMsg;
+						} else {
+							// Last resort: try toString but clean it up
+							const str = String(error);
+							msg = str;
+						}
+					}
+				}
+				
+				// Clean up the message - remove weird prefixes and normalize
+				msg = msg
+					.replace(/^Me:\s*/i, '')
+					.replace(/^Error:\s*/i, '')
+					.replace(/^SuiError:\s*/i, '')
+					.trim();
+				
+				// If message is still generic or empty, try to get more info
+				if (msg === 'Unknown error' || msg === 'Error' || !msg) {
+					// Try to stringify the error for debugging
+					try {
+						const errorStr = JSON.stringify(error, Object.getOwnPropertyNames(error));
+						if (errorStr && errorStr !== '{}') {
+							msg = 'Transaction failed. Check console for details.';
+						}
+					} catch {
+						// Ignore JSON stringify errors
+					}
 				}
 
 				if (msg.includes('rejected') || msg.includes('cancelled') || msg.includes('User rejected')) {

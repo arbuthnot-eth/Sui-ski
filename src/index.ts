@@ -1076,7 +1076,7 @@ async function handleSuiNSImageProxy(request: Request, env: Env): Promise<Respon
 		})
 
 		if (!response.ok) {
-			// Try alternative endpoint without timestamp if we have one
+			// Try alternative endpoint without timestamp if we have one and got 404
 			if (expirationTs && response.status === 404) {
 				const altUrl = `${suinsApiBase}/nfts/${domain}`
 				const altResponse = await fetch(altUrl, {
@@ -1099,8 +1099,9 @@ async function handleSuiNSImageProxy(request: Request, env: Env): Promise<Respon
 				}
 			}
 			// Return 404 for missing images (don't return 500 for expected 404s)
+			// This is expected behavior - the NFT might not exist or the image endpoint might not be available
 			const status = response.status === 404 ? 404 : response.status
-			return new Response(`Failed to fetch image: ${response.status}`, {
+			return new Response(`Image not found`, {
 				status,
 				headers: {
 					'Access-Control-Allow-Origin': '*',
