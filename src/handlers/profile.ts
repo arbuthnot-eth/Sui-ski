@@ -4039,7 +4039,7 @@ export function generateProfilePage(
 		updateFileMeta(null);
 
 		// ===== MESSAGING FUNCTIONALITY =====
-		const MESSAGING_CONTRACT = ${serializeJson(env.MESSAGING_CONTRACT_ADDRESS || '')};
+		const MESSAGING_CONTRACT = ${serializeJson(String(env.MESSAGING_CONTRACT_ADDRESS || ''))};
 		const RECIPIENT_ADDRESS = CURRENT_ADDRESS;
 		const RECIPIENT_NAME = NAME;
 		const messageInput = document.getElementById('message-input');
