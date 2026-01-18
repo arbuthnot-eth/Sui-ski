@@ -1,6 +1,7 @@
 import { SuiClient } from '@mysten/sui/client'
 import { SuinsClient } from '@mysten/suins'
 import type { Env } from '../types'
+import { cacheKey, getCached, setCache } from '../utils/cache'
 import { htmlResponse, jsonResponse } from '../utils/response'
 import { renderSocialMeta } from '../utils/social'
 import { getGatewayStatus } from '../utils/status'
@@ -158,6 +159,21 @@ async function handleNftDetails(objectId: string, env: Env): Promise<Response> {
 	}
 }
 
+interface NameInfo {
+	name: string
+	nftId: string
+	expirationMs: number | null
+	targetAddress: string | null
+	isPrimary: boolean
+}
+
+interface LinkedNamesCache {
+	names: NameInfo[]
+	grouped: Record<string, NameInfo[]>
+}
+
+const LINKED_NAMES_CACHE_TTL = 300 // 5 minutes
+
 /**
  * Fetch all SuiNS names owned by an address with expiration and target address data
  */
@@ -168,6 +184,16 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 	}
 
 	try {
+		// Check cache first
+		const key = cacheKey('linked-names', env.SUI_NETWORK, address)
+		const cached = await getCached<LinkedNamesCache>(env, key)
+		if (cached) {
+			return new Response(JSON.stringify(cached), {
+				status: 200,
+				headers: { ...corsHeaders, 'X-Cache': 'HIT' },
+			})
+		}
+
 		const client = new SuiClient({ url: env.SUI_RPC_URL })
 		const suinsClient = new SuinsClient({
 			client: client as never,
@@ -179,14 +205,6 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			'0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration',
 			'0x22fa05f21b1ad71442571fe5757571a2c063d7856c1a2b174de01f21a6f562ee::suins_registration::SuinsRegistration',
 		]
-
-		interface NameInfo {
-			name: string
-			nftId: string
-			expirationMs: number | null
-			targetAddress: string | null
-			isPrimary: boolean
-		}
 
 		const allNames: NameInfo[] = []
 		let cursor: string | null | undefined = undefined
@@ -269,8 +287,8 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 		}
 
 		// Sort each group by expiration, with primary first
-		for (const key of Object.keys(grouped)) {
-			grouped[key].sort((a, b) => {
+		for (const groupKey of Object.keys(grouped)) {
+			grouped[groupKey].sort((a, b) => {
 				// Primary names come first
 				if (a.isPrimary && !b.isPrimary) return -1
 				if (!a.isPrimary && b.isPrimary) return 1
@@ -281,9 +299,14 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			})
 		}
 
-		return new Response(JSON.stringify({ names: allNames, grouped }), {
+		const result: LinkedNamesCache = { names: allNames, grouped }
+
+		// Cache the result
+		await setCache(env, key, result, LINKED_NAMES_CACHE_TTL)
+
+		return new Response(JSON.stringify(result), {
 			status: 200,
-			headers: corsHeaders,
+			headers: { ...corsHeaders, 'X-Cache': 'MISS' },
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch names'
