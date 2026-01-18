@@ -231,17 +231,24 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			cursor = response.hasNextPage ? response.nextCursor : null
 		} while (cursor)
 
-		// Step 2: Use native Sui RPC to resolve each name to its target address
+		// Step 2: Use SuinsClient.getNameRecord to resolve each name to its target address
+		// This is more reliable than the raw RPC method
+		const suinsClient = new SuinsClient({
+			client: client as never,
+			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
+		})
+
 		const BATCH_SIZE = 10
 		for (let i = 0; i < allNames.length; i += BATCH_SIZE) {
 			const batch = allNames.slice(i, i + BATCH_SIZE)
 			await Promise.all(batch.map(async (nameInfo) => {
 				try {
-					// Use native suix_resolveNameServiceAddress RPC method
-					const resolved = await client.resolveNameServiceAddress({ name: nameInfo.name })
-					nameInfo.targetAddress = resolved || null
+					// Ensure name has .sui suffix for SuinsClient
+					const suinsName = nameInfo.name.endsWith('.sui') ? nameInfo.name : `${nameInfo.name}.sui`
+					const nameRecord = await suinsClient.getNameRecord(suinsName)
+					nameInfo.targetAddress = nameRecord?.targetAddress || null
 				} catch {
-					// Name may not have a target address set
+					// Name may not have a target address set or record may not exist
 				}
 			}))
 		}

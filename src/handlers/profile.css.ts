@@ -4160,7 +4160,7 @@ export const profileStyles = `
 		}
 		.availability-container {
 			display: grid;
-			grid-template-columns: 1fr 1fr;
+			grid-template-columns: 1.4fr 0.6fr;
 			gap: 16px;
 			align-items: stretch;
 		}
@@ -4177,7 +4177,7 @@ export const profileStyles = `
 			flex-direction: column;
 			align-items: center;
 			justify-content: center;
-			padding: 16px 12px;
+			padding: 24px 16px;
 			background: rgba(0, 0, 0, 0.25);
 			border-radius: 10px;
 			border: 1px solid rgba(139, 92, 246, 0.25);
@@ -4185,59 +4185,59 @@ export const profileStyles = `
 		.avail-timer-header {
 			display: flex;
 			align-items: center;
-			gap: 6px;
-			font-size: 0.7rem;
+			gap: 8px;
+			font-size: 0.8rem;
 			font-weight: 700;
 			color: var(--accent);
 			text-transform: uppercase;
-			letter-spacing: 0.08em;
-			margin-bottom: 10px;
+			letter-spacing: 0.1em;
+			margin-bottom: 12px;
 		}
 		.avail-timer-header svg {
-			width: 14px;
-			height: 14px;
+			width: 16px;
+			height: 16px;
 		}
 		.avail-timer-display {
 			display: flex;
 			align-items: center;
-			gap: 3px;
-			margin-bottom: 8px;
+			gap: 4px;
+			margin-bottom: 10px;
 		}
 		.avail-timer-unit {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			min-width: 38px;
-			padding: 8px 4px;
+			min-width: 50px;
+			padding: 12px 6px;
 			background: rgba(139, 92, 246, 0.2);
 			border: 1px solid rgba(139, 92, 246, 0.35);
-			border-radius: 8px;
+			border-radius: 10px;
 		}
 		.avail-timer-value {
 			font-family: var(--font-mono, ui-monospace, monospace);
-			font-size: 1.25rem;
+			font-size: 1.75rem;
 			font-weight: 800;
 			color: var(--accent);
 			line-height: 1;
 		}
 		.avail-timer-label {
-			font-size: 0.55rem;
+			font-size: 0.6rem;
 			font-weight: 700;
 			color: var(--text-muted);
 			text-transform: uppercase;
-			margin-top: 2px;
+			margin-top: 4px;
 		}
 		.avail-timer-sep {
-			font-size: 1rem;
+			font-size: 1.25rem;
 			font-weight: 700;
 			color: var(--accent);
 			opacity: 0.4;
-			margin-bottom: 12px;
+			margin-bottom: 16px;
 		}
 		.avail-timer-date {
-			font-size: 0.65rem;
+			font-size: 0.75rem;
 			color: var(--text-muted);
-			opacity: 0.8;
+			opacity: 0.9;
 		}
 
 		/* Bounty Side (Right) - Compact */
