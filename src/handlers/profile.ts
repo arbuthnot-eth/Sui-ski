@@ -1787,8 +1787,8 @@ export function generateProfilePage(
 						return obj.data.owner.ObjectOwner;
 					}
 				}
-			} catch (e) {
-				console.log('Failed to fetch NFT owner:', e.message);
+			} catch (err) {
+				console.log('Failed to fetch NFT owner');
 			}
 			return null;
 		}
@@ -1802,8 +1802,8 @@ export function generateProfilePage(
 				if (result?.data?.length > 0) {
 					return result.data[0];
 				}
-			} catch (e) {
-				console.log('Failed to fetch primary name:', e.message);
+			} catch (err) {
+				console.log('Failed to fetch primary name');
 			}
 			return null;
 		}
@@ -1968,14 +1968,14 @@ export function generateProfilePage(
 					throw new Error(reqData.error || 'Request failed');
 				}
 
-			} catch (e) {
-				const m = e.message || '';
+			} catch (gracePeriodErr) {
+				const m = gracePeriodErr && typeof gracePeriodErr === 'object' && 'message' in gracePeriodErr ? String(gracePeriodErr.message) : '';
 				if (m.includes('rejected') || m.includes('cancelled')) {
 					showGracePeriodStatus('Cancelled', 'error');
 				} else if (m.includes('Insufficient')) {
 					showGracePeriodStatus('Need 10 SUI + gas', 'error');
 				} else {
-					showGracePeriodStatus('Error: ' + m, 'error');
+					showGracePeriodStatus('Error: ' + (m || 'Unknown error'), 'error');
 				}
 			} finally {
 				if (btn) btn.disabled = false;
@@ -2101,8 +2101,8 @@ export function generateProfilePage(
 				await checkEditPermission();
 				updateBountiesSectionVisibility();
 				return true;
-			} catch (e) {
-				console.log('Failed to restore wallet:', e.message);
+			} catch (err) {
+				console.log('Failed to restore wallet');
 				clearWalletConnection();
 				return false;
 			}
@@ -2149,9 +2149,9 @@ export function generateProfilePage(
 				renderWalletBar();
 				await checkEditPermission();
 				updateBountiesSectionVisibility();
-			} catch (e) {
-				console.error('Connection error:', e);
-				const errorMsg = e.message || 'Unknown error';
+			} catch (connErr) {
+				console.error('Connection error:', connErr);
+				const errorMsg = connErr && typeof connErr === 'object' && 'message' in connErr ? connErr.message : 'Unknown error';
 				walletList.innerHTML = '<div class="wallet-no-wallets" style="color: var(--error);">' +
 					'Connection failed: ' + errorMsg +
 					'<br><br>' +
@@ -2816,8 +2816,9 @@ export function generateProfilePage(
 					const resolved = await resolveSuiNSName(inputValue);
 					newAddress = resolved.address;
 					resolvedFromName = resolved.name;
-				} catch (e) {
-					showStatus(modalStatus, e.message || 'Could not resolve name', 'error');
+				} catch (resolveErr) {
+					const errMsg = resolveErr && typeof resolveErr === 'object' && 'message' in resolveErr ? resolveErr.message : 'Could not resolve name';
+					showStatus(modalStatus, errMsg, 'error');
 					return;
 				}
 			}
@@ -2893,8 +2894,8 @@ export function generateProfilePage(
 							account: connectedAccount,
 							chain
 						});
-					} catch (e) {
-						console.log('signAndExecuteTransaction failed:', e.message);
+					} catch (signErr) {
+						console.log('signAndExecuteTransaction failed');
 					}
 				}
 
@@ -3504,8 +3505,9 @@ export function generateProfilePage(
 					} else {
 						showBidStatus(data.error || 'Failed to submit bid', 'error');
 					}
-				} catch (e) {
-					showBidStatus('Failed to submit bid: ' + e.message, 'error');
+				} catch (submitErr) {
+					const errMsg = submitErr && typeof submitErr === 'object' && 'message' in submitErr ? submitErr.message : 'Unknown error';
+					showBidStatus('Failed to submit bid: ' + errMsg, 'error');
 				} finally {
 					queueBidBtn.disabled = false;
 					queueBidBtn.textContent = 'Queue Bid';
@@ -3532,15 +3534,16 @@ export function generateProfilePage(
 						const data = await res.json();
 						showBidStatus(data.error || 'Failed to cancel bid', 'error');
 					}
-				} catch (e) {
-					showBidStatus('Failed to cancel bid: ' + e.message, 'error');
+				} catch (cancelErr) {
+					const errMsg = cancelErr && typeof cancelErr === 'object' && 'message' in cancelErr ? cancelErr.message : 'Unknown error';
+					showBidStatus('Failed to cancel bid: ' + errMsg, 'error');
 				}
 			}
 
 			// Event listeners
 			queueBidBtn.addEventListener('click', submitBid);
-			bidAmountInput.addEventListener('keypress', (e) => {
-				if (e.key === 'Enter') submitBid();
+			bidAmountInput.addEventListener('keypress', (ev) => {
+				if (ev.key === 'Enter') submitBid();
 			});
 
 			// Load existing bid when wallet connects
