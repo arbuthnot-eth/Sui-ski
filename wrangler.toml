@@ -14,34 +14,8 @@ routes = [
 SUI_NETWORK = "mainnet"
 SUI_RPC_URL = "https://fullnode.mainnet.sui.io:443"
 WALRUS_NETWORK = "mainnet"
-# Move Registry (MVR) parent object ID for mainnet
-MOVE_REGISTRY_PARENT_ID = "0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727"
-# Bounty escrow Move package IDs (set these before enabling bounties)
-# BOUNTY_ESCROW_PACKAGE_MAINNET = "0x..."
-# BOUNTY_ESCROW_PACKAGE_TESTNET = "0x..."
-# Sui Stack Messaging SDK contract (mainnet)
-MESSAGING_CONTRACT_ADDRESS = "0x9a814ab4f67fff8ec2a8bb1ddcf188b26119ae6866eea9f3f5d5e7eaf7a9c862"
-
-# AI Features Configuration
-# Set OpenRouter API key as secret: wrangler secret put OPENROUTER_API_KEY
-# Optional: Set controlling wallet/NFT as secret: wrangler secret put CONTROLLING_WALLET_ADDRESS
-# OPENROUTER_API_KEY - Your OpenRouter API key for Gemini Nano Banana 3 Flash (required)
-# CONTROLLING_WALLET_ADDRESS - Optional: Sui wallet address or NFT object ID that controls access
-#   If not set, anyone can use AI features (payment still required)
-# Note: Payments automatically go to the alias.sui address (target address of the SuiNS name)
-
-# gRPC Backend Proxy Configuration
-# Set backend URL as secret: wrangler secret put GRPC_BACKEND_URL
-# Set API key as secret: wrangler secret put GRPC_BACKEND_API_KEY
-# GRPC_BACKEND_URL - HTTP endpoint that translates to gRPC calls (e.g., https://grpc.example.com)
-# GRPC_BACKEND_API_KEY - Optional: API key for backend authentication
-# Benefits: Binary protocol efficiency, HTTP/2 multiplexing, connection pooling
 
 # KV namespace for caching resolved names
 [[kv_namespaces]]
 binding = "CACHE"
 id = "c0054cf22c6a4daa99cb36347fa5229c"
-
-# Scheduled triggers for claim processing
-[triggers]
-crons = ["* * * * *"]  # Every minute
