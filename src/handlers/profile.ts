@@ -1704,11 +1704,19 @@ export function generateProfilePage(
 			return wallets;
 		}
 
-		// Detect wallets with retry logic
+		// Detect wallets with retry logic (non-blocking)
 		async function detectWallets() {
+			// First, try immediate detection
+			const immediateWallets = getSuiWallets();
+			if (immediateWallets.length > 0) {
+				return immediateWallets;
+			}
+
+			// If no wallets found immediately, return empty and let the UI show install links
+			// The wallet API will register wallets asynchronously
 			return new Promise((resolve) => {
 				let attempts = 0;
-				const maxAttempts = 25;
+				const maxAttempts = 10; // Reduced from 25 to avoid long blocking
 				let resolved = false;
 
 				const check = () => {
@@ -1720,7 +1728,7 @@ export function generateProfilePage(
 						resolved = true;
 						resolve(wallets);
 					} else {
-						setTimeout(check, 150);
+						setTimeout(check, 100); // Reduced from 150ms
 					}
 				};
 
@@ -1740,7 +1748,8 @@ export function generateProfilePage(
 					}
 				}
 
-				check();
+				// Start checking after a short delay to allow async wallet registration
+				setTimeout(check, 50);
 			});
 		}
 
@@ -1822,8 +1831,8 @@ export function generateProfilePage(
 				} else {
 					setSelfBtn.disabled = false;
 					setSelfBtn.title = connectedPrimaryName
-						? \`Set to \${connectedPrimaryName}\`
-						: \`Set to \${truncAddr(connectedAddress)}\`;
+						? 'Set to ' + connectedPrimaryName
+						: 'Set to ' + truncAddr(connectedAddress);
 					setSelfBtn.classList.remove('already-set');
 				}
 				setSelfBtn.classList.remove('hidden');
@@ -1899,7 +1908,7 @@ export function generateProfilePage(
 					const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
 						transaction: tx,
 						account: connectedAccount,
-						chain: \`sui:\${NETWORK}\`
+						chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
 					});
 
 					if (!result?.digest) throw new Error('No transaction digest');
@@ -2138,13 +2147,45 @@ export function generateProfilePage(
 			}
 		}
 
-		// Show wallet selection modal
+		// Show wallet selection modal (non-blocking)
 		async function connectWallet() {
 			walletModal.classList.add('open');
 			walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Detecting wallets...</div>';
 
-			const wallets = await detectWallets();
+			// Don't block - show immediate results and update as wallets are detected
+			const immediateWallets = getSuiWallets();
+			if (immediateWallets.length > 0) {
+				renderWalletList(immediateWallets);
+				// Continue detecting in background for newly registered wallets
+				detectWallets().then(wallets => {
+					if (wallets.length > immediateWallets.length) {
+						renderWalletList(wallets);
+					}
+				}).catch(() => {});
+				return;
+			}
 
+			// If no immediate wallets, show install links and detect in background
+			walletList.innerHTML = \`
+				<div class="wallet-no-wallets">
+					Detecting wallets...
+					<br><br>
+					<a href="https://phantom.app/download" target="_blank">Install Phantom →</a>
+					<br>
+					<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank">Install Sui Wallet →</a>
+				</div>
+			\`;
+
+			// Detect wallets in background without blocking
+			detectWallets().then(wallets => {
+				if (wallets.length > 0) {
+					renderWalletList(wallets);
+				}
+			}).catch(() => {});
+		}
+
+		// Render wallet list (helper function)
+		function renderWalletList(wallets) {
 			if (wallets.length === 0) {
 				walletList.innerHTML = \`
 					<div class="wallet-no-wallets">
@@ -2171,6 +2212,7 @@ export function generateProfilePage(
 				walletList.appendChild(item);
 			}
 		}
+
 
 		// Disconnect wallet
 		function disconnectWallet() {
@@ -2205,13 +2247,11 @@ export function generateProfilePage(
 				walletStatus.className = 'wallet-status';
 				walletStatus.style.cursor = 'pointer';
 				walletStatus.title = connectedPrimaryName 
-					? \`Go to \${connectedPrimaryName} profile\`
+					? 'Go to ' + connectedPrimaryName + ' profile'
 					: 'Disconnect wallet';
-				walletStatus.innerHTML = \`
-					<span class="wallet-addr">\${displayName}</span>
-					\${connectedPrimaryName ? \`<span class="wallet-name">\${truncAddr(connectedAddress)}</span>\` : ''}
-					<button id="disconnect-wallet-btn">×</button>
-				\`;
+				walletStatus.innerHTML = '<span class="wallet-addr">' + displayName + '</span>' +
+					(connectedPrimaryName ? '<span class="wallet-name">' + truncAddr(connectedAddress) + '</span>' : '') +
+					'<button id="disconnect-wallet-btn">×</button>';
 				walletBar.appendChild(walletStatus);
 				
 				// Handle click on wallet status (but not the disconnect button)
@@ -4102,7 +4142,7 @@ export function generateProfilePage(
 				const result = await signFeature.signAndExecuteTransaction({
 					transaction: tx,
 					account: connectedAccount,
-					chain: 'sui:' + NETWORK,
+					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
 				});
 
 				btnText.textContent = 'Confirming...';
@@ -6309,11 +6349,10 @@ export function generateProfilePage(
 				};
 
 				// Sign and execute
-				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
 				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
 					transaction: txWrapper,
 					account: connectedAccount,
-					chain,
+					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
 				});
 
 				if (!result?.digest) {
@@ -6419,156 +6458,95 @@ export function generateProfilePage(
 		window.updateMvrSectionVisibility = updateMvrSectionVisibility;
 
 		// MVR Auto-fill parsing
-		const mvrAutofill = document.getElementById('mvr-autofill');
-		const mvrParseBtn = document.getElementById('mvr-parse-btn');
-		const mvrAiParseBtn = document.getElementById('mvr-ai-parse-btn');
-		const mvrParseStatus = document.getElementById('mvr-parse-status');
+		var mvrAutofill = document.getElementById('mvr-autofill');
+		var mvrParseBtn = document.getElementById('mvr-parse-btn');
+		var mvrAiParseBtn = document.getElementById('mvr-ai-parse-btn');
+		var mvrParseStatus = document.getElementById('mvr-parse-status');
 
 		function parseMvrInput(text) {
-			const result = { packageName: null, packageAddress: null, upgradeCap: null };
+			var result = { packageName: null, packageAddress: null, upgradeCap: null };
+			var addrRegex = new RegExp('0x[a-fA-F0-9]{64}', 'g');
+			var addresses = text.match(addrRegex) || [];
+			var lines = text.split(/[\r\n]+/);
 
-			// Try to parse MVR name format: @name/package or name/package
-			const mvrMatch = text.match(/@?([a-zA-Z0-9_-]+)\\/([a-zA-Z0-9_-]+)/);
-			if (mvrMatch) {
-				result.packageName = mvrMatch[2].toLowerCase();
-			}
-
-			// Find all 0x addresses (64 hex chars after 0x)
-			const addresses = text.match(/0x[a-fA-F0-9]{64}/g) || [];
-
-			// Try to identify which is package vs upgrade cap from context
-			const lines = text.split(/\\r?\\n/);
-			for (const line of lines) {
-				const lineLower = line.toLowerCase();
-				const addrMatch = line.match(/0x[a-fA-F0-9]{64}/);
-				if (addrMatch) {
-					if (lineLower.includes('package') && !lineLower.includes('upgrade') && !lineLower.includes('cap')) {
-						result.packageAddress = addrMatch[0];
-					} else if (lineLower.includes('upgradecap') || lineLower.includes('upgrade_cap') || (lineLower.includes('upgrade') && lineLower.includes('cap'))) {
-						result.upgradeCap = addrMatch[0];
+			for (var i = 0; i < lines.length; i++) {
+				var line = lines[i];
+				var lower = line.toLowerCase();
+				var lineAddr = line.match(new RegExp('0x[a-fA-F0-9]{64}'));
+				if (lineAddr) {
+					if (lower.indexOf('package') >= 0 && lower.indexOf('upgrade') < 0 && lower.indexOf('cap') < 0) {
+						result.packageAddress = lineAddr[0];
+					} else if (lower.indexOf('upgradecap') >= 0 || (lower.indexOf('upgrade') >= 0 && lower.indexOf('cap') >= 0)) {
+						result.upgradeCap = lineAddr[0];
 					}
 				}
 			}
 
-			// If we found addresses but couldn't identify them, use position heuristics
-			if (addresses.length >= 1 && !result.packageAddress) {
-				// First address is usually package ID in deployment output
-				result.packageAddress = addresses[0];
+			var unique = [];
+			for (var j = 0; j < addresses.length; j++) {
+				if (unique.indexOf(addresses[j]) < 0) unique.push(addresses[j]);
 			}
-			if (addresses.length >= 2 && !result.upgradeCap) {
-				// Second unique address might be upgrade cap
-				const unique = [...new Set(addresses)];
-				if (unique.length >= 2) {
-					result.upgradeCap = unique[1];
-				}
-			}
+			if (!result.packageAddress && unique.length >= 1) result.packageAddress = unique[0];
+			if (!result.upgradeCap && unique.length >= 2) result.upgradeCap = unique[1];
 
-			// Try to extract package name from text if not found
-			if (!result.packageName) {
-				// Look for common patterns in deployment output
-				const pkgPattern = /package[: ]+["']?([a-zA-Z0-9_-]+)["']?/i;
-				const namePattern = /name[: ]+["']?([a-zA-Z0-9_-]+)["']?/i;
-				const pubPattern = /publishing +["']?([a-zA-Z0-9_-]+)["']?/i;
-				const patterns = [pkgPattern, namePattern, pubPattern];
-				for (const pattern of patterns) {
-					const match = text.match(pattern);
-					if (match && match[1] && !['id', 'address', 'cap'].includes(match[1].toLowerCase())) {
-						result.packageName = match[1].toLowerCase().replace(/_/g, '-');
-						break;
-					}
-				}
+			var slashIdx = text.indexOf('/');
+			if (slashIdx > 0 && !result.packageName) {
+				var after = text.substring(slashIdx + 1, slashIdx + 40);
+				var pkgMatch = after.match(new RegExp('^([a-zA-Z0-9_-]+)'));
+				if (pkgMatch) result.packageName = pkgMatch[1].toLowerCase().replace(/_/g, '-');
 			}
-
 			return result;
 		}
 
 		function applyParsedResult(result) {
-			let filled = 0;
-			if (result.packageName && mvrPackageName) {
-				mvrPackageName.value = result.packageName;
-				filled++;
-			}
-			if (result.packageAddress && mvrPackageAddress) {
-				mvrPackageAddress.value = result.packageAddress;
-				filled++;
-			}
-			if (result.upgradeCap && mvrUpgradeCap) {
-				mvrUpgradeCap.value = result.upgradeCap;
-				filled++;
-			}
+			var filled = 0;
+			if (result.packageName && mvrPackageName) { mvrPackageName.value = result.packageName; filled++; }
+			if (result.packageAddress && mvrPackageAddress) { mvrPackageAddress.value = result.packageAddress; filled++; }
+			if (result.upgradeCap && mvrUpgradeCap) { mvrUpgradeCap.value = result.upgradeCap; filled++; }
 			return filled;
 		}
 
 		if (mvrParseBtn) {
-			mvrParseBtn.addEventListener('click', () => {
-				const text = mvrAutofill?.value || '';
-				if (!text.trim()) {
-					mvrParseStatus.textContent = 'Paste some text first';
-					mvrParseStatus.style.color = '#f87171';
-					return;
-				}
-
-				const result = parseMvrInput(text);
-				const filled = applyParsedResult(result);
-
-				if (filled > 0) {
-					mvrParseStatus.textContent = 'Filled ' + filled + ' field(s)';
-					mvrParseStatus.style.color = '#34d399';
-				} else {
-					mvrParseStatus.textContent = 'Could not parse - try AI Parse';
-					mvrParseStatus.style.color = '#fbbf24';
-				}
+			mvrParseBtn.addEventListener('click', function() {
+				var text = mvrAutofill ? mvrAutofill.value : '';
+				if (!text.trim()) { mvrParseStatus.textContent = 'Paste some text first'; mvrParseStatus.style.color = '#f87171'; return; }
+				var result = parseMvrInput(text);
+				var filled = applyParsedResult(result);
+				mvrParseStatus.textContent = filled > 0 ? 'Filled ' + filled + ' field(s)' : 'Could not parse - try AI Parse';
+				mvrParseStatus.style.color = filled > 0 ? '#34d399' : '#fbbf24';
 			});
 		}
 
 		if (mvrAiParseBtn) {
-			mvrAiParseBtn.addEventListener('click', async () => {
-				const text = mvrAutofill?.value || '';
-				if (!text.trim()) {
-					mvrParseStatus.textContent = 'Paste some text first';
-					mvrParseStatus.style.color = '#f87171';
-					return;
-				}
-
+			mvrAiParseBtn.addEventListener('click', function() {
+				var text = mvrAutofill ? mvrAutofill.value : '';
+				if (!text.trim()) { mvrParseStatus.textContent = 'Paste some text first'; mvrParseStatus.style.color = '#f87171'; return; }
 				mvrAiParseBtn.disabled = true;
 				mvrParseStatus.textContent = 'AI parsing...';
 				mvrParseStatus.style.color = 'var(--text-muted)';
 
-				try {
-					const response = await fetch('/api/ai/parse-mvr', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ text, suinsName: NAME })
-					});
-
-					if (!response.ok) {
-						throw new Error('AI parsing failed');
-					}
-
-					const data = await response.json();
-					const filled = applyParsedResult(data);
-
-					if (filled > 0) {
-						mvrParseStatus.textContent = 'AI filled ' + filled + ' field(s)';
-						mvrParseStatus.style.color = '#a855f7';
-					} else {
-						mvrParseStatus.textContent = 'AI could not extract fields';
-						mvrParseStatus.style.color = '#fbbf24';
-					}
-				} catch (error) {
-					console.error('AI parse error:', error);
-					// Fall back to regex parsing
-					const result = parseMvrInput(text);
-					const filled = applyParsedResult(result);
-					mvrParseStatus.textContent = filled > 0 ? 'Filled ' + filled + ' (regex fallback)' : 'Parse failed';
+				fetch('/api/ai/parse-mvr', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ text: text, suinsName: NAME })
+				}).then(function(r) { return r.json(); }).then(function(data) {
+					var filled = applyParsedResult(data);
+					mvrParseStatus.textContent = filled > 0 ? 'AI filled ' + filled + ' field(s)' : 'AI could not extract fields';
+					mvrParseStatus.style.color = filled > 0 ? '#a855f7' : '#fbbf24';
+				}).catch(function(err) {
+					console.error('AI parse error:', err);
+					var result = parseMvrInput(text);
+					var filled = applyParsedResult(result);
+					mvrParseStatus.textContent = filled > 0 ? 'Filled ' + filled + ' (fallback)' : 'Parse failed';
 					mvrParseStatus.style.color = filled > 0 ? '#34d399' : '#f87171';
-				} finally {
+				}).finally(function() {
 					mvrAiParseBtn.disabled = false;
-				}
+				});
 			});
 		}
 
 		if (premiumGraphContainer) {
+
 			const handlePointer = (event) => {
 				const rect = premiumGraphContainer.getBoundingClientRect();
 				if (rect.width <= 0) return;
