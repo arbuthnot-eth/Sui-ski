@@ -1,15 +1,6 @@
 import { getNetworkStatus } from '../resolvers/rpc'
 import type { Env } from '../types'
 
-interface JsonRpcObjectResponse {
-	result?: {
-		data?: unknown
-	}
-	error?: {
-		message?: string
-	}
-}
-
 export interface GatewayStatus {
 	network: Env['SUI_NETWORK']
 	timestamp: string

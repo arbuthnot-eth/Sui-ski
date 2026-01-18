@@ -7,7 +7,7 @@ import { resolveContent, resolveDirectContent } from './resolvers/content'
 import type { Env, SuiNSRecord } from './types'
 import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils/response'
 import { isTwitterPreviewBot } from './utils/social'
-import { parseSubdomain, toSuiNSName } from './utils/subdomain'
+import { parseSubdomain } from './utils/subdomain'
 import { ensureRpcEnv } from './utils/rpc'
 
 export default {
@@ -161,7 +161,7 @@ interface ContentRequestOptions {
 async function handleContentRequest(
 	subdomain: string,
 	env: Env,
-	options: ContentRequestOptions = {},
+	_options: ContentRequestOptions = {},
 ): Promise<Response> {
 	const result = await resolveDirectContent(subdomain, env)
 
@@ -180,7 +180,7 @@ async function handlePathContentRequest(
 	type: string,
 	id: string,
 	env: Env,
-	options: ContentRequestOptions = {},
+	_options: ContentRequestOptions = {},
 ): Promise<Response> {
 	const subdomain = `${type}-${id}`
 	const result = await resolveDirectContent(subdomain, env)
