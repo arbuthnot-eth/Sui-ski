@@ -176,7 +176,7 @@ const LINKED_NAMES_CACHE_TTL = 300 // 5 minutes
 
 /**
  * Fetch all SuiNS names owned by an address with expiration and target address data
- * Uses parallel batch fetching for target addresses to maximize performance
+ * Uses native Sui RPC methods for reliable name resolution
  */
 async function handleNamesByAddress(address: string, env: Env): Promise<Response> {
 	const corsHeaders = {
@@ -196,15 +196,11 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 		}
 
 		const client = new SuiClient({ url: env.SUI_RPC_URL })
-		const suinsClient = new SuinsClient({
-			client: client as never,
-			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
-		})
 
 		const allNames: NameInfo[] = []
 		let cursor: string | null | undefined = undefined
 
-		// Paginate through all owned objects
+		// Step 1: Get all SuiNS NFTs owned by this address
 		do {
 			const response = await client.getOwnedObjects({
 				owner: address,
@@ -213,33 +209,19 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 				limit: 50,
 			})
 
-			// Filter for SuiNS NFTs and extract name + expiration
 			for (const item of response.data) {
 				const objType = item.data?.type || ''
-				// Match any SuinsRegistration type across different package versions
-				const isSuinsNft = objType.toLowerCase().includes('suins_registration::suinsregistration')
-				
-				if (isSuinsNft && item.data?.content?.dataType === 'moveObject') {
+				if (objType.includes('suins_registration::SuinsRegistration') && item.data?.content?.dataType === 'moveObject') {
 					const fields = (item.data.content as any).fields
-					
-					// Handle various field name variations across versions
-					const name = fields?.domain_name || fields?.name || fields?.domain
-					const expirationMs = fields?.expiration_timestamp_ms || fields?.expirationTimestampMs
-						? Number(fields.expiration_timestamp_ms || fields.expirationTimestampMs)
-						: null
-					
-					// Extract target address from NFT fields if available (faster than record lookup)
-					let targetAddress = fields?.target_address || fields?.targetAddress
-					if (!targetAddress && fields?.registration?.fields?.target_address) {
-						targetAddress = fields.registration.fields.target_address
-					}
+					const name = fields?.domain_name || fields?.name
+					const expirationMs = fields?.expiration_timestamp_ms ? Number(fields.expiration_timestamp_ms) : null
 
 					if (name) {
 						allNames.push({
 							name: String(name),
 							nftId: item.data.objectId,
 							expirationMs,
-							targetAddress: targetAddress ? String(targetAddress) : null,
+							targetAddress: null,
 							isPrimary: false,
 						})
 					}
@@ -249,70 +231,54 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			cursor = response.hasNextPage ? response.nextCursor : null
 		} while (cursor)
 
-		// Fetch target addresses from NameRecord for each name in parallel
-		// This is the authoritative source for where a name resolves
-		const CONCURRENCY_LIMIT = 10
-		for (let i = 0; i < allNames.length; i += CONCURRENCY_LIMIT) {
-			const batch = allNames.slice(i, i + CONCURRENCY_LIMIT)
+		// Step 2: Use native Sui RPC to resolve each name to its target address
+		const BATCH_SIZE = 10
+		for (let i = 0; i < allNames.length; i += BATCH_SIZE) {
+			const batch = allNames.slice(i, i + BATCH_SIZE)
 			await Promise.all(batch.map(async (nameInfo) => {
 				try {
-					// Ensure name has .sui suffix for the client if it's a legacy name
-					const lookupName = nameInfo.name.includes('.') ? nameInfo.name : `${nameInfo.name}.sui`
-					const record = await suinsClient.getNameRecord(lookupName)
-					if (record?.targetAddress) {
-						nameInfo.targetAddress = record.targetAddress
-					}
-				} catch (e) {
-					// Keep the targetAddress from NFT fields if record lookup fails
+					// Use native suix_resolveNameServiceAddress RPC method
+					const resolved = await client.resolveNameServiceAddress({ name: nameInfo.name })
+					nameInfo.targetAddress = resolved || null
+				} catch {
+					// Name may not have a target address set
 				}
 			}))
 		}
 
-		// Get unique target addresses to check reverse resolution
+		// Step 3: Get unique target addresses and fetch their default names (reverse resolution)
 		const uniqueAddresses = [...new Set(allNames.map(n => n.targetAddress).filter(Boolean))] as string[]
-
-		// Fetch reverse resolution for each unique address in parallel
-		// Query the reverse_registry dynamic field on the suins object
 		const addressDefaultName = new Map<string, string>()
-		const suinsObjectId = suinsClient.config.suins
 
-		for (let i = 0; i < uniqueAddresses.length; i += CONCURRENCY_LIMIT) {
-			const batch = uniqueAddresses.slice(i, i + CONCURRENCY_LIMIT)
+		for (let i = 0; i < uniqueAddresses.length; i += BATCH_SIZE) {
+			const batch = uniqueAddresses.slice(i, i + BATCH_SIZE)
 			await Promise.all(batch.map(async (addr) => {
 				try {
-					// Query the reverse lookup dynamic field
-					const reverseRecord = await client.getDynamicFieldObject({
-						parentId: suinsObjectId,
-						name: {
-							type: 'address',
-							value: addr,
-						},
-					})
-					if (reverseRecord.data?.content?.dataType === 'moveObject') {
-						const fields = (reverseRecord.data.content as { fields?: { value?: string; domain_name?: string } }).fields
-						const defaultName = fields?.value || fields?.domain_name
-						if (defaultName) {
-							addressDefaultName.set(addr, defaultName)
-						}
+					// Use native suix_resolveNameServiceNames RPC method
+					const result = await client.resolveNameServiceNames({ address: addr })
+					if (result.data && result.data.length > 0) {
+						// First name in the list is the primary/default name
+						addressDefaultName.set(addr, result.data[0])
 					}
 				} catch {
-					// Skip if reverse resolution fails (no default name set)
+					// Address may not have a default name set
 				}
 			}))
 		}
 
-		// Mark primary names only if they match the reverse resolution
+		// Step 4: Mark primary names based on reverse resolution
 		for (const nameInfo of allNames) {
 			if (nameInfo.targetAddress) {
 				const defaultName = addressDefaultName.get(nameInfo.targetAddress)
-				// Compare without .sui suffix
-				const cleanName = nameInfo.name.replace(/\.sui$/, '')
-				const cleanDefault = defaultName?.replace(/\.sui$/, '')
-				nameInfo.isPrimary = cleanName === cleanDefault
+				if (defaultName) {
+					const cleanName = nameInfo.name.replace(/\.sui$/, '')
+					const cleanDefault = defaultName.replace(/\.sui$/, '')
+					nameInfo.isPrimary = cleanName === cleanDefault
+				}
 			}
 		}
 
-		// Group by target address
+		// Step 5: Group by target address
 		const grouped: Record<string, NameInfo[]> = {}
 		for (const nameInfo of allNames) {
 			const key = nameInfo.targetAddress || 'unset'
