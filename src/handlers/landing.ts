@@ -219,7 +219,7 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 				limit: 50,
 			})
 
-			// Filter for SuiNS NFTs and extract name + expiration + target address
+			// Filter for SuiNS NFTs and extract name + expiration
 			for (const item of response.data) {
 				const objType = item.data?.type || ''
 				const isSuinsNft = suinsNftTypes.some((t) => objType.includes(t.split('::')[0]))
@@ -228,20 +228,17 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 						domain_name?: string
 						name?: string
 						expiration_timestamp_ms?: string | number
-						target_address?: string
 					} }).fields
 					const name = fields?.domain_name || fields?.name
 					const expirationMs = fields?.expiration_timestamp_ms
 						? Number(fields.expiration_timestamp_ms)
 						: null
-					// Get target_address directly from NFT fields (no extra RPC call needed)
-					const targetAddress = fields?.target_address || null
 					if (name) {
 						allNames.push({
 							name,
 							nftId: item.data.objectId,
 							expirationMs,
-							targetAddress,
+							targetAddress: null, // Will be fetched from NameRecord
 							isPrimary: false,
 						})
 					}
@@ -251,6 +248,20 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			cursor = response.hasNextPage ? response.nextCursor : null
 		} while (cursor)
 
+		// Fetch target addresses from NameRecord for each name in parallel
+		const CONCURRENCY_LIMIT = 10
+		for (let i = 0; i < allNames.length; i += CONCURRENCY_LIMIT) {
+			const batch = allNames.slice(i, i + CONCURRENCY_LIMIT)
+			await Promise.all(batch.map(async (nameInfo) => {
+				try {
+					const record = await suinsClient.getNameRecord(nameInfo.name)
+					nameInfo.targetAddress = record?.targetAddress || null
+				} catch {
+					// Skip if we can't fetch the record
+				}
+			}))
+		}
+
 		// Get unique target addresses to check reverse resolution
 		const uniqueAddresses = [...new Set(allNames.map(n => n.targetAddress).filter(Boolean))] as string[]
 
@@ -258,7 +269,6 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 		// Query the reverse_registry dynamic field on the suins object
 		const addressDefaultName = new Map<string, string>()
 		const suinsObjectId = suinsClient.config.suins
-		const CONCURRENCY_LIMIT = 10
 
 		for (let i = 0; i < uniqueAddresses.length; i += CONCURRENCY_LIMIT) {
 			const batch = uniqueAddresses.slice(i, i + CONCURRENCY_LIMIT)
