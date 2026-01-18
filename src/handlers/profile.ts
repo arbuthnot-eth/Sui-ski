@@ -434,62 +434,16 @@ export function generateProfilePage(
 							<span>No bounties yet</span>
 						</div>
 
-						<!-- Quick Create Bounty -->
-						<div class="create-bounty-quick" id="create-bounty-quick">
-							<div class="create-bounty-header">
-								<span>Create Bounty</span>
-								<div class="bounty-mode-toggle" id="bounty-mode-toggle">
-									<button class="bounty-mode-btn active" data-mode="standard">Sniping</button>
-									<button class="bounty-mode-btn" data-mode="gift">Gift Request</button>
-								</div>
-							</div>
-							<div class="create-bounty-row">
-								<div class="create-bounty-inputs">
-									<div class="create-bounty-input-group" id="total-escrow-group">
-										<label>Total Escrow</label>
-										<div class="create-bounty-input-row">
-											<input type="number" id="quick-bounty-amount" min="5" step="1" value="10" />
-											<span class="bounty-input-suffix">SUI</span>
-										</div>
-									</div>
-									<div class="create-bounty-input-group">
-										<label id="reward-label">Executor Reward</label>
-										<div class="create-bounty-input-row">
-											<input type="number" id="quick-executor-reward" min="1" step="0.5" value="1" />
-											<span class="bounty-input-suffix">SUI</span>
-										</div>
-									</div>
-									<div class="create-bounty-input-group">
-										<label>Duration</label>
-										<select id="quick-bounty-years">
-											<option value="1">1 Year</option>
-											<option value="2">2 Years</option>
-											<option value="3">3 Years</option>
-											<option value="5">5 Years</option>
-										</select>
-									</div>
-								</div>
-								<button class="create-bounty-btn" id="quick-bounty-btn">
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<circle cx="12" cy="8" r="7"></circle>
-										<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
-									</svg>
-									Create Bounty
-								</button>
-							</div>
-							<div class="create-bounty-summary">
-								<div class="create-bounty-summary-row" id="est-reg-cost-row">
-									<span>Est. Registration Cost:</span>
-									<span id="quick-bounty-reg-cost">-- SUI</span>
-								</div>
-								<div class="create-bounty-summary-row total">
-									<span id="total-label">Total to Deposit:</span>
-									<span id="quick-bounty-total">-- SUI</span>
-								</div>
-								<div class="create-bounty-mode-desc" id="bounty-mode-desc">
-									Sniping: You provide the registration SUI and a reward.
-								</div>
-							</div>
+						<!-- Simple Bounty Button -->
+						<div class="create-bounty-simple">
+							<button class="create-bounty-btn-simple" id="quick-bounty-btn">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="8" r="7"></circle>
+									<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+								</svg>
+								<span>Create 10 SUI Bounty</span>
+							</button>
+							<div class="create-bounty-simple-info">1 year registration • 1 SUI executor reward</div>
 							<div class="create-bounty-status hidden" id="create-bounty-status"></div>
 						</div>
 					</div>
@@ -4826,11 +4780,6 @@ export function generateProfilePage(
 		const bidUsdEstimate = document.getElementById('bid-usd-estimate');
 		const createBidBtn = document.getElementById('create-bid-btn');
 		const createBidStatus = document.getElementById('create-bid-status');
-		const quickBountyAmount = document.getElementById('quick-bounty-amount');
-		const quickExecutorReward = document.getElementById('quick-executor-reward');
-		const quickBountyYears = document.getElementById('quick-bounty-years');
-		const quickBountyRegCost = document.getElementById('quick-bounty-reg-cost');
-		const quickBountyTotal = document.getElementById('quick-bounty-total');
 		const quickBountyBtn = document.getElementById('quick-bounty-btn');
 		const createBountyStatus = document.getElementById('create-bounty-status');
 
@@ -4868,7 +4817,6 @@ export function generateProfilePage(
 					if (data.price) {
 						bidBountySuiPrice = data.price;
 						updateBidUsdEstimate();
-						updateBountyEstimates();
 					}
 				}
 			} catch (e) {
@@ -4999,28 +4947,6 @@ export function generateProfilePage(
 			if (!bidAmountInput || !bidUsdEstimate) return;
 			const amount = parseFloat(bidAmountInput.value) || 0;
 			bidUsdEstimate.textContent = getUsdValue(amount) || '≈ $--';
-		}
-
-		// Update bounty estimates
-		function updateBountyEstimates() {
-			if (!quickBountyAmount || !quickExecutorReward || !quickBountyRegCost || !quickBountyTotal) return;
-
-			const totalAmount = parseFloat(quickBountyAmount.value) || 0;
-			const executorReward = parseFloat(quickExecutorReward.value) || 0;
-
-			// Estimate registration cost (this is a rough estimate based on grace period position)
-			const now = Date.now();
-			const gracePeriodEnd = AVAILABLE_AT;
-			const gracePeriodStart = EXPIRATION_MS;
-			const progress = gracePeriodStart && gracePeriodEnd
-				? Math.max(0, Math.min(1, (now - gracePeriodStart) / (gracePeriodEnd - gracePeriodStart)))
-				: 0;
-
-			// Simple estimation - actual would need on-chain data
-			const estimatedRegCost = Math.max(1, totalAmount - executorReward);
-
-			quickBountyRegCost.textContent = '~' + estimatedRegCost.toFixed(1) + ' SUI';
-			quickBountyTotal.textContent = totalAmount.toFixed(2) + ' SUI';
 		}
 
 		function buildTxWrapper(bytes) {
@@ -5173,7 +5099,7 @@ export function generateProfilePage(
 			}
 		}
 
-		// Create a new bounty with one-click SUI transaction
+		// Create a new bounty with one-click - fixed 10 SUI, 1 SUI reward, 1 year
 		async function createQuickBounty() {
 			if (!connectedAddress) {
 				showBidBountyStatus(createBountyStatus, 'Please connect your wallet first', 'error');
@@ -5191,28 +5117,10 @@ export function generateProfilePage(
 				return;
 			}
 
-			const totalAmount = parseFloat(quickBountyAmount?.value) || 0;
-			const executorReward = parseFloat(quickExecutorReward?.value) || 0;
-			const years = parseInt(quickBountyYears?.value) || 1;
-			const isGiftMode = document.querySelector('.bounty-mode-btn[data-mode="gift"]')?.classList.contains('active');
-
-			if (!isGiftMode && totalAmount < 5) {
-				showBidBountyStatus(createBountyStatus, 'Minimum bounty amount is 5 SUI', 'error');
-				return;
-			}
-
-			if (executorReward < 1) {
-				showBidBountyStatus(createBountyStatus, 'Minimum reward is 1 SUI', 'error');
-				return;
-			}
-
-			if (!isGiftMode && totalAmount <= executorReward) {
-				showBidBountyStatus(createBountyStatus, 'Total escrow must be greater than the executor reward', 'error');
-				return;
-			}
-
-			const totalAmountMist = BigInt(Math.round(totalAmount * 1_000_000_000));
-			const executorRewardMist = BigInt(Math.round(executorReward * 1_000_000_000));
+			// Fixed values: 10 SUI total, 1 SUI reward, 1 year
+			const totalAmountMist = BigInt(10 * 1_000_000_000);
+			const executorRewardMist = BigInt(1 * 1_000_000_000);
+			const years = 1;
 
 			if (quickBountyBtn) quickBountyBtn.disabled = true;
 			showBidBountyStatus(createBountyStatus, 'Building escrow transaction...', 'loading');
@@ -5226,31 +5134,19 @@ export function generateProfilePage(
 						: connectedAddress;
 				tx.setSender(senderAddress);
 
-				if (isGiftMode) {
-					const [rewardCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(executorRewardMist)]);
-					tx.moveCall({
-						target: BOUNTY_ESCROW_PACKAGE_ID + '::escrow::create_and_share_gift_bounty',
-						arguments: [
-							tx.pure.string(NAME),
-							tx.pure.address(connectedAddress),
-							rewardCoin,
-						],
-					});
-				} else {
-					const [depositCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalAmountMist)]);
-					tx.moveCall({
-						target: BOUNTY_ESCROW_PACKAGE_ID + '::escrow::create_and_share_bounty',
-						arguments: [
-							tx.pure.string(NAME),
-							tx.pure.address(connectedAddress),
-							depositCoin,
-							tx.pure.u64(executorRewardMist),
-							tx.pure.u64(BigInt(AVAILABLE_AT)),
-							tx.pure.u8(years),
-							tx.object('0x6'),
-						],
-					});
-				}
+				const [depositCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalAmountMist)]);
+				tx.moveCall({
+					target: BOUNTY_ESCROW_PACKAGE_ID + '::escrow::create_and_share_bounty',
+					arguments: [
+						tx.pure.string(NAME),
+						tx.pure.address(connectedAddress),
+						depositCoin,
+						tx.pure.u64(executorRewardMist),
+						tx.pure.u64(BigInt(AVAILABLE_AT)),
+						tx.pure.u8(years),
+						tx.object('0x6'),
+					],
+				});
 
 				const builtTxBytes = await tx.build({ client: suiClient });
 				const txWrapper = buildTxWrapper(builtTxBytes);
@@ -5305,12 +5201,12 @@ export function generateProfilePage(
 						beneficiary: connectedAddress,
 						creator: connectedAddress,
 						escrowObjectId,
-						totalAmountMist: isGiftMode ? executorRewardMist.toString() : totalAmountMist.toString(),
+						totalAmountMist: totalAmountMist.toString(),
 						executorRewardMist: executorRewardMist.toString(),
-						registrationCostMist: isGiftMode ? '0' : (totalAmountMist - executorRewardMist).toString(),
-						availableAt: isGiftMode ? Date.now() : AVAILABLE_AT,
+						registrationCostMist: (totalAmountMist - executorRewardMist).toString(),
+						availableAt: AVAILABLE_AT,
 						years,
-						type: isGiftMode ? 'gift' : 'standard',
+						type: 'standard',
 					}),
 				});
 
@@ -5383,46 +5279,9 @@ export function generateProfilePage(
 		if (createBidBtn) {
 			createBidBtn.addEventListener('click', createBid);
 		}
-		if (quickBountyAmount) {
-			quickBountyAmount.addEventListener('input', updateBountyEstimates);
-		}
-		if (quickExecutorReward) {
-			quickExecutorReward.addEventListener('input', updateBountyEstimates);
-		}
 		if (quickBountyBtn) {
 			quickBountyBtn.addEventListener('click', createQuickBounty);
 		}
-
-		// Bounty mode toggle logic
-		const bountyModeBtns = document.querySelectorAll('.bounty-mode-btn');
-		const totalEscrowGroup = document.getElementById('total-escrow-group');
-		const estRegCostRow = document.getElementById('est-reg-cost-row');
-		const bountyModeDesc = document.getElementById('bounty-mode-desc');
-		const totalLabel = document.getElementById('total-label');
-		const rewardLabel = document.getElementById('reward-label');
-
-		bountyModeBtns.forEach(btn => {
-			btn.addEventListener('click', () => {
-				bountyModeBtns.forEach(b => b.classList.remove('active'));
-				btn.classList.add('active');
-				const mode = btn.dataset.mode;
-
-				if (mode === 'gift') {
-					totalEscrowGroup?.classList.add('hidden');
-					estRegCostRow?.classList.add('hidden');
-					if (totalLabel) totalLabel.textContent = 'Reward to Deposit:';
-					if (rewardLabel) rewardLabel.textContent = 'Gift Incentive';
-					if (bountyModeDesc) bountyModeDesc.textContent = 'Gift Request: You only provide a reward. Someone else pays for the name and the contract sends it to you.';
-				} else {
-					totalEscrowGroup?.classList.remove('hidden');
-					estRegCostRow?.classList.remove('hidden');
-					if (totalLabel) totalLabel.textContent = 'Total to Deposit:';
-					if (rewardLabel) rewardLabel.textContent = 'Executor Reward';
-					if (bountyModeDesc) bountyModeDesc.textContent = 'Sniping: You provide the registration SUI and a reward.';
-				}
-				updateBountyEstimates();
-			});
-		});
 
 		// Initialize bid/bounty section
 		if (EXPIRATION_MS) {
@@ -5434,7 +5293,6 @@ export function generateProfilePage(
 			setInterval(fetchBountyQueue, 30000);
 			updateBidBountyCountdown();
 			setInterval(updateBidBountyCountdown, 60000);
-			updateBountyEstimates();
 		}
 
 		// ========== GRACE PERIOD BANNER COUNTDOWN ==========

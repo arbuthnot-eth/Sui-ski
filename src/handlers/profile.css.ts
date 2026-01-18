@@ -4656,6 +4656,53 @@ export const profileStyles = `
 			width: 14px;
 			height: 14px;
 		}
+		/* Simplified single-button bounty creation */
+		.create-bounty-simple {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 8px;
+			padding: 16px;
+			background: rgba(139, 92, 246, 0.08);
+			border: 1px dashed rgba(139, 92, 246, 0.3);
+			border-radius: 12px;
+			margin-top: 12px;
+		}
+		.create-bounty-btn-simple {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			width: 100%;
+			padding: 14px 24px;
+			background: linear-gradient(135deg, #8b5cf6, #a855f7);
+			border: none;
+			border-radius: 10px;
+			color: white;
+			font-size: 0.95rem;
+			font-weight: 700;
+			cursor: pointer;
+			transition: all 0.2s;
+			box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+		}
+		.create-bounty-btn-simple:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+		}
+		.create-bounty-btn-simple:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+			transform: none;
+			box-shadow: none;
+		}
+		.create-bounty-btn-simple svg {
+			width: 18px;
+			height: 18px;
+		}
+		.create-bounty-simple-info {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+		}
 		.create-bounty-summary {
 			margin-top: 10px;
 			padding-top: 10px;
