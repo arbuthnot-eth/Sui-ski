@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { parseSubdomain, toMVRName, toSuiNSName } from './utils/subdomain'
+import { parseSubdomain, toSuiNSName } from './utils/subdomain'
 
 describe('parseSubdomain', () => {
 	it('parses root domain', () => {
@@ -22,22 +22,6 @@ describe('parseSubdomain', () => {
 	it('parses RPC subdomain', () => {
 		const result = parseSubdomain('rpc.sui.ski')
 		expect(result.type).toBe('rpc')
-	})
-
-	it('parses MVR package pattern', () => {
-		const result = parseSubdomain('core--suifrens.sui.ski')
-		expect(result.type).toBe('mvr')
-		expect(result.subdomain).toBe('suifrens')
-		expect(result.packageName).toBe('core')
-		expect(result.version).toBeUndefined()
-	})
-
-	it('parses MVR package with version', () => {
-		const result = parseSubdomain('nft--myname--v2.sui.ski')
-		expect(result.type).toBe('mvr')
-		expect(result.subdomain).toBe('myname')
-		expect(result.packageName).toBe('nft')
-		expect(result.version).toBe(2)
 	})
 
 	it('parses IPFS content subdomain', () => {
@@ -67,15 +51,5 @@ describe('toSuiNSName', () => {
 
 	it('preserves existing .sui suffix', () => {
 		expect(toSuiNSName('myname.sui')).toBe('myname.sui')
-	})
-})
-
-describe('toMVRName', () => {
-	it('creates MVR name without version', () => {
-		expect(toMVRName('suifrens', 'core')).toBe('@suifrens/core')
-	})
-
-	it('creates MVR name with version', () => {
-		expect(toMVRName('myname', 'nft', 2)).toBe('@myname/nft/2')
 	})
 })
