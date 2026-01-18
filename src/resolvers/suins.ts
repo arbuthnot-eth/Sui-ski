@@ -69,21 +69,16 @@ export async function resolveSuiNS(
 		// Get the NFT owner (different from target address)
 		let ownerAddress: string | undefined
 		try {
-			if (nameRecord.nftId) {
-				const nameObject = await suiClient.getObject({
-					id: nameRecord.nftId,
-					options: { showOwner: true },
-				})
-				if (nameObject?.data?.owner) {
-					const owner = nameObject.data.owner
-					// Owner can be AddressOwner or ObjectOwner
-					if (typeof owner === 'string') {
-						ownerAddress = owner
-					} else if ('AddressOwner' in owner) {
-						ownerAddress = owner.AddressOwner
-					} else if ('ObjectOwner' in owner) {
-						ownerAddress = owner.ObjectOwner
-					}
+			// @ts-expect-error - getNameObject exists at runtime but not in type definitions
+			const nameObject = await suinsClient.getNameObject(suinsName, { showOwner: true })
+			if (nameObject?.owner) {
+				// Owner can be AddressOwner or ObjectOwner
+				if (typeof nameObject.owner === 'string') {
+					ownerAddress = nameObject.owner
+				} else if ('AddressOwner' in nameObject.owner) {
+					ownerAddress = nameObject.owner.AddressOwner
+				} else if ('ObjectOwner' in nameObject.owner) {
+					ownerAddress = nameObject.owner.ObjectOwner
 				}
 			}
 		} catch (e) {
