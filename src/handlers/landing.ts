@@ -179,7 +179,7 @@ export async function getSUIPrice(env?: { CACHE?: KVNamespace }): Promise<number
 				const cached = await env.CACHE.get(CACHE_KEY)
 				if (cached) {
 					const cachedData = JSON.parse(cached) as { price: number }
-					console.warn('Using cached price due to error:', fetchError.message)
+					console.warn('Using cached price due to error:', fetchError instanceof Error ? fetchError.message : String(fetchError))
 					return cachedData.price
 				}
 			}

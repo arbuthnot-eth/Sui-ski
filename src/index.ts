@@ -998,7 +998,7 @@ async function handleUploadProxy(request: Request, env: Env): Promise<Response> 
  * Handle Tradeport API requests (stub - marketplace integration removed)
  * Returns empty data to prevent frontend errors
  */
-async function handleTradeportRequest(request: Request, env: Env): Promise<Response> {
+async function handleTradeportRequest(request: Request, _env: Env): Promise<Response> {
 	try {
 		const url = new URL(request.url)
 		
@@ -1252,7 +1252,7 @@ async function handleNFTDetailsRequest(request: Request, env: Env): Promise<Resp
 async function handleAiParseMvr(request: Request, env: Env): Promise<Response> {
 	try {
 		const body = (await request.json()) as { text: string; suinsName?: string }
-		const { text, suinsName } = body
+		const { text } = body
 
 		if (!text || typeof text !== 'string') {
 			return jsonResponse({ error: 'text field is required' }, 400)

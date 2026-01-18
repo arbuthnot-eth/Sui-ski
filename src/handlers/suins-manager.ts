@@ -32,11 +32,6 @@ const SUINS_CONTRACTS = {
 	},
 }
 
-// SuiNS pricing constants
-const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
-const NS_DISCOUNT_DAYS = 3
-const YEAR_MS = 365 * 24 * 60 * 60 * 1000
-
 // Escape HTML for security
 function escapeHtml(str: string): string {
 	return str
@@ -112,7 +107,7 @@ export async function handleSuinsManagerRequest(request: Request, env: Env): Pro
 				sender: string
 				operation: 'register' | 'renew' | 'subdomain'
 			}
-			const { txBytes, sender, operation } = body
+			const { txBytes, sender, operation: _operation } = body
 			if (!txBytes || !sender) {
 				return errorResponse('Transaction bytes and sender required', 'INVALID_REQUEST', 400)
 			}

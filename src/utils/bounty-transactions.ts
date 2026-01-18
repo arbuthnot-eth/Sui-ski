@@ -47,7 +47,7 @@ export async function resolveBountyPackageId(
 				const [suinsName, packageName] = aliasParts
 				const mvrResult = await resolveMVRPackage(suinsName.trim(), packageName.trim(), undefined, env as Env)
 				
-				if (mvrResult.found && mvrResult.data) {
+				if (mvrResult.found && mvrResult.data && 'address' in mvrResult.data) {
 					return mvrResult.data.address
 				}
 			}

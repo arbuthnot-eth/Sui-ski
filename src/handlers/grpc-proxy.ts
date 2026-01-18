@@ -30,28 +30,6 @@ interface ProxyConfig {
 	maxBatchSize: number
 }
 
-// Supported proxy operations
-type ProxyOperation =
-	| 'sui_getObject'
-	| 'sui_multiGetObjects'
-	| 'sui_getOwnedObjects'
-	| 'sui_queryEvents'
-	| 'sui_getTransactionBlock'
-	| 'sui_multiGetTransactionBlocks'
-	| 'sui_executeTransactionBlock'
-	| 'sui_dryRunTransactionBlock'
-	| 'suix_getOwnedObjects'
-	| 'suix_queryTransactionBlocks'
-	| 'suix_getBalance'
-	| 'suix_getAllBalances'
-	| 'suix_getCoins'
-	| 'suix_getAllCoins'
-	| 'suix_getDynamicFields'
-	| 'suix_getDynamicFieldObject'
-	| 'suins_getNameRecord'
-	| 'suins_getAddress'
-	| 'suins_getName'
-
 // Request/response types
 interface JsonRpcRequest {
 	jsonrpc: '2.0'
@@ -69,11 +47,6 @@ interface JsonRpcResponse {
 		message: string
 		data?: unknown
 	}
-}
-
-interface BatchRequest {
-	requests: JsonRpcRequest[]
-	timestamp: number
 }
 
 // Default configuration
@@ -95,35 +68,14 @@ const GRPC_PREFERRED_OPERATIONS: Set<string> = new Set([
 	'suix_getDynamicFields',
 ])
 
-// Read-only operations (safe to cache/retry)
-const READ_ONLY_OPERATIONS: Set<string> = new Set([
-	'sui_getObject',
-	'sui_multiGetObjects',
-	'sui_getOwnedObjects',
-	'sui_queryEvents',
-	'sui_getTransactionBlock',
-	'sui_multiGetTransactionBlocks',
-	'suix_getOwnedObjects',
-	'suix_queryTransactionBlocks',
-	'suix_getBalance',
-	'suix_getAllBalances',
-	'suix_getCoins',
-	'suix_getAllCoins',
-	'suix_getDynamicFields',
-	'suix_getDynamicFieldObject',
-	'suins_getNameRecord',
-	'suins_getAddress',
-	'suins_getName',
-])
-
 /**
  * Get proxy configuration from environment
  */
 function getProxyConfig(env: Env): ProxyConfig {
 	return {
 		...DEFAULT_CONFIG,
-		backendUrl: (env as Record<string, string>).GRPC_BACKEND_URL || '',
-		apiKey: (env as Record<string, string>).GRPC_BACKEND_API_KEY,
+		backendUrl: (env as unknown as Record<string, string>).GRPC_BACKEND_URL || '',
+		apiKey: (env as unknown as Record<string, string>).GRPC_BACKEND_API_KEY,
 	}
 }
 

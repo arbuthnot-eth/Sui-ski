@@ -6440,13 +6440,13 @@ export function generateProfilePage(
 			// Build transfer transaction - transfer TO the connected wallet
 			const tx = new Transaction();
 			
-			// If the UpgradeCap is owned by an object ID that we own, we need to reference that object
+			// If the UpgradeCap is owned by an object ID that we own, we need to include the parent object
+			// In Sui, when transferring an object owned by another object, the parent must be in the transaction.
+			// The simplest approach is to just use transferObjects - Sui will automatically include
+			// the parent object if we own it and it's needed to authorize the transfer.
 			if (canTransfer && parentObjectId) {
-				// When transferring an object owned by another object in Sui, we need to include
-				// the parent object in the transaction so it can be used for authorization.
-				// Add the parent object as an input (this makes it available for the transfer)
-				tx.object(parentObjectId);
-				// Transfer the UpgradeCap - Sui will use the parent object to authorize the transfer
+				// Simply transfer the UpgradeCap - Sui's transaction builder will automatically
+				// include the parent object (which we own) to authorize the transfer
 				tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
 			} else {
 				// Regular transfer from address owner
