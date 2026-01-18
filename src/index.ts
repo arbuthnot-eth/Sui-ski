@@ -39,9 +39,11 @@ import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils
 import { isTwitterPreviewBot, renderSocialMeta } from './utils/social'
 import { parseSubdomain } from './utils/subdomain'
 import { fetchSuiNSObjectData } from './utils/suins-object'
+import { ensureRpcEnv } from './utils/rpc'
 
 export default {
-	async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+	async fetch(request: Request, rawEnv: Env, _ctx: ExecutionContext): Promise<Response> {
+		const env = ensureRpcEnv(rawEnv)
 		// Handle CORS preflight
 		if (request.method === 'OPTIONS') {
 			return new Response(null, {
@@ -273,9 +275,10 @@ export default {
 	 */
 	async scheduled(
 		_controller: ScheduledController,
-		env: Env,
+		rawEnv: Env,
 		ctx: ExecutionContext,
 	): Promise<void> {
+		const env = ensureRpcEnv(rawEnv)
 		const now = Date.now()
 		console.log(`[Scheduled] Processing claims and bounties at ${new Date(now).toISOString()}`)
 

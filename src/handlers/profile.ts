@@ -1422,6 +1422,30 @@ export function generateProfilePage(
 		const FULL_NAME = ${serializeJson(fullName)};
 		const NETWORK = ${serializeJson(network)};
 		const RPC_URL = ${serializeJson(env.SUI_RPC_URL)};
+		const DEFAULT_PUBLIC_RPC = {
+			mainnet: 'https://fullnode.mainnet.sui.io:443',
+			testnet: 'https://fullnode.testnet.sui.io:443',
+			devnet: 'https://fullnode.devnet.sui.io:443',
+		};
+		const normalizedRpcUrl =
+			typeof RPC_URL === 'string' ? RPC_URL.trim() : '';
+		const ACTIVE_RPC_URL =
+			normalizedRpcUrl ||
+			DEFAULT_PUBLIC_RPC[NETWORK] ||
+			DEFAULT_PUBLIC_RPC.mainnet;
+		let cachedSuiClient = null;
+		const getSuiClient = () => {
+			if (!cachedSuiClient) {
+				cachedSuiClient = new SuiClient({ url: ACTIVE_RPC_URL });
+			}
+			return cachedSuiClient;
+		};
+		if (!normalizedRpcUrl) {
+			console.warn(
+				'[sui.ski] SUI_RPC_URL not configured, using public RPC:',
+				ACTIVE_RPC_URL,
+			);
+		}
 		const BOUNTY_ESCROW_PACKAGE_ID = ${serializeJson(bountyPackageId || null)};
 	const NFT_ID = ${serializeJson(record.nftId || '')};
 	const TARGET_ADDRESS = ${serializeJson(record.address)};
@@ -1607,7 +1631,7 @@ export function generateProfilePage(
 
 		// Resolve a SuiNS name to its target address
 		async function resolveSuiNSName(name) {
-			const suiClient = new SuiClient({ url: RPC_URL });
+			const suiClient = getSuiClient();
 			const suinsClient = new SuinsClient({
 				client: suiClient,
 				network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
@@ -1774,7 +1798,7 @@ export function generateProfilePage(
 		async function fetchNftOwner() {
 			if (!NFT_ID) return null;
 			try {
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 				const obj = await suiClient.getObject({
 					id: NFT_ID,
 					options: { showOwner: true }
@@ -1797,7 +1821,7 @@ export function generateProfilePage(
 		async function fetchPrimaryName(address) {
 			if (!address) return null;
 			try {
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 				const result = await suiClient.resolveNameServiceNames({ address });
 				if (result?.data?.length > 0) {
 					return result.data[0];
@@ -2677,7 +2701,7 @@ export function generateProfilePage(
 				setSelfBtn.disabled = true;
 				setSelfBtn.textContent = '...';
 
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 				const suinsClient = new SuinsClient({
 					client: suiClient,
 					network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
@@ -2836,7 +2860,7 @@ export function generateProfilePage(
 				showStatus(modalStatus, '<span class="loading"></span> Building transaction...', 'info');
 				saveBtn.disabled = true;
 
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 				const suinsClient = new SuinsClient({
 					client: suiClient,
 					network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
@@ -3679,7 +3703,7 @@ export function generateProfilePage(
 
 		async function checkNameAvailability(name) {
 			try {
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 				const address = await suiClient.resolveNameServiceAddress({ name: name + '.sui' });
 
 				if (!address) {
@@ -3903,7 +3927,7 @@ export function generateProfilePage(
 				throw new Error('Wallet not connected');
 			}
 
-			const suiClient = new SuiClient({ url: RPC_URL });
+			const suiClient = getSuiClient();
 			const suinsClient = new SuinsClient({
 				client: suiClient,
 				network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
@@ -4099,7 +4123,7 @@ export function generateProfilePage(
 				const { Transaction } = await import('https://esm.sh/@mysten/sui@1.45.2/transactions');
 				const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.45.2/client');
 
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 				const tx = new Transaction();
 
 				btnText.textContent = 'Encrypting...';
@@ -4288,7 +4312,7 @@ export function generateProfilePage(
 			namesLoading = true;
 
 			try {
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 
 				// Use the built-in resolveNameServiceNames method
 				const response = await suiClient.resolveNameServiceNames({
@@ -4551,7 +4575,7 @@ export function generateProfilePage(
 			}
 
 			// Create client outside try block so it's available in catch
-			const suiClient = new SuiClient({ url: RPC_URL });
+			const suiClient = getSuiClient();
 
 			try {
 				// Fetch owned objects filtered by SuiNS registration type
@@ -4883,7 +4907,7 @@ export function generateProfilePage(
 		if (!nftsLoaded && activeTab !== 'nfts' && isValidSuiAddress(CURRENT_ADDRESS)) {
 			setTimeout(async () => {
 				try {
-					const suiClient = new SuiClient({ url: RPC_URL });
+					const suiClient = getSuiClient();
 					const response = await suiClient.getOwnedObjects({
 						owner: CURRENT_ADDRESS,
 						filter: {
@@ -5209,7 +5233,7 @@ export function generateProfilePage(
 				const { Transaction } = await import('https://esm.sh/@mysten/sui@1.45.2/transactions');
 				const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.45.2/client');
 				
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 				const tx = new Transaction();
 				
 				// Get gas coins
@@ -5334,7 +5358,7 @@ export function generateProfilePage(
 			showBidBountyStatus(createBountyStatus, 'Building escrow transaction...', 'loading');
 
 			try {
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 				const tx = new Transaction();
 				const senderAddress =
 					typeof connectedAccount?.address === 'string'
@@ -6222,7 +6246,7 @@ export function generateProfilePage(
 					try {
 						const upgradeCapId = mvrUpgradeCap.value.trim();
 						if (/^0x[a-f0-9]{64}$/i.test(upgradeCapId)) {
-							const suiClient = new SuiClient({ url: RPC_URL });
+							const suiClient = getSuiClient();
 							const upgradeCapObj = await suiClient.getObject({
 								id: upgradeCapId,
 								options: { showOwner: true }
@@ -6349,7 +6373,7 @@ export function generateProfilePage(
 				mvrTransferUpgradeCapBtn.textContent = 'Checking UpgradeCap...';
 				hideMvrStatus();
 
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 
 				// Check UpgradeCap ownership
 				const upgradeCapObj = await suiClient.getObject({
@@ -6533,7 +6557,7 @@ export function generateProfilePage(
 				mvrShareUpgradeCapBtn.textContent = 'Checking UpgradeCap...';
 				hideMvrStatus();
 
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 
 				// Check UpgradeCap ownership
 				const upgradeCapObj = await suiClient.getObject({
@@ -6718,7 +6742,7 @@ export function generateProfilePage(
 				mvrRegisterBtnText.textContent = 'Checking UpgradeCap ownership...';
 				hideMvrStatus();
 
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = getSuiClient();
 
 				// Check if the UpgradeCap is owned by the current user
 				// If it's owned by someone else, we can't use it as an input object
