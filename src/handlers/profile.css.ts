@@ -2428,6 +2428,152 @@ export const profileStyles = `
 			}
 		}
 
+		/* Simplified Grace Period Countdown Card */
+		.grace-countdown-card {
+			width: 100%;
+			text-align: center;
+		}
+		.grace-countdown-header {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			margin-bottom: 20px;
+			font-size: 0.9rem;
+			font-weight: 600;
+			color: var(--warning);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+		.grace-countdown-header svg {
+			width: 20px;
+			height: 20px;
+			color: var(--warning);
+		}
+		.grace-countdown-timer {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			margin-bottom: 24px;
+		}
+		.countdown-unit {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			min-width: 70px;
+			padding: 16px 12px;
+			background: rgba(0, 0, 0, 0.3);
+			border: 1px solid rgba(248, 113, 113, 0.3);
+			border-radius: 12px;
+		}
+		.countdown-value {
+			font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+			font-size: 2rem;
+			font-weight: 800;
+			color: var(--error);
+			line-height: 1;
+			text-shadow: 0 0 20px rgba(248, 113, 113, 0.5);
+		}
+		.countdown-label {
+			font-size: 0.65rem;
+			font-weight: 600;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			margin-top: 6px;
+		}
+		.countdown-sep {
+			font-size: 1.75rem;
+			font-weight: 700;
+			color: var(--error);
+			opacity: 0.5;
+			margin-bottom: 20px;
+		}
+		.grace-snipe-action {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 10px;
+		}
+		.grace-snipe-btn {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			padding: 14px 32px;
+			background: linear-gradient(135deg, #ef4444, #dc2626);
+			color: white;
+			border: none;
+			border-radius: 12px;
+			font-size: 1rem;
+			font-weight: 700;
+			cursor: pointer;
+			transition: all 0.2s ease;
+			box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+		}
+		.grace-snipe-btn:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 6px 24px rgba(239, 68, 68, 0.5);
+		}
+		.grace-snipe-btn:active {
+			transform: translateY(0);
+		}
+		.grace-snipe-btn:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+			transform: none;
+		}
+		.grace-snipe-btn svg {
+			width: 20px;
+			height: 20px;
+		}
+		.grace-snipe-info {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+		}
+		.grace-snipe-status {
+			margin-top: 12px;
+			padding: 10px 16px;
+			border-radius: 8px;
+			font-size: 0.85rem;
+		}
+		.grace-snipe-status.loading {
+			background: rgba(96, 165, 250, 0.12);
+			border: 1px solid rgba(96, 165, 250, 0.3);
+			color: var(--accent);
+		}
+		.grace-snipe-status.success {
+			background: rgba(34, 197, 94, 0.12);
+			border: 1px solid rgba(34, 197, 94, 0.3);
+			color: #22c55e;
+		}
+		.grace-snipe-status.error {
+			background: rgba(248, 113, 113, 0.12);
+			border: 1px solid rgba(248, 113, 113, 0.3);
+			color: #f87171;
+		}
+		.grace-snipe-status a {
+			color: inherit;
+			text-decoration: underline;
+		}
+		@media (max-width: 480px) {
+			.countdown-unit {
+				min-width: 60px;
+				padding: 12px 8px;
+			}
+			.countdown-value {
+				font-size: 1.5rem;
+			}
+			.countdown-sep {
+				font-size: 1.25rem;
+			}
+			.grace-snipe-btn {
+				width: 100%;
+				padding: 12px 24px;
+			}
+		}
+
 		/* NFT Details Section */
 		.nft-details-section {
 			margin-top: 32px;

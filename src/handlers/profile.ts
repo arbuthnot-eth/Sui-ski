@@ -232,131 +232,54 @@ export function generateProfilePage(
 			${
 				options.inGracePeriod
 					? `
-			<!-- Grace Period Banner -->
+			<!-- Grace Period Banner - Simplified -->
 			<div class="grace-period-banner" id="grace-period-banner">
-				<div class="grace-period-icon">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<circle cx="12" cy="12" r="10"></circle>
-						<line x1="12" y1="8" x2="12" y2="12"></line>
-						<line x1="12" y1="16" x2="12.01" y2="16"></line>
-					</svg>
-				</div>
-				<div class="grace-period-content">
-					<div class="grace-period-title">This name has expired</div>
-					<div class="grace-period-text">
-						The name <strong>${escapeHtml(cleanName)}.sui</strong> is currently in its 30-day grace period.
-						<span id="grace-period-owner-info">The NFT owner</span> can renew it until <strong>${
-							expiresAt
-								? escapeHtml(
-										new Date(expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', {
-											year: 'numeric',
-											month: 'short',
-											day: 'numeric',
-											hour: '2-digit',
-											minute: '2-digit',
-										}),
-									)
-								: 'N/A'
-						}</strong>.
+				<div class="grace-countdown-card">
+					<div class="grace-countdown-header">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="12" cy="12" r="10"></circle>
+							<polyline points="12 6 12 12 16 14"></polyline>
+						</svg>
+						<span>Available for Registration</span>
 					</div>
-					<div class="grace-period-countdown">
-						<div class="grace-countdown-label">Top Bids & Bounties:</div>
-						<div class="grace-top-offers" id="grace-top-offers">
-							<div class="grace-offers-loading">
-								<span class="loading-spinner"></span>
-								Loading offers...
-							</div>
+					<div class="grace-countdown-timer" id="grace-countdown-timer">
+						<div class="countdown-unit">
+							<span class="countdown-value" id="grace-days">--</span>
+							<span class="countdown-label">Days</span>
 						</div>
-						<div class="grace-countdown-mini">
-							<span class="grace-countdown-mini-label">Available in:</span>
-							<span class="grace-countdown-mini-timer" id="grace-countdown-mini">
-								<span id="grace-days">--</span>d
-								<span id="grace-hours">--</span>h
-								<span id="grace-mins">--</span>m
-								<span id="grace-secs">--</span>s
-							</span>
+						<span class="countdown-sep">:</span>
+						<div class="countdown-unit">
+							<span class="countdown-value" id="grace-hours">--</span>
+							<span class="countdown-label">Hours</span>
 						</div>
-						<div class="grace-skill-counter">
-							<div class="grace-skill-label">Premium Estimate</div>
-							<div class="premium-graph-container" id="premium-graph-container">
-								<svg class="premium-decay-graph" viewBox="0 0 300 80" preserveAspectRatio="none">
-									<defs>
-										<linearGradient id="decayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-											<stop offset="0%" style="stop-color:var(--accent);stop-opacity:0.3"/>
-											<stop offset="100%" style="stop-color:var(--accent);stop-opacity:0.05"/>
-										</linearGradient>
-										<linearGradient id="nsDecayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-											<stop offset="0%" style="stop-color:#4DA2FF;stop-opacity:0.25"/>
-											<stop offset="100%" style="stop-color:#4DA2FF;stop-opacity:0.03"/>
-										</linearGradient>
-									</defs>
-									<!-- Grid lines -->
-									<line x1="0" y1="20" x2="300" y2="20" class="graph-grid"/>
-									<line x1="0" y1="40" x2="300" y2="40" class="graph-grid"/>
-									<line x1="0" y1="60" x2="300" y2="60" class="graph-grid"/>
-									<!-- SUI exponential decay curve (filled area) -->
-									<path id="decay-area" class="decay-area" d="M0,10 Q75,12 150,30 T300,70 L300,80 L0,80 Z"/>
-									<!-- SUI exponential decay curve (line) -->
-									<path id="decay-curve" class="decay-curve" d="M0,10 Q75,12 150,30 T300,70"/>
-									<path id="decay-hover-path" class="decay-hover-path" d=""/>
-									<!-- NS decay curve - 3 day discount (filled area) -->
-									<path id="ns-decay-area" class="ns-decay-area" d="M0,10 Q75,12 150,30 T300,70 L300,80 L0,80 Z"/>
-									<!-- NS decay curve (line) -->
-									<path id="ns-decay-curve" class="ns-decay-curve" d="M0,10 Q75,12 150,30 T300,70"/>
-									<path id="ns-decay-hover-path" class="ns-decay-hover-path" d=""/>
-									<!-- SUI current position marker -->
-									<circle id="decay-marker" class="decay-marker" cx="0" cy="10" r="5"/>
-									<!-- NS current position marker -->
-									<circle id="ns-decay-marker" class="ns-decay-marker" cx="0" cy="10" r="4"/>
-									<!-- Vertical line from SUI marker -->
-									<line id="decay-marker-line" class="decay-marker-line" x1="0" y1="10" x2="0" y2="80"/>
-								</svg>
-								<div class="graph-labels">
-									<span class="graph-label-start" id="graph-max-label">$10M</span>
-									<span class="graph-label-end">0</span>
-								</div>
-								<div class="graph-time-labels">
-									<span>Day 0</span>
-									<span>Day 30</span>
-								</div>
-							</div>
-							<div class="premium-hover-time" id="grace-premium-time">Live premium as of now.</div>
-							<div class="premium-values-grid">
-								<div class="premium-value-row sui-row">
-									<span class="premium-currency-badge sui-badge">SUI</span>
-									<span class="premium-value" id="grace-skill-value">10,000,000</span>
-									<span class="premium-usd">≈ $<span id="grace-skill-usd">--</span></span>
-								</div>
-								<div class="premium-value-row ns-row">
-									<span class="premium-currency-badge ns-badge">$NS</span>
-									<span class="premium-value" id="grace-ns-value">--</span>
-									<span class="premium-usd">≈ $<span id="grace-ns-usd">--</span></span>
-									<span class="premium-discount">3-day discount</span>
-								</div>
-							</div>
+						<span class="countdown-sep">:</span>
+						<div class="countdown-unit">
+							<span class="countdown-value" id="grace-mins">--</span>
+							<span class="countdown-label">Min</span>
+						</div>
+						<span class="countdown-sep">:</span>
+						<div class="countdown-unit">
+							<span class="countdown-value" id="grace-secs">--</span>
+							<span class="countdown-label">Sec</span>
 						</div>
 					</div>
+					<div class="grace-snipe-action">
+						<button class="grace-snipe-btn" id="grace-snipe-btn">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<circle cx="12" cy="12" r="10"></circle>
+								<circle cx="12" cy="12" r="6"></circle>
+								<circle cx="12" cy="12" r="2"></circle>
+								<line x1="12" y1="2" x2="12" y2="6"></line>
+								<line x1="12" y1="18" x2="12" y2="22"></line>
+								<line x1="2" y1="12" x2="6" y2="12"></line>
+								<line x1="18" y1="12" x2="22" y2="12"></line>
+							</svg>
+							<span>Snipe for 10 SUI</span>
+						</button>
+						<div class="grace-snipe-info">1 year registration • 1 SUI reward to executor</div>
+					</div>
+					<div class="grace-snipe-status hidden" id="grace-snipe-status"></div>
 				</div>
-				<div class="grace-period-actions" id="grace-period-actions">
-					<button class="grace-period-btn gift" id="gift-renewal-btn" style="display:none;">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<polyline points="20 12 20 22 4 22 4 12"></polyline>
-							<rect x="2" y="7" width="20" height="5"></rect>
-							<line x1="12" y1="22" x2="12" y2="7"></line>
-							<path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
-							<path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
-						</svg>
-						<span id="gift-renewal-text">Gift 1 Month (10 SUI)</span>
-					</button>
-					<a href="https://suins.io/name/${escapeHtml(cleanName)}" target="_blank" class="grace-period-btn renew" id="renew-name-btn" style="display:none;">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<polyline points="23 4 23 10 17 10"></polyline>
-							<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-						</svg>
-						Renew on SuiNS
-					</a>
-				</div>
-				<div class="grace-period-status" id="grace-period-status"></div>
 			</div>
 					`
 					: ''
@@ -1469,23 +1392,6 @@ export function generateProfilePage(
 	const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
 	const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
 	const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
-	const USD_TARGET_VALUE = 10_000_000; // $10M USD target
-	const DEFAULT_SUI_PRICE = 1; // Fallback price if CoinGecko fails
-	const numberFormatter =
-		typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function'
-			? new Intl.NumberFormat('en-US')
-			: { format: (value) => String(value ?? 0) };
-
-	// Dynamic max SUI supply based on current price
-	function getMaxSuiSupply() {
-		const price = suiPriceUsd !== null ? suiPriceUsd : DEFAULT_SUI_PRICE;
-		return USD_TARGET_VALUE / price;
-	}
-
-	// Decay constant recalculated based on current max supply
-	function getPremiumDecayConstant() {
-		return Math.log(getMaxSuiSupply());
-	}
 
 		let connectedWallet = null;
 		let connectedAccount = null;
@@ -1502,60 +1408,6 @@ export function generateProfilePage(
 			walletsApi = getWallets();
 		} catch (e) {
 			console.error('Failed to init wallet API:', e);
-		}
-
-		function formatPremiumTime(progress, timestamp) {
-			const totalMinutes = progress * GRACE_PERIOD_DAYS * 24 * 60;
-			const days = Math.floor(totalMinutes / (24 * 60));
-			const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
-			const minutes = Math.floor(totalMinutes % 60);
-			const dateStr = new Date(timestamp).toLocaleString('en-US', {
-				month: 'short',
-				day: 'numeric',
-				hour: 'numeric',
-				minute: '2-digit',
-			});
-			return dateStr + ' (' + days + 'd ' + hours + 'h ' + minutes + 'm after expiry)';
-		}
-
-		function renderPremiumState(progress, mode = 'live') {
-			if (!graceSkillValue || !EXPIRATION_MS) return;
-			const totalWindow = Math.max(1, AVAILABLE_AT - EXPIRATION_MS);
-
-			const clampedProgress = Math.max(0, Math.min(1, progress));
-			const timestamp = EXPIRATION_MS + clampedProgress * totalWindow;
-
-			const suiValue = Math.max(0, Math.round(getDecayValue(clampedProgress)));
-			graceSkillValue.textContent = numberFormatter.format(suiValue);
-
-			const nsProgress = Math.min(1, clampedProgress + NS_DISCOUNT_PROGRESS);
-			const nsValue = Math.max(0, Math.round(getDecayValue(nsProgress)));
-			if (graceNsValue) {
-				graceNsValue.textContent = numberFormatter.format(nsValue);
-			}
-
-			if (graceSkillUsd && suiPriceUsd !== null) {
-				graceSkillUsd.textContent = usdFormatter.format(suiValue * suiPriceUsd);
-			}
-
-			if (graceNsUsd && suiPriceUsd !== null) {
-				graceNsUsd.textContent = usdFormatter.format(nsValue * suiPriceUsd);
-			}
-
-			updateGraphMarker(clampedProgress, nsProgress);
-			updateHoverPaths(
-				clampedProgress,
-				nsProgress,
-				mode === 'hover' && premiumHoverProgress !== null,
-			);
-
-			if (premiumTimeDisplay) {
-				const prefix = mode === 'hover' ? 'Cursor estimate' : 'Live premium';
-				premiumTimeDisplay.innerHTML = '<strong>' + prefix + ':</strong> ' + formatPremiumTime(
-					clampedProgress,
-					timestamp,
-				);
-			}
 		}
 
 		// DOM Elements
@@ -5479,7 +5331,6 @@ export function generateProfilePage(
 				}
 
 				fetchBountyQueue();
-				fetchTopOffers();
 				if (typeof refreshUserBounties === 'function') {
 					refreshUserBounties();
 				}
@@ -5592,242 +5443,6 @@ export function generateProfilePage(
 		const graceMins = document.getElementById('grace-mins');
 		const graceSecs = document.getElementById('grace-secs');
 		const graceBanner = document.getElementById('grace-period-banner');
-		const graceSkillValue = document.getElementById('grace-skill-value');
-		const graceSkillUsd = document.getElementById('grace-skill-usd');
-		const graceNsValue = document.getElementById('grace-ns-value');
-		const graceNsUsd = document.getElementById('grace-ns-usd');
-		const decayMarker = document.getElementById('decay-marker');
-		const decayMarkerLine = document.getElementById('decay-marker-line');
-		const decayCurve = document.getElementById('decay-curve');
-		const decayArea = document.getElementById('decay-area');
-		const nsDecayMarker = document.getElementById('ns-decay-marker');
-		const nsDecayCurve = document.getElementById('ns-decay-curve');
-		const nsDecayArea = document.getElementById('ns-decay-area');
-		const decayHoverPath = document.getElementById('decay-hover-path');
-		const nsDecayHoverPath = document.getElementById('ns-decay-hover-path');
-		const premiumGraphContainer = document.getElementById('premium-graph-container');
-		const premiumTimeDisplay = document.getElementById('grace-premium-time');
-		const graphMaxLabel = document.getElementById('graph-max-label');
-
-		// SUI price state
-		let suiPriceUsd = null;
-		const usdFormatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-
-		// NS discount: 3 days expressed as fraction of 30-day window
-		const NS_DISCOUNT_DAYS = 3;
-		const GRACE_PERIOD_DAYS = 30;
-		const NS_DISCOUNT_PROGRESS = NS_DISCOUNT_DAYS / GRACE_PERIOD_DAYS; // 0.1 (10%)
-		let premiumHoverProgress = null;
-		let decayCurvePoints = [];
-		let nsDecayCurvePoints = [];
-
-		// Format large numbers for display (e.g., 50000000 -> "50M")
-		function formatMaxSuiLabel(value) {
-			if (value >= 1_000_000_000) {
-				return (value / 1_000_000_000).toFixed(value % 1_000_000_000 === 0 ? 0 : 1) + 'B';
-			} else if (value >= 1_000_000) {
-				return (value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1) + 'M';
-			} else if (value >= 1_000) {
-				return (value / 1_000).toFixed(value % 1_000 === 0 ? 0 : 1) + 'K';
-			}
-			return String(Math.round(value));
-		}
-
-		// Update graph label and re-render curves when price changes
-		function updateGraphForPrice() {
-			const maxSui = getMaxSuiSupply();
-			if (graphMaxLabel) {
-				graphMaxLabel.textContent = formatMaxSuiLabel(maxSui) + ' SUI';
-			}
-			// Re-initialize decay curves with new max supply
-			initDecayCurves();
-			// Update current premium display
-			updateGraceSkillCounter();
-		}
-
-		// Fetch SUI price from CoinGecko
-		async function fetchSuiPrice() {
-			try {
-				const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd');
-				const data = await res.json();
-				if (data.sui && data.sui.usd) {
-					const oldPrice = suiPriceUsd;
-					suiPriceUsd = data.sui.usd;
-					// Update graph if price changed (or first fetch)
-					if (oldPrice !== suiPriceUsd) {
-						updateGraphForPrice();
-					}
-				}
-			} catch (e) {
-				console.warn('Failed to fetch SUI price:', e);
-			}
-		}
-
-		// Calculate exponential decay value at a given progress (0 to 1)
-		// Starts at $100M USD worth of SUI, decreases exponentially
-		function getDecayValue(progress) {
-			const maxSupply = getMaxSuiSupply();
-			const decayConstant = getPremiumDecayConstant();
-			const clampedProgress = Math.max(0, Math.min(1, progress));
-			return maxSupply * Math.exp(-decayConstant * clampedProgress);
-		}
-
-		// Generate SVG path for exponential decay curve with optional progress offset
-		function generateDecayCurvePath(progressOffset = 0) {
-			const width = 300;
-			const height = 80;
-			const padding = 10;
-			const points = [];
-
-			for (let i = 0; i <= 100; i++) {
-				const progress = i / 100;
-				// Apply offset for NS curve (shifted forward in time = lower values)
-				const adjustedProgress = Math.min(1, progress + progressOffset);
-				const value = getDecayValue(adjustedProgress);
-				const x = progress * width;
-				// Map value (0 to max SUI) to y (height-padding to padding)
-				const normalizedValue = value / getMaxSuiSupply();
-				const y = padding + (1 - normalizedValue) * (height - padding * 2);
-				points.push({ x, y });
-			}
-
-			// Build curve path
-			let curvePath = 'M' + points[0].x + ',' + points[0].y;
-			for (let i = 1; i < points.length; i++) {
-				curvePath += ' L' + points[i].x + ',' + points[i].y;
-			}
-
-			// Build area path (curve + bottom edge)
-			const areaPath = curvePath + ' L' + width + ',' + height + ' L0,' + height + ' Z';
-
-			return { curvePath, areaPath, points };
-		}
-
-		function buildPartialPath(points, progress) {
-			if (!points || points.length === 0) return '';
-			const clamped = Math.max(0, Math.min(1, progress));
-			const totalSegments = points.length - 1;
-			const exactIndex = clamped * totalSegments;
-			const lowerIndex = Math.floor(exactIndex);
-			const upperIndex = Math.min(points.length - 1, lowerIndex + 1);
-			const t = exactIndex - lowerIndex;
-
-			const pathPoints = points.slice(0, upperIndex + 1);
-
-			if (upperIndex > lowerIndex) {
-				const start = points[lowerIndex];
-				const end = points[upperIndex];
-				const interp = {
-					x: start.x + (end.x - start.x) * t,
-					y: start.y + (end.y - start.y) * t,
-				};
-				pathPoints[pathPoints.length - 1] = interp;
-			}
-
-			let path = 'M' + pathPoints[0].x + ',' + pathPoints[0].y;
-			for (let i = 1; i < pathPoints.length; i++) {
-				path += ' L' + pathPoints[i].x + ',' + pathPoints[i].y;
-			}
-			return path;
-		}
-
-		function updateHoverPaths(progress, nsProgress, isHover) {
-			if (
-				!decayHoverPath ||
-				!nsDecayHoverPath ||
-				decayCurvePoints.length === 0 ||
-				nsDecayCurvePoints.length === 0
-			) {
-				return;
-			}
-
-			if (progress === null) {
-				decayHoverPath.setAttribute('d', '');
-				nsDecayHoverPath.setAttribute('d', '');
-				premiumGraphContainer?.classList.remove('hovering');
-				return;
-			}
-
-			const path = buildPartialPath(decayCurvePoints, progress);
-			const nsPath = buildPartialPath(nsDecayCurvePoints, nsProgress);
-			decayHoverPath.setAttribute('d', path);
-			nsDecayHoverPath.setAttribute('d', nsPath);
-			if (isHover) {
-				premiumGraphContainer?.classList.add('hovering');
-			} else {
-				premiumGraphContainer?.classList.remove('hovering');
-			}
-		}
-
-		// Update graph marker position based on progress
-		function updateGraphMarker(progress, nsProgress) {
-			const width = 300;
-			const height = 80;
-			const padding = 10;
-
-			// Update SUI marker
-			if (decayMarker && decayMarkerLine) {
-				const clampedProgress = Math.max(0, Math.min(1, progress));
-				const value = getDecayValue(clampedProgress);
-				const x = clampedProgress * width;
-				const normalizedValue = value / getMaxSuiSupply();
-				const y = padding + (1 - normalizedValue) * (height - padding * 2);
-
-				decayMarker.setAttribute('cx', x.toString());
-				decayMarker.setAttribute('cy', y.toString());
-				decayMarkerLine.setAttribute('x1', x.toString());
-				decayMarkerLine.setAttribute('y1', y.toString());
-				decayMarkerLine.setAttribute('x2', x.toString());
-			}
-
-			// Update NS marker (same x position, but y on the NS curve)
-			if (nsDecayMarker) {
-				const clampedProgress = Math.max(0, Math.min(1, progress));
-				const nsValue = getDecayValue(Math.min(1, nsProgress));
-				const x = clampedProgress * width;
-				const normalizedNsValue = nsValue / getMaxSuiSupply();
-				const nsY = padding + (1 - normalizedNsValue) * (height - padding * 2);
-
-				nsDecayMarker.setAttribute('cx', x.toString());
-				nsDecayMarker.setAttribute('cy', nsY.toString());
-			}
-		}
-
-		// Initialize both decay curves
-		function initDecayCurves() {
-			// SUI curve (no offset)
-			if (decayCurve && decayArea) {
-				const { curvePath, areaPath, points } = generateDecayCurvePath(0);
-				decayCurve.setAttribute('d', curvePath);
-				decayArea.setAttribute('d', areaPath);
-				decayCurvePoints = points;
-			}
-
-			// NS curve (3-day offset = 10% progress offset)
-			if (nsDecayCurve && nsDecayArea) {
-				const { curvePath, areaPath, points } = generateDecayCurvePath(NS_DISCOUNT_PROGRESS);
-				nsDecayCurve.setAttribute('d', curvePath);
-				nsDecayArea.setAttribute('d', areaPath);
-				nsDecayCurvePoints = points;
-			}
-		}
-
-		function updateGraceSkillCounter(currentTime = Date.now()) {
-			if (!graceSkillValue || !EXPIRATION_MS) return;
-			if (premiumHoverProgress !== null) return;
-
-			const totalWindow = AVAILABLE_AT - EXPIRATION_MS;
-			if (totalWindow <= 0) {
-				renderPremiumState(1);
-				return;
-			}
-
-			const clampedTime = Math.min(Math.max(currentTime, EXPIRATION_MS), AVAILABLE_AT);
-			const elapsed = clampedTime - EXPIRATION_MS;
-			const progress = elapsed / totalWindow;
-
-			renderPremiumState(progress);
-		}
 
 		function updateGracePeriodCountdown() {
 			if (!EXPIRATION_MS || !IS_IN_GRACE_PERIOD) return;
@@ -5842,14 +5457,9 @@ export function generateProfilePage(
 				if (graceHours) graceHours.textContent = '00';
 				if (graceMins) graceMins.textContent = '00';
 				if (graceSecs) graceSecs.textContent = '00';
-				updateGraceSkillCounter(AVAILABLE_AT);
 				if (graceBanner) {
-					const title = graceBanner.querySelector('.grace-period-title');
-					const text = graceBanner.querySelector('.grace-period-text');
-					const countdownLabel = graceBanner.querySelector('.grace-countdown-label');
-					if (title) title.textContent = 'This name is now available!';
-					if (text) text.innerHTML = 'The grace period has ended. This name can now be registered by anyone.';
-					if (countdownLabel) countdownLabel.textContent = 'Available now';
+					const header = graceBanner.querySelector('.grace-countdown-header span');
+					if (header) header.textContent = 'Available Now!';
 				}
 				return;
 			}
@@ -5863,84 +5473,158 @@ export function generateProfilePage(
 			if (graceHours) graceHours.textContent = String(hours).padStart(2, '0');
 			if (graceMins) graceMins.textContent = String(mins).padStart(2, '0');
 			if (graceSecs) graceSecs.textContent = String(secs).padStart(2, '0');
-			updateGraceSkillCounter(now);
 		}
 
 		if (IS_IN_GRACE_PERIOD && EXPIRATION_MS) {
-			// Initialize both decay curves (SUI and NS)
-			initDecayCurves();
-			// Fetch SUI price initially and every 60 seconds
-			fetchSuiPrice();
-			setInterval(fetchSuiPrice, 60000);
 			// Start countdown
 			updateGracePeriodCountdown();
 			setInterval(updateGracePeriodCountdown, 1000);
-			// Fetch and display top offers
-			fetchTopOffers();
-			setInterval(fetchTopOffers, 30000); // Refresh every 30 seconds
 		}
 
-		// Fetch top bids and bounties for this name
-		async function fetchTopOffers() {
-			const offersContainer = document.getElementById('grace-top-offers');
-			if (!offersContainer) return;
+		// ========== SIMPLIFIED SNIPE BUTTON ==========
+		const graceSnipeBtn = document.getElementById('grace-snipe-btn');
+		const graceSnipeStatus = document.getElementById('grace-snipe-status');
+
+		function showSnipeStatus(message, type) {
+			if (!graceSnipeStatus) return;
+			graceSnipeStatus.innerHTML = message;
+			graceSnipeStatus.className = 'grace-snipe-status ' + type;
+			graceSnipeStatus.classList.remove('hidden');
+		}
+
+		function hideSnipeStatus() {
+			if (!graceSnipeStatus) return;
+			graceSnipeStatus.classList.add('hidden');
+		}
+
+		// One-click snipe bounty with fixed values: 10 SUI total, 1 SUI reward, 1 year
+		async function createSnipeBounty() {
+			if (!connectedAddress) {
+				showSnipeStatus('Please connect your wallet first', 'error');
+				connectWallet();
+				return;
+			}
+
+			if (!connectedWallet) {
+				showSnipeStatus('Wallet not detected. Please reconnect.', 'error');
+				return;
+			}
+
+			if (!BOUNTY_ESCROW_PACKAGE_ID) {
+				showSnipeStatus('Bounty escrow contract is not configured on this network.', 'error');
+				return;
+			}
+
+			// Fixed values: 10 SUI total, 1 SUI reward, 1 year
+			const totalAmountSui = 10;
+			const executorRewardSui = 1;
+			const years = 1;
+
+			const totalAmountMist = BigInt(totalAmountSui * 1_000_000_000);
+			const executorRewardMist = BigInt(executorRewardSui * 1_000_000_000);
+
+			if (graceSnipeBtn) graceSnipeBtn.disabled = true;
+			showSnipeStatus('<span class="loading-spinner"></span> Building transaction...', 'loading');
 
 			try {
-				// Fetch bids and bounties in parallel
-				const [bidsRes, bountiesRes] = await Promise.all([
-					fetch('/api/bids/' + NAME).catch(() => null),
-					fetch('/api/bounties/' + NAME).catch(() => null),
-				]);
+				const suiClient = getSuiClient();
+				const tx = new Transaction();
+				const senderAddress =
+					typeof connectedAccount?.address === 'string'
+						? connectedAccount.address
+						: connectedAddress;
+				tx.setSender(senderAddress);
 
-				const bidsData = bidsRes?.ok ? await bidsRes.json() : { bids: [] };
-				const bountiesData = bountiesRes?.ok ? await bountiesRes.json() : { bounties: [] };
+				const [depositCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalAmountMist)]);
+				tx.moveCall({
+					target: BOUNTY_ESCROW_PACKAGE_ID + '::escrow::create_and_share_bounty',
+					arguments: [
+						tx.pure.string(NAME),
+						tx.pure.address(connectedAddress),
+						depositCoin,
+						tx.pure.u64(executorRewardMist),
+						tx.pure.u64(BigInt(AVAILABLE_AT)),
+						tx.pure.u8(years),
+						tx.object('0x6'),
+					],
+				});
 
-				const bids = (bidsData.bids || []).map(b => ({
-					type: 'bid',
-					amount: b.amount,
-					bidder: b.bidder,
-					status: b.status || 'pending',
-				}));
+				const builtTxBytes = await tx.build({ client: suiClient });
+				const txWrapper = buildTxWrapper(builtTxBytes);
+				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
 
-				const bounties = (bountiesData.bounties || []).map(b => ({
-					type: 'bounty',
-					amount: Number(b.totalAmountMist) / 1e9, // Convert MIST to SUI
-					bidder: b.beneficiary,
-					status: b.status,
-				}));
+				let result = null;
+				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+				const signFeature = connectedWallet.features?.['sui:signTransaction'];
 
-				// Combine and sort by amount (highest first)
-				const allOffers = [...bids, ...bounties].sort((a, b) => b.amount - a.amount);
-
-				// Display top 3 offers
-				const topOffers = allOffers.slice(0, 3);
-
-				if (topOffers.length === 0) {
-					offersContainer.innerHTML = '<div class="grace-offers-empty">No bids or bounties yet. Be the first!</div>';
-					return;
+				if (signExecFeature?.signAndExecuteTransaction) {
+					showSnipeStatus('<span class="loading-spinner"></span> Sign in wallet...', 'loading');
+					try {
+						result = await signExecFeature.signAndExecuteTransaction({
+							transaction: txWrapper,
+							account: connectedAccount,
+							chain,
+							options: { showEffects: true, showObjectChanges: true },
+						});
+					} catch (error) {
+						console.warn('signAndExecuteTransaction failed, falling back:', error);
+					}
 				}
 
-				const formatAddress = (addr) => addr ? addr.slice(0, 6) + '...' + addr.slice(-4) : 'Unknown';
-				const formatAmount = (amount) => amount >= 1000 ? (amount / 1000).toFixed(1) + 'K' : amount.toFixed(2);
-				const getUsdValue = (amount) => suiPriceUsd ? '$' + (amount * suiPriceUsd).toLocaleString('en-US', { maximumFractionDigits: 0 }) : '';
+				if (!result) {
+					if (!signFeature) {
+						throw new Error('Wallet does not support transaction execution');
+					}
+					showSnipeStatus('<span class="loading-spinner"></span> Submitting...', 'loading');
+					const { signature } = await signFeature.signTransaction({
+						transaction: txWrapper,
+						account: connectedAccount,
+						chain,
+					});
+					result = await suiClient.executeTransactionBlock({
+						transactionBlock: builtTxBytes,
+						signature,
+						options: { showEffects: true, showObjectChanges: true },
+					});
+				}
 
-				offersContainer.innerHTML = topOffers.map(offer => \`
-					<div class="grace-offer-item">
-						<div class="grace-offer-left">
-							<span class="grace-offer-type \${offer.type}">\${offer.type}</span>
-							<span class="grace-offer-amount">\${formatAmount(offer.amount)} SUI</span>
-							<span class="grace-offer-usd">\${getUsdValue(offer.amount)}</span>
-						</div>
-						<div class="grace-offer-right">
-							<div class="grace-offer-bidder">\${formatAddress(offer.bidder)}</div>
-							<span class="grace-offer-status \${offer.status}">\${offer.status}</span>
-						</div>
-					</div>
-				\`).join('');
+				showSnipeStatus('<span class="loading-spinner"></span> Finalizing...', 'loading');
+				const escrowObjectId = await resolveBountyObjectIdFromResult(result, suiClient);
+				if (!escrowObjectId) {
+					throw new Error('Escrow created but object ID could not be determined.');
+				}
+
+				// Record the bounty
+				await fetch('/api/bounties', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						name: NAME,
+						beneficiary: connectedAddress,
+						creator: connectedAddress,
+						escrowObjectId,
+						totalAmountMist: totalAmountMist.toString(),
+						executorRewardMist: executorRewardMist.toString(),
+						registrationCostMist: (totalAmountMist - executorRewardMist).toString(),
+						availableAt: AVAILABLE_AT,
+						years,
+						type: 'standard',
+					}),
+				});
+
+				showSnipeStatus('Bounty created! <a href="https://suivision.xyz/txblock/' + result.digest + '" target="_blank">View tx</a>', 'success');
+				setTimeout(hideSnipeStatus, 8000);
 			} catch (error) {
-				console.error('Failed to fetch top offers:', error);
-				offersContainer.innerHTML = '<div class="grace-offers-empty">Failed to load offers</div>';
+				console.error('Failed to create snipe bounty:', error);
+				const message = error instanceof Error ? error.message : 'Failed to create bounty';
+				showSnipeStatus(message, 'error');
+			} finally {
+				if (graceSnipeBtn) graceSnipeBtn.disabled = false;
 			}
+		}
+
+		if (graceSnipeBtn) {
+			graceSnipeBtn.addEventListener('click', createSnipeBounty);
 		}
 
 		// ========== YOUR BOUNTIES FUNCTIONALITY ==========
@@ -6210,8 +5894,6 @@ export function generateProfilePage(
 
 				// Refresh the bounties list
 				await refreshUserBounties();
-				// Also refresh the top offers
-				fetchTopOffers();
 
 			} catch (error) {
 				console.error('Failed to cancel bounty:', error);
@@ -7061,29 +6743,6 @@ export function generateProfilePage(
 				}).finally(function() {
 					mvrAiParseBtn.disabled = false;
 				});
-			});
-		}
-
-		if (premiumGraphContainer) {
-
-			const handlePointer = (event) => {
-				const rect = premiumGraphContainer.getBoundingClientRect();
-				if (rect.width <= 0) return;
-				const progress = (event.clientX - rect.left) / rect.width;
-				if (!Number.isFinite(progress)) return;
-				premiumHoverProgress = Math.max(0, Math.min(1, progress));
-				renderPremiumState(premiumHoverProgress, 'hover');
-			};
-
-			premiumGraphContainer.addEventListener('pointermove', handlePointer);
-			premiumGraphContainer.addEventListener('pointerdown', handlePointer);
-			premiumGraphContainer.addEventListener('pointerleave', () => {
-				premiumHoverProgress = null;
-				updateGraceSkillCounter();
-			});
-			premiumGraphContainer.addEventListener('pointercancel', () => {
-				premiumHoverProgress = null;
-				updateGraceSkillCounter();
 			});
 		}
 
