@@ -6313,7 +6313,7 @@ export function generateProfilePage(
 				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
 					transaction: txWrapper,
 					account: connectedAccount,
-					chain: chain,
+					chain,
 				});
 
 				if (!result?.digest) {
