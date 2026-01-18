@@ -159,7 +159,7 @@ async function handleNftDetails(objectId: string, env: Env): Promise<Response> {
 }
 
 /**
- * Fetch all SuiNS names owned by an address with expiration data
+ * Fetch all SuiNS names owned by an address with expiration and target address data
  */
 async function handleNamesByAddress(address: string, env: Env): Promise<Response> {
 	const corsHeaders = {
@@ -169,6 +169,10 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 
 	try {
 		const client = new SuiClient({ url: env.SUI_RPC_URL })
+		const suinsClient = new SuinsClient({
+			client: client as never,
+			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
+		})
 
 		// SuiNS NFT types
 		const suinsNftTypes = [
@@ -180,6 +184,8 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			name: string
 			nftId: string
 			expirationMs: number | null
+			targetAddress: string | null
+			isPrimary: boolean
 		}
 
 		const allNames: NameInfo[] = []
@@ -203,6 +209,7 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 						domain_name?: string
 						name?: string
 						expiration_timestamp_ms?: string | number
+						target_address?: string
 					} }).fields
 					const name = fields?.domain_name || fields?.name
 					const expirationMs = fields?.expiration_timestamp_ms
@@ -213,6 +220,8 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 							name,
 							nftId: item.data.objectId,
 							expirationMs,
+							targetAddress: null, // Will be fetched separately
+							isPrimary: false,
 						})
 					}
 				}
@@ -221,20 +230,75 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			cursor = response.hasNextPage ? response.nextCursor : null
 		} while (cursor)
 
-		// Sort by expiration (soonest first, nulls last)
-		allNames.sort((a, b) => {
-			if (a.expirationMs === null) return 1
-			if (b.expirationMs === null) return -1
-			return a.expirationMs - b.expirationMs
-		})
+		// Fetch target addresses and check for primary names
+		const targetAddresses = new Map<string, string | null>() // address -> primary name
 
-		return new Response(JSON.stringify({ names: allNames }), {
+		for (const nameInfo of allNames) {
+			try {
+				const record = await suinsClient.getNameRecord(nameInfo.name)
+				nameInfo.targetAddress = record?.targetAddress || null
+
+				// Track unique target addresses
+				if (nameInfo.targetAddress && !targetAddresses.has(nameInfo.targetAddress)) {
+					targetAddresses.set(nameInfo.targetAddress, null)
+				}
+			} catch {
+				// Skip if we can't fetch the record
+			}
+		}
+
+		// Get primary name for each unique target address
+		for (const [targetAddr] of targetAddresses) {
+			try {
+				const primaryName = await suinsClient.getName(targetAddr)
+				if (primaryName) {
+					targetAddresses.set(targetAddr, primaryName)
+				}
+			} catch {
+				// Skip if we can't fetch primary name
+			}
+		}
+
+		// Mark primary names
+		for (const nameInfo of allNames) {
+			if (nameInfo.targetAddress) {
+				const primaryName = targetAddresses.get(nameInfo.targetAddress)
+				if (primaryName) {
+					const cleanPrimary = primaryName.replace(/\.sui$/, '')
+					const cleanName = nameInfo.name.replace(/\.sui$/, '')
+					nameInfo.isPrimary = cleanPrimary.toLowerCase() === cleanName.toLowerCase()
+				}
+			}
+		}
+
+		// Group by target address
+		const grouped: Record<string, NameInfo[]> = {}
+		for (const nameInfo of allNames) {
+			const key = nameInfo.targetAddress || 'unset'
+			if (!grouped[key]) grouped[key] = []
+			grouped[key].push(nameInfo)
+		}
+
+		// Sort each group by expiration, with primary first
+		for (const key of Object.keys(grouped)) {
+			grouped[key].sort((a, b) => {
+				// Primary names come first
+				if (a.isPrimary && !b.isPrimary) return -1
+				if (!a.isPrimary && b.isPrimary) return 1
+				// Then by expiration
+				if (a.expirationMs === null) return 1
+				if (b.expirationMs === null) return -1
+				return a.expirationMs - b.expirationMs
+			})
+		}
+
+		return new Response(JSON.stringify({ names: allNames, grouped }), {
 			status: 200,
 			headers: corsHeaders,
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch names'
-		return new Response(JSON.stringify({ error: message, names: [] }), {
+		return new Response(JSON.stringify({ error: message, names: [], grouped: {} }), {
 			status: 500,
 			headers: corsHeaders,
 		})
