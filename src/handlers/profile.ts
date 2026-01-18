@@ -6218,7 +6218,7 @@ export function generateProfilePage(
 				canUseMvr = canEdit || connectedAddress === nftOwnerAddress || connectedAddress === CURRENT_ADDRESS;
 				
 				// Also check if UpgradeCap is owned by connected wallet or is shared
-				if (!canUseMvr && mvrUpgradeCap?.value?.trim()) {
+				if (!canUseMvr && mvrUpgradeCap && mvrUpgradeCap.value && mvrUpgradeCap.value.trim()) {
 					try {
 						const upgradeCapId = mvrUpgradeCap.value.trim();
 						if (/^0x[a-f0-9]{64}$/i.test(upgradeCapId)) {
@@ -6234,25 +6234,26 @@ export function generateProfilePage(
 									if ('Shared' in owner || 'Immutable' in owner) {
 										canUseMvr = true;
 									} else if ('AddressOwner' in owner) {
-										// Check if owned by connected wallet or by an object we own
+										// Check if owned by connected wallet
 										const ownerAddr = owner.AddressOwner;
 										if (ownerAddr === connectedAddress) {
 											canUseMvr = true;
-										} else {
-											// Check if owned by an object ID that we own
-											try {
-												const ownerObj = await suiClient.getObject({
-													id: ownerAddr,
-													options: { showOwner: true }
-												});
-												if (ownerObj.data?.owner && typeof ownerObj.data.owner === 'object' && 'AddressOwner' in ownerObj.data.owner) {
-													if (ownerObj.data.owner.AddressOwner === connectedAddress) {
-														canUseMvr = true;
-													}
+										}
+									} else if ('ObjectOwner' in owner) {
+										// Check if owned by an object ID that we own (like brando.sui NFT)
+										const ownerObjId = owner.ObjectOwner;
+										try {
+											const ownerObj = await suiClient.getObject({
+												id: ownerObjId,
+												options: { showOwner: true }
+											});
+											if (ownerObj.data && ownerObj.data.owner && typeof ownerObj.data.owner === 'object' && 'AddressOwner' in ownerObj.data.owner) {
+												if (ownerObj.data.owner.AddressOwner === connectedAddress) {
+													canUseMvr = true;
 												}
-											} catch (e) {
-												// Not an object, ignore
 											}
+										} catch (e) {
+											// Not an object or can't fetch, ignore
 										}
 									}
 								}
@@ -6260,7 +6261,8 @@ export function generateProfilePage(
 						}
 					} catch (e) {
 						// If we can't check, fall back to original logic
-						console.log('Could not check UpgradeCap ownership:', e.message);
+						const errorMsg = e && typeof e === 'object' && 'message' in e ? e.message : String(e);
+						console.log('Could not check UpgradeCap ownership:', errorMsg);
 					}
 				}
 			}
