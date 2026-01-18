@@ -6286,13 +6286,34 @@ export function generateProfilePage(
 				// Transfer the AppCap to the sender (so they can manage the app later)
 				tx.transferObjects([appCap], connectedAddress);
 
+				// Set sender address
+				const senderAddress = typeof connectedAccount.address === 'string'
+					? connectedAccount.address
+					: connectedAccount.address?.toString() || connectedAddress;
+				tx.setSender(senderAddress);
+
 				mvrRegisterBtnText.textContent = 'Approve in wallet...';
 
+				// Build transaction before signing
+				const builtTxBytes = await tx.build({ client: suiClient });
+
+				// Wrap transaction for wallet compatibility
+				const txWrapper = {
+					_bytes: builtTxBytes,
+					toJSON() {
+						return btoa(String.fromCharCode.apply(null, this._bytes));
+					},
+					serialize() {
+						return this._bytes;
+					}
+				};
+
 				// Sign and execute
+				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
 				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
-					transaction: tx,
+					transaction: txWrapper,
 					account: connectedAccount,
-					chain: 'sui:' + NETWORK,
+					chain: chain,
 				});
 
 				if (!result?.digest) {
