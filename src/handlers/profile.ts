@@ -790,6 +790,15 @@ export function generateProfilePage(
 									</svg>
 									<span>Transfer UpgradeCap to Connected Wallet</span>
 								</button>
+								<button type="button" id="mvr-share-upgrade-cap-btn" style="padding: 12px 20px; background: rgba(34, 197, 94, 0.1); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.3); border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+										<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+										<circle cx="9" cy="7" r="4"></circle>
+										<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+										<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+									</svg>
+									<span>Make UpgradeCap Shared</span>
+								</button>
 							</div>
 						</div>
 					</form>
@@ -3832,7 +3841,7 @@ export function generateProfilePage(
 			updateUploadVisibility();
 			// Update MVR section if expanded
 			if (typeof window.updateMvrSectionVisibility === 'function') {
-				window.updateMvrSectionVisibility();
+				await window.updateMvrSectionVisibility();
 			}
 		};
 
@@ -6165,25 +6174,26 @@ export function generateProfilePage(
 		const mvrRegisterBtn = document.getElementById('mvr-register-btn');
 		const mvrRegisterBtnText = document.getElementById('mvr-register-btn-text');
 		const mvrTransferUpgradeCapBtn = document.getElementById('mvr-transfer-upgrade-cap-btn');
+		const mvrShareUpgradeCapBtn = document.getElementById('mvr-share-upgrade-cap-btn');
 
 		let mvrExpanded = false;
 
 		// Toggle MVR section
 		if (mvrToggleBtn) {
-			mvrToggleBtn.addEventListener('click', () => {
+			mvrToggleBtn.addEventListener('click', async () => {
 				mvrExpanded = !mvrExpanded;
 				mvrContent.style.display = mvrExpanded ? 'block' : 'none';
 				mvrToggleIcon.innerHTML = mvrExpanded
 					? '<polyline points="18 15 12 9 6 15"></polyline>'
 					: '<polyline points="6 9 12 15 18 9"></polyline>';
 				if (mvrExpanded) {
-					updateMvrSectionVisibility();
+					await updateMvrSectionVisibility();
 				}
 			});
 		}
 
 		// Update MVR section visibility based on wallet state
-		function updateMvrSectionVisibility() {
+		async function updateMvrSectionVisibility() {
 			if (!mvrContent) return;
 
 			// Set the SuiNS name
@@ -6191,18 +6201,82 @@ export function generateProfilePage(
 				mvrSuinsName.value = NAME;
 			}
 
+			// Ensure NFT owner is fetched if not already
+			if (!nftOwnerAddress && NFT_ID) {
+				nftOwnerAddress = await fetchNftOwner();
+			}
+
+			// Re-check edit permission to ensure canEdit is up to date
+			if (connectedAddress) {
+				await checkEditPermission();
+			}
+
+			// Check if connected wallet can use UpgradeCap (either owns NFT, is target address, or owns UpgradeCap)
+			let canUseMvr = false;
+			if (connectedAddress) {
+				// Can use if: owns NFT, is target address, or owns the UpgradeCap (or UpgradeCap is shared)
+				canUseMvr = canEdit || connectedAddress === nftOwnerAddress || connectedAddress === CURRENT_ADDRESS;
+				
+				// Also check if UpgradeCap is owned by connected wallet or is shared
+				if (!canUseMvr && mvrUpgradeCap?.value?.trim()) {
+					try {
+						const upgradeCapId = mvrUpgradeCap.value.trim();
+						if (/^0x[a-f0-9]{64}$/i.test(upgradeCapId)) {
+							const suiClient = new SuiClient({ url: RPC_URL });
+							const upgradeCapObj = await suiClient.getObject({
+								id: upgradeCapId,
+								options: { showOwner: true }
+							});
+							if (upgradeCapObj.data) {
+								const owner = upgradeCapObj.data.owner;
+								// If shared or immutable, anyone can use it
+								if (owner && typeof owner === 'object') {
+									if ('Shared' in owner || 'Immutable' in owner) {
+										canUseMvr = true;
+									} else if ('AddressOwner' in owner) {
+										// Check if owned by connected wallet or by an object we own
+										const ownerAddr = owner.AddressOwner;
+										if (ownerAddr === connectedAddress) {
+											canUseMvr = true;
+										} else {
+											// Check if owned by an object ID that we own
+											try {
+												const ownerObj = await suiClient.getObject({
+													id: ownerAddr,
+													options: { showOwner: true }
+												});
+												if (ownerObj.data?.owner && typeof ownerObj.data.owner === 'object' && 'AddressOwner' in ownerObj.data.owner) {
+													if (ownerObj.data.owner.AddressOwner === connectedAddress) {
+														canUseMvr = true;
+													}
+												}
+											} catch (e) {
+												// Not an object, ignore
+											}
+										}
+									}
+								}
+							}
+						}
+					} catch (e) {
+						// If we can't check, fall back to original logic
+						console.log('Could not check UpgradeCap ownership:', e.message);
+					}
+				}
+			}
+
 			if (!connectedAddress) {
 				// Not connected - show connect prompt
 				mvrWalletRequired.style.display = 'block';
 				mvrNotOwner.style.display = 'none';
 				mvrRegisterForm.style.display = 'none';
-			} else if (!canEdit || connectedAddress !== nftOwnerAddress) {
-				// Connected but not owner
+			} else if (!canUseMvr) {
+				// Connected but cannot use MVR
 				mvrWalletRequired.style.display = 'none';
 				mvrNotOwner.style.display = 'block';
 				mvrRegisterForm.style.display = 'none';
 			} else {
-				// Owner connected - show form
+				// Can use MVR - show form
 				mvrWalletRequired.style.display = 'none';
 				mvrNotOwner.style.display = 'none';
 				mvrRegisterForm.style.display = 'block';
@@ -6248,6 +6322,13 @@ export function generateProfilePage(
 		if (mvrTransferUpgradeCapBtn) {
 			mvrTransferUpgradeCapBtn.addEventListener('click', async () => {
 				await handleTransferUpgradeCap();
+			});
+		}
+
+		// Handle making UpgradeCap shared
+		if (mvrShareUpgradeCapBtn) {
+			mvrShareUpgradeCapBtn.addEventListener('click', async () => {
+				await handleShareUpgradeCap();
 			});
 		}
 
@@ -6408,6 +6489,167 @@ export function generateProfilePage(
 			} finally {
 				mvrTransferUpgradeCapBtn.disabled = false;
 				mvrTransferUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><polyline points="9 18 15 12 9 6"></polyline></svg><span>Transfer UpgradeCap to Connected Wallet</span>';
+			}
+		}
+
+		async function handleShareUpgradeCap() {
+			if (!connectedWallet || !connectedAccount) {
+				showMvrStatus('Please connect your wallet first.', 'error');
+				return;
+			}
+
+			const upgradeCap = mvrUpgradeCap?.value?.trim();
+			if (!upgradeCap || !/^0x[a-f0-9]{64}$/i.test(upgradeCap)) {
+				showMvrStatus('Please enter a valid UpgradeCap object ID first.', 'error');
+				return;
+			}
+
+			try {
+				mvrShareUpgradeCapBtn.disabled = true;
+				mvrShareUpgradeCapBtn.textContent = 'Checking UpgradeCap...';
+				hideMvrStatus();
+
+				const suiClient = new SuiClient({ url: RPC_URL });
+
+				// Check UpgradeCap ownership
+				const upgradeCapObj = await suiClient.getObject({
+					id: upgradeCap,
+					options: { showOwner: true }
+				});
+
+				if (!upgradeCapObj.data) {
+					showMvrStatus('UpgradeCap object not found.', 'error');
+					mvrShareUpgradeCapBtn.disabled = false;
+					mvrShareUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>Make UpgradeCap Shared</span>';
+					return;
+				}
+
+				const owner = upgradeCapObj.data.owner;
+				
+				// Check if already shared
+				if (owner && typeof owner === 'object' && 'Shared' in owner) {
+					showMvrStatus('UpgradeCap is already shared! Anyone can use it for MVR registration.', 'info');
+					mvrShareUpgradeCapBtn.disabled = false;
+					mvrShareUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>Make UpgradeCap Shared</span>';
+					return;
+				}
+
+				// Check if owned by connected wallet
+				if (!owner || typeof owner !== 'object' || !('AddressOwner' in owner)) {
+					showMvrStatus('UpgradeCap is not owned (it may be immutable). Cannot make it shared.', 'error');
+					mvrShareUpgradeCapBtn.disabled = false;
+					mvrShareUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>Make UpgradeCap Shared</span>';
+					return;
+				}
+
+				const currentOwner = owner.AddressOwner;
+				
+				// Check if owned by object ID (like NFT)
+				let isOwnedByObjectId = false;
+				if (currentOwner !== connectedAddress) {
+					try {
+						const ownerObj = await suiClient.getObject({
+							id: currentOwner,
+							options: { showOwner: true }
+						});
+						if (ownerObj.data) {
+							isOwnedByObjectId = true;
+							// Check if we own the parent object
+							if (ownerObj.data.owner && typeof ownerObj.data.owner === 'object' && 'AddressOwner' in ownerObj.data.owner) {
+								const parentOwner = ownerObj.data.owner.AddressOwner;
+								if (parentOwner !== connectedAddress) {
+									showMvrStatus('UpgradeCap is owned by an object ID, but you don\'t own that object. Cannot make it shared.', 'error');
+									mvrShareUpgradeCapBtn.disabled = false;
+									mvrShareUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>Make UpgradeCap Shared</span>';
+									return;
+								}
+							}
+						}
+					} catch (e) {
+						// Not an object, treat as regular address
+					}
+				}
+
+				if (currentOwner !== connectedAddress && !isOwnedByObjectId) {
+					showMvrStatus('You must be the owner of the UpgradeCap to make it shared. Current owner: ' + currentOwner.slice(0, 8) + '...', 'error');
+					mvrShareUpgradeCapBtn.disabled = false;
+					mvrShareUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>Make UpgradeCap Shared</span>';
+					return;
+				}
+
+				mvrShareUpgradeCapBtn.textContent = 'Building transaction...';
+
+				// Build transaction to make UpgradeCap shared
+				// In Sui, we use public_share_object for objects with 'store' ability
+				const tx = new Transaction();
+				
+				// Use the Move function to share the object
+				// @0x2::transfer::public_share_object<T: key + store>(obj: T)
+				tx.moveCall({
+					target: '0x2::transfer::public_share_object',
+					typeArguments: ['0x2::package::UpgradeCap'],
+					arguments: [tx.object(upgradeCap)],
+				});
+
+				const senderAddress = typeof connectedAccount.address === 'string'
+					? connectedAccount.address
+					: connectedAccount.address?.toString() || connectedAddress;
+				tx.setSender(senderAddress);
+
+				mvrShareUpgradeCapBtn.textContent = 'Approve in wallet...';
+
+				// Build transaction before signing
+				const builtTxBytes = await tx.build({ client: suiClient });
+
+				// Wrap transaction for wallet compatibility
+				const txWrapper = {
+					_bytes: builtTxBytes,
+					toJSON() {
+						return btoa(String.fromCharCode.apply(null, this._bytes));
+					},
+					serialize() {
+						return this._bytes;
+					}
+				};
+
+				// Sign and execute
+				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
+					transaction: txWrapper,
+					account: connectedAccount,
+					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+				});
+
+				if (!result?.digest) {
+					throw new Error('Transaction failed - no digest returned');
+				}
+
+				// Success!
+				showMvrStatus(
+					'UpgradeCap is now shared! Anyone can use it for MVR registration. ' +
+					'<a href="' + EXPLORER_BASE + '/tx/' + result.digest + '" target="_blank" style="color: inherit; text-decoration: underline;">View transaction</a>',
+					'success'
+				);
+
+			} catch (error) {
+				console.error('Share UpgradeCap error:', error);
+				var msg = error && error.message ? error.message : (typeof error === 'string' ? error : 'Unknown error');
+				
+				// Clean up the message
+				msg = msg
+					.replace(new RegExp('^Me:\\s*', 'i'), '')
+					.replace(new RegExp('^Error:\\s*', 'i'), '')
+					.replace(new RegExp('^SuiError:\\s*', 'i'), '')
+					.trim();
+
+				// Special handling for object ID ownership
+				if (msg.includes('not signed by the correct sender') || msg.includes('owned by account address')) {
+					msg = 'UpgradeCap is owned by an object ID address. To make it shared, you need a Move function that uses the parent object (NFT) to authorize the share operation. This requires deploying a custom Move package.';
+				}
+
+				showMvrStatus('Failed to make UpgradeCap shared: ' + msg, 'error');
+			} finally {
+				mvrShareUpgradeCapBtn.disabled = false;
+				mvrShareUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>Make UpgradeCap Shared</span>';
 			}
 		}
 
@@ -6624,6 +6866,16 @@ export function generateProfilePage(
 
 		// Make MVR update function globally available for wallet state changes
 		window.updateMvrSectionVisibility = updateMvrSectionVisibility;
+		// Also update when wallet connects
+		if (typeof window.checkEditPermission === 'function') {
+			const originalCheckEdit = window.checkEditPermission;
+			window.checkEditPermission = async function() {
+				await originalCheckEdit();
+				if (mvrExpanded) {
+					await updateMvrSectionVisibility();
+				}
+			};
+		}
 
 		// MVR Auto-fill parsing
 		var mvrAutofill = document.getElementById('mvr-autofill');
