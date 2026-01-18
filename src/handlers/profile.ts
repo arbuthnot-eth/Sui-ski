@@ -37,6 +37,11 @@ export function generateProfilePage(
 	options: ProfilePageOptions = {},
 ): string {
 	const network = env.SUI_NETWORK
+	const normalizedNetwork = network === 'mainnet' ? 'mainnet' : 'testnet'
+	const bountyPackageId =
+		normalizedNetwork === 'mainnet'
+			? env.BOUNTY_ESCROW_PACKAGE_MAINNET
+			: env.BOUNTY_ESCROW_PACKAGE_TESTNET
 	const explorerBase =
 		network === 'mainnet' ? 'https://suiscan.xyz/mainnet' : `https://suiscan.xyz/${network}`
 	const explorerUrl = `${explorerBase}/account/${record.address}`
@@ -1279,6 +1284,7 @@ export function generateProfilePage(
 		const FULL_NAME = ${serializeJson(fullName)};
 		const NETWORK = ${serializeJson(network)};
 		const RPC_URL = ${serializeJson(env.SUI_RPC_URL)};
+		const BOUNTY_ESCROW_PACKAGE_ID = ${serializeJson(bountyPackageId || null)};
 	const NFT_ID = ${serializeJson(record.nftId || '')};
 	const TARGET_ADDRESS = ${serializeJson(record.address)};
 	const OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
@@ -4948,6 +4954,54 @@ export function generateProfilePage(
 			quickBountyTotal.textContent = totalAmount.toFixed(2) + ' SUI';
 		}
 
+		function buildTxWrapper(bytes) {
+			return {
+				_bytes: bytes,
+				toJSON() {
+					return btoa(
+						String.fromCharCode.apply(
+							null,
+							Array.from(this._bytes),
+						),
+					)
+				},
+				serialize() {
+					return this._bytes
+				},
+			}
+		}
+
+		function extractBountyObjectIdFromChanges(changes) {
+			if (!Array.isArray(changes)) return null
+			for (const change of changes) {
+				if (
+					change.type === 'created' &&
+					typeof change.objectType === 'string' &&
+					change.objectType.includes('bounty_escrow::escrow::Bounty')
+				) {
+					return change.objectId
+				}
+			}
+			return null
+		}
+
+		async function resolveBountyObjectIdFromResult(result, suiClient) {
+			const directId = extractBountyObjectIdFromChanges(result?.objectChanges)
+			if (directId) return directId
+			const digest = result?.digest
+			if (!digest) return null
+			try {
+				const finalized = await suiClient.waitForTransaction({
+					digest,
+					options: { showObjectChanges: true },
+				})
+				return extractBountyObjectIdFromChanges(finalized?.objectChanges)
+			} catch (error) {
+				console.error('Failed to fetch finalized transaction:', error)
+				return null
+			}
+		}
+
 		// Create a new bid with one-click SUI transaction
 		async function createBid() {
 			if (!connectedAddress) {
@@ -5054,6 +5108,17 @@ export function generateProfilePage(
 		async function createQuickBounty() {
 			if (!connectedAddress) {
 				showBidBountyStatus(createBountyStatus, 'Please connect your wallet first', 'error');
+				connectWallet();
+				return;
+			}
+
+			if (!connectedWallet) {
+				showBidBountyStatus(createBountyStatus, 'Wallet not detected. Please reconnect.', 'error');
+				return;
+			}
+
+			if (!BOUNTY_ESCROW_PACKAGE_ID) {
+				showBidBountyStatus(createBountyStatus, 'Bounty escrow contract is not configured on this network.', 'error');
 				return;
 			}
 
@@ -5071,119 +5136,86 @@ export function generateProfilePage(
 				return;
 			}
 
+			if (totalAmount <= executorReward) {
+				showBidBountyStatus(createBountyStatus, 'Total escrow must be greater than the executor reward', 'error');
+				return;
+			}
+
+			const totalAmountMist = BigInt(Math.round(totalAmount * 1_000_000_000));
+			const executorRewardMist = BigInt(Math.round(executorReward * 1_000_000_000));
+
 			if (quickBountyBtn) quickBountyBtn.disabled = true;
-			showBidBountyStatus(createBountyStatus, 'Preparing escrow transaction...', 'loading');
+			showBidBountyStatus(createBountyStatus, 'Building escrow transaction...', 'loading');
 
 			try {
-				// Build escrow creation transaction using SUI SDK
-				const { Transaction } = await import('https://esm.sh/@mysten/sui@1.45.2/transactions');
-				const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.45.2/client');
-				
 				const suiClient = new SuiClient({ url: RPC_URL });
 				const tx = new Transaction();
-				
-				// Get gas coins
-				const coins = await suiClient.getCoins({
-					owner: connectedAddress,
-					coinType: '0x2::sui::SUI',
+				const senderAddress =
+					typeof connectedAccount?.address === 'string'
+						? connectedAccount.address
+						: connectedAddress;
+				tx.setSender(senderAddress);
+
+				const [depositCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalAmountMist)]);
+
+				tx.moveCall({
+					target: `${BOUNTY_ESCROW_PACKAGE_ID}::escrow::create_and_share_bounty`,
+					arguments: [
+						tx.pure.string(NAME),
+						tx.pure.address(connectedAddress),
+						depositCoin,
+						tx.pure.u64(executorRewardMist),
+						tx.pure.u64(BigInt(AVAILABLE_AT)),
+						tx.pure.u8(years),
+						tx.object('0x6'),
+					],
 				});
-				
-				if (coins.data.length === 0) {
-					throw new Error('No SUI coins found in wallet');
-				}
-				
-				const totalAmountMist = BigInt(Math.floor(totalAmount * 1_000_000_000));
-				const executorRewardMist = BigInt(Math.floor(executorReward * 1_000_000_000));
-				
-				// Merge coins if needed
-				const primaryCoin = coins.data[0].coinObjectId;
-				if (coins.data.length > 1) {
-					tx.mergeCoins(tx.object(primaryCoin), coins.data.slice(1).map(c => tx.object(c.coinObjectId)));
-				}
-				
-				// Split the escrow amount
-				const [depositCoin] = tx.splitCoins(tx.object(primaryCoin), [totalAmountMist]);
-				
-				// Build escrow creation transaction via API (needs package ID from server)
-				showBidBountyStatus(createBountyStatus, 'Building escrow transaction...', 'loading');
-				
-				const buildRes = await fetch('/api/bounties/build-create', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						name: NAME,
-						beneficiary: connectedAddress,
-						coinObjectId: primaryCoin,
-						totalAmountMist: totalAmountMist.toString(),
-						executorRewardMist: executorRewardMist.toString(),
-						availableAt: AVAILABLE_AT,
-						years: years,
-					}),
-				});
-				
-				if (!buildRes.ok) {
-					const errorData = await buildRes.json().catch(() => ({ error: 'Failed to build transaction' }));
-					throw new Error(errorData.error || 'Failed to build escrow transaction');
-				}
-				
-				const buildData = await buildRes.json();
-				if (!buildData.transaction) {
-					throw new Error('Invalid transaction response from server');
-				}
-				
-				// Decode transaction bytes
-				const txBytes = Uint8Array.from(atob(buildData.transaction), c => c.charCodeAt(0));
-				
-				// Sign and execute transaction
-				showBidBountyStatus(createBountyStatus, 'Sign transaction in wallet...', 'loading');
-				
-				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
-					transaction: txBytes,
-					account: connectedAccount,
-					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-				});
-				
-				// Extract escrow object ID from transaction effects
-				// Query the transaction to get object changes
-				showBidBountyStatus(createBountyStatus, 'Extracting escrow object ID...', 'loading');
-				
-				const txDetails = await suiClient.getTransactionBlock({
-					digest: result.digest,
-					options: { showEffects: true, showObjectChanges: true },
-				});
-				
-				let escrowObjectId = null;
-				
-				// Look for created shared objects (bounty escrow is shared)
-				if (txDetails.objectChanges) {
-					for (const change of txDetails.objectChanges) {
-						if (change.type === 'created' && 'objectId' in change) {
-							// Check if it's a shared object (bounty escrow)
-							if ('owner' in change && change.owner && typeof change.owner === 'object' && 'Shared' in change.owner) {
-								escrowObjectId = change.objectId;
-								break;
-							}
-						}
+
+				const builtTxBytes = await tx.build({ client: suiClient });
+				const txWrapper = buildTxWrapper(builtTxBytes);
+				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+
+				let result = null;
+				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+				const signFeature = connectedWallet.features?.['sui:signTransaction'];
+
+				if (signExecFeature?.signAndExecuteTransaction) {
+					showBidBountyStatus(createBountyStatus, 'Sign transaction in wallet...', 'loading');
+					try {
+						result = await signExecFeature.signAndExecuteTransaction({
+							transaction: txWrapper,
+							account: connectedAccount,
+							chain,
+							options: { showEffects: true, showObjectChanges: true },
+						});
+					} catch (error) {
+						console.warn('signAndExecuteTransaction failed, falling back to manual execution:', error);
 					}
 				}
-				
-				// Fallback: check effects.created for shared objects
-				if (!escrowObjectId && txDetails.effects?.created) {
-					for (const ref of txDetails.effects.created) {
-						if (ref.owner && typeof ref.owner === 'object' && 'Shared' in ref.owner) {
-							escrowObjectId = ref.reference?.objectId || ref.objectId;
-							break;
-						}
+
+				if (!result) {
+					if (!signFeature) {
+						throw new Error('Wallet does not support transaction execution on this device');
 					}
+					showBidBountyStatus(createBountyStatus, 'Submitting transaction...', 'loading');
+					const { signature } = await signFeature.signTransaction({
+						transaction: txWrapper,
+						account: connectedAccount,
+						chain,
+					});
+					result = await suiClient.executeTransactionBlock({
+						transactionBlock: builtTxBytes,
+						signature,
+						options: { showEffects: true, showObjectChanges: true },
+					});
 				}
-				
+
+				showBidBountyStatus(createBountyStatus, 'Finalizing bounty...', 'loading');
+				const escrowObjectId = await resolveBountyObjectIdFromResult(result, suiClient);
 				if (!escrowObjectId) {
-					throw new Error('Failed to extract escrow object ID from transaction. Please check the transaction manually.');
+					throw new Error('Escrow created but object ID could not be determined. Please check the transaction manually.');
 				}
-				
-				// Create bounty record with the actual escrow object ID
-				showBidBountyStatus(createBountyStatus, 'Saving bounty record...', 'loading');
-				
+
 				const res = await fetch('/api/bounties', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -5191,45 +5223,70 @@ export function generateProfilePage(
 						name: NAME,
 						beneficiary: connectedAddress,
 						creator: connectedAddress,
-						escrowObjectId: escrowObjectId,
+						escrowObjectId,
 						totalAmountMist: totalAmountMist.toString(),
 						executorRewardMist: executorRewardMist.toString(),
+						registrationCostMist: (totalAmountMist - executorRewardMist).toString(),
 						availableAt: AVAILABLE_AT,
-						years: years,
+						years,
 					}),
 				});
 
 				const data = await res.json();
 				if (!res.ok) {
 					console.warn('Escrow created but bounty record creation failed:', data.error);
-					showBidBountyStatus(createBountyStatus, \`Escrow created! <a href="https://suivision.xyz/txblock/\${result.digest}" target="_blank">View tx</a> (Note: Bounty record may not be saved)\`, 'success');
+					showBidBountyStatus(
+						createBountyStatus,
+						`Escrow created! <a href="https://suivision.xyz/txblock/${result.digest}" target="_blank">View tx</a> (record may not be saved)`,
+						'success',
+					);
 				} else {
-					showBidBountyStatus(createBountyStatus, \`Bounty created! <a href="https://suivision.xyz/txblock/\${result.digest}" target="_blank">View tx</a>\`, 'success');
+					showBidBountyStatus(
+						createBountyStatus,
+						`Bounty created! <a href="https://suivision.xyz/txblock/${result.digest}" target="_blank">View tx</a>`,
+						'success',
+					);
 				}
-				
+
 				fetchBountyQueue();
+				fetchTopOffers();
+				if (typeof refreshUserBounties === 'function') {
+					refreshUserBounties();
+				}
 
 				setTimeout(() => hideBidBountyStatus(createBountyStatus), 5000);
 			} catch (error) {
 				console.error('Failed to create bounty:', error);
-				showBidBountyStatus(createBountyStatus, error.message || 'Failed to create bounty', 'error');
+				const message = error instanceof Error ? error.message : 'Failed to create bounty';
+				showBidBountyStatus(createBountyStatus, message, 'error');
 			} finally {
 				if (quickBountyBtn) quickBountyBtn.disabled = false;
 			}
 		}
 
+		const INLINE_STATUS_TYPES = new Set(['success', 'error', 'info', 'loading'])
+
 		// Show bid/bounty status message (separate from modal showStatus)
 		function showBidBountyStatus(element, message, type) {
 			if (!element) return;
 			element.textContent = message;
-			element.className = 'create-bid-status ' + type;
+			if (!element.dataset.baseClass) {
+				const baseClass =
+					element.className
+						.split(' ')
+						.filter((cls) => cls && cls !== 'hidden' && !INLINE_STATUS_TYPES.has(cls))[0] || 'create-bid-status';
+				element.dataset.baseClass = baseClass;
+			}
+			const base = element.dataset.baseClass || 'create-bid-status';
+			element.className = `${base} ${type}`.trim();
 			element.classList.remove('hidden');
 		}
 
 		// Hide bid/bounty status message
 		function hideBidBountyStatus(element) {
 			if (!element) return;
-			element.classList.add('hidden');
+			const base = element.dataset?.baseClass || 'create-bid-status';
+			element.className = `${base} hidden`.trim();
 		}
 
 		// Event listeners for bid/bounty section
@@ -5668,7 +5725,8 @@ export function generateProfilePage(
 			\`;
 
 			try {
-				const res = await fetch('/api/bounties/' + NAME + '?creator=' + connectedAddress);
+				const creatorParam = connectedAddress.toLowerCase();
+				const res = await fetch('/api/bounties/' + NAME + '?creator=' + creatorParam);
 				if (!res.ok) throw new Error('Failed to fetch bounties');
 
 				const data = await res.json();
@@ -5696,9 +5754,9 @@ export function generateProfilePage(
 			if (!yourBountiesList) return;
 
 			const formatAmount = (mist) => (Number(mist) / 1e9).toFixed(2);
-			const formatStatus = (status, hasTx) => {
-				if (status === 'pending' && !hasTx) return 'Needs Signature';
-				if (status === 'pending' && hasTx) return 'Awaiting Execution';
+			const formatStatus = (status, hasSignedTx) => {
+				if (status === 'pending' && !hasSignedTx) return 'Needs Signature';
+				if (status === 'pending' && hasSignedTx) return 'Awaiting Execution';
 				if (status === 'ready') return 'Ready to Execute';
 				if (status === 'executing') return 'Executing...';
 				if (status === 'completed') return 'Completed';
@@ -5706,8 +5764,8 @@ export function generateProfilePage(
 				if (status === 'cancelled') return 'Cancelled';
 				return status;
 			};
-			const getStatusClass = (status, hasTx) => {
-				if (status === 'pending' && !hasTx) return 'needs-signature';
+			const getStatusClass = (status, hasSignedTx) => {
+				if (status === 'pending' && !hasSignedTx) return 'needs-signature';
 				if (status === 'completed') return 'completed';
 				if (status === 'failed') return 'failed';
 				if (status === 'cancelled') return 'cancelled';
@@ -5718,7 +5776,7 @@ export function generateProfilePage(
 				<div class="your-bounty-item" data-bounty-id="\${bounty.id}">
 					<div class="your-bounty-header">
 						<div class="your-bounty-amount">\${formatAmount(bounty.totalAmountMist)} SUI</div>
-						<div class="your-bounty-status \${getStatusClass(bounty.status, bounty.txBytes)}">\${formatStatus(bounty.status, bounty.txBytes)}</div>
+						<div class="your-bounty-status \${getStatusClass(bounty.status, bounty.hasSignedTx)}">\${formatStatus(bounty.status, bounty.hasSignedTx)}</div>
 					</div>
 					<div class="your-bounty-details">
 						<div class="your-bounty-detail">
@@ -5735,7 +5793,7 @@ export function generateProfilePage(
 						</div>
 					</div>
 					<div class="your-bounty-actions">
-						\${bounty.status === 'pending' && !bounty.txBytes ? \`
+						\${bounty.status === 'pending' && !bounty.hasSignedTx ? \`
 							<button class="your-bounty-sign-btn" onclick="signBountyTransaction('\${bounty.id}')">
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 									<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
@@ -5743,7 +5801,7 @@ export function generateProfilePage(
 								Sign Transaction
 							</button>
 						\` : ''}
-						\${bounty.status === 'pending' && bounty.txBytes ? \`
+						\${bounty.status === 'pending' && bounty.hasSignedTx ? \`
 							<div class="your-bounty-signed">
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 									<polyline points="20 6 9 17 4 12"></polyline>
