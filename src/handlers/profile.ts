@@ -2134,16 +2134,13 @@ export function generateProfilePage(
 				updateBountiesSectionVisibility();
 			} catch (e) {
 				console.error('Connection error:', e);
-				walletList.innerHTML = \`
-					<div class="wallet-no-wallets" style="color: var(--error);">
-						Connection failed: \${e.message}
-						<br><br>
-						<button onclick="document.getElementById('wallet-modal').classList.remove('open')"
-							style="padding: 8px 16px; background: var(--accent); border: none; border-radius: 8px; color: white; cursor: pointer;">
-							Close
-						</button>
-					</div>
-				\`;
+				const errorMsg = e.message || 'Unknown error';
+				walletList.innerHTML = '<div class="wallet-no-wallets" style="color: var(--error);">' +
+					'Connection failed: ' + errorMsg +
+					'<br><br>' +
+					'<button onclick="document.getElementById(\\'wallet-modal\\').classList.remove(\\'open\\')" ' +
+					'style="padding: 8px 16px; background: var(--accent); border: none; border-radius: 8px; color: white; cursor: pointer;">' +
+					'Close</button></div>';
 			}
 		}
 
@@ -2166,15 +2163,13 @@ export function generateProfilePage(
 			}
 
 			// If no immediate wallets, show install links and detect in background
-			walletList.innerHTML = \`
-				<div class="wallet-no-wallets">
-					Detecting wallets...
-					<br><br>
-					<a href="https://phantom.app/download" target="_blank">Install Phantom →</a>
-					<br>
-					<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank">Install Sui Wallet →</a>
-				</div>
-			\`;
+			walletList.innerHTML = '<div class="wallet-no-wallets">' +
+				'Detecting wallets...' +
+				'<br><br>' +
+				'<a href="https://phantom.app/download" target="_blank">Install Phantom →</a>' +
+				'<br>' +
+				'<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank">Install Sui Wallet →</a>' +
+				'</div>';
 
 			// Detect wallets in background without blocking
 			detectWallets().then(wallets => {
@@ -2187,15 +2182,13 @@ export function generateProfilePage(
 		// Render wallet list (helper function)
 		function renderWalletList(wallets) {
 			if (wallets.length === 0) {
-				walletList.innerHTML = \`
-					<div class="wallet-no-wallets">
-						No Sui wallets detected.
-						<br><br>
-						<a href="https://phantom.app/download" target="_blank">Install Phantom →</a>
-						<br>
-						<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank">Install Sui Wallet →</a>
-					</div>
-				\`;
+				walletList.innerHTML = '<div class="wallet-no-wallets">' +
+					'No Sui wallets detected.' +
+					'<br><br>' +
+					'<a href="https://phantom.app/download" target="_blank">Install Phantom →</a>' +
+					'<br>' +
+					'<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank">Install Sui Wallet →</a>' +
+					'</div>';
 				return;
 			}
 
@@ -2204,10 +2197,9 @@ export function generateProfilePage(
 				const item = document.createElement('div');
 				item.className = 'wallet-item';
 				const iconSrc = wallet.icon || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><circle fill=%22%23818cf8%22 cx=%2216%22 cy=%2216%22 r=%2216%22/></svg>';
-				item.innerHTML = \`
-					<img src="\${iconSrc}" alt="\${wallet.name}" onerror="this.style.display='none'">
-					<span class="wallet-name">\${wallet.name}</span>
-				\`;
+				const walletName = wallet.name || 'Unknown';
+				item.innerHTML = '<img src="' + iconSrc + '" alt="' + walletName + '" onerror="this.style.display=\\'none\\'">' +
+					'<span class="wallet-name">' + walletName + '</span>';
 				item.addEventListener('click', () => connectToWallet(wallet));
 				walletList.appendChild(item);
 			}
@@ -6374,50 +6366,7 @@ export function generateProfilePage(
 
 			} catch (error) {
 				console.error('MVR registration error:', error);
-				
-				// Extract error message from various error object structures
-				// Sui SDK errors can have nested structures with cause, details, etc.
-				let msg = 'Unknown error';
-				
-				// Helper to extract message from an object
-				const extractMsg = (obj: unknown): string | null => {
-					if (!obj || typeof obj !== 'object') return null;
-					const err = obj as Record<string, unknown>;
-					return (err.message as string) 
-						|| (err.error as string)
-						|| (err.msg as string)
-						|| (err.details as string)
-						|| (err.code as string)
-						|| null;
-				};
-				
-				if (error instanceof Error) {
-					msg = error.message || error.name || 'Error';
-					// Check for nested error in cause property
-					if (error.cause) {
-						const causeMsg = extractMsg(error.cause);
-						if (causeMsg) msg = causeMsg;
-					}
-				} else if (typeof error === 'string') {
-					msg = error;
-				} else if (error && typeof error === 'object') {
-					// Try to extract from error object directly
-					const directMsg = extractMsg(error);
-					if (directMsg) {
-						msg = directMsg;
-					} else {
-						// Check nested cause
-						const cause = (error as { cause?: unknown }).cause;
-						if (cause) {
-							const causeMsg = extractMsg(cause);
-							if (causeMsg) msg = causeMsg;
-						} else {
-							// Last resort: try toString but clean it up
-							const str = String(error);
-							msg = str;
-						}
-					}
-				}
+				var msg = error && error.message ? error.message : (typeof error === 'string' ? error : 'Unknown error');
 				
 				// Clean up the message - remove weird prefixes and normalize
 				msg = msg
