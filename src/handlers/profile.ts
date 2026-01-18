@@ -1418,7 +1418,7 @@ export function generateProfilePage(
 		import { Transaction } from 'https://esm.sh/@mysten/sui@1.45.2/transactions';
 		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.9.13';
 
-		const NAME = ${serializeJson(cleanName)};
+		const NAME = '${cleanName}';
 		const FULL_NAME = ${serializeJson(fullName)};
 		const NETWORK = ${serializeJson(network)};
 		const RPC_URL = ${serializeJson(env.SUI_RPC_URL)};
@@ -1787,8 +1787,8 @@ export function generateProfilePage(
 						return obj.data.owner.ObjectOwner;
 					}
 				}
-			} catch (err) {
-				console.log('Failed to fetch NFT owner');
+			} catch (e) {
+				console.log('Failed to fetch NFT owner:', e);
 			}
 			return null;
 		}
@@ -1802,8 +1802,8 @@ export function generateProfilePage(
 				if (result?.data?.length > 0) {
 					return result.data[0];
 				}
-			} catch (err) {
-				console.log('Failed to fetch primary name');
+			} catch (e) {
+				console.log('Failed to fetch primary name:', e);
 			}
 			return null;
 		}
@@ -1968,14 +1968,14 @@ export function generateProfilePage(
 					throw new Error(reqData.error || 'Request failed');
 				}
 
-			} catch (gracePeriodErr) {
-				const m = gracePeriodErr && typeof gracePeriodErr === 'object' && 'message' in gracePeriodErr ? String(gracePeriodErr.message) : '';
+			} catch (e) {
+				const m = e || '';
 				if (m.includes('rejected') || m.includes('cancelled')) {
 					showGracePeriodStatus('Cancelled', 'error');
 				} else if (m.includes('Insufficient')) {
 					showGracePeriodStatus('Need 10 SUI + gas', 'error');
 				} else {
-					showGracePeriodStatus('Error: ' + (m || 'Unknown error'), 'error');
+					showGracePeriodStatus('Error: ' + m, 'error');
 				}
 			} finally {
 				if (btn) btn.disabled = false;
@@ -2101,8 +2101,8 @@ export function generateProfilePage(
 				await checkEditPermission();
 				updateBountiesSectionVisibility();
 				return true;
-			} catch (err) {
-				console.log('Failed to restore wallet');
+			} catch (e) {
+				console.log('Failed to restore wallet:', e);
 				clearWalletConnection();
 				return false;
 			}
@@ -2149,9 +2149,9 @@ export function generateProfilePage(
 				renderWalletBar();
 				await checkEditPermission();
 				updateBountiesSectionVisibility();
-			} catch (connErr) {
-				console.error('Connection error:', connErr);
-				const errorMsg = connErr && typeof connErr === 'object' && 'message' in connErr ? connErr.message : 'Unknown error';
+			} catch (e) {
+				console.error('Connection error:', e);
+				const errorMsg = e || 'Unknown error';
 				walletList.innerHTML = '<div class="wallet-no-wallets" style="color: var(--error);">' +
 					'Connection failed: ' + errorMsg +
 					'<br><br>' +
@@ -2816,9 +2816,8 @@ export function generateProfilePage(
 					const resolved = await resolveSuiNSName(inputValue);
 					newAddress = resolved.address;
 					resolvedFromName = resolved.name;
-				} catch (resolveErr) {
-					const errMsg = resolveErr && typeof resolveErr === 'object' && 'message' in resolveErr ? resolveErr.message : 'Could not resolve name';
-					showStatus(modalStatus, errMsg, 'error');
+				} catch (e) {
+					showStatus(modalStatus, e || 'Could not resolve name', 'error');
 					return;
 				}
 			}
@@ -2894,8 +2893,8 @@ export function generateProfilePage(
 							account: connectedAccount,
 							chain
 						});
-					} catch (signErr) {
-						console.log('signAndExecuteTransaction failed');
+					} catch (e) {
+						console.log('signAndExecuteTransaction failed:', e);
 					}
 				}
 
@@ -3505,9 +3504,8 @@ export function generateProfilePage(
 					} else {
 						showBidStatus(data.error || 'Failed to submit bid', 'error');
 					}
-				} catch (submitErr) {
-					const errMsg = submitErr && typeof submitErr === 'object' && 'message' in submitErr ? submitErr.message : 'Unknown error';
-					showBidStatus('Failed to submit bid: ' + errMsg, 'error');
+				} catch (e) {
+					showBidStatus('Failed to submit bid: ' + e, 'error');
 				} finally {
 					queueBidBtn.disabled = false;
 					queueBidBtn.textContent = 'Queue Bid';
@@ -3534,16 +3532,15 @@ export function generateProfilePage(
 						const data = await res.json();
 						showBidStatus(data.error || 'Failed to cancel bid', 'error');
 					}
-				} catch (cancelErr) {
-					const errMsg = cancelErr && typeof cancelErr === 'object' && 'message' in cancelErr ? cancelErr.message : 'Unknown error';
-					showBidStatus('Failed to cancel bid: ' + errMsg, 'error');
+				} catch (e) {
+					showBidStatus('Failed to cancel bid: ' + e, 'error');
 				}
 			}
 
 			// Event listeners
 			queueBidBtn.addEventListener('click', submitBid);
-			bidAmountInput.addEventListener('keypress', (ev) => {
-				if (ev.key === 'Enter') submitBid();
+			bidAmountInput.addEventListener('keypress', (e) => {
+				if (e.key === 'Enter') submitBid();
 			});
 
 			// Load existing bid when wallet connects
@@ -4042,7 +4039,7 @@ export function generateProfilePage(
 		updateFileMeta(null);
 
 		// ===== MESSAGING FUNCTIONALITY =====
-		const MESSAGING_CONTRACT = ${serializeJson(env.MESSAGING_CONTRACT_ADDRESS || '')};
+		const MESSAGING_CONTRACT = '${env.MESSAGING_CONTRACT_ADDRESS || ''}';
 		const RECIPIENT_ADDRESS = CURRENT_ADDRESS;
 		const RECIPIENT_NAME = NAME;
 		const messageInput = document.getElementById('message-input');
@@ -6261,9 +6258,9 @@ export function generateProfilePage(
 								}
 							}
 						}
-					} catch (err) {
+					} catch (e) {
 						// If we can't check, fall back to original logic
-						console.log('Could not check UpgradeCap ownership');
+						console.log('Could not check UpgradeCap ownership:', e);
 					}
 				}
 			}
@@ -6385,34 +6382,11 @@ export function generateProfilePage(
 					return;
 				}
 
-			// Special case: If UpgradeCap is owned by an object ID (like vortex.sui NFT),
-			// and the connected wallet owns that NFT, we can transfer it
-			let canTransfer = false;
-			let parentObjectId = null;
-			if (currentOwner !== connectedAddress) {
-				// First, check if the UpgradeCap is owned by the current domain's SuiNS NFT object ID
-				if (NFT_ID && currentOwner === NFT_ID) {
-					// The UpgradeCap is owned by this domain's SuiNS object ID
-					// Check if we own the NFT
-					try {
-						const nftObj = await suiClient.getObject({
-							id: NFT_ID,
-							options: { showOwner: true }
-						});
-						if (nftObj.data?.owner && typeof nftObj.data.owner === 'object' && 'AddressOwner' in nftObj.data.owner) {
-							const nftOwner = nftObj.data.owner.AddressOwner;
-							if (nftOwner === connectedAddress) {
-								canTransfer = true;
-								parentObjectId = NFT_ID; // Use the current domain's NFT ID
-							}
-						}
-					} catch (e) {
-						console.error('Error checking NFT ownership:', e);
-					}
-				}
-				
-				// If not the current domain's NFT, check if currentOwner is any object we own
-				if (!canTransfer) {
+				// Special case: If UpgradeCap is owned by an object ID (like brando.sui NFT),
+				// and the connected wallet owns that NFT, we can transfer it
+				let canTransfer = false;
+				if (currentOwner !== connectedAddress) {
+					// Check if currentOwner is an object ID and we own that object
 					try {
 						const ownerObj = await suiClient.getObject({
 							id: currentOwner,
@@ -6422,39 +6396,38 @@ export function generateProfilePage(
 							const nftOwner = ownerObj.data.owner.AddressOwner;
 							if (nftOwner === connectedAddress) {
 								canTransfer = true;
-								parentObjectId = currentOwner; // Store the parent object ID
+								// We'll use the NFT object in the transaction
 							}
 						}
 					} catch (e) {
 						// Not an object or doesn't exist, treat as regular address
 					}
+					
+					if (!canTransfer) {
+						showMvrStatus('UpgradeCap is owned by ' + currentOwner.slice(0, 8) + '... Please connect the wallet that owns the UpgradeCap to transfer it.', 'error');
+						mvrTransferUpgradeCapBtn.disabled = false;
+						mvrTransferUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><polyline points="9 18 15 12 9 6"></polyline></svg><span>Transfer UpgradeCap to Connected Wallet</span>';
+						return;
+					}
 				}
+
+				mvrTransferUpgradeCapBtn.textContent = 'Building transaction...';
+
+				// Build transfer transaction - transfer TO the connected wallet
+				const tx = new Transaction();
 				
-				if (!canTransfer) {
-					showMvrStatus('UpgradeCap is owned by ' + currentOwner.slice(0, 8) + '... Please connect the wallet that owns the UpgradeCap (or the SuiNS object that owns it) to transfer it.', 'error');
-					mvrTransferUpgradeCapBtn.disabled = false;
-					mvrTransferUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><polyline points="9 18 15 12 9 6"></polyline></svg><span>Transfer UpgradeCap to Connected Wallet</span>';
-					return;
+				// If the UpgradeCap is owned by an object ID that we own, we need to reference that object
+				if (canTransfer && currentOwner !== connectedAddress) {
+					// Reference the parent NFT object to authorize the transfer
+					// In Sui, when transferring objects owned by object IDs, we reference the parent
+					tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
+					// Note: The transaction will need the NFT object as an input, but since we're the owner,
+					// the transaction should work. However, this might require the NFT to be passed as a parameter.
+					// For now, we'll try the direct transfer - if it fails, we'll need a Move function.
+				} else {
+					// Regular transfer from address owner
+					tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
 				}
-			}
-
-			mvrTransferUpgradeCapBtn.textContent = 'Building transaction...';
-
-			// Build transfer transaction - transfer TO the connected wallet
-			const tx = new Transaction();
-			
-			// If the UpgradeCap is owned by an object ID that we own, we need to reference that object
-			if (canTransfer && parentObjectId) {
-				// When transferring an object owned by another object in Sui, we need to include
-				// the parent object in the transaction so it can be used for authorization.
-				// Add the parent object as an input (this makes it available for the transfer)
-				tx.object(parentObjectId);
-				// Transfer the UpgradeCap - Sui will use the parent object to authorize the transfer
-				tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
-			} else {
-				// Regular transfer from address owner
-				tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
-			}
 
 				const senderAddress = typeof connectedAccount.address === 'string'
 					? connectedAccount.address
