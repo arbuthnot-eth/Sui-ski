@@ -3752,6 +3752,10 @@ export function generateProfilePage(
 		checkEditPermission = async function() {
 			await originalCheckEditPermission();
 			updateUploadVisibility();
+			// Update MVR section if expanded
+			if (typeof window.updateMvrSectionVisibility === 'function') {
+				window.updateMvrSectionVisibility();
+			}
 		};
 
 		function formatBytes(bytes) {
@@ -6279,15 +6283,8 @@ export function generateProfilePage(
 			}
 		}
 
-		// Update MVR visibility when wallet state changes
-		// (This will be called by existing wallet connection code)
-		const originalCheckEditPermission = checkEditPermission;
-		checkEditPermission = async function() {
-			await originalCheckEditPermission();
-			if (mvrExpanded) {
-				updateMvrSectionVisibility();
-			}
-		};
+		// Make MVR update function globally available for wallet state changes
+		window.updateMvrSectionVisibility = updateMvrSectionVisibility;
 
 		if (premiumGraphContainer) {
 			const handlePointer = (event) => {
