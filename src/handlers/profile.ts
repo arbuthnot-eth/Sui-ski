@@ -1418,7 +1418,7 @@ export function generateProfilePage(
 		import { Transaction } from 'https://esm.sh/@mysten/sui@1.45.2/transactions';
 		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.9.13';
 
-		const NAME = '${cleanName}';
+		const NAME = ${serializeJson(cleanName)};
 		const FULL_NAME = ${serializeJson(fullName)};
 		const NETWORK = ${serializeJson(network)};
 		const RPC_URL = ${serializeJson(env.SUI_RPC_URL)};
@@ -4039,7 +4039,7 @@ export function generateProfilePage(
 		updateFileMeta(null);
 
 		// ===== MESSAGING FUNCTIONALITY =====
-		const MESSAGING_CONTRACT = '${env.MESSAGING_CONTRACT_ADDRESS || ''}';
+		const MESSAGING_CONTRACT = ${serializeJson(env.MESSAGING_CONTRACT_ADDRESS || '')};
 		const RECIPIENT_ADDRESS = CURRENT_ADDRESS;
 		const RECIPIENT_NAME = NAME;
 		const messageInput = document.getElementById('message-input');
@@ -6382,11 +6382,34 @@ export function generateProfilePage(
 					return;
 				}
 
-				// Special case: If UpgradeCap is owned by an object ID (like brando.sui NFT),
-				// and the connected wallet owns that NFT, we can transfer it
-				let canTransfer = false;
-				if (currentOwner !== connectedAddress) {
-					// Check if currentOwner is an object ID and we own that object
+			// Special case: If UpgradeCap is owned by an object ID (like alias.sui NFT),
+			// and the connected wallet owns that NFT, we can transfer it
+			let canTransfer = false;
+			let parentObjectId = null;
+			if (currentOwner !== connectedAddress) {
+				// First, check if the UpgradeCap is owned by the current domain's SuiNS NFT object ID
+				if (NFT_ID && currentOwner === NFT_ID) {
+					// The UpgradeCap is owned by this domain's SuiNS object ID
+					// Check if we own the NFT
+					try {
+						const nftObj = await suiClient.getObject({
+							id: NFT_ID,
+							options: { showOwner: true }
+						});
+						if (nftObj.data?.owner && typeof nftObj.data.owner === 'object' && 'AddressOwner' in nftObj.data.owner) {
+							const nftOwner = nftObj.data.owner.AddressOwner;
+							if (nftOwner === connectedAddress) {
+								canTransfer = true;
+								parentObjectId = NFT_ID; // Use the current domain's NFT ID
+							}
+						}
+					} catch (e) {
+						console.error('Error checking NFT ownership:', e);
+					}
+				}
+				
+				// If not the current domain's NFT, check if currentOwner is any object we own
+				if (!canTransfer) {
 					try {
 						const ownerObj = await suiClient.getObject({
 							id: currentOwner,
@@ -6396,38 +6419,39 @@ export function generateProfilePage(
 							const nftOwner = ownerObj.data.owner.AddressOwner;
 							if (nftOwner === connectedAddress) {
 								canTransfer = true;
-								// We'll use the NFT object in the transaction
+								parentObjectId = currentOwner; // Store the parent object ID
 							}
 						}
 					} catch (e) {
 						// Not an object or doesn't exist, treat as regular address
 					}
-					
-					if (!canTransfer) {
-						showMvrStatus('UpgradeCap is owned by ' + currentOwner.slice(0, 8) + '... Please connect the wallet that owns the UpgradeCap to transfer it.', 'error');
-						mvrTransferUpgradeCapBtn.disabled = false;
-						mvrTransferUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><polyline points="9 18 15 12 9 6"></polyline></svg><span>Transfer UpgradeCap to Connected Wallet</span>';
-						return;
-					}
 				}
-
-				mvrTransferUpgradeCapBtn.textContent = 'Building transaction...';
-
-				// Build transfer transaction - transfer TO the connected wallet
-				const tx = new Transaction();
 				
-				// If the UpgradeCap is owned by an object ID that we own, we need to reference that object
-				if (canTransfer && currentOwner !== connectedAddress) {
-					// Reference the parent NFT object to authorize the transfer
-					// In Sui, when transferring objects owned by object IDs, we reference the parent
-					tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
-					// Note: The transaction will need the NFT object as an input, but since we're the owner,
-					// the transaction should work. However, this might require the NFT to be passed as a parameter.
-					// For now, we'll try the direct transfer - if it fails, we'll need a Move function.
-				} else {
-					// Regular transfer from address owner
-					tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
+				if (!canTransfer) {
+					showMvrStatus('UpgradeCap is owned by ' + currentOwner.slice(0, 8) + '... Please connect the wallet that owns the UpgradeCap (or the SuiNS object that owns it) to transfer it.', 'error');
+					mvrTransferUpgradeCapBtn.disabled = false;
+					mvrTransferUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><polyline points="9 18 15 12 9 6"></polyline></svg><span>Transfer UpgradeCap to Connected Wallet</span>';
+					return;
 				}
+			}
+
+			mvrTransferUpgradeCapBtn.textContent = 'Building transaction...';
+
+			// Build transfer transaction - transfer TO the connected wallet
+			const tx = new Transaction();
+			
+			// If the UpgradeCap is owned by an object ID that we own, we need to reference that object
+			if (canTransfer && parentObjectId) {
+				// When transferring an object owned by another object in Sui, we need to include
+				// the parent object in the transaction so it can be used for authorization.
+				// Add the parent object as an input (this makes it available for the transfer)
+				tx.object(parentObjectId);
+				// Transfer the UpgradeCap - Sui will use the parent object to authorize the transfer
+				tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
+			} else {
+				// Regular transfer from address owner
+				tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
+			}
 
 				const senderAddress = typeof connectedAccount.address === 'string'
 					? connectedAccount.address
