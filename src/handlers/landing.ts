@@ -201,12 +201,6 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
 		})
 
-		// SuiNS NFT types
-		const suinsNftTypes = [
-			'0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration',
-			'0x22fa05f21b1ad71442571fe5757571a2c063d7856c1a2b174de01f21a6f562ee::suins_registration::SuinsRegistration',
-		]
-
 		const allNames: NameInfo[] = []
 		let cursor: string | null | undefined = undefined
 
@@ -222,23 +216,30 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			// Filter for SuiNS NFTs and extract name + expiration
 			for (const item of response.data) {
 				const objType = item.data?.type || ''
-				const isSuinsNft = suinsNftTypes.some((t) => objType.includes(t.split('::')[0]))
+				// Match any SuinsRegistration type across different package versions
+				const isSuinsNft = objType.toLowerCase().includes('suins_registration::suinsregistration')
+				
 				if (isSuinsNft && item.data?.content?.dataType === 'moveObject') {
-					const fields = (item.data.content as { fields?: {
-						domain_name?: string
-						name?: string
-						expiration_timestamp_ms?: string | number
-					} }).fields
-					const name = fields?.domain_name || fields?.name
-					const expirationMs = fields?.expiration_timestamp_ms
-						? Number(fields.expiration_timestamp_ms)
+					const fields = (item.data.content as any).fields
+					
+					// Handle various field name variations across versions
+					const name = fields?.domain_name || fields?.name || fields?.domain
+					const expirationMs = fields?.expiration_timestamp_ms || fields?.expirationTimestampMs
+						? Number(fields.expiration_timestamp_ms || fields.expirationTimestampMs)
 						: null
+					
+					// Extract target address from NFT fields if available (faster than record lookup)
+					let targetAddress = fields?.target_address || fields?.targetAddress
+					if (!targetAddress && fields?.registration?.fields?.target_address) {
+						targetAddress = fields.registration.fields.target_address
+					}
+
 					if (name) {
 						allNames.push({
-							name,
+							name: String(name),
 							nftId: item.data.objectId,
 							expirationMs,
-							targetAddress: null, // Will be fetched from NameRecord
+							targetAddress: targetAddress ? String(targetAddress) : null,
 							isPrimary: false,
 						})
 					}
@@ -249,15 +250,20 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 		} while (cursor)
 
 		// Fetch target addresses from NameRecord for each name in parallel
+		// This is the authoritative source for where a name resolves
 		const CONCURRENCY_LIMIT = 10
 		for (let i = 0; i < allNames.length; i += CONCURRENCY_LIMIT) {
 			const batch = allNames.slice(i, i + CONCURRENCY_LIMIT)
 			await Promise.all(batch.map(async (nameInfo) => {
 				try {
-					const record = await suinsClient.getNameRecord(nameInfo.name)
-					nameInfo.targetAddress = record?.targetAddress || null
-				} catch {
-					// Skip if we can't fetch the record
+					// Ensure name has .sui suffix for the client if it's a legacy name
+					const lookupName = nameInfo.name.includes('.') ? nameInfo.name : `${nameInfo.name}.sui`
+					const record = await suinsClient.getNameRecord(lookupName)
+					if (record?.targetAddress) {
+						nameInfo.targetAddress = record.targetAddress
+					}
+				} catch (e) {
+					// Keep the targetAddress from NFT fields if record lookup fails
 				}
 			}))
 		}
