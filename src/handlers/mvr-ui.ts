@@ -306,6 +306,7 @@ function generateMVRManagementHTML(env: Env): string {
 				<button class="tab" data-tab="metadata">Update Metadata</button>
 				<button class="tab" data-tab="transfer">Transfer Ownership</button>
 				<button class="tab" data-tab="browse">Browse Packages</button>
+				<button class="tab" data-tab="config">Configuration</button>
 			</div>
 
 			<!-- Register Package Tab -->
@@ -491,6 +492,36 @@ function generateMVRManagementHTML(env: Env): string {
 
 				<div id="browse-result"></div>
 			</div>
+
+			<!-- Configuration Tab -->
+			<div class="tab-content" data-tab-content="config">
+				<h2>Bounty Escrow Configuration</h2>
+				<p style="color: #a1a6c5; margin-bottom: 24px;">
+					Configure the bounty escrow package ID using an MVR alias. This allows you to manage the package address through the Move Registry.
+				</p>
+
+				<form id="config-form">
+					<div class="form-group">
+						<label>MVR Alias</label>
+						<input type="text" id="config-alias" placeholder="sui.ski/bounty-escrow" />
+						<div class="hint">Format: {suinsName}/{packageName} (e.g., "sui.ski/bounty-escrow")</div>
+					</div>
+
+					<button type="submit" class="button">Save Configuration</button>
+				</form>
+
+				<div id="config-result"></div>
+
+				<div style="margin-top: 24px; padding: 16px; background: rgba(96, 165, 250, 0.1); border-radius: 8px; border: 1px solid rgba(96, 165, 250, 0.2);">
+					<h4 style="margin-top: 0; color: #60a5fa;">Current Configuration</h4>
+					<p style="color: #a1a6c5; margin: 8px 0;">
+						<strong>MVR Alias:</strong> <span id="current-alias">Not configured</span>
+					</p>
+					<p style="color: #a1a6c5; margin: 8px 0; font-size: 0.875rem;">
+						To use this feature, set the <code>BOUNTY_ESCROW_MVR_ALIAS</code> environment variable in your Cloudflare Workers configuration.
+					</p>
+				</div>
+			</div>
 		</div>
 
 		<div class="card">
@@ -590,6 +621,46 @@ function generateMVRManagementHTML(env: Env): string {
 				packageName: document.getElementById('transfer-package').value.trim(),
 				newOwner: document.getElementById('transfer-owner').value.trim(),
 			})
+		})
+
+		// Load current configuration
+		async function loadConfig() {
+			try {
+				const response = await fetch('/api/mvr/config')
+				const data = await response.json()
+				if (data.alias) {
+					document.getElementById('current-alias').textContent = data.alias
+					document.getElementById('config-alias').value = data.alias
+				}
+			} catch (error) {
+				console.error('Failed to load config:', error)
+			}
+		}
+		loadConfig()
+
+		document.getElementById('config-form').addEventListener('submit', async (e) => {
+			e.preventDefault()
+			const alias = document.getElementById('config-alias').value.trim()
+			const resultDiv = document.getElementById('config-result')
+			resultDiv.innerHTML = '<div class="info-box">Saving configuration...</div>'
+
+			try {
+				const response = await fetch('/api/mvr/config', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ alias: alias || null })
+				})
+
+				const result = await response.json()
+				if (!response.ok) {
+					throw new Error(result.error || 'Failed to save configuration')
+				}
+
+				resultDiv.innerHTML = '<div class="success">Configuration saved! Note: You must set BOUNTY_ESCROW_MVR_ALIAS in your Cloudflare Workers environment variables for this to take effect.</div>'
+				document.getElementById('current-alias').textContent = alias || 'Not configured'
+			} catch (error) {
+				resultDiv.innerHTML = \`<div class="error">Failed to save: \${error.message}</div>\`
+			}
 		})
 
 		async function handleFormSubmit(formName, endpoint, data) {

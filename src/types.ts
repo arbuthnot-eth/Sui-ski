@@ -9,6 +9,8 @@ export interface Env {
 	BOUNTY_ESCROW_PACKAGE_MAINNET?: string
 	/** Optional bounty escrow Move package id for testnet */
 	BOUNTY_ESCROW_PACKAGE_TESTNET?: string
+	/** Optional MVR alias for bounty escrow package (e.g., "sui.ski/bounty-escrow") */
+	BOUNTY_ESCROW_MVR_ALIAS?: string
 	// Messaging SDK contract addresses (testnet/mainnet)
 	MESSAGING_CONTRACT_ADDRESS?: string
 	MOVE_REGISTRY_PARENT_ID?: string

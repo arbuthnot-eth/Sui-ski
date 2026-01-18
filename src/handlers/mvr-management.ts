@@ -49,6 +49,24 @@ export async function handleMVRManagementRequest(request: Request, env: Env): Pr
 		return handleSearchPackages(query, env)
 	}
 
+	// Get/Set configuration
+	if (path === '/api/mvr/config') {
+		if (request.method === 'GET') {
+			return jsonResponse({
+				alias: env.BOUNTY_ESCROW_MVR_ALIAS || null,
+			})
+		}
+		if (request.method === 'POST') {
+			const body = (await request.json()) as { alias?: string | null }
+			// Note: This is read-only display. Actual configuration must be set via Cloudflare Workers env vars
+			return jsonResponse({
+				success: true,
+				message: 'Configuration display updated. To actually set this, configure BOUNTY_ESCROW_MVR_ALIAS in your Cloudflare Workers environment variables.',
+				alias: body.alias || null,
+			})
+		}
+	}
+
 	// All management operations require POST and registry to be configured
 	if (request.method !== 'POST') {
 		return errorResponse('Method not allowed', 'METHOD_NOT_ALLOWED', 405)

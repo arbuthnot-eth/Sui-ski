@@ -2,6 +2,7 @@ import { Transaction } from '@mysten/sui/transactions'
 import { SuiClient } from '@mysten/sui/client'
 import { SuinsClient, SuinsTransaction } from '@mysten/suins'
 import type { Env } from '../types'
+import { resolveMVRPackage } from '../resolvers/mvr'
 
 /**
  * Bounty Transaction Builder Utilities
@@ -20,16 +21,43 @@ function resolveNetwork(env: { SUI_NETWORK: string }): 'mainnet' | 'testnet' {
 	return env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
 }
 
-export function resolveBountyPackageId(
-	env: Pick<Env, 'BOUNTY_ESCROW_PACKAGE_MAINNET' | 'BOUNTY_ESCROW_PACKAGE_TESTNET' | 'SUI_NETWORK'> | undefined,
+/**
+ * Resolve bounty escrow package ID
+ * 
+ * Priority:
+ * 1. MVR alias (if configured) - e.g., "sui.ski/bounty-escrow"
+ * 2. Environment variable (BOUNTY_ESCROW_PACKAGE_MAINNET/TESTNET)
+ * 3. Default hardcoded value
+ */
+export async function resolveBountyPackageId(
+	env: Pick<Env, 'BOUNTY_ESCROW_PACKAGE_MAINNET' | 'BOUNTY_ESCROW_PACKAGE_TESTNET' | 'BOUNTY_ESCROW_MVR_ALIAS' | 'SUI_NETWORK' | 'CACHE' | 'SUI_RPC_URL' | 'MOVE_REGISTRY_PARENT_ID'> | undefined,
 	overrideNetwork?: 'mainnet' | 'testnet',
-): string {
+): Promise<string> {
 	const network = overrideNetwork || (env ? resolveNetwork(env) : undefined)
 
 	if (!network) {
 		throw new Error('Network is required to resolve bounty package id')
 	}
 
+	// First, try MVR alias if configured
+	if (env?.BOUNTY_ESCROW_MVR_ALIAS) {
+		try {
+			const aliasParts = env.BOUNTY_ESCROW_MVR_ALIAS.split('/')
+			if (aliasParts.length === 2) {
+				const [suinsName, packageName] = aliasParts
+				const mvrResult = await resolveMVRPackage(suinsName.trim(), packageName.trim(), undefined, env as Env)
+				
+				if (mvrResult.found && mvrResult.data) {
+					return mvrResult.data.address
+				}
+			}
+		} catch (error) {
+			console.warn('Failed to resolve bounty package from MVR alias:', error)
+			// Fall through to env vars
+		}
+	}
+
+	// Fallback to environment variables
 	const fromEnv =
 		env && network === 'mainnet'
 			? env.BOUNTY_ESCROW_PACKAGE_MAINNET
@@ -40,7 +68,7 @@ export function resolveBountyPackageId(
 	const candidate = fromEnv?.trim() || DEFAULT_BOUNTY_ESCROW_PACKAGE_ID[network]
 
 	if (!candidate || candidate === '0x0' || candidate === '0x' || /^0x0+$/.test(candidate)) {
-		throw new Error(`Bounty escrow package id is not configured for ${network}`)
+		throw new Error(`Bounty escrow package id is not configured for ${network}. Set BOUNTY_ESCROW_MVR_ALIAS (e.g., "sui.ski/bounty-escrow") or BOUNTY_ESCROW_PACKAGE_${network.toUpperCase()}`)
 	}
 
 	return candidate
@@ -148,12 +176,12 @@ export function calculatePremium(
  * This transaction deposits SUI into the escrow contract and creates a shared
  * Bounty object that can be executed when the grace period ends.
  */
-export function buildCreateBountyTx(
+export async function buildCreateBountyTx(
 	params: CreateBountyParams,
 	env: Env,
 	networkOverride?: 'mainnet' | 'testnet',
-): Transaction {
-	const packageId = resolveBountyPackageId(env, networkOverride)
+): Promise<Transaction> {
+	const packageId = await resolveBountyPackageId(env, networkOverride)
 	const tx = new Transaction()
 
 	// Set gas budget
@@ -196,9 +224,9 @@ export function buildCreateBountyTx(
  * IMPORTANT: The bounty can only be claimed if the name is transferred to the beneficiary.
  * This atomic transaction ensures the executor cannot take funds without completing registration.
  */
-export function buildExecuteBountyTx(params: ExecuteBountyParams, env: Env): Transaction {
+export async function buildExecuteBountyTx(params: ExecuteBountyParams, env: Env): Promise<Transaction> {
 	const network = resolveNetwork(env)
-	const bountyPackageId = resolveBountyPackageId(env, network)
+	const bountyPackageId = await resolveBountyPackageId(env, network)
 	const tx = new Transaction()
 
 	// Set gas budget
@@ -255,8 +283,8 @@ export function buildExecuteBountyTx(params: ExecuteBountyParams, env: Env): Tra
  *
  * Only the creator can cancel, and only if the bounty is not locked.
  */
-export function buildCancelBountyTx(bountyObjectId: string, env: Env, gasBudget?: string): Transaction {
-	const packageId = resolveBountyPackageId(env)
+export async function buildCancelBountyTx(bountyObjectId: string, env: Env, gasBudget?: string): Promise<Transaction> {
+	const packageId = await resolveBountyPackageId(env)
 	const tx = new Transaction()
 
 	if (gasBudget) {
@@ -274,8 +302,8 @@ export function buildCancelBountyTx(bountyObjectId: string, env: Env, gasBudget?
 /**
  * Build transaction to lock a bounty (after pre-signing the execution tx)
  */
-export function buildLockBountyTx(bountyObjectId: string, env: Env, gasBudget?: string): Transaction {
-	const packageId = resolveBountyPackageId(env)
+export async function buildLockBountyTx(bountyObjectId: string, env: Env, gasBudget?: string): Promise<Transaction> {
+	const packageId = await resolveBountyPackageId(env)
 	const tx = new Transaction()
 
 	if (gasBudget) {
@@ -296,8 +324,8 @@ export function buildLockBountyTx(bountyObjectId: string, env: Env, gasBudget?: 
  * Anyone can call this after the bounty expires (7 days after available_at).
  * Funds are returned to the original creator.
  */
-export function buildReclaimExpiredTx(bountyObjectId: string, env: Env, gasBudget?: string): Transaction {
-	const packageId = resolveBountyPackageId(env)
+export async function buildReclaimExpiredTx(bountyObjectId: string, env: Env, gasBudget?: string): Promise<Transaction> {
+	const packageId = await resolveBountyPackageId(env)
 	const tx = new Transaction()
 
 	if (gasBudget) {

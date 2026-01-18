@@ -121,7 +121,7 @@ async function handleBuildCreateBountyTx(request: Request, env: Env): Promise<Re
 	}
 
 	try {
-		const tx = buildCreateBountyTx(
+		const tx = await buildCreateBountyTx(
 			{
 				name: name.toLowerCase().replace(/\.sui$/i, ''),
 				beneficiary,
@@ -390,7 +390,7 @@ async function handleBuildTx(
 	}
 
 	// Build the execution transaction
-	const tx = buildExecuteBountyTx(
+	const tx = await buildExecuteBountyTx(
 		{
 			bountyObjectId: bounty.escrowObjectId,
 			name: bounty.name,
