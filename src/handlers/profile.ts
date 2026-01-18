@@ -318,90 +318,97 @@ export function generateProfilePage(
 			${
 				expiresMs
 					? `
-			<!-- Bounty Section - Active Bounties + Fitted Timer -->
-			<div class="bounty-split-section" id="bounty-split-section">
-				<div class="bounty-split-container">
-					<!-- Left: Active Bounties -->
-					<div class="bounty-list-side">
-						<div class="bounty-list-header">
-							<h4>
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<circle cx="12" cy="8" r="7"></circle>
-									<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
-								</svg>
-								Active Bounties
-							</h4>
-							<button class="bounty-refresh-btn" id="bounty-refresh-btn" title="Refresh">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<polyline points="23 4 23 10 17 10"></polyline>
-									<polyline points="1 20 1 14 7 14"></polyline>
-									<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-								</svg>
-							</button>
-						</div>
-						<div class="bounty-queue-list" id="bounty-queue-list">
-							<div class="bounty-queue-loading">
-								<span class="loading-spinner"></span>
-								Loading...
-							</div>
-						</div>
-						<div class="bounty-queue-empty hidden" id="bounty-queue-empty">
-							<span>No bounties yet</span>
-						</div>
-						
-						<!-- Set New Highest Bounty Button -->
-						<div class="bounty-action-box">
-							<button class="bounty-create-btn" id="quick-bounty-btn">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<circle cx="12" cy="8" r="7"></circle>
-									<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
-								</svg>
-								<span>Set New Highest Bounty</span>
-							</button>
-							<div class="bounty-create-info">1 year • 1 SUI reward</div>
-							<div class="bounty-create-status hidden" id="create-bounty-status"></div>
-						</div>
-					</div>
-
-					<!-- Right: Fitted Countdown Timer -->
-					<div class="bounty-timer-side">
-						<div class="bounty-timer-header">
+			<!-- Availability Section - Timer + Compact Bounties -->
+			<div class="availability-section" id="availability-section">
+				<div class="availability-container">
+					<!-- Left: Countdown Timer -->
+					<div class="avail-timer-side">
+						<div class="avail-timer-header">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<circle cx="12" cy="12" r="10"></circle>
 								<polyline points="12 6 12 12 16 14"></polyline>
 							</svg>
 							<span>Available In</span>
 						</div>
-						<div class="bounty-timer-display fitted" id="bounty-timer-display">
-							<div class="bounty-timer-unit">
-								<span class="bounty-timer-value" id="bounty-days">--</span>
-								<span class="bounty-timer-label">Days</span>
+						<div class="avail-timer-display" id="bounty-timer-display">
+							<div class="avail-timer-unit">
+								<span class="avail-timer-value" id="bounty-days">--</span>
+								<span class="avail-timer-label">D</span>
 							</div>
-							<span class="bounty-timer-sep">:</span>
-							<div class="bounty-timer-unit">
-								<span class="bounty-timer-value" id="bounty-hours">--</span>
-								<span class="bounty-timer-label">Hours</span>
+							<span class="avail-timer-sep">:</span>
+							<div class="avail-timer-unit">
+								<span class="avail-timer-value" id="bounty-hours">--</span>
+								<span class="avail-timer-label">H</span>
 							</div>
-							<span class="bounty-timer-sep">:</span>
-							<div class="bounty-timer-unit">
-								<span class="bounty-timer-value" id="bounty-mins">--</span>
-								<span class="bounty-timer-label">Min</span>
+							<span class="avail-timer-sep">:</span>
+							<div class="avail-timer-unit">
+								<span class="avail-timer-value" id="bounty-mins">--</span>
+								<span class="avail-timer-label">M</span>
 							</div>
-							<span class="bounty-timer-sep">:</span>
-							<div class="bounty-timer-unit">
-								<span class="bounty-timer-value" id="bounty-secs">--</span>
-								<span class="bounty-timer-label">Sec</span>
+							<span class="avail-timer-sep">:</span>
+							<div class="avail-timer-unit">
+								<span class="avail-timer-value" id="bounty-secs">--</span>
+								<span class="avail-timer-label">S</span>
 							</div>
 						</div>
-						<div class="bounty-timer-date">
-							Opens ${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+						<div class="avail-timer-date">
+							${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
 						</div>
+					</div>
+
+					<!-- Right: Compact Bounties -->
+					<div class="avail-bounty-side">
+						<div class="avail-bounty-header">
+							<span class="avail-bounty-title">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="8" r="7"></circle>
+									<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+								</svg>
+								Bounties
+							</span>
+							<button class="avail-bounty-refresh" id="bounty-refresh-btn" title="Refresh">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="23 4 23 10 17 10"></polyline>
+									<path d="M20.49 15A9 9 0 1 1 21 5.64"></path>
+								</svg>
+							</button>
+						</div>
+						<div class="avail-bounty-list" id="bounty-queue-list">
+							<div class="avail-bounty-loading"><span class="loading"></span></div>
+						</div>
+						<div class="avail-bounty-empty hidden" id="bounty-queue-empty">None yet</div>
+						<button class="avail-bounty-btn" id="quick-bounty-btn">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="12" y1="5" x2="12" y2="19"></line>
+								<line x1="5" y1="12" x2="19" y2="12"></line>
+							</svg>
+							10 SUI Bounty
+						</button>
+						<div class="avail-bounty-status hidden" id="create-bounty-status"></div>
 					</div>
 				</div>
 			</div>
+
 					`
 					: ''
 			}
+
+			<!-- Linked Names Section (always visible) -->
+			<div class="linked-names-section" id="linked-names-section">
+				<div class="linked-names-header">
+					<span class="linked-names-title">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+							<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+						</svg>
+						Linked Names
+					</span>
+					<span class="linked-names-count" id="linked-names-count">Loading...</span>
+				</div>
+				<div class="linked-names-list" id="linked-names-list">
+					<div class="linked-names-loading"><span class="loading"></span> Fetching linked names...</div>
+				</div>
+			</div>
 
 			${
 				record.nftId
@@ -4910,6 +4917,58 @@ export function generateProfilePage(
 			setInterval(updateBountyCountdown, 1000);
 			updateExpirationCountdown();
 			setInterval(updateExpirationCountdown, 1000);
+		}
+
+		// ========== LINKED NAMES (Reverse Resolution) ==========
+		const linkedNamesList = document.getElementById('linked-names-list');
+		const linkedNamesCount = document.getElementById('linked-names-count');
+
+		async function fetchLinkedNames() {
+			// Use owner address to find other names owned by the same wallet
+			const ownerAddr = OWNER_ADDRESS || TARGET_ADDRESS;
+			if (!linkedNamesList || !ownerAddr) {
+				if (linkedNamesList) {
+					linkedNamesList.innerHTML = '<div class="linked-names-empty">No owner address found</div>';
+				}
+				if (linkedNamesCount) linkedNamesCount.textContent = '0';
+				return;
+			}
+
+			try {
+				// Fetch all names owned by this address
+				const res = await fetch('/api/names/' + ownerAddr);
+				if (!res.ok) throw new Error('Failed to fetch');
+				const data = await res.json();
+				const names = data.names || [];
+
+				if (linkedNamesCount) {
+					linkedNamesCount.textContent = names.length + ' name' + (names.length !== 1 ? 's' : '');
+				}
+
+				if (names.length === 0) {
+					linkedNamesList.innerHTML = '<div class="linked-names-empty">No other names owned by this wallet</div>';
+					return;
+				}
+
+				// Render clickable name chips
+				linkedNamesList.innerHTML = names.map(name => {
+					const cleanName = name.replace(/\\.sui$/, '');
+					const isCurrent = cleanName.toLowerCase() === NAME.toLowerCase();
+					return '<a href="https://' + cleanName + '.sui.ski" class="linked-name-chip' + (isCurrent ? ' current' : '') + '">' +
+						cleanName + '.sui' +
+						(isCurrent ? ' <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>' : '') +
+						'</a>';
+				}).join('');
+			} catch (error) {
+				console.error('Failed to fetch linked names:', error);
+				linkedNamesList.innerHTML = '<div class="linked-names-empty">Could not load linked names</div>';
+				if (linkedNamesCount) linkedNamesCount.textContent = '--';
+			}
+		}
+
+		// Initialize linked names
+		if (OWNER_ADDRESS || TARGET_ADDRESS) {
+			fetchLinkedNames();
 		}
 
 		// ========== GRACE PERIOD BANNER COUNTDOWN ==========

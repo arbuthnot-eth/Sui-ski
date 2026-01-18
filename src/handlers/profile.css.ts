@@ -4150,150 +4150,283 @@ export const profileStyles = `
 			color: var(--text);
 		}
 
-		/* ===== BOUNTY SPLIT SECTION ===== */
-		.bounty-split-section {
-			background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(59, 130, 246, 0.06));
-			border: 1px solid rgba(139, 92, 246, 0.25);
-			border-radius: 16px;
-			padding: 24px;
-			margin-bottom: 24px;
+		/* ===== AVAILABILITY SECTION (Timer + Compact Bounties) ===== */
+		.availability-section {
+			background: linear-gradient(135deg, rgba(139, 92, 246, 0.06), rgba(59, 130, 246, 0.04));
+			border: 1px solid rgba(139, 92, 246, 0.2);
+			border-radius: 12px;
+			padding: 16px;
+			margin-bottom: 16px;
 		}
-		.bounty-split-container {
+		.availability-container {
 			display: grid;
-			grid-template-columns: 1.2fr 0.8fr;
-			gap: 24px;
-			align-items: start;
+			grid-template-columns: 1fr 1fr;
+			gap: 16px;
+			align-items: stretch;
 		}
-		@media (max-width: 700px) {
-			.bounty-split-container {
+		@media (max-width: 600px) {
+			.availability-container {
 				grid-template-columns: 1fr;
+				gap: 12px;
 			}
 		}
 
-		/* Timer Side */
-		.bounty-timer-side {
+		/* Timer Side (Left) */
+		.avail-timer-side {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
 			justify-content: center;
-			padding: 20px;
-			background: rgba(0, 0, 0, 0.2);
-			border-radius: 12px;
-			border: 1px solid rgba(139, 92, 246, 0.2);
+			padding: 16px 12px;
+			background: rgba(0, 0, 0, 0.25);
+			border-radius: 10px;
+			border: 1px solid rgba(139, 92, 246, 0.25);
 		}
-		.bounty-timer-header {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			font-size: 0.85rem;
-			font-weight: 600;
-			color: var(--accent);
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
-			margin-bottom: 16px;
-		}
-		.bounty-timer-header svg {
-			width: 18px;
-			height: 18px;
-		}
-		.bounty-timer-display {
+		.avail-timer-header {
 			display: flex;
 			align-items: center;
 			gap: 6px;
-			margin-bottom: 12px;
+			font-size: 0.7rem;
+			font-weight: 700;
+			color: var(--accent);
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+			margin-bottom: 10px;
 		}
-		.bounty-timer-display.fitted {
-			gap: 4px;
+		.avail-timer-header svg {
+			width: 14px;
+			height: 14px;
 		}
-		.bounty-timer-unit {
+		.avail-timer-display {
+			display: flex;
+			align-items: center;
+			gap: 3px;
+			margin-bottom: 8px;
+		}
+		.avail-timer-unit {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			min-width: 48px;
-			padding: 10px 6px;
-			background: rgba(139, 92, 246, 0.15);
-			border: 1px solid rgba(139, 92, 246, 0.3);
-			border-radius: 10px;
+			min-width: 38px;
+			padding: 8px 4px;
+			background: rgba(139, 92, 246, 0.2);
+			border: 1px solid rgba(139, 92, 246, 0.35);
+			border-radius: 8px;
 		}
-		.bounty-timer-value {
+		.avail-timer-value {
 			font-family: var(--font-mono, ui-monospace, monospace);
-			font-size: 1.5rem;
+			font-size: 1.25rem;
 			font-weight: 800;
 			color: var(--accent);
 			line-height: 1;
 		}
-		.bounty-timer-label {
-			font-size: 0.6rem;
-			font-weight: 600;
+		.avail-timer-label {
+			font-size: 0.55rem;
+			font-weight: 700;
 			color: var(--text-muted);
 			text-transform: uppercase;
-			letter-spacing: 0.03em;
-			margin-top: 4px;
+			margin-top: 2px;
 		}
-		.bounty-timer-sep {
-			font-size: 1.25rem;
+		.avail-timer-sep {
+			font-size: 1rem;
 			font-weight: 700;
 			color: var(--accent);
-			opacity: 0.5;
-			margin-bottom: 16px;
+			opacity: 0.4;
+			margin-bottom: 12px;
 		}
-		.bounty-timer-date {
-			font-size: 0.75rem;
+		.avail-timer-date {
+			font-size: 0.65rem;
 			color: var(--text-muted);
+			opacity: 0.8;
 		}
 
-		/* Bounty List Side */
-		.bounty-list-side {
+		/* Bounty Side (Right) - Compact */
+		.avail-bounty-side {
 			display: flex;
 			flex-direction: column;
+			padding: 12px;
+			background: rgba(0, 0, 0, 0.15);
+			border-radius: 10px;
+			border: 1px solid rgba(168, 85, 247, 0.15);
 		}
-		.bounty-list-header {
+		.avail-bounty-header {
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			margin-bottom: 12px;
+			margin-bottom: 8px;
 		}
-		.bounty-list-header h4 {
+		.avail-bounty-title {
 			display: flex;
 			align-items: center;
-			gap: 8px;
-			font-size: 0.9rem;
+			gap: 6px;
+			font-size: 0.7rem;
 			font-weight: 700;
 			color: var(--text);
-			margin: 0;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
 		}
-		.bounty-list-header h4 svg {
-			width: 18px;
-			height: 18px;
+		.avail-bounty-title svg {
+			width: 14px;
+			height: 14px;
 			color: #a855f7;
 		}
-		.bounty-list-side .bounty-queue-list {
-			flex: 1;
-			min-height: 120px;
-			max-height: 200px;
-			overflow-y: auto;
-			background: rgba(0, 0, 0, 0.15);
-			border-radius: 10px;
-			padding: 8px;
+		.avail-bounty-refresh {
+			background: transparent;
+			border: none;
+			padding: 4px;
+			cursor: pointer;
+			color: var(--text-muted);
+			border-radius: 4px;
+			transition: all 0.15s ease;
 		}
-		.bounty-list-side .bounty-queue-empty {
+		.avail-bounty-refresh:hover {
+			color: var(--accent);
+			background: rgba(139, 92, 246, 0.1);
+		}
+		.avail-bounty-refresh svg {
+			width: 14px;
+			height: 14px;
+		}
+		.avail-bounty-list {
+			flex: 1;
+			min-height: 60px;
+			max-height: 100px;
+			overflow-y: auto;
+			background: rgba(0, 0, 0, 0.2);
+			border-radius: 6px;
+			padding: 6px;
+			margin-bottom: 8px;
+		}
+		.avail-bounty-loading {
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			height: 100px;
+			height: 100%;
 			color: var(--text-muted);
-			font-size: 0.85rem;
+			font-size: 0.75rem;
+		}
+		.avail-bounty-empty {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 12px;
+			color: var(--text-muted);
+			font-size: 0.75rem;
+			font-style: italic;
+		}
+		.avail-bounty-btn {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 6px;
+			width: 100%;
+			padding: 8px 12px;
+			background: linear-gradient(135deg, #8b5cf6, #a855f7);
+			border: none;
+			border-radius: 6px;
+			color: white;
+			font-size: 0.75rem;
+			font-weight: 700;
+			cursor: pointer;
+			transition: all 0.2s ease;
+		}
+		.avail-bounty-btn:hover {
+			background: linear-gradient(135deg, #7c3aed, #9333ea);
+			transform: translateY(-1px);
+		}
+		.avail-bounty-btn svg {
+			width: 14px;
+			height: 14px;
+		}
+		.avail-bounty-status {
+			margin-top: 6px;
+			padding: 6px 8px;
+			border-radius: 4px;
+			font-size: 0.7rem;
+			text-align: center;
 		}
 
-		/* Bounty Action Box (Under List) */
-		.bounty-action-box {
+		/* Linked Names Section */
+		.linked-names-section {
+			background: rgba(0, 0, 0, 0.15);
+			border: 1px solid rgba(139, 92, 246, 0.15);
+			border-radius: 10px;
+			padding: 12px;
+			margin-bottom: 16px;
+		}
+		.linked-names-header {
 			display: flex;
-			flex-direction: column;
 			align-items: center;
-			gap: 12px;
-			margin-top: 16px;
-			padding-top: 16px;
-			border-top: 1px solid rgba(139, 92, 246, 0.15);
+			justify-content: space-between;
+			margin-bottom: 10px;
+		}
+		.linked-names-title {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 0.75rem;
+			font-weight: 700;
+			color: var(--text);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+		.linked-names-title svg {
+			width: 14px;
+			height: 14px;
+			color: var(--accent);
+		}
+		.linked-names-count {
+			font-size: 0.7rem;
+			color: var(--text-muted);
+			background: rgba(139, 92, 246, 0.15);
+			padding: 2px 8px;
+			border-radius: 10px;
+		}
+		.linked-names-list {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px;
+		}
+		.linked-names-loading {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			color: var(--text-muted);
+			font-size: 0.75rem;
+			padding: 8px 0;
+		}
+		.linked-name-chip {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			padding: 4px 10px;
+			background: rgba(139, 92, 246, 0.15);
+			border: 1px solid rgba(139, 92, 246, 0.25);
+			border-radius: 16px;
+			font-size: 0.75rem;
+			color: var(--accent);
+			text-decoration: none;
+			transition: all 0.15s ease;
+		}
+		.linked-name-chip:hover {
+			background: rgba(139, 92, 246, 0.25);
+			border-color: rgba(139, 92, 246, 0.4);
+			transform: translateY(-1px);
+		}
+		.linked-name-chip.current {
+			background: rgba(139, 92, 246, 0.3);
+			border-color: var(--accent);
+			font-weight: 600;
+		}
+		.linked-name-chip svg {
+			width: 10px;
+			height: 10px;
+		}
+		.linked-names-empty {
+			color: var(--text-muted);
+			font-size: 0.75rem;
+			font-style: italic;
+			padding: 8px 0;
 		}
 		.bounty-create-btn {
 			display: inline-flex;

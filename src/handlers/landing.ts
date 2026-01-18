@@ -92,6 +92,15 @@ export async function handleLandingApiRequest(
 		return proxyImageRequest(targetUrl)
 	}
 
+	// Names by address endpoint - /api/names/{address}
+	if (url.pathname.startsWith('/api/names/')) {
+		const address = url.pathname.replace('/api/names/', '')
+		if (!address || !address.startsWith('0x')) {
+			return jsonResponse({ error: 'Valid Sui address required' }, 400)
+		}
+		return handleNamesByAddress(address, env)
+	}
+
 	// NFT details endpoint - /api/nft-details?objectId={id}
 	if (url.pathname === '/api/nft-details') {
 		const objectId = url.searchParams.get('objectId')
@@ -143,6 +152,63 @@ async function handleNftDetails(objectId: string, env: Env): Promise<Response> {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch NFT details'
 		return new Response(JSON.stringify({ error: message }), {
+			status: 500,
+			headers: corsHeaders,
+		})
+	}
+}
+
+/**
+ * Fetch all SuiNS names owned by an address
+ */
+async function handleNamesByAddress(address: string, env: Env): Promise<Response> {
+	const corsHeaders = {
+		'Access-Control-Allow-Origin': '*',
+		'Content-Type': 'application/json',
+	}
+
+	try {
+		const client = new SuiClient({ url: env.SUI_RPC_URL })
+
+		// SuiNS NFT types
+		const suinsNftTypes = [
+			'0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration',
+			'0x22fa05f21b1ad71442571fe5757571a2c063d7856c1a2b174de01f21a6f562ee::suins_registration::SuinsRegistration',
+		]
+
+		const allNames: string[] = []
+		let cursor: string | null | undefined = undefined
+
+		// Paginate through all owned objects
+		do {
+			const response = await client.getOwnedObjects({
+				owner: address,
+				options: { showContent: true, showType: true },
+				cursor: cursor || undefined,
+				limit: 50,
+			})
+
+			// Filter for SuiNS NFTs and extract names
+			for (const item of response.data) {
+				const objType = item.data?.type || ''
+				const isSuinsNft = suinsNftTypes.some((t) => objType.includes(t.split('::')[0]))
+				if (isSuinsNft && item.data?.content?.dataType === 'moveObject') {
+					const fields = (item.data.content as { fields?: { domain_name?: string; name?: string } }).fields
+					const name = fields?.domain_name || fields?.name
+					if (name) allNames.push(name)
+				}
+			}
+
+			cursor = response.hasNextPage ? response.nextCursor : null
+		} while (cursor)
+
+		return new Response(JSON.stringify({ names: allNames }), {
+			status: 200,
+			headers: corsHeaders,
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch names'
+		return new Response(JSON.stringify({ error: message, names: [] }), {
 			status: 500,
 			headers: corsHeaders,
 		})
