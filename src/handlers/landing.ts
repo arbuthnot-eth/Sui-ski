@@ -159,7 +159,7 @@ async function handleNftDetails(objectId: string, env: Env): Promise<Response> {
 }
 
 /**
- * Fetch all SuiNS names owned by an address
+ * Fetch all SuiNS names owned by an address with expiration data
  */
 async function handleNamesByAddress(address: string, env: Env): Promise<Response> {
 	const corsHeaders = {
@@ -176,7 +176,13 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			'0x22fa05f21b1ad71442571fe5757571a2c063d7856c1a2b174de01f21a6f562ee::suins_registration::SuinsRegistration',
 		]
 
-		const allNames: string[] = []
+		interface NameInfo {
+			name: string
+			nftId: string
+			expirationMs: number | null
+		}
+
+		const allNames: NameInfo[] = []
 		let cursor: string | null | undefined = undefined
 
 		// Paginate through all owned objects
@@ -188,19 +194,39 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 				limit: 50,
 			})
 
-			// Filter for SuiNS NFTs and extract names
+			// Filter for SuiNS NFTs and extract name + expiration
 			for (const item of response.data) {
 				const objType = item.data?.type || ''
 				const isSuinsNft = suinsNftTypes.some((t) => objType.includes(t.split('::')[0]))
 				if (isSuinsNft && item.data?.content?.dataType === 'moveObject') {
-					const fields = (item.data.content as { fields?: { domain_name?: string; name?: string } }).fields
+					const fields = (item.data.content as { fields?: {
+						domain_name?: string
+						name?: string
+						expiration_timestamp_ms?: string | number
+					} }).fields
 					const name = fields?.domain_name || fields?.name
-					if (name) allNames.push(name)
+					const expirationMs = fields?.expiration_timestamp_ms
+						? Number(fields.expiration_timestamp_ms)
+						: null
+					if (name) {
+						allNames.push({
+							name,
+							nftId: item.data.objectId,
+							expirationMs,
+						})
+					}
 				}
 			}
 
 			cursor = response.hasNextPage ? response.nextCursor : null
 		} while (cursor)
+
+		// Sort by expiration (soonest first, nulls last)
+		allNames.sort((a, b) => {
+			if (a.expirationMs === null) return 1
+			if (b.expirationMs === null) return -1
+			return a.expirationMs - b.expirationMs
+		})
 
 		return new Response(JSON.stringify({ names: allNames }), {
 			status: 200,

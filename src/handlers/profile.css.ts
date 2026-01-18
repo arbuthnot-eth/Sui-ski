@@ -4422,6 +4422,37 @@ export const profileStyles = `
 			width: 10px;
 			height: 10px;
 		}
+		.linked-name-text {
+			color: var(--text);
+		}
+		.linked-name-tag {
+			font-size: 0.6rem;
+			font-weight: 700;
+			padding: 2px 6px;
+			border-radius: 8px;
+			text-transform: uppercase;
+			letter-spacing: 0.02em;
+		}
+		.linked-name-tag.blue {
+			background: rgba(59, 130, 246, 0.2);
+			color: #60a5fa;
+		}
+		.linked-name-tag.green {
+			background: rgba(34, 197, 94, 0.2);
+			color: #4ade80;
+		}
+		.linked-name-tag.yellow {
+			background: rgba(250, 204, 21, 0.2);
+			color: #fbbf24;
+		}
+		.linked-name-tag.red {
+			background: rgba(239, 68, 68, 0.2);
+			color: #f87171;
+		}
+		.linked-name-tag.gray {
+			background: rgba(107, 114, 128, 0.2);
+			color: #9ca3af;
+		}
 		.linked-names-empty {
 			color: var(--text-muted);
 			font-size: 0.75rem;

@@ -4923,6 +4923,25 @@ export function generateProfilePage(
 		const linkedNamesList = document.getElementById('linked-names-list');
 		const linkedNamesCount = document.getElementById('linked-names-count');
 
+		// Get expiration tag color and text
+		function getExpirationTag(expirationMs) {
+			if (!expirationMs) return { color: 'gray', text: '?' };
+			const now = Date.now();
+			const daysLeft = Math.floor((expirationMs - now) / (24 * 60 * 60 * 1000));
+
+			if (daysLeft < 0) {
+				return { color: 'red', text: 'Expired' };
+			} else if (daysLeft <= 30) {
+				return { color: 'red', text: daysLeft + 'd' };
+			} else if (daysLeft <= 90) {
+				return { color: 'yellow', text: daysLeft + 'd' };
+			} else if (daysLeft <= 180) {
+				return { color: 'green', text: daysLeft + 'd' };
+			} else {
+				return { color: 'blue', text: daysLeft + 'd' };
+			}
+		}
+
 		async function fetchLinkedNames() {
 			// Use owner address to find other names owned by the same wallet
 			const ownerAddr = OWNER_ADDRESS || TARGET_ADDRESS;
@@ -4950,13 +4969,17 @@ export function generateProfilePage(
 					return;
 				}
 
-				// Render clickable name chips
-				linkedNamesList.innerHTML = names.map(name => {
-					const cleanName = name.replace(/\\.sui$/, '');
+				// Render clickable name chips with expiration tags
+				linkedNamesList.innerHTML = names.map(item => {
+					const nameStr = typeof item === 'string' ? item : item.name;
+					const expirationMs = typeof item === 'object' ? item.expirationMs : null;
+					const cleanName = nameStr.replace(/\\.sui$/, '');
 					const isCurrent = cleanName.toLowerCase() === NAME.toLowerCase();
+					const tag = getExpirationTag(expirationMs);
+
 					return '<a href="https://' + cleanName + '.sui.ski" class="linked-name-chip' + (isCurrent ? ' current' : '') + '">' +
-						cleanName + '.sui' +
-						(isCurrent ? ' <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>' : '') +
+						'<span class="linked-name-text">' + cleanName + '.sui</span>' +
+						'<span class="linked-name-tag ' + tag.color + '">' + tag.text + '</span>' +
 						'</a>';
 				}).join('');
 			} catch (error) {
