@@ -245,7 +245,19 @@ export function generateProfilePage(
 					<div class="grace-period-title">This name has expired</div>
 					<div class="grace-period-text">
 						The name <strong>${escapeHtml(cleanName)}.sui</strong> is currently in its 30-day grace period.
-						<span id="grace-period-owner-info">The NFT owner</span> can renew it until <strong>${expiresAt ? new Date(expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}</strong>.
+						<span id="grace-period-owner-info">The NFT owner</span> can renew it until <strong>${
+							expiresAt
+								? escapeHtml(
+										new Date(expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', {
+											year: 'numeric',
+											month: 'short',
+											day: 'numeric',
+											hour: '2-digit',
+											minute: '2-digit',
+										}),
+									)
+								: 'N/A'
+						}</strong>.
 					</div>
 					<div class="grace-period-countdown">
 						<div class="grace-countdown-label">Top Bids & Bounties:</div>
