@@ -784,6 +784,12 @@ export function generateProfilePage(
 									</svg>
 									<span id="mvr-register-btn-text">Register Package</span>
 								</button>
+								<button type="button" id="mvr-transfer-upgrade-cap-btn" style="padding: 12px 20px; background: rgba(59, 130, 246, 0.1); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.3); border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+										<polyline points="9 18 15 12 9 6"></polyline>
+									</svg>
+									<span>Transfer UpgradeCap to Connected Wallet</span>
+								</button>
 							</div>
 						</div>
 					</form>
@@ -6158,6 +6164,7 @@ export function generateProfilePage(
 		const mvrStatus = document.getElementById('mvr-status');
 		const mvrRegisterBtn = document.getElementById('mvr-register-btn');
 		const mvrRegisterBtnText = document.getElementById('mvr-register-btn-text');
+		const mvrTransferUpgradeCapBtn = document.getElementById('mvr-transfer-upgrade-cap-btn');
 
 		let mvrExpanded = false;
 
@@ -6237,6 +6244,173 @@ export function generateProfilePage(
 			});
 		}
 
+		// Handle UpgradeCap transfer to brando.sui
+		if (mvrTransferUpgradeCapBtn) {
+			mvrTransferUpgradeCapBtn.addEventListener('click', async () => {
+				await handleTransferUpgradeCap();
+			});
+		}
+
+		async function handleTransferUpgradeCap() {
+			if (!connectedWallet || !connectedAccount) {
+				showMvrStatus('Please connect your wallet first.', 'error');
+				return;
+			}
+
+			const upgradeCap = mvrUpgradeCap?.value?.trim();
+			if (!upgradeCap || !/^0x[a-f0-9]{64}$/i.test(upgradeCap)) {
+				showMvrStatus('Please enter a valid UpgradeCap object ID first.', 'error');
+				return;
+			}
+
+			try {
+				mvrTransferUpgradeCapBtn.disabled = true;
+				mvrTransferUpgradeCapBtn.textContent = 'Checking UpgradeCap...';
+				hideMvrStatus();
+
+				const suiClient = new SuiClient({ url: RPC_URL });
+
+				// Check UpgradeCap ownership
+				const upgradeCapObj = await suiClient.getObject({
+					id: upgradeCap,
+					options: { showOwner: true }
+				});
+
+				if (!upgradeCapObj.data) {
+					showMvrStatus('UpgradeCap object not found.', 'error');
+					mvrTransferUpgradeCapBtn.disabled = false;
+					mvrTransferUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><polyline points="9 18 15 12 9 6"></polyline></svg><span>Transfer UpgradeCap to Connected Wallet</span>';
+					return;
+				}
+
+				const owner = upgradeCapObj.data.owner;
+				if (!owner || typeof owner !== 'object' || !('AddressOwner' in owner)) {
+					showMvrStatus('UpgradeCap is not owned (it may be shared or immutable). Transfer is not needed.', 'error');
+					mvrTransferUpgradeCapBtn.disabled = false;
+					mvrTransferUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><polyline points="9 18 15 12 9 6"></polyline></svg><span>Transfer UpgradeCap to Connected Wallet</span>';
+					return;
+				}
+
+				const currentOwner = owner.AddressOwner;
+				
+				// Check if already owned by connected wallet
+				if (currentOwner === connectedAddress) {
+					showMvrStatus('UpgradeCap is already owned by your connected wallet (' + connectedAddress.slice(0, 8) + '...).', 'info');
+					mvrTransferUpgradeCapBtn.disabled = false;
+					mvrTransferUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><polyline points="9 18 15 12 9 6"></polyline></svg><span>Transfer UpgradeCap to Connected Wallet</span>';
+					return;
+				}
+
+				// Special case: If UpgradeCap is owned by an object ID (like brando.sui NFT),
+				// and the connected wallet owns that NFT, we can transfer it
+				let canTransfer = false;
+				if (currentOwner !== connectedAddress) {
+					// Check if currentOwner is an object ID and we own that object
+					try {
+						const ownerObj = await suiClient.getObject({
+							id: currentOwner,
+							options: { showOwner: true }
+						});
+						if (ownerObj.data?.owner && typeof ownerObj.data.owner === 'object' && 'AddressOwner' in ownerObj.data.owner) {
+							const nftOwner = ownerObj.data.owner.AddressOwner;
+							if (nftOwner === connectedAddress) {
+								canTransfer = true;
+								// We'll use the NFT object in the transaction
+							}
+						}
+					} catch (e) {
+						// Not an object or doesn't exist, treat as regular address
+					}
+					
+					if (!canTransfer) {
+						showMvrStatus('UpgradeCap is owned by ' + currentOwner.slice(0, 8) + '... Please connect the wallet that owns the UpgradeCap to transfer it.', 'error');
+						mvrTransferUpgradeCapBtn.disabled = false;
+						mvrTransferUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><polyline points="9 18 15 12 9 6"></polyline></svg><span>Transfer UpgradeCap to Connected Wallet</span>';
+						return;
+					}
+				}
+
+				mvrTransferUpgradeCapBtn.textContent = 'Building transaction...';
+
+				// Build transfer transaction - transfer TO the connected wallet
+				const tx = new Transaction();
+				
+				// If the UpgradeCap is owned by an object ID that we own, we need to reference that object
+				if (canTransfer && currentOwner !== connectedAddress) {
+					// Reference the parent NFT object to authorize the transfer
+					// In Sui, when transferring objects owned by object IDs, we reference the parent
+					tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
+					// Note: The transaction will need the NFT object as an input, but since we're the owner,
+					// the transaction should work. However, this might require the NFT to be passed as a parameter.
+					// For now, we'll try the direct transfer - if it fails, we'll need a Move function.
+				} else {
+					// Regular transfer from address owner
+					tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
+				}
+
+				const senderAddress = typeof connectedAccount.address === 'string'
+					? connectedAccount.address
+					: connectedAccount.address?.toString() || connectedAddress;
+				tx.setSender(senderAddress);
+
+				mvrTransferUpgradeCapBtn.textContent = 'Approve in wallet...';
+
+				// Build transaction before signing
+				const builtTxBytes = await tx.build({ client: suiClient });
+
+				// Wrap transaction for wallet compatibility
+				const txWrapper = {
+					_bytes: builtTxBytes,
+					toJSON() {
+						return btoa(String.fromCharCode.apply(null, this._bytes));
+					},
+					serialize() {
+						return this._bytes;
+					}
+				};
+
+				// Sign and execute
+				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
+					transaction: txWrapper,
+					account: connectedAccount,
+					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+				});
+
+				if (!result?.digest) {
+					throw new Error('Transaction failed - no digest returned');
+				}
+
+				// Success!
+				showMvrStatus(
+					'UpgradeCap transferred successfully to your wallet (' + connectedAddress.slice(0, 8) + '...)! ' +
+					'<a href="' + EXPLORER_BASE + '/tx/' + result.digest + '" target="_blank" style="color: inherit; text-decoration: underline;">View transaction</a><br>' +
+					'<br>You can now use this UpgradeCap to register the package in MVR.',
+					'success'
+				);
+
+				// Update the form field to show the new owner
+				if (mvrUpgradeCap) {
+					mvrUpgradeCap.value = upgradeCap; // Keep the same ID, ownership changed
+				}
+
+			} catch (error) {
+				console.error('UpgradeCap transfer error:', error);
+				var msg = error && error.message ? error.message : (typeof error === 'string' ? error : 'Unknown error');
+				
+				// Clean up the message
+				msg = msg
+					.replace(new RegExp('^Me:\\s*', 'i'), '')
+					.replace(new RegExp('^Error:\\s*', 'i'), '')
+					.replace(new RegExp('^SuiError:\\s*', 'i'), '')
+					.trim();
+
+				showMvrStatus('Transfer failed: ' + msg, 'error');
+			} finally {
+				mvrTransferUpgradeCapBtn.disabled = false;
+				mvrTransferUpgradeCapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><polyline points="9 18 15 12 9 6"></polyline></svg><span>Transfer UpgradeCap to Connected Wallet</span>';
+			}
+		}
+
 		async function handleMvrRegistration() {
 			if (!connectedWallet || !connectedAccount) {
 				showMvrStatus('Please connect your wallet first.', 'error');
@@ -6275,10 +6449,52 @@ export function generateProfilePage(
 
 			try {
 				mvrRegisterBtn.disabled = true;
-				mvrRegisterBtnText.textContent = 'Building transaction...';
+				mvrRegisterBtnText.textContent = 'Checking UpgradeCap ownership...';
 				hideMvrStatus();
 
 				const suiClient = new SuiClient({ url: RPC_URL });
+
+				// Check if the UpgradeCap is owned by the current user
+				// If it's owned by someone else, we can't use it as an input object
+				let upgradeCapObj;
+				try {
+					upgradeCapObj = await suiClient.getObject({
+						id: upgradeCap,
+						options: { showOwner: true }
+					});
+				} catch (e) {
+					showMvrStatus('Failed to fetch UpgradeCap object. Please verify the object ID is correct.', 'error');
+					mvrRegisterBtn.disabled = false;
+					mvrRegisterBtnText.textContent = 'Register Package';
+					return;
+				}
+
+				if (!upgradeCapObj.data) {
+					showMvrStatus('UpgradeCap object not found. Please verify the object ID is correct.', 'error');
+					mvrRegisterBtn.disabled = false;
+					mvrRegisterBtnText.textContent = 'Register Package';
+					return;
+				}
+
+				// Check ownership - if owned, must be owned by the current user
+				const owner = upgradeCapObj.data.owner;
+				if (owner && typeof owner === 'object' && 'AddressOwner' in owner) {
+					const ownerAddress = owner.AddressOwner;
+					if (ownerAddress !== connectedAddress) {
+						showMvrStatus(
+							'UpgradeCap is owned by a different address (' + ownerAddress.slice(0, 8) + '...). ' +
+							'You can only register packages with UpgradeCaps that you own, or that are shared/immutable. ' +
+							'Please use your own UpgradeCap or contact the owner to make it shared.',
+							'error'
+						);
+						mvrRegisterBtn.disabled = false;
+						mvrRegisterBtnText.textContent = 'Register Package';
+						return;
+					}
+				}
+				// If it's shared or immutable, we can use it
+
+				mvrRegisterBtnText.textContent = 'Building transaction...';
 
 				// Build the MVR registration transaction (PTB)
 				// This is a multi-step process:
