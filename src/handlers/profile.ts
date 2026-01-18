@@ -678,6 +678,101 @@ export function generateProfilePage(
 				</div>
 			</div>
 
+			<!-- MVR Package Registration Section -->
+			<div class="card" style="margin-top: 24px;" id="mvr-section">
+				<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+					<h2 style="font-size: 1.25rem; display: flex; align-items: center; gap: 10px; margin: 0;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px; color: var(--accent);">
+							<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+							<polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+							<line x1="12" y1="22.08" x2="12" y2="12"></line>
+						</svg>
+						Move Registry (MVR)
+					</h2>
+					<button id="mvr-toggle-btn" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 8px;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px;" id="mvr-toggle-icon">
+							<polyline points="6 9 12 15 18 9"></polyline>
+						</svg>
+					</button>
+				</div>
+				<p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">
+					Register Move packages in the on-chain registry under your SuiNS name.
+				</p>
+
+				<div id="mvr-content" style="display: none;">
+					<div id="mvr-wallet-required" style="display: none; padding: 16px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 10px; margin-bottom: 16px;">
+						<div style="display: flex; align-items: center; gap: 10px; color: #fbbf24;">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+								<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+								<line x1="12" y1="9" x2="12" y2="13"></line>
+								<line x1="12" y1="17" x2="12.01" y2="17"></line>
+							</svg>
+							<span>Connect wallet to register packages</span>
+						</div>
+					</div>
+
+					<div id="mvr-not-owner" style="display: none; padding: 16px; background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.3); border-radius: 10px; margin-bottom: 16px;">
+						<div style="display: flex; align-items: center; gap: 10px; color: #f87171;">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+								<circle cx="12" cy="12" r="10"></circle>
+								<line x1="15" y1="9" x2="9" y2="15"></line>
+								<line x1="9" y1="9" x2="15" y2="15"></line>
+							</svg>
+							<span>Only the SuiNS NFT owner can register packages</span>
+						</div>
+					</div>
+
+					<form id="mvr-register-form" style="display: none;">
+						<div style="display: grid; gap: 16px;">
+							<div>
+								<label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">SuiNS Name</label>
+								<input type="text" id="mvr-suins-name" readonly style="width: 100%; padding: 12px; background: rgba(15, 18, 32, 0.6); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.95rem;" />
+							</div>
+
+							<div>
+								<label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Package Name</label>
+								<input type="text" id="mvr-package-name" placeholder="e.g., bounty-escrow" style="width: 100%; padding: 12px; background: rgba(15, 18, 32, 0.8); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.95rem;" />
+								<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Short identifier (letters, numbers, hyphens)</div>
+							</div>
+
+							<div>
+								<label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Package Address</label>
+								<input type="text" id="mvr-package-address" placeholder="0x..." style="width: 100%; padding: 12px; background: rgba(15, 18, 32, 0.8); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.95rem; font-family: monospace;" />
+								<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">The on-chain address of your published Move package</div>
+							</div>
+
+							<div>
+								<label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">UpgradeCap Object ID</label>
+								<input type="text" id="mvr-upgrade-cap" placeholder="0x..." style="width: 100%; padding: 12px; background: rgba(15, 18, 32, 0.8); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.95rem; font-family: monospace;" />
+								<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">The UpgradeCap from package deployment (required for mainnet registration)</div>
+							</div>
+
+							<div id="mvr-status" style="display: none; padding: 12px; border-radius: 8px; font-size: 0.9rem;"></div>
+
+							<div style="display: flex; gap: 12px; flex-wrap: wrap;">
+								<button type="submit" id="mvr-register-btn" style="flex: 1; min-width: 150px; padding: 12px 20px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; border: none; border-radius: 10px; font-size: 0.95rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+										<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+									</svg>
+									<span id="mvr-register-btn-text">Register Package</span>
+								</button>
+							</div>
+						</div>
+					</form>
+
+					<div style="margin-top: 20px; padding: 16px; background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.2); border-radius: 10px;">
+						<h4 style="margin: 0 0 8px 0; font-size: 0.9rem; color: var(--accent);">How MVR Registration Works</h4>
+						<ol style="margin: 0; padding-left: 20px; font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
+							<li>Connect the wallet that owns this SuiNS NFT</li>
+							<li>Enter your package name and the deployed package address</li>
+							<li>Provide the UpgradeCap object ID from deployment</li>
+							<li>Sign the transaction to register in the Move Registry</li>
+							<li>Your package will be accessible as <code style="background: rgba(96, 165, 250, 0.1); padding: 2px 6px; border-radius: 4px;">@${cleanName}/package-name</code></li>
+						</ol>
+					</div>
+				</div>
+			</div>
+
 			<!-- Vortex Privacy Protocol Section -->
 			<div class="card" style="margin-top: 24px; background: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(168, 85, 247, 0.08)); border: 1px solid rgba(96, 165, 250, 0.25);">
 				<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;">
@@ -1801,9 +1896,9 @@ export function generateProfilePage(
 
 					// Success - show result with status link
 					showGracePeriodStatus(
-						\`Queued! <a href="\${EXPLORER_BASE}/tx/\${result.digest}" target="_blank">Payment</a> ·
-						<a href="\${verifyData.statusUrl}" target="_blank">Status</a><br>
-						<small>Nautilus TEE will process renewal shortly.</small>\`,
+						'Queued! <a href="' + EXPLORER_BASE + '/tx/' + result.digest + '" target="_blank">Payment</a> · ' +
+						'<a href="' + verifyData.statusUrl + '" target="_blank">Status</a><br>' +
+						'<small>Nautilus TEE will process renewal shortly.</small>',
 						'success'
 					);
 
@@ -2577,7 +2672,7 @@ export function generateProfilePage(
 				document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
 				document.querySelector('.owner-name').innerHTML = formatSuiName(connectedPrimaryName);
 				ownerDisplayAddress = connectedAddress;
-				alert(\`Updated! TX: \${result.digest}\`);
+				alert('Updated! TX: ' + result.digest);
 
 			} catch (error) {
 				console.error('Set self error:', error);
@@ -3067,7 +3162,7 @@ export function generateProfilePage(
 					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
 				});
 
-				showBidStatusMsg(\`Bid placed successfully! <a href="https://suivision.xyz/txblock/\${result.digest}" target="_blank">View transaction</a>\`, 'success');
+				showBidStatusMsg('Bid placed successfully! <a href="https://suivision.xyz/txblock/' + result.digest + '" target="_blank">View transaction</a>', 'success');
 				marketplaceBidAmount.value = '';
 
 				// Refresh marketplace data
@@ -3977,12 +4072,12 @@ export function generateProfilePage(
 					await suiClient.waitForTransaction({ digest: result.digest });
 
 					// Success!
-					showMessageStatus(\`Message sent to @\${RECIPIENT_NAME}! Tx: \${result.digest.slice(0, 8)}...\`, 'success');
+					showMessageStatus('Message sent to @' + RECIPIENT_NAME + '! Tx: ' + result.digest.slice(0, 8) + '...', 'success');
 					messageInput.value = '';
 
 					// Show link to view on explorer
 					setTimeout(() => {
-						showMessageStatus(\`<a href="https://suiscan.xyz/\${NETWORK}/tx/\${result.digest}" target="_blank" style="color: inherit; text-decoration: underline;">View transaction on explorer →</a>\`, 'success');
+						showMessageStatus('<a href="https://suiscan.xyz/' + NETWORK + '/tx/' + result.digest + '" target="_blank" style="color: inherit; text-decoration: underline;">View transaction on explorer →</a>', 'success');
 					}, 2000);
 				}
 
@@ -5087,9 +5182,9 @@ export function generateProfilePage(
 				if (!res.ok) {
 					console.warn('Transaction succeeded but bid record creation failed:', data.error);
 					// Transaction already succeeded, so show success but warn about record
-					showBidBountyStatus(createBidStatus, \`Transaction sent! <a href="https://suivision.xyz/txblock/\${result.digest}" target="_blank">View tx</a> (Note: Bid record may not be saved)\`, 'success');
+					showBidBountyStatus(createBidStatus, 'Transaction sent! <a href="https://suivision.xyz/txblock/' + result.digest + '" target="_blank">View tx</a> (Note: Bid record may not be saved)', 'success');
 				} else {
-					showBidBountyStatus(createBidStatus, \`Bid placed! <a href="https://suivision.xyz/txblock/\${result.digest}" target="_blank">View tx</a>\`, 'success');
+					showBidBountyStatus(createBidStatus, 'Bid placed! <a href="https://suivision.xyz/txblock/' + result.digest + '" target="_blank">View tx</a>', 'success');
 				}
 				
 				if (bidAmountInput) bidAmountInput.value = '';
@@ -5159,7 +5254,7 @@ export function generateProfilePage(
 				const [depositCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalAmountMist)]);
 
 				tx.moveCall({
-					target: `${BOUNTY_ESCROW_PACKAGE_ID}::escrow::create_and_share_bounty`,
+					target: BOUNTY_ESCROW_PACKAGE_ID + '::escrow::create_and_share_bounty',
 					arguments: [
 						tx.pure.string(NAME),
 						tx.pure.address(connectedAddress),
@@ -5237,13 +5332,13 @@ export function generateProfilePage(
 					console.warn('Escrow created but bounty record creation failed:', data.error);
 					showBidBountyStatus(
 						createBountyStatus,
-						`Escrow created! <a href="https://suivision.xyz/txblock/${result.digest}" target="_blank">View tx</a> (record may not be saved)`,
+						'Escrow created! <a href="https://suivision.xyz/txblock/' + result.digest + '" target="_blank">View tx</a> (record may not be saved)',
 						'success',
 					);
 				} else {
 					showBidBountyStatus(
 						createBountyStatus,
-						`Bounty created! <a href="https://suivision.xyz/txblock/${result.digest}" target="_blank">View tx</a>`,
+						'Bounty created! <a href="https://suivision.xyz/txblock/' + result.digest + '" target="_blank">View tx</a>',
 						'success',
 					);
 				}
@@ -5278,7 +5373,7 @@ export function generateProfilePage(
 				element.dataset.baseClass = baseClass;
 			}
 			const base = element.dataset.baseClass || 'create-bid-status';
-			element.className = `${base} ${type}`.trim();
+			element.className = (base + ' ' + type).trim();
 			element.classList.remove('hidden');
 		}
 
@@ -5286,7 +5381,7 @@ export function generateProfilePage(
 		function hideBidBountyStatus(element) {
 			if (!element) return;
 			const base = element.dataset?.baseClass || 'create-bid-status';
-			element.className = `${base} hidden`.trim();
+			element.className = (base + ' hidden').trim();
 		}
 
 		// Event listeners for bid/bounty section
@@ -5968,6 +6063,231 @@ export function generateProfilePage(
 		if (IS_IN_GRACE_PERIOD) {
 			updateBountiesSectionVisibility();
 		}
+
+		// ========== MVR REGISTRATION FUNCTIONALITY ==========
+		const MVR_CORE_PACKAGE = '0xbb97fa5af2504cc944a8df78dcb5c8b72c3673ca4ba8e4969a98188bf745ee54';
+		const MVR_METADATA_PACKAGE = '0xc88768f8b26581a8ee1bf71e6a6ec0f93d4cc6460ebb66a31b94d64de8105c98';
+		const MVR_REGISTRY_ID = '0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727';
+
+		const mvrToggleBtn = document.getElementById('mvr-toggle-btn');
+		const mvrToggleIcon = document.getElementById('mvr-toggle-icon');
+		const mvrContent = document.getElementById('mvr-content');
+		const mvrWalletRequired = document.getElementById('mvr-wallet-required');
+		const mvrNotOwner = document.getElementById('mvr-not-owner');
+		const mvrRegisterForm = document.getElementById('mvr-register-form');
+		const mvrSuinsName = document.getElementById('mvr-suins-name');
+		const mvrPackageName = document.getElementById('mvr-package-name');
+		const mvrPackageAddress = document.getElementById('mvr-package-address');
+		const mvrUpgradeCap = document.getElementById('mvr-upgrade-cap');
+		const mvrStatus = document.getElementById('mvr-status');
+		const mvrRegisterBtn = document.getElementById('mvr-register-btn');
+		const mvrRegisterBtnText = document.getElementById('mvr-register-btn-text');
+
+		let mvrExpanded = false;
+
+		// Toggle MVR section
+		if (mvrToggleBtn) {
+			mvrToggleBtn.addEventListener('click', () => {
+				mvrExpanded = !mvrExpanded;
+				mvrContent.style.display = mvrExpanded ? 'block' : 'none';
+				mvrToggleIcon.innerHTML = mvrExpanded
+					? '<polyline points="18 15 12 9 6 15"></polyline>'
+					: '<polyline points="6 9 12 15 18 9"></polyline>';
+				if (mvrExpanded) {
+					updateMvrSectionVisibility();
+				}
+			});
+		}
+
+		// Update MVR section visibility based on wallet state
+		function updateMvrSectionVisibility() {
+			if (!mvrContent) return;
+
+			// Set the SuiNS name
+			if (mvrSuinsName) {
+				mvrSuinsName.value = NAME;
+			}
+
+			if (!connectedAddress) {
+				// Not connected - show connect prompt
+				mvrWalletRequired.style.display = 'block';
+				mvrNotOwner.style.display = 'none';
+				mvrRegisterForm.style.display = 'none';
+			} else if (!canEdit || connectedAddress !== nftOwnerAddress) {
+				// Connected but not owner
+				mvrWalletRequired.style.display = 'none';
+				mvrNotOwner.style.display = 'block';
+				mvrRegisterForm.style.display = 'none';
+			} else {
+				// Owner connected - show form
+				mvrWalletRequired.style.display = 'none';
+				mvrNotOwner.style.display = 'none';
+				mvrRegisterForm.style.display = 'block';
+			}
+		}
+
+		function showMvrStatus(msg, type) {
+			if (!mvrStatus) return;
+			mvrStatus.style.display = 'block';
+			mvrStatus.innerHTML = msg;
+			mvrStatus.style.background = type === 'error' ? 'rgba(248, 113, 113, 0.15)' :
+				type === 'success' ? 'rgba(52, 211, 153, 0.15)' : 'rgba(96, 165, 250, 0.15)';
+			mvrStatus.style.border = type === 'error' ? '1px solid rgba(248, 113, 113, 0.3)' :
+				type === 'success' ? '1px solid rgba(52, 211, 153, 0.3)' : '1px solid rgba(96, 165, 250, 0.3)';
+			mvrStatus.style.color = type === 'error' ? '#f87171' :
+				type === 'success' ? '#34d399' : '#60a5fa';
+		}
+
+		function hideMvrStatus() {
+			if (mvrStatus) mvrStatus.style.display = 'none';
+		}
+
+		// Handle MVR registration form submission
+		if (mvrRegisterForm) {
+			mvrRegisterForm.addEventListener('submit', async (e) => {
+				e.preventDefault();
+				await handleMvrRegistration();
+			});
+		}
+
+		async function handleMvrRegistration() {
+			if (!connectedWallet || !connectedAccount) {
+				showMvrStatus('Please connect your wallet first.', 'error');
+				return;
+			}
+
+			const packageName = mvrPackageName?.value?.trim();
+			const packageAddress = mvrPackageAddress?.value?.trim();
+			const upgradeCap = mvrUpgradeCap?.value?.trim();
+
+			// Validation
+			if (!packageName) {
+				showMvrStatus('Package name is required.', 'error');
+				return;
+			}
+
+			if (!/^[a-z0-9-]+$/.test(packageName)) {
+				showMvrStatus('Package name can only contain lowercase letters, numbers, and hyphens.', 'error');
+				return;
+			}
+
+			if (!packageAddress || !/^0x[a-f0-9]{64}$/i.test(packageAddress)) {
+				showMvrStatus('Valid package address is required (0x followed by 64 hex characters).', 'error');
+				return;
+			}
+
+			if (!upgradeCap || !/^0x[a-f0-9]{64}$/i.test(upgradeCap)) {
+				showMvrStatus('Valid UpgradeCap object ID is required.', 'error');
+				return;
+			}
+
+			if (!NFT_ID) {
+				showMvrStatus('SuiNS NFT ID not found for this name.', 'error');
+				return;
+			}
+
+			try {
+				mvrRegisterBtn.disabled = true;
+				mvrRegisterBtnText.textContent = 'Building transaction...';
+				hideMvrStatus();
+
+				const suiClient = new SuiClient({ url: RPC_URL });
+
+				// Build the MVR registration transaction (PTB)
+				// This is a multi-step process:
+				// 1. Create PackageInfo from UpgradeCap
+				// 2. Register the app name with SuiNS NFT
+				// 3. Assign the package to the app
+
+				const tx = new Transaction();
+
+				// Step 1: Create PackageInfo from UpgradeCap
+				// @mvr/metadata::package_info::new(upgrade_cap)
+				const [packageInfo] = tx.moveCall({
+					target: MVR_METADATA_PACKAGE + '::package_info::new',
+					arguments: [tx.object(upgradeCap)],
+				});
+
+				// Step 2: Register the app name in MVR using SuiNS NFT
+				// @mvr/core::move_registry::register(registry, suins_nft, app_name, clock)
+				const [appCap] = tx.moveCall({
+					target: MVR_CORE_PACKAGE + '::move_registry::register',
+					arguments: [
+						tx.object(MVR_REGISTRY_ID),
+						tx.object(NFT_ID),
+						tx.pure.string(packageName),
+						tx.object('0x6'), // Clock
+					],
+				});
+
+				// Step 3: Assign the package to the app record
+				// @mvr/core::move_registry::assign_package(registry, app_cap, package_info)
+				tx.moveCall({
+					target: MVR_CORE_PACKAGE + '::move_registry::assign_package',
+					arguments: [
+						tx.object(MVR_REGISTRY_ID),
+						appCap,
+						packageInfo,
+					],
+				});
+
+				// Transfer the AppCap to the sender (so they can manage the app later)
+				tx.transferObjects([appCap], connectedAddress);
+
+				mvrRegisterBtnText.textContent = 'Approve in wallet...';
+
+				// Sign and execute
+				const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
+					transaction: tx,
+					account: connectedAccount,
+					chain: 'sui:' + NETWORK,
+				});
+
+				if (!result?.digest) {
+					throw new Error('Transaction failed - no digest returned');
+				}
+
+				// Success!
+				showMvrStatus(
+					'Package registered successfully! ' +
+					'<a href="' + EXPLORER_BASE + '/tx/' + result.digest + '" target="_blank" style="color: inherit; text-decoration: underline;">View transaction</a><br>' +
+					'<br>Your package is now accessible as: <code style="background: rgba(52, 211, 153, 0.2); padding: 2px 6px; border-radius: 4px;">@' + NAME + '/' + packageName + '</code>',
+					'success'
+				);
+
+				// Clear form
+				mvrPackageName.value = '';
+				mvrPackageAddress.value = '';
+				mvrUpgradeCap.value = '';
+
+			} catch (error) {
+				console.error('MVR registration error:', error);
+				const msg = error.message || 'Unknown error';
+
+				if (msg.includes('rejected') || msg.includes('cancelled') || msg.includes('User rejected')) {
+					showMvrStatus('Transaction cancelled by user.', 'error');
+				} else if (msg.includes('already registered') || msg.includes('already exists')) {
+					showMvrStatus('This app name is already registered. Try a different package name.', 'error');
+				} else if (msg.includes('Insufficient')) {
+					showMvrStatus('Insufficient balance for transaction. You need SUI for gas.', 'error');
+				} else {
+					showMvrStatus('Registration failed: ' + msg, 'error');
+				}
+			} finally {
+				mvrRegisterBtn.disabled = false;
+				mvrRegisterBtnText.textContent = 'Register Package';
+			}
+		}
+
+		// Update MVR visibility when wallet state changes
+		// (This will be called by existing wallet connection code)
+		const originalCheckEditPermission = checkEditPermission;
+		checkEditPermission = async function() {
+			await originalCheckEditPermission();
+			if (mvrExpanded) {
+				updateMvrSectionVisibility();
+			}
+		};
 
 		if (premiumGraphContainer) {
 			const handlePointer = (event) => {
