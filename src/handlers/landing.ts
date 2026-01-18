@@ -196,10 +196,6 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 		}
 
 		const client = new SuiClient({ url: env.SUI_RPC_URL })
-		const suinsClient = new SuinsClient({
-			client: client as never,
-			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
-		})
 
 		// SuiNS NFT types
 		const suinsNftTypes = [
@@ -219,7 +215,7 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 				limit: 50,
 			})
 
-			// Filter for SuiNS NFTs and extract name + expiration
+			// Filter for SuiNS NFTs and extract name + expiration + target address
 			for (const item of response.data) {
 				const objType = item.data?.type || ''
 				const isSuinsNft = suinsNftTypes.some((t) => objType.includes(t.split('::')[0]))
@@ -234,12 +230,14 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 					const expirationMs = fields?.expiration_timestamp_ms
 						? Number(fields.expiration_timestamp_ms)
 						: null
+					// Get target_address directly from NFT fields (no extra RPC call needed)
+					const targetAddress = fields?.target_address || null
 					if (name) {
 						allNames.push({
 							name,
 							nftId: item.data.objectId,
 							expirationMs,
-							targetAddress: null, // Will be fetched separately
+							targetAddress,
 							isPrimary: false,
 						})
 					}
@@ -248,23 +246,6 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 
 			cursor = response.hasNextPage ? response.nextCursor : null
 		} while (cursor)
-
-		// Fetch target addresses for all names in parallel (with concurrency limit)
-		const CONCURRENCY_LIMIT = 10
-		const fetchTargetAddress = async (nameInfo: NameInfo) => {
-			try {
-				const record = await suinsClient.getNameRecord(nameInfo.name)
-				nameInfo.targetAddress = record?.targetAddress || null
-			} catch {
-				// Skip if we can't fetch the record
-			}
-		}
-
-		// Process in batches to limit concurrent RPC calls
-		for (let i = 0; i < allNames.length; i += CONCURRENCY_LIMIT) {
-			const batch = allNames.slice(i, i + CONCURRENCY_LIMIT)
-			await Promise.all(batch.map(fetchTargetAddress))
-		}
 
 		// For each address group, mark the first name (alphabetically) as primary
 		// This is a heuristic since we can't easily query the on-chain default name
