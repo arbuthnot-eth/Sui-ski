@@ -7024,8 +7024,60 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 						nonce: crypto.randomUUID(),
 					};
 
+					// Request wallet signature to prove authorship
+					showMsgStatus('Requesting wallet signature...', 'info');
+
+					const signaturePayload = JSON.stringify({
+						type: 'sui_ski_message',
+						version: 1,
+						from: connectedAddress,
+						to: recipientAddr,
+						contentHash: await hashContent(content),
+						timestamp: messageData.timestamp,
+						nonce: messageData.nonce,
+					});
+
+					let signature = null;
+					try {
+						// Use wallet to sign the message (proves authorship)
+						if (connectedWallet && connectedWallet.signPersonalMessage) {
+							const signResult = await connectedWallet.signPersonalMessage({
+								message: new TextEncoder().encode(signaturePayload),
+							});
+							signature = signResult.signature;
+						} else if (connectedWallet && connectedWallet.signMessage) {
+							const signResult = await connectedWallet.signMessage({
+								message: new TextEncoder().encode(signaturePayload),
+							});
+							signature = signResult.signature;
+						} else {
+							// Fallback: use basic confirmation
+							const confirmed = confirm(
+								'Sign message to ' + recipientName + '?\\n\\n' +
+								'Content: ' + content.substring(0, 100) + (content.length > 100 ? '...' : '') + '\\n\\n' +
+								'Click OK to send (encrypted with Seal)'
+							);
+							if (!confirmed) {
+								throw new Error('User cancelled');
+							}
+						}
+					} catch (signError) {
+						if (signError.message === 'User cancelled' || signError.message.includes('rejected')) {
+							throw new Error('Signature rejected');
+						}
+						console.warn('Signature failed, using fallback:', signError);
+					}
+
+					// Add signature to message data
+					messageData.signature = signature;
+					messageData.signaturePayload = signaturePayload;
+
+					showMsgStatus('Encrypting message...', 'info');
+
 					// Encrypt with Seal (only recipient can decrypt)
 					const encrypted = await encryptForRecipient(messageData, recipientAddr);
+
+					showMsgStatus('Storing on Walrus...', 'info');
 
 					// Store on Walrus
 					const blobId = await storeMessageOnWalrus(encrypted);
@@ -7045,6 +7097,15 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 					return await fetchMessagesForAddress(address);
 				}
 			};
+		}
+
+		// Hash content for signature (avoids signing raw content)
+		async function hashContent(content) {
+			const encoder = new TextEncoder();
+			const data = encoder.encode(content);
+			const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+			const hashArray = Array.from(new Uint8Array(hashBuffer));
+			return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 		}
 
 		// Encrypt message for recipient using Seal
