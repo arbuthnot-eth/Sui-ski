@@ -2011,8 +2011,10 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			// Remove old wallet elements but keep search btn and network badge
 			const existingWalletStatus = walletBar.querySelector('.wallet-status');
 			const existingConnectBtn = walletBar.querySelector('.connect-btn');
+			const existingDropdown = walletBar.querySelector('.wallet-dropdown');
 			if (existingWalletStatus) existingWalletStatus.remove();
 			if (existingConnectBtn) existingConnectBtn.remove();
+			if (existingDropdown) existingDropdown.remove();
 
 			if (!connectedAddress) {
 				const connectBtn = document.createElement('button');
@@ -2023,37 +2025,80 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				walletBar.appendChild(connectBtn);
 			} else {
 				const displayName = connectedPrimaryName || truncAddr(connectedAddress);
+
+				// Create wallet status container
+				const walletContainer = document.createElement('div');
+				walletContainer.className = 'wallet-status-container';
+
 				const walletStatus = document.createElement('div');
 				walletStatus.className = 'wallet-status';
 				walletStatus.style.cursor = 'pointer';
-				walletStatus.title = connectedPrimaryName 
-					? 'Go to ' + connectedPrimaryName + ' profile'
-					: 'Disconnect wallet';
+				walletStatus.title = 'Click for wallet options';
 				walletStatus.innerHTML = '<span class="wallet-addr">' + displayName + '</span>' +
 					(connectedPrimaryName ? '<span class="wallet-name">' + truncAddr(connectedAddress) + '</span>' : '') +
-					'<button id="disconnect-wallet-btn">×</button>';
-				walletBar.appendChild(walletStatus);
-				
-				// Handle click on wallet status (but not the disconnect button)
+					'<svg class="wallet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+
+				// Create dropdown menu
+				const dropdown = document.createElement('div');
+				dropdown.className = 'wallet-dropdown';
+				dropdown.innerHTML = \`
+					\${connectedPrimaryName ? \`
+					<button class="wallet-dropdown-item" id="wallet-view-profile">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+						View My Profile
+					</button>
+					\` : ''}
+					<button class="wallet-dropdown-item" id="wallet-switch">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
+						Switch Wallet
+					</button>
+					<button class="wallet-dropdown-item disconnect" id="wallet-disconnect">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+						Disconnect
+					</button>
+				\`;
+
+				walletContainer.appendChild(walletStatus);
+				walletContainer.appendChild(dropdown);
+				walletBar.appendChild(walletContainer);
+
+				// Toggle dropdown on click
 				walletStatus.addEventListener('click', (e) => {
-					// Don't handle if clicking the disconnect button
-					if (e.target.closest('#disconnect-wallet-btn')) return;
-					
-					if (connectedPrimaryName) {
-						// Navigate to the primary name's profile
-						const cleanedName = connectedPrimaryName.replace(/\\.sui$/i, '');
-						window.location.href = \`https://\${cleanedName}.sui.ski\`;
-					} else {
-						// No primary name, disconnect wallet
-						disconnectWallet();
+					e.stopPropagation();
+					dropdown.classList.toggle('open');
+				});
+
+				// Close dropdown when clicking outside
+				document.addEventListener('click', (e) => {
+					if (!walletContainer.contains(e.target)) {
+						dropdown.classList.remove('open');
 					}
 				});
-				
-				// Disconnect button handler
-				const disconnectBtn = document.getElementById('disconnect-wallet-btn');
+
+				// View profile handler
+				const viewProfileBtn = document.getElementById('wallet-view-profile');
+				if (viewProfileBtn) {
+					viewProfileBtn.addEventListener('click', () => {
+						const cleanedName = connectedPrimaryName.replace(/\\.sui$/i, '');
+						window.location.href = \`https://\${cleanedName}.sui.ski\`;
+					});
+				}
+
+				// Switch wallet handler
+				const switchBtn = document.getElementById('wallet-switch');
+				if (switchBtn) {
+					switchBtn.addEventListener('click', () => {
+						dropdown.classList.remove('open');
+						disconnectWallet();
+						setTimeout(() => showWalletModal(), 100);
+					});
+				}
+
+				// Disconnect handler
+				const disconnectBtn = document.getElementById('wallet-disconnect');
 				if (disconnectBtn) {
-					disconnectBtn.addEventListener('click', (e) => {
-						e.stopPropagation(); // Prevent triggering wallet status click
+					disconnectBtn.addEventListener('click', () => {
+						dropdown.classList.remove('open');
 						disconnectWallet();
 					});
 				}

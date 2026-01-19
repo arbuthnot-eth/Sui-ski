@@ -969,6 +969,75 @@ export const profileStyles = `
 			box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
 		}
 
+		/* Wallet dropdown */
+		.wallet-status-container {
+			position: relative;
+			margin-left: auto;
+		}
+		.wallet-chevron {
+			transition: transform 0.2s;
+			color: var(--text-muted);
+		}
+		.wallet-status-container:has(.wallet-dropdown.open) .wallet-chevron {
+			transform: rotate(180deg);
+		}
+		.wallet-dropdown {
+			position: absolute;
+			top: calc(100% + 8px);
+			right: 0;
+			min-width: 180px;
+			background: var(--card-bg-solid);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+			opacity: 0;
+			visibility: hidden;
+			transform: translateY(-8px);
+			transition: all 0.2s;
+			z-index: 1000;
+			overflow: hidden;
+		}
+		.wallet-dropdown.open {
+			opacity: 1;
+			visibility: visible;
+			transform: translateY(0);
+		}
+		.wallet-dropdown-item {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			width: 100%;
+			padding: 12px 16px;
+			background: transparent;
+			border: none;
+			color: var(--text);
+			font-size: 0.85rem;
+			cursor: pointer;
+			transition: background 0.15s;
+			text-align: left;
+		}
+		.wallet-dropdown-item:hover {
+			background: rgba(96, 165, 250, 0.1);
+		}
+		.wallet-dropdown-item svg {
+			width: 16px;
+			height: 16px;
+			color: var(--text-muted);
+		}
+		.wallet-dropdown-item:hover svg {
+			color: var(--accent);
+		}
+		.wallet-dropdown-item.disconnect {
+			border-top: 1px solid var(--border);
+			color: var(--error);
+		}
+		.wallet-dropdown-item.disconnect svg {
+			color: var(--error);
+		}
+		.wallet-dropdown-item.disconnect:hover {
+			background: rgba(248, 113, 113, 0.1);
+		}
+
 		.section {
 			background: var(--card-bg);
 			backdrop-filter: blur(20px);
