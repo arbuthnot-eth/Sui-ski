@@ -102,6 +102,10 @@ export default {
 						if (url.pathname.startsWith('/api/bounties')) {
 							return handleBountiesRequest(request, env)
 						}
+						// Handle /api/app/* routes (messaging, subscriptions, etc.)
+						if (url.pathname.startsWith('/api/app/')) {
+							return handleAppRequest(request, env)
+						}
 						// Try landing API handlers (sui-price, suins-image, image-proxy, etc.)
 						const apiResponse = await handleLandingApiRequest(request, env)
 						if (apiResponse) {
