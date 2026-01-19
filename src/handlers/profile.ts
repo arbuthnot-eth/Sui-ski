@@ -164,7 +164,7 @@ export function generateProfilePage(
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg>
 						<span>NFTs</span>
 					</button>
-					<button class="sidebar-tab" data-tab="messaging">
+					<button class="sidebar-tab hidden" data-tab="messaging" id="messaging-tab-btn">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
 						<span>Message</span>
 					</button>
@@ -1018,8 +1018,32 @@ export function generateProfilePage(
 							<span class="alpha-badge">Beta</span>
 						</div>
 
-						<!-- Compose Section -->
-						<div class="msg-compose-section" id="msg-compose-section">
+						<!-- Connect Wallet Prompt (shown when no wallet connected) -->
+						<div class="msg-connect-prompt" id="msg-connect-prompt">
+							<div class="msg-connect-icon">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48">
+									<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+									<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+								</svg>
+							</div>
+							<h4>Connect Your Wallet</h4>
+							<p>Connect your Sui wallet to send encrypted messages to @${escapeHtml(cleanName)}.sui</p>
+							<button class="msg-connect-btn" id="msg-connect-btn">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+									<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+									<circle cx="12" cy="7" r="4"></circle>
+								</svg>
+								Connect Wallet
+							</button>
+							<div class="msg-connect-features">
+								<span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> End-to-end encrypted</span>
+								<span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Stored on Walrus</span>
+								<span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Signed with your wallet</span>
+							</div>
+						</div>
+
+						<!-- Compose Section (hidden until wallet connected) -->
+						<div class="msg-compose-section hidden" id="msg-compose-section">
 							<div class="msg-recipient-bar">
 								<span class="msg-recipient-label">To:</span>
 								<span class="msg-recipient-name">@${escapeHtml(cleanName)}.sui</span>
@@ -1052,8 +1076,8 @@ export function generateProfilePage(
 							<div id="msg-status" class="msg-status hidden"></div>
 						</div>
 
-						<!-- Conversation History -->
-						<div class="msg-conversation-section">
+						<!-- Conversation History (hidden until wallet connected) -->
+						<div class="msg-conversation-section hidden" id="msg-conversation-section">
 							<div class="msg-conversation-header">
 								<h4>Conversation</h4>
 								<button class="msg-refresh-btn" id="msg-refresh-btn" title="Refresh messages">
@@ -7087,6 +7111,51 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		const msgRefreshBtn = document.getElementById('msg-refresh-btn');
 		const msgSdkToggle = document.getElementById('msg-sdk-toggle');
 		const msgSdkContent = document.getElementById('msg-sdk-content');
+		const msgConnectPrompt = document.getElementById('msg-connect-prompt');
+		const msgConnectBtn = document.getElementById('msg-connect-btn');
+		const msgComposeSection = document.getElementById('msg-compose-section');
+		const msgConversationSection = document.getElementById('msg-conversation-section');
+		const messagingTabBtn = document.getElementById('messaging-tab-btn');
+
+		// Update messaging UI visibility based on wallet connection
+		function updateMessagingVisibility() {
+			if (connectedAddress) {
+				// Wallet connected - show messaging tab and content
+				if (messagingTabBtn) messagingTabBtn.classList.remove('hidden');
+				if (msgConnectPrompt) msgConnectPrompt.classList.add('hidden');
+				if (msgConversationSection) msgConversationSection.classList.remove('hidden');
+
+				// Show compose or inbox based on whether user is profile owner
+				if (isProfileOwner()) {
+					// Profile owner sees inbox
+					if (msgComposeSection) msgComposeSection.classList.remove('hidden');
+					updateSendButtonState(); // This will convert to inbox view
+				} else {
+					// Visitor sees compose
+					if (msgComposeSection) msgComposeSection.classList.remove('hidden');
+				}
+			} else {
+				// No wallet connected - show connect prompt, hide everything else
+				if (messagingTabBtn) messagingTabBtn.classList.add('hidden');
+				if (msgConnectPrompt) msgConnectPrompt.classList.remove('hidden');
+				if (msgComposeSection) msgComposeSection.classList.add('hidden');
+				if (msgConversationSection) msgConversationSection.classList.add('hidden');
+
+				// Clear any displayed messages
+				if (msgConversationList) {
+					const emptyHtml = msgConversationEmpty ? msgConversationEmpty.outerHTML : '';
+					const loadingHtml = msgConversationLoading ? msgConversationLoading.outerHTML : '';
+					msgConversationList.innerHTML = emptyHtml + loadingHtml;
+				}
+			}
+		}
+
+		// Connect button in messaging prompt
+		if (msgConnectBtn) {
+			msgConnectBtn.addEventListener('click', () => {
+				showWalletModal();
+			});
+		}
 
 		// ===== SUI STACK MESSAGING INTEGRATION =====
 		// Messages are signed by sender wallet for authenticity
@@ -7586,22 +7655,28 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			});
 		}
 
-		// Initial load
-		renderMessages(getCachedMessages());
+		// Initial load - only show connect prompt (messages only visible after wallet connection)
+		updateMessagingVisibility();
 
-		// Update messaging button when wallet connects/disconnects
+		// Update messaging when wallet connects/disconnects
 		const originalUpdateUI = updateUIForWallet;
 		updateUIForWallet = function() {
 			originalUpdateUI();
+			updateMessagingVisibility();
 			updateSendButtonState();
 
-			// If owner connected, auto-load inbox
-			if (isProfileOwner()) {
-				loadInbox();
+			// If wallet connected, load messages
+			if (connectedAddress) {
+				if (isProfileOwner()) {
+					loadInbox();
+				} else {
+					// Load sent messages for this conversation
+					renderMessages(getCachedMessages().filter(m => m.to === MESSAGING_RECIPIENT_ADDRESS));
+				}
 			}
 		};
 
-		// Initial button state
+		// Initial button state (will show connect prompt since no wallet)
 		updateSendButtonState();
 
 		// Preload SDK in background

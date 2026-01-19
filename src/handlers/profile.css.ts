@@ -3544,6 +3544,79 @@ export const profileStyles = `
 			line-height: 1.6;
 		}
 
+		/* Connect Wallet Prompt */
+		.msg-connect-prompt {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			padding: 48px 24px;
+			text-align: center;
+			background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(139, 92, 246, 0.08));
+			border: 1px dashed rgba(96, 165, 250, 0.3);
+			border-radius: 16px;
+			margin-bottom: 20px;
+		}
+		.msg-connect-prompt.hidden {
+			display: none;
+		}
+		.msg-connect-icon {
+			color: var(--accent);
+			margin-bottom: 16px;
+			opacity: 0.8;
+		}
+		.msg-connect-prompt h4 {
+			font-size: 1.25rem;
+			font-weight: 700;
+			margin-bottom: 8px;
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.msg-connect-prompt p {
+			color: var(--text-muted);
+			font-size: 0.9rem;
+			margin-bottom: 24px;
+			max-width: 320px;
+		}
+		.msg-connect-btn {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			padding: 12px 24px;
+			background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+			border: none;
+			border-radius: 12px;
+			color: white;
+			font-size: 1rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+			box-shadow: 0 4px 16px rgba(96, 165, 250, 0.3);
+		}
+		.msg-connect-btn:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 6px 24px rgba(96, 165, 250, 0.4);
+		}
+		.msg-connect-features {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 16px;
+			margin-top: 24px;
+			justify-content: center;
+		}
+		.msg-connect-features span {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 0.8rem;
+			color: var(--text-muted);
+		}
+		.msg-connect-features svg {
+			color: var(--success);
+		}
+
 		/* Message Compose Section */
 		.msg-compose-section {
 			background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.1));
