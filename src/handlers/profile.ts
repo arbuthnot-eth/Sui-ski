@@ -7098,6 +7098,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 		const MESSAGING_RECIPIENT = ${serializeJson(cleanName)};
 		const MESSAGING_RECIPIENT_ADDRESS = ${serializeJson(record.address)};
+		const MESSAGING_OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
 
 		// DOM elements for messaging
 		const msgComposeInput = document.getElementById('msg-compose-input');
@@ -7388,9 +7389,14 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			localStorage.setItem(MSG_CACHE_KEY, JSON.stringify(messages));
 		}
 
-		// Check if current user is the profile owner
+		// Check if current user is the profile owner (matches target or NFT owner address)
 		function isProfileOwner() {
-			return connectedAddress && connectedAddress.toLowerCase() === MESSAGING_RECIPIENT_ADDRESS.toLowerCase();
+			if (!connectedAddress) return false;
+			const addr = connectedAddress.toLowerCase();
+			// Check if connected wallet is either the target address or the NFT owner
+			if (MESSAGING_RECIPIENT_ADDRESS && addr === MESSAGING_RECIPIENT_ADDRESS.toLowerCase()) return true;
+			if (MESSAGING_OWNER_ADDRESS && addr === MESSAGING_OWNER_ADDRESS.toLowerCase()) return true;
+			return false;
 		}
 
 		// Render messages in conversation view
@@ -7605,9 +7611,34 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 					// Fetch and decrypt messages (only works for owner)
 					messages = await messagingClient.getMessages(connectedAddress);
 				} else {
-					// Fallback: try to decrypt cached messages
+					// Fetch messages for the connected address
 					messages = await fetchMessagesForAddress(connectedAddress);
+
+					// Also fetch messages addressed to the profile's target address
+					// (Messages to @name.sui are stored under the target address)
+					if (MESSAGING_RECIPIENT_ADDRESS &&
+						MESSAGING_RECIPIENT_ADDRESS.toLowerCase() !== connectedAddress.toLowerCase()) {
+						const targetMessages = await fetchMessagesForAddress(MESSAGING_RECIPIENT_ADDRESS);
+						messages = [...messages, ...targetMessages];
+					}
+
+					// Also check owner address if different
+					if (MESSAGING_OWNER_ADDRESS &&
+						MESSAGING_OWNER_ADDRESS.toLowerCase() !== connectedAddress.toLowerCase() &&
+						MESSAGING_OWNER_ADDRESS.toLowerCase() !== MESSAGING_RECIPIENT_ADDRESS.toLowerCase()) {
+						const ownerMessages = await fetchMessagesForAddress(MESSAGING_OWNER_ADDRESS);
+						messages = [...messages, ...ownerMessages];
+					}
 				}
+
+				// Deduplicate messages by nonce/id
+				const seen = new Set();
+				messages = messages.filter(m => {
+					const key = m.nonce || m.id || m.timestamp;
+					if (seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				});
 
 				// Add sent messages from cache
 				const sentMessages = getCachedMessages().filter(m => m.direction === 'sent');
