@@ -14,6 +14,15 @@ routes = [
 SUI_NETWORK = "mainnet"
 SUI_RPC_URL = "https://sui-rpc.publicnode.com"
 WALRUS_NETWORK = "mainnet"
+# IKA dWallet package ID for cross-chain control (set when deploying IKA integration)
+# IKA_PACKAGE_ID = ""
+# Agency registry object ID (set after deploying agency registry contract)
+# AGENCY_REGISTRY_ID = ""
+# LLM API URL (defaults to Anthropic if not set)
+# LLM_API_URL = "https://api.anthropic.com/v1/messages"
+
+# Secrets (set via `wrangler secret put <NAME>`)
+# LLM_API_KEY - API key for LLM provider (Anthropic/OpenAI)
 
 # KV namespace for caching resolved names
 [[kv_namespaces]]

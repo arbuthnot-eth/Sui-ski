@@ -3,6 +3,8 @@ import { handleMessagingRequest } from './handlers/messaging'
 import { generateProfilePage } from './handlers/profile'
 import { handlePWARequest } from './handlers/pwa'
 import { handlePrivateRequest } from './handlers/private'
+import { handleAppRequest } from './handlers/app'
+import { handleAgentsRequest } from './handlers/agents'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
@@ -56,6 +58,17 @@ export default {
 						url,
 					})
 				}
+
+				// Handle /app routes on root domain (sui.ski/app/*)
+				if (url.pathname === '/app' || url.pathname.startsWith('/app/')) {
+					return handleAppRequest(request, env)
+				}
+
+				// Handle /api/app, /api/agents, /api/ika, /api/llm routes on root domain
+				if (url.pathname.startsWith('/api/app/') || url.pathname.startsWith('/api/agents/') ||
+					url.pathname.startsWith('/api/ika/') || url.pathname.startsWith('/api/llm/')) {
+					return handleAppRequest(request, env)
+				}
 			}
 
 			switch (parsed.type) {
@@ -67,6 +80,12 @@ export default {
 
 				case 'messaging':
 					return handleMessagingRequest(request, env)
+
+				case 'app':
+					return handleAppRequest(request, env)
+
+				case 'agents':
+					return handleAgentsRequest(request, env)
 
 				case 'suins': {
 					// Special handling for private.sui.ski -> Private Protocol

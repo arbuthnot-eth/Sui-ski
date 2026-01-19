@@ -13,9 +13,17 @@ export interface Env {
 	BOUNTY_ESCROW_MVR_ALIAS?: string
 	// Optional: Move Registry parent ID
 	MOVE_REGISTRY_PARENT_ID?: string
+	// Optional: IKA dWallet package ID for cross-chain control
+	IKA_PACKAGE_ID?: string
+	// Optional: LLM API key for AI copilot features
+	LLM_API_KEY?: string
+	// Optional: LLM API endpoint (defaults to Anthropic)
+	LLM_API_URL?: string
+	// Optional: Agency registry object ID
+	AGENCY_REGISTRY_ID?: string
 }
 
-export type RouteType = 'suins' | 'content' | 'rpc' | 'root' | 'mvr' | 'messaging'
+export type RouteType = 'suins' | 'content' | 'rpc' | 'root' | 'mvr' | 'messaging' | 'app' | 'agents'
 
 export interface MVRInfo {
 	/** Package name (e.g., "private" from "private--iousd.sui.ski") */

@@ -1131,6 +1131,10 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 				Manage on SuiNS
 			</a>
+			<button class="subscribe-btn" id="subscribe-btn" data-name="${escapeHtml(cleanName)}" data-address="${escapeHtml(record.address)}">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+				<span class="subscribe-text">Subscribe</span>
+			</button>
 				</div>
 			</div><!-- end main-content -->
 		</div><!-- end page-layout -->
@@ -7154,7 +7158,525 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			updateSUIPrice();
 			setInterval(updateSUIPrice, 60000); // Update every minute
 		}
+
+		// ===== FLOATING APP BAR =====
+		document.body.classList.add('has-app-bar');
+
+		// Show/hide panels
+		function showPanel(panelId) {
+			document.querySelectorAll('.conversations-panel, .channels-panel, .news-panel, .agents-panel, .chat-fullscreen').forEach(p => p.classList.add('hidden'));
+			const panel = document.getElementById(panelId);
+			if (panel) panel.classList.remove('hidden');
+		}
+
+		function hideAllPanels() {
+			document.querySelectorAll('.conversations-panel, .channels-panel, .news-panel, .agents-panel, .chat-fullscreen').forEach(p => p.classList.add('hidden'));
+		}
+
+		// App bar button handlers
+		document.querySelectorAll('.app-bar-btn').forEach(btn => {
+			btn.addEventListener('click', () => {
+				const panel = btn.dataset.panel;
+				if (panel) showPanel(panel);
+			});
+		});
+
+		// Close panel buttons
+		document.querySelectorAll('.panel-close-btn').forEach(btn => {
+			btn.addEventListener('click', hideAllPanels);
+		});
+
+		// Fullscreen chat functionality
+		const chatFullscreen = document.getElementById('chat-fullscreen');
+		const chatMessages = document.getElementById('fullscreen-chat-messages');
+		const chatInput = document.getElementById('fullscreen-chat-input');
+		const chatSendBtn = document.getElementById('fullscreen-chat-send');
+
+		function openFullscreenChat(name, address) {
+			if (!chatFullscreen) return;
+			document.getElementById('fullscreen-chat-name').textContent = '@' + name + '.sui';
+			document.getElementById('fullscreen-chat-addr').textContent = address.slice(0, 8) + '...' + address.slice(-6);
+			hideAllPanels();
+			chatFullscreen.classList.remove('hidden');
+
+			// Load messages for this conversation
+			const messages = JSON.parse(localStorage.getItem('sui_ski_messages_' + name) || '[]');
+			renderFullscreenMessages(messages, name);
+		}
+
+		function renderFullscreenMessages(messages, recipientName) {
+			if (!chatMessages) return;
+			if (!messages.length) {
+				chatMessages.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 40px;">No messages yet. Start the conversation!</div>';
+				return;
+			}
+			chatMessages.innerHTML = messages.map(msg => \`
+				<div class="chat-bubble \${msg.direction}">
+					\${escapeHtmlJs(msg.content)}
+					<div class="chat-bubble-time">\${new Date(msg.timestamp).toLocaleTimeString()}</div>
+				</div>
+			\`).join('');
+			chatMessages.scrollTop = chatMessages.scrollHeight;
+		}
+
+		if (chatSendBtn && chatInput) {
+			chatSendBtn.addEventListener('click', () => {
+				const content = chatInput.value.trim();
+				if (!content || !connectedAddress) return;
+
+				const name = document.getElementById('fullscreen-chat-name').textContent.replace('@', '').replace('.sui', '');
+				const messages = JSON.parse(localStorage.getItem('sui_ski_messages_' + name) || '[]');
+				messages.push({
+					id: Date.now().toString(),
+					direction: 'sent',
+					content: content,
+					timestamp: Date.now()
+				});
+				localStorage.setItem('sui_ski_messages_' + name, JSON.stringify(messages));
+				renderFullscreenMessages(messages, name);
+				chatInput.value = '';
+			});
+
+			chatInput.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter' && !e.shiftKey) {
+					e.preventDefault();
+					chatSendBtn.click();
+				}
+			});
+		}
+
+		// Open chat with current profile
+		window.openChatWithProfile = function() {
+			openFullscreenChat(MESSAGING_RECIPIENT, MESSAGING_RECIPIENT_ADDRESS);
+		};
+
+		// Conversations panel
+		function loadConversations() {
+			const list = document.getElementById('conversations-list-items');
+			if (!list) return;
+
+			// Get all conversation keys from localStorage
+			const conversations = [];
+			for (let i = 0; i < localStorage.length; i++) {
+				const key = localStorage.key(i);
+				if (key.startsWith('sui_ski_messages_')) {
+					const name = key.replace('sui_ski_messages_', '');
+					const messages = JSON.parse(localStorage.getItem(key) || '[]');
+					if (messages.length > 0) {
+						const lastMsg = messages[messages.length - 1];
+						conversations.push({
+							name: name,
+							lastMessage: lastMsg.content,
+							timestamp: lastMsg.timestamp
+						});
+					}
+				}
+			}
+
+			if (conversations.length === 0) {
+				list.innerHTML = \`
+					<div style="text-align: center; color: var(--text-muted); padding: 40px;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.5;">
+							<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+						</svg>
+						<p>No conversations yet</p>
+						<p style="font-size: 0.85rem; margin-top: 8px;">Visit any SuiNS profile to start messaging</p>
+					</div>
+				\`;
+				return;
+			}
+
+			// Sort by most recent
+			conversations.sort((a, b) => b.timestamp - a.timestamp);
+
+			list.innerHTML = conversations.map(conv => \`
+				<div class="conversation-item" onclick="openFullscreenChat('\${conv.name}', '0x...')">
+					<div class="conversation-avatar">\${conv.name.charAt(0).toUpperCase()}</div>
+					<div class="conversation-info">
+						<div class="conversation-name">@\${conv.name}.sui</div>
+						<div class="conversation-preview">\${escapeHtmlJs(conv.lastMessage.slice(0, 40))}\${conv.lastMessage.length > 40 ? '...' : ''}</div>
+					</div>
+					<div class="conversation-meta">
+						<div class="conversation-time">\${new Date(conv.timestamp).toLocaleDateString()}</div>
+					</div>
+				</div>
+			\`).join('');
+		}
+
+		// Load conversations when panel opens
+		document.querySelector('[data-panel="conversations-panel"]')?.addEventListener('click', loadConversations);
+
+		// New chat button
+		document.getElementById('new-chat-btn')?.addEventListener('click', () => {
+			const name = prompt('Enter SuiNS name (e.g., alice):');
+			if (name) {
+				openFullscreenChat(name.replace('.sui', ''), '0x...');
+			}
+		});
+
+		// ===== PRIVATE SUBSCRIPTIONS =====
+		const SUBSCRIPTIONS_KEY = 'sui_ski_subscriptions';
+
+		function getSubscriptions() {
+			try {
+				return JSON.parse(localStorage.getItem(SUBSCRIPTIONS_KEY) || '[]');
+			} catch {
+				return [];
+			}
+		}
+
+		function saveSubscriptions(subs) {
+			localStorage.setItem(SUBSCRIPTIONS_KEY, JSON.stringify(subs));
+		}
+
+		function isSubscribed(targetName) {
+			return getSubscriptions().some(s => s.targetName === targetName);
+		}
+
+		function subscribeToName(targetName, targetAddress) {
+			const subs = getSubscriptions();
+			if (subs.some(s => s.targetName === targetName)) {
+				return false; // Already subscribed
+			}
+			subs.push({
+				subscriberAddress: window.connectedAddress || 'anonymous',
+				targetName: targetName,
+				targetAddress: targetAddress,
+				subscribedAt: Date.now(),
+				notifications: true,
+				isPrivate: true, // Always private by default
+				lastCheckedAt: Date.now()
+			});
+			saveSubscriptions(subs);
+			return true;
+		}
+
+		function unsubscribeFromName(targetName) {
+			const subs = getSubscriptions().filter(s => s.targetName !== targetName);
+			saveSubscriptions(subs);
+		}
+
+		// Initialize subscribe button
+		const subscribeBtn = document.getElementById('subscribe-btn');
+		if (subscribeBtn) {
+			const targetName = subscribeBtn.dataset.name;
+			const targetAddress = subscribeBtn.dataset.address;
+			const textEl = subscribeBtn.querySelector('.subscribe-text');
+
+			// Check initial state
+			if (isSubscribed(targetName)) {
+				subscribeBtn.classList.add('subscribed');
+				if (textEl) textEl.textContent = 'Subscribed';
+			}
+
+			subscribeBtn.addEventListener('click', () => {
+				if (isSubscribed(targetName)) {
+					unsubscribeFromName(targetName);
+					subscribeBtn.classList.remove('subscribed');
+					if (textEl) textEl.textContent = 'Subscribe';
+				} else {
+					subscribeToName(targetName, targetAddress);
+					subscribeBtn.classList.add('subscribed');
+					if (textEl) textEl.textContent = 'Subscribed';
+				}
+			});
+		}
+
+		// Load subscriptions into news panel
+		function loadSubscriptionFeed() {
+			const feedList = document.querySelector('.news-panel .news-feed');
+			if (!feedList) return;
+			const subs = getSubscriptions();
+			if (!subs.length) {
+				feedList.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-muted);">No subscriptions yet. Visit a profile and click Subscribe to follow their feed!</div>';
+				return;
+			}
+
+			// For now show subscriptions list
+			feedList.innerHTML = '<div class="news-section-title">Your Private Subscriptions</div>' +
+				subs.map(sub => \`
+					<div class="news-post" style="cursor: pointer;" onclick="window.location.href='https://\${sub.targetName}.sui.ski'">
+						<div class="news-post-header">
+							<div class="news-post-avatar">\${sub.targetName.charAt(0).toUpperCase()}</div>
+							<div class="news-post-info">
+								<div class="news-post-channel">@\${sub.targetName}.sui</div>
+								<div class="news-post-time">Subscribed \${new Date(sub.subscribedAt).toLocaleDateString()}</div>
+							</div>
+							<span style="font-size: 0.7rem; padding: 4px 8px; background: rgba(16, 185, 129, 0.2); color: var(--success); border-radius: 8px;">Private</span>
+						</div>
+						<p class="news-post-content">Click to view their profile and content</p>
+					</div>
+				\`).join('');
+		}
+
+		// Load subscription feed when news panel opens
+		document.querySelector('[data-panel="news-panel"]')?.addEventListener('click', loadSubscriptionFeed);
 	</script>
+
+	<!-- Floating App Bar -->
+	<nav class="floating-app-bar">
+		<div class="app-bar-inner">
+			<button class="app-bar-btn" data-panel="conversations-panel" title="Chats">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+				</svg>
+				<span>Chat</span>
+			</button>
+			<button class="app-bar-btn" data-panel="channels-panel" title="Channels">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+					<circle cx="9" cy="7" r="4"></circle>
+					<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+					<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+				</svg>
+				<span>Channels</span>
+			</button>
+			<button class="app-bar-btn active" onclick="document.querySelector('[data-tab=messaging]').click()" title="Message this profile">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="12" cy="12" r="10"></circle>
+					<path d="M12 16v-4"></path>
+					<path d="M12 8h.01"></path>
+				</svg>
+				<span>Profile</span>
+			</button>
+			<button class="app-bar-btn" data-panel="news-panel" title="News">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+				</svg>
+				<span>News</span>
+			</button>
+			<button class="app-bar-btn" data-panel="agents-panel" title="Agents">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="12" cy="12" r="3"></circle>
+					<path d="M12 1v4"></path>
+					<path d="M12 19v4"></path>
+					<path d="M1 12h4"></path>
+					<path d="M19 12h4"></path>
+				</svg>
+				<span>Agents</span>
+			</button>
+		</div>
+	</nav>
+
+	<!-- Conversations Panel -->
+	<div class="conversations-panel hidden" id="conversations-panel">
+		<div class="conversations-header">
+			<h2>Chats</h2>
+			<button class="conversations-close panel-close-btn">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+			</button>
+		</div>
+		<div class="conversations-search">
+			<input type="text" placeholder="Search conversations..." />
+		</div>
+		<div class="conversations-list" id="conversations-list-items">
+			<div style="text-align: center; color: var(--text-muted); padding: 40px;">
+				Loading...
+			</div>
+		</div>
+		<button class="conversations-fab" id="new-chat-btn" title="New Chat">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+				<line x1="12" y1="8" x2="12" y2="14"></line>
+				<line x1="9" y1="11" x2="15" y2="11"></line>
+			</svg>
+		</button>
+	</div>
+
+	<!-- Fullscreen Chat -->
+	<div class="chat-fullscreen hidden" id="chat-fullscreen">
+		<div class="chat-header">
+			<button class="chat-back-btn panel-close-btn">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+					<polyline points="15 18 9 12 15 6"></polyline>
+				</svg>
+			</button>
+			<div class="chat-header-info">
+				<div class="chat-header-name" id="fullscreen-chat-name">@user.sui</div>
+				<div class="chat-header-status" id="fullscreen-chat-addr">0x...</div>
+			</div>
+		</div>
+		<div class="chat-messages" id="fullscreen-chat-messages">
+			<div style="text-align: center; color: var(--text-muted); padding: 40px;">
+				No messages yet. Start the conversation!
+			</div>
+		</div>
+		<div class="chat-input-bar">
+			<textarea class="chat-input" id="fullscreen-chat-input" placeholder="Type a message..." rows="1"></textarea>
+			<button class="chat-send-btn" id="fullscreen-chat-send">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<line x1="22" y1="2" x2="11" y2="13"></line>
+					<polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+				</svg>
+			</button>
+		</div>
+	</div>
+
+	<!-- Channels Panel -->
+	<div class="channels-panel hidden" id="channels-panel">
+		<div class="conversations-header">
+			<h2>Channels</h2>
+			<button class="conversations-close panel-close-btn">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+			</button>
+		</div>
+		<div class="conversations-search">
+			<input type="text" placeholder="Search channels..." />
+		</div>
+		<div class="conversations-list">
+			<div class="channel-item">
+				<div class="channel-avatar">#</div>
+				<div class="channel-info">
+					<div class="channel-name">
+						#sui-general
+						<svg class="verified" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+					</div>
+					<div class="channel-members">12,453 members</div>
+				</div>
+				<span class="channel-tag">Official</span>
+			</div>
+			<div class="channel-item">
+				<div class="channel-avatar" style="background: linear-gradient(135deg, #f59e0b, #d97706);">#</div>
+				<div class="channel-info">
+					<div class="channel-name">#suins-holders</div>
+					<div class="channel-members">3,201 members</div>
+				</div>
+				<span class="channel-tag">Token-gated</span>
+			</div>
+			<div class="channel-item">
+				<div class="channel-avatar" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">#</div>
+				<div class="channel-info">
+					<div class="channel-name">#defi-traders</div>
+					<div class="channel-members">892 members</div>
+				</div>
+			</div>
+			<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 0.9rem;">
+				Channel discovery coming soon.<br>Connect wallet to create channels.
+			</div>
+		</div>
+		<button class="conversations-fab" title="Create Channel">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<line x1="12" y1="5" x2="12" y2="19"></line>
+				<line x1="5" y1="12" x2="19" y2="12"></line>
+			</svg>
+		</button>
+	</div>
+
+	<!-- News Panel -->
+	<div class="news-panel hidden" id="news-panel">
+		<div class="conversations-header">
+			<h2>News Feed</h2>
+			<button class="conversations-close panel-close-btn">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+			</button>
+		</div>
+		<div class="conversations-list">
+			<div class="news-item">
+				<div class="news-item-header">
+					<div class="news-item-avatar">S</div>
+					<div class="news-item-meta">
+						<div class="news-item-author">@suins.sui</div>
+						<div class="news-item-time">2 hours ago</div>
+					</div>
+				</div>
+				<div class="news-item-content">Introducing Sui Stack Messaging SDK - end-to-end encrypted messaging for the Sui ecosystem. Build secure communications into your dApps today!</div>
+				<div class="news-item-actions">
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+						234
+					</button>
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+						45
+					</button>
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+						Share
+					</button>
+				</div>
+			</div>
+			<div class="news-item">
+				<div class="news-item-header">
+					<div class="news-item-avatar" style="background: linear-gradient(135deg, #22c55e, #16a34a);">M</div>
+					<div class="news-item-meta">
+						<div class="news-item-author">@mysten.sui</div>
+						<div class="news-item-time">5 hours ago</div>
+					</div>
+				</div>
+				<div class="news-item-content">The Sui network just processed 50M transactions today! Thank you to our amazing community for making this possible.</div>
+				<div class="news-item-actions">
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+						1.2K
+					</button>
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+						89
+					</button>
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+						Share
+					</button>
+				</div>
+			</div>
+			<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 0.9rem;">
+				Subscribe to news channels to see more updates here.
+			</div>
+		</div>
+	</div>
+
+	<!-- Agents Panel -->
+	<div class="agents-panel hidden" id="agents-panel">
+		<div class="conversations-header">
+			<h2>Agents</h2>
+			<button class="conversations-close panel-close-btn">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+			</button>
+		</div>
+		<div class="conversations-list">
+			<div class="agent-item">
+				<div class="agent-avatar">🤖</div>
+				<div class="agent-info">
+					<div class="agent-name">Trading Assistant</div>
+					<div class="agent-desc">AI-powered DeFi trading agent with safety guardrails</div>
+				</div>
+				<span class="agent-badge llm">AI</span>
+			</div>
+			<div class="agent-item">
+				<div class="agent-avatar">📊</div>
+				<div class="agent-info">
+					<div class="agent-name">Portfolio Tracker</div>
+					<div class="agent-desc">Monitors your holdings across chains via IKA dWallet</div>
+				</div>
+				<span class="agent-badge llm">AI</span>
+			</div>
+			<div class="agent-item">
+				<div class="agent-avatar">👤</div>
+				<div class="agent-info">
+					<div class="agent-name">Create Your Agency</div>
+					<div class="agent-desc">Set up an agency with AI + human members</div>
+				</div>
+				<span class="agent-badge human">New</span>
+			</div>
+			<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 0.9rem;">
+				<a href="https://agents.sui.ski" style="color: var(--accent); text-decoration: none;">
+					Visit agents.sui.ski for the full marketplace →
+				</a>
+			</div>
+		</div>
+	</div>
 </body>
 </html>`
 }
