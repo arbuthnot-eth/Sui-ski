@@ -147,6 +147,10 @@ export function generateProfilePage(
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg>
 						<span>NFTs</span>
 					</button>
+					<button class="sidebar-tab" data-tab="messaging">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+						<span>Message</span>
+					</button>
 				</nav>
 			</div>
 			<div class="main-content">
@@ -982,6 +986,69 @@ export function generateProfilePage(
 						</div>
 					</div>
 				</div><!-- end tab-nfts -->
+
+				<div class="tab-panel" id="tab-messaging">
+					<div class="messaging-section">
+						<div class="messaging-header">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+							</svg>
+							<h3>Encrypted Messaging</h3>
+							<span class="alpha-badge">Alpha</span>
+						</div>
+						<p class="messaging-subtitle">Send encrypted messages to @${escapeHtml(cleanName)}.sui using the Sui Messaging SDK</p>
+
+						<div class="messaging-features">
+							<div class="feature-card">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+									<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+								</svg>
+								<h4>End-to-End Encrypted</h4>
+								<p>Messages encrypted with Seal protocol</p>
+							</div>
+							<div class="feature-card">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="12" r="10"></circle>
+									<line x1="2" y1="12" x2="22" y2="12"></line>
+									<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+								</svg>
+								<h4>Decentralized</h4>
+								<p>Stored on Walrus, no central server</p>
+							</div>
+							<div class="feature-card">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+									<circle cx="9" cy="7" r="4"></circle>
+									<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+									<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+								</svg>
+								<h4>SuiNS Integration</h4>
+								<p>Send messages using @name.sui</p>
+							</div>
+						</div>
+
+						<div class="messaging-actions">
+							<a href="https://msg.sui.ski/users/@${escapeHtml(cleanName)}.sui" class="messaging-button primary">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+								</svg>
+								View Messaging Profile
+							</a>
+							<a href="https://msg.sui.ski" class="messaging-button secondary">
+								Learn More
+							</a>
+						</div>
+
+						<div class="messaging-code-example">
+							<p class="code-label">Send a message with the SDK:</p>
+							<pre><code>import { SuiStackMessagingClient } from '@mysten/messaging';
+
+const client = new SuiStackMessagingClient({ ... });
+await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre>
+						</div>
+					</div>
+				</div><!-- end tab-messaging -->
 
 				<div class="links">
 			<a href="${escapeHtml(explorerUrl)}" target="_blank">

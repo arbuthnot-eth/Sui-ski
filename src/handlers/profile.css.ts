@@ -3189,6 +3189,119 @@ export const profileStyles = `
 			height: 16px;
 		}
 
+		/* Messaging Tab Section */
+		.messaging-header {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			margin-bottom: 8px;
+		}
+		.messaging-header svg {
+			width: 24px;
+			height: 24px;
+			color: var(--accent);
+		}
+		.messaging-header h3 {
+			font-size: 1.25rem;
+			font-weight: 700;
+			color: var(--text);
+			margin: 0;
+		}
+		.messaging-features {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 16px;
+			margin: 20px 0;
+		}
+		.feature-card {
+			background: rgba(15, 23, 42, 0.6);
+			padding: 20px;
+			border-radius: 12px;
+			border: 1px solid var(--border);
+			text-align: center;
+			transition: all 0.2s;
+		}
+		.feature-card:hover {
+			border-color: rgba(96, 165, 250, 0.3);
+			transform: translateY(-2px);
+		}
+		.feature-card svg {
+			width: 32px;
+			height: 32px;
+			color: var(--accent);
+			margin-bottom: 12px;
+		}
+		.feature-card h4 {
+			font-size: 0.95rem;
+			font-weight: 600;
+			color: var(--text);
+			margin-bottom: 6px;
+		}
+		.feature-card p {
+			font-size: 0.85rem;
+			color: var(--text-muted);
+		}
+		.messaging-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 12px;
+			margin: 20px 0;
+		}
+		.messaging-button {
+			display: inline-flex;
+			align-items: center;
+			gap: 10px;
+			padding: 14px 24px;
+			border-radius: 12px;
+			font-size: 1rem;
+			font-weight: 600;
+			text-decoration: none;
+			transition: transform 0.2s, box-shadow 0.2s;
+		}
+		.messaging-button.primary {
+			background: linear-gradient(135deg, #60a5fa, #8b5cf6);
+			color: white;
+			box-shadow: 0 4px 16px rgba(96, 165, 250, 0.3);
+		}
+		.messaging-button.primary:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 6px 20px rgba(96, 165, 250, 0.4);
+		}
+		.messaging-button.secondary {
+			background: rgba(96, 165, 250, 0.1);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			color: var(--accent);
+		}
+		.messaging-button.secondary:hover {
+			background: rgba(96, 165, 250, 0.2);
+			border-color: rgba(96, 165, 250, 0.4);
+		}
+		.messaging-button svg {
+			width: 20px;
+			height: 20px;
+		}
+		.messaging-code-example {
+			background: rgba(0, 0, 0, 0.3);
+			border-radius: 12px;
+			padding: 16px;
+			margin-top: 20px;
+		}
+		.messaging-code-example .code-label {
+			font-size: 0.85rem;
+			color: var(--text-muted);
+			margin-bottom: 12px;
+		}
+		.messaging-code-example pre {
+			margin: 0;
+			overflow-x: auto;
+		}
+		.messaging-code-example code {
+			font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+			font-size: 0.85rem;
+			color: var(--text);
+			line-height: 1.6;
+		}
+
 		/* Command Palette / Quick Search */
 		.search-overlay {
 			position: fixed;

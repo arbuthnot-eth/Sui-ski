@@ -15,7 +15,7 @@ export interface Env {
 	MOVE_REGISTRY_PARENT_ID?: string
 }
 
-export type RouteType = 'suins' | 'content' | 'rpc' | 'root' | 'mvr'
+export type RouteType = 'suins' | 'content' | 'rpc' | 'root' | 'mvr' | 'messaging'
 
 export interface MVRInfo {
 	/** Package name (e.g., "private" from "private--iousd.sui.ski") */

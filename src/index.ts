@@ -1,4 +1,5 @@
 import { handleLandingPage, handleLandingApiRequest } from './handlers/landing'
+import { handleMessagingRequest } from './handlers/messaging'
 import { generateProfilePage } from './handlers/profile'
 import { handlePWARequest } from './handlers/pwa'
 import { handlePrivateRequest } from './handlers/private'
@@ -63,6 +64,9 @@ export default {
 
 				case 'rpc':
 					return handleRPCRequest(request, env)
+
+				case 'messaging':
+					return handleMessagingRequest(request, env)
 
 				case 'suins': {
 					// Special handling for private.sui.ski -> Private Protocol

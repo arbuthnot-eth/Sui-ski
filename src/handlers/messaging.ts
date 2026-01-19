@@ -4,17 +4,93 @@
  * - Sui: identity and state management
  * - Walrus: decentralized storage for attachments
  * - Seal: programmable access control and encryption
+ *
+ * Now with human-readable name resolution:
+ * - @user.sui → resolves to Sui address via SuiNS
+ * - #channel → resolves to channel object ID
  */
 
 import type { Env } from '../types'
+import {
+	createMessagingResolver,
+	isChannelName,
+	isSuiNSName,
+	normalizeChannelName,
+	type ChannelInfo,
+	type MessagingProfile,
+} from '../resolvers/messaging'
 import { htmlResponse, jsonResponse } from '../utils/response'
+import { renderSocialMeta } from '../utils/social'
 
 /**
  * Handle messaging-related API requests
+ * Supports both legacy /api/messaging/* and new /api/channels/*, /api/users/* endpoints
  */
 export async function handleMessagingRequest(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url)
 	const path = url.pathname
+
+	// Handle web UI routes for msg.sui.ski subdomain
+	if (path === '/' || path === '') {
+		return handleMessagingLandingPage(env)
+	}
+
+	// Channel web pages: /channels/#channel or /channels/:id
+	if (path.startsWith('/channels/')) {
+		const channelNameOrId = path.replace('/channels/', '').replace(/\/$/, '')
+		if (!path.startsWith('/channels/') || !channelNameOrId) {
+			return handleMessagingLandingPage(env)
+		}
+		return handleChannelPage(decodeURIComponent(channelNameOrId), env)
+	}
+
+	// User web pages: /users/@name.sui or /users/:address
+	if (path.startsWith('/users/')) {
+		const userNameOrAddress = path.replace('/users/', '').replace(/\/$/, '')
+		if (!userNameOrAddress) {
+			return handleMessagingLandingPage(env)
+		}
+		return handleUserPage(decodeURIComponent(userNameOrAddress), env)
+	}
+
+	// ========== API Endpoints ==========
+
+	// GET /api/channels/:nameOrId - Get channel info
+	const channelMatch = path.match(/^\/api\/channels\/([^/]+)$/)
+	if (channelMatch && request.method === 'GET') {
+		const nameOrId = decodeURIComponent(channelMatch[1])
+		return handleGetChannel(nameOrId, env)
+	}
+
+	// GET /api/channels/:nameOrId/messages - Get channel messages (metadata only)
+	const messagesMatch = path.match(/^\/api\/channels\/([^/]+)\/messages$/)
+	if (messagesMatch && request.method === 'GET') {
+		const nameOrId = decodeURIComponent(messagesMatch[1])
+		return handleGetChannelMessages(nameOrId, url, env)
+	}
+
+	// POST /api/channels/register - Register channel name mapping
+	if (path === '/api/channels/register' && request.method === 'POST') {
+		return handleRegisterChannel(request, env)
+	}
+
+	// GET /api/users/:nameOrAddress - Get user messaging profile
+	const userMatch = path.match(/^\/api\/users\/([^/]+)$/)
+	if (userMatch && request.method === 'GET') {
+		const nameOrAddress = decodeURIComponent(userMatch[1])
+		return handleGetUser(nameOrAddress, env)
+	}
+
+	// GET /api/resolve - Universal resolver for names and channels
+	if (path === '/api/resolve' && request.method === 'GET') {
+		const input = url.searchParams.get('input')
+		if (!input) {
+			return jsonResponse({ error: 'Input parameter required' }, 400)
+		}
+		return handleResolve(input, env)
+	}
+
+	// ========== Legacy API Endpoints ==========
 
 	// API endpoint for messaging status
 	if (path === '/api/messaging/status') {
@@ -35,6 +111,8 @@ export async function handleMessagingRequest(request: Request, env: Env): Promis
 				encryption: true,
 				walrusStorage: true,
 				eventDriven: true,
+				suinsResolution: true,
+				channelNames: true,
 			},
 			status: 'alpha',
 			warning:
@@ -57,6 +135,675 @@ export async function handleMessagingRequest(request: Request, env: Env): Promis
 	}
 
 	return jsonResponse({ error: 'Unknown messaging endpoint' }, 404)
+}
+
+// ========== Channel API Handlers ==========
+
+/**
+ * GET /api/channels/:nameOrId
+ */
+async function handleGetChannel(nameOrId: string, env: Env): Promise<Response> {
+	const resolver = createMessagingResolver(env)
+	const channelInfo = await resolver.getChannelInfo(nameOrId)
+
+	if (!channelInfo) {
+		return jsonResponse(
+			{
+				error: 'Channel not found',
+				code: 'CHANNEL_NOT_FOUND',
+				query: nameOrId,
+			},
+			404,
+		)
+	}
+
+	return jsonResponse({
+		channel: channelInfo,
+		links: {
+			messages: `/api/channels/${encodeURIComponent(nameOrId)}/messages`,
+			web: `/channels/${encodeURIComponent(nameOrId)}`,
+		},
+	})
+}
+
+/**
+ * GET /api/channels/:nameOrId/messages
+ * Returns message metadata (not encrypted content)
+ */
+async function handleGetChannelMessages(nameOrId: string, url: URL, env: Env): Promise<Response> {
+	const resolver = createMessagingResolver(env)
+	const channelId = await resolver.resolveChannel(nameOrId)
+
+	if (!channelId) {
+		return jsonResponse(
+			{
+				error: 'Channel not found',
+				code: 'CHANNEL_NOT_FOUND',
+				query: nameOrId,
+			},
+			404,
+		)
+	}
+
+	// Pagination params
+	const limit = Math.min(Number.parseInt(url.searchParams.get('limit') || '50', 10), 100)
+	const cursor = url.searchParams.get('cursor')
+
+	// Note: Full message retrieval would require the messaging SDK client
+	return jsonResponse({
+		channelId,
+		messages: [],
+		pagination: {
+			limit,
+			cursor,
+			hasMore: false,
+		},
+		note: 'Message content is encrypted. Use the @mysten/messaging SDK client-side to decrypt.',
+	})
+}
+
+/**
+ * POST /api/channels/register - Register a channel name mapping
+ */
+async function handleRegisterChannel(request: Request, env: Env): Promise<Response> {
+	try {
+		const body = (await request.json()) as { name?: string; channelId?: string }
+		const { name, channelId } = body
+
+		if (!name || !channelId) {
+			return jsonResponse(
+				{
+					error: 'Name and channelId are required',
+					code: 'INVALID_REQUEST',
+				},
+				400,
+			)
+		}
+
+		if (!isChannelName(name) && !name.startsWith('#')) {
+			return jsonResponse(
+				{
+					error: 'Invalid channel name format. Use #channel format.',
+					code: 'INVALID_CHANNEL_NAME',
+				},
+				400,
+			)
+		}
+
+		if (!channelId.startsWith('0x')) {
+			return jsonResponse(
+				{
+					error: 'Invalid channelId. Must be a Sui object ID.',
+					code: 'INVALID_CHANNEL_ID',
+				},
+				400,
+			)
+		}
+
+		const resolver = createMessagingResolver(env)
+		await resolver.registerChannel(name, channelId)
+
+		return jsonResponse({
+			success: true,
+			name: normalizeChannelName(name),
+			channelId,
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to register channel'
+		return jsonResponse({ error: message, code: 'REGISTER_FAILED' }, 500)
+	}
+}
+
+// ========== User API Handlers ==========
+
+/**
+ * GET /api/users/:nameOrAddress
+ */
+async function handleGetUser(nameOrAddress: string, env: Env): Promise<Response> {
+	const resolver = createMessagingResolver(env)
+	const profile = await resolver.getUserProfile(nameOrAddress)
+
+	if (!profile) {
+		return jsonResponse(
+			{
+				error: 'User not found',
+				code: 'USER_NOT_FOUND',
+				query: nameOrAddress,
+			},
+			404,
+		)
+	}
+
+	return jsonResponse({
+		profile,
+		links: {
+			suiski: profile.suinsName
+				? `https://${profile.suinsName.replace('.sui', '')}.sui.ski`
+				: null,
+			explorer: `https://suiscan.xyz/${env.SUI_NETWORK}/account/${profile.address}`,
+			messaging: `/users/${profile.suinsName || profile.address}`,
+		},
+	})
+}
+
+/**
+ * GET /api/resolve - Universal resolver for addresses and channels
+ */
+async function handleResolve(input: string, env: Env): Promise<Response> {
+	const resolver = createMessagingResolver(env)
+
+	if (isChannelName(input)) {
+		const channelId = await resolver.resolveChannel(input)
+		return jsonResponse({
+			type: 'channel',
+			input,
+			resolved: channelId,
+			found: !!channelId,
+		})
+	}
+
+	if (isSuiNSName(input) || input.includes('.sui') || input.startsWith('@')) {
+		const address = await resolver.resolveAddress(input)
+		return jsonResponse({
+			type: 'address',
+			input,
+			resolved: address,
+			found: !!address,
+		})
+	}
+
+	// Assume it's an address if starts with 0x
+	if (input.startsWith('0x')) {
+		return jsonResponse({
+			type: 'address',
+			input,
+			resolved: input,
+			found: true,
+		})
+	}
+
+	return jsonResponse({
+		type: 'unknown',
+		input,
+		resolved: null,
+		found: false,
+		error: 'Unknown input format. Use @name.sui for addresses or #channel for channels.',
+	})
+}
+
+// ========== Web UI Pages ==========
+
+/**
+ * Channel info page
+ */
+async function handleChannelPage(nameOrId: string, env: Env): Promise<Response> {
+	const resolver = createMessagingResolver(env)
+	const channelInfo = await resolver.getChannelInfo(nameOrId)
+
+	if (!channelInfo) {
+		return htmlResponse(notFoundChannelPage(nameOrId), 404)
+	}
+
+	return htmlResponse(channelPageHTML(channelInfo, env))
+}
+
+/**
+ * User profile page
+ */
+async function handleUserPage(nameOrAddress: string, env: Env): Promise<Response> {
+	const resolver = createMessagingResolver(env)
+	const profile = await resolver.getUserProfile(nameOrAddress)
+
+	if (!profile) {
+		return htmlResponse(notFoundUserPage(nameOrAddress), 404)
+	}
+
+	return htmlResponse(userPageHTML(profile, env))
+}
+
+/**
+ * Messaging landing page for msg.sui.ski
+ */
+function handleMessagingLandingPage(env: Env): Response {
+	const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Sui Messaging | sui.ski</title>
+	${renderSocialMeta({
+		title: 'Sui Messaging | sui.ski',
+		description: 'Secure, decentralized messaging on Sui blockchain with SuiNS name support',
+		url: 'https://msg.sui.ski',
+		siteName: 'sui.ski',
+	})}
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background: linear-gradient(135deg, #0f1419 0%, #1a2332 100%);
+			color: #e7e9ea;
+			min-height: 100vh;
+			display: flex;
+			flex-direction: column;
+		}
+		.container {
+			max-width: 800px;
+			margin: 0 auto;
+			padding: 2rem;
+			flex: 1;
+		}
+		h1 {
+			font-size: 2.5rem;
+			margin-bottom: 1rem;
+			background: linear-gradient(90deg, #4ca2ff, #7c3aed);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.subtitle {
+			color: #71767b;
+			font-size: 1.1rem;
+			margin-bottom: 2rem;
+		}
+		.card {
+			background: rgba(255,255,255,0.05);
+			border: 1px solid rgba(255,255,255,0.1);
+			border-radius: 12px;
+			padding: 1.5rem;
+			margin-bottom: 1.5rem;
+		}
+		.card h2 {
+			color: #4ca2ff;
+			margin-bottom: 1rem;
+			font-size: 1.3rem;
+		}
+		.feature-list {
+			list-style: none;
+		}
+		.feature-list li {
+			padding: 0.5rem 0;
+			padding-left: 1.5rem;
+			position: relative;
+		}
+		.feature-list li::before {
+			content: '→';
+			position: absolute;
+			left: 0;
+			color: #4ca2ff;
+		}
+		code {
+			background: rgba(255,255,255,0.1);
+			padding: 0.2rem 0.5rem;
+			border-radius: 4px;
+			font-family: 'SF Mono', Monaco, monospace;
+			font-size: 0.9em;
+		}
+		.api-endpoint {
+			background: rgba(76, 162, 255, 0.1);
+			border-left: 3px solid #4ca2ff;
+			padding: 1rem;
+			margin: 0.5rem 0;
+			border-radius: 0 8px 8px 0;
+		}
+		.api-method {
+			color: #7c3aed;
+			font-weight: bold;
+			margin-right: 0.5rem;
+		}
+		footer {
+			text-align: center;
+			padding: 1rem;
+			color: #71767b;
+			border-top: 1px solid rgba(255,255,255,0.1);
+		}
+		a { color: #4ca2ff; text-decoration: none; }
+		a:hover { text-decoration: underline; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>Sui Messaging</h1>
+		<p class="subtitle">Secure, decentralized messaging on Sui with human-readable names</p>
+
+		<div class="card">
+			<h2>Name Resolution</h2>
+			<p>The Sui Messaging SDK supports human-readable names:</p>
+			<ul class="feature-list">
+				<li><code>@alice.sui</code> → Resolves to Sui address via SuiNS</li>
+				<li><code>#general</code> → Resolves to channel object ID</li>
+			</ul>
+		</div>
+
+		<div class="card">
+			<h2>API Endpoints</h2>
+			<div class="api-endpoint">
+				<span class="api-method">GET</span>
+				<code>/api/channels/:nameOrId</code>
+				<p style="margin-top: 0.5rem; color: #71767b;">Get channel information</p>
+			</div>
+			<div class="api-endpoint">
+				<span class="api-method">GET</span>
+				<code>/api/channels/:nameOrId/messages</code>
+				<p style="margin-top: 0.5rem; color: #71767b;">Get message metadata (content is encrypted)</p>
+			</div>
+			<div class="api-endpoint">
+				<span class="api-method">GET</span>
+				<code>/api/users/:nameOrAddress</code>
+				<p style="margin-top: 0.5rem; color: #71767b;">Get user messaging profile</p>
+			</div>
+			<div class="api-endpoint">
+				<span class="api-method">GET</span>
+				<code>/api/resolve?input=@name.sui</code>
+				<p style="margin-top: 0.5rem; color: #71767b;">Universal resolver for names and channels</p>
+			</div>
+		</div>
+
+		<div class="card">
+			<h2>Client-Side Usage</h2>
+			<p>Messages are end-to-end encrypted. Load the SDK client-side for full functionality:</p>
+			<pre style="margin-top: 1rem; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; overflow-x: auto;"><code>import { SuiStackMessagingClient } from '@mysten/messaging';
+
+const client = new SuiStackMessagingClient({
+  // Your config here
+});
+
+// Resolve and send to a SuiNS name
+await client.sendMessage('@alice.sui', 'Hello!');</code></pre>
+		</div>
+
+		<div class="card">
+			<h2>Integration with sui.ski</h2>
+			<ul class="feature-list">
+				<li><a href="https://alice.sui.ski">alice.sui.ski</a> → Profile page with messaging link</li>
+				<li><a href="/users/@alice.sui">/users/@alice.sui</a> → Messaging profile</li>
+				<li><a href="/channels/%23general">/channels/#general</a> → Channel info</li>
+			</ul>
+		</div>
+	</div>
+
+	<footer>
+		<p>Part of <a href="https://sui.ski">sui.ski</a> gateway • Network: ${env.SUI_NETWORK}</p>
+	</footer>
+</body>
+</html>`
+
+	return htmlResponse(html)
+}
+
+/**
+ * Channel info page HTML
+ */
+function channelPageHTML(channel: ChannelInfo, env: Env): string {
+	const title = channel.displayName || channel.name
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>${title} | Sui Messaging</title>
+	${renderSocialMeta({
+		title: `${title} | Sui Messaging`,
+		description: channel.description || 'Channel on Sui Messaging',
+		url: `https://msg.sui.ski/channels/${encodeURIComponent(channel.name)}`,
+		siteName: 'sui.ski',
+	})}
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background: linear-gradient(135deg, #0f1419 0%, #1a2332 100%);
+			color: #e7e9ea;
+			min-height: 100vh;
+			padding: 2rem;
+		}
+		.container { max-width: 600px; margin: 0 auto; }
+		h1 {
+			font-size: 2rem;
+			margin-bottom: 0.5rem;
+			color: #4ca2ff;
+		}
+		.channel-id {
+			font-family: 'SF Mono', Monaco, monospace;
+			font-size: 0.85rem;
+			color: #71767b;
+			word-break: break-all;
+			margin-bottom: 1.5rem;
+		}
+		.card {
+			background: rgba(255,255,255,0.05);
+			border: 1px solid rgba(255,255,255,0.1);
+			border-radius: 12px;
+			padding: 1.5rem;
+			margin-bottom: 1rem;
+		}
+		.stat {
+			display: flex;
+			justify-content: space-between;
+			padding: 0.5rem 0;
+			border-bottom: 1px solid rgba(255,255,255,0.1);
+		}
+		.stat:last-child { border-bottom: none; }
+		.stat-label { color: #71767b; }
+		a { color: #4ca2ff; text-decoration: none; }
+		a:hover { text-decoration: underline; }
+		.back { margin-top: 2rem; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>${title}</h1>
+		<p class="channel-id">${channel.id}</p>
+
+		<div class="card">
+			${channel.description ? `<p style="margin-bottom: 1rem;">${channel.description}</p>` : ''}
+			<div class="stat">
+				<span class="stat-label">Type</span>
+				<span>${channel.isPublic ? 'Public' : 'Private'}</span>
+			</div>
+			${
+				channel.memberCount
+					? `
+			<div class="stat">
+				<span class="stat-label">Members</span>
+				<span>${channel.memberCount}</span>
+			</div>
+			`
+					: ''
+			}
+			<div class="stat">
+				<span class="stat-label">Network</span>
+				<span>${env.SUI_NETWORK}</span>
+			</div>
+		</div>
+
+		<div class="card">
+			<p style="color: #71767b;">To join this channel and view messages, use the @mysten/messaging SDK client-side.</p>
+		</div>
+
+		<p class="back"><a href="/">← Back to Messaging</a></p>
+	</div>
+</body>
+</html>`
+}
+
+/**
+ * User profile page HTML
+ */
+function userPageHTML(profile: MessagingProfile, env: Env): string {
+	const title =
+		profile.displayName || profile.suinsName || `${profile.address.slice(0, 8)}...`
+	const suiskiLink = profile.suinsName
+		? `https://${profile.suinsName.replace('.sui', '')}.sui.ski`
+		: null
+
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>${title} | Sui Messaging</title>
+	${renderSocialMeta({
+		title: `${title} | Sui Messaging`,
+		description: 'Messaging profile on Sui',
+		url: `https://msg.sui.ski/users/${profile.suinsName || profile.address}`,
+		siteName: 'sui.ski',
+		image: profile.avatar,
+	})}
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background: linear-gradient(135deg, #0f1419 0%, #1a2332 100%);
+			color: #e7e9ea;
+			min-height: 100vh;
+			padding: 2rem;
+		}
+		.container { max-width: 600px; margin: 0 auto; }
+		.profile-header {
+			display: flex;
+			align-items: center;
+			gap: 1.5rem;
+			margin-bottom: 1.5rem;
+		}
+		.avatar {
+			width: 80px;
+			height: 80px;
+			border-radius: 50%;
+			background: linear-gradient(135deg, #4ca2ff, #7c3aed);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 2rem;
+			overflow: hidden;
+		}
+		.avatar img { width: 100%; height: 100%; object-fit: cover; }
+		h1 { font-size: 1.8rem; color: #4ca2ff; }
+		.address {
+			font-family: 'SF Mono', Monaco, monospace;
+			font-size: 0.85rem;
+			color: #71767b;
+			word-break: break-all;
+		}
+		.card {
+			background: rgba(255,255,255,0.05);
+			border: 1px solid rgba(255,255,255,0.1);
+			border-radius: 12px;
+			padding: 1.5rem;
+			margin-bottom: 1rem;
+		}
+		.links { display: flex; flex-direction: column; gap: 0.5rem; }
+		a { color: #4ca2ff; text-decoration: none; }
+		a:hover { text-decoration: underline; }
+		.back { margin-top: 2rem; }
+		code { background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="profile-header">
+			<div class="avatar">
+				${profile.avatar ? `<img src="${profile.avatar}" alt="${title}">` : title.charAt(0).toUpperCase()}
+			</div>
+			<div>
+				<h1>${title}</h1>
+				${profile.suinsName ? `<p style="color: #71767b; margin-bottom: 0.25rem;">@${profile.suinsName}</p>` : ''}
+				<p class="address">${profile.address}</p>
+			</div>
+		</div>
+
+		<div class="card">
+			<h3 style="margin-bottom: 1rem; color: #fff;">Links</h3>
+			<div class="links">
+				${suiskiLink ? `<a href="${suiskiLink}" target="_blank">→ sui.ski profile</a>` : ''}
+				<a href="https://suiscan.xyz/${env.SUI_NETWORK}/account/${profile.address}" target="_blank">→ View on Suiscan</a>
+			</div>
+		</div>
+
+		<div class="card">
+			<p style="color: #71767b;">To message this user, use the @mysten/messaging SDK client-side with <code>@${profile.suinsName || profile.address}</code></p>
+		</div>
+
+		<p class="back"><a href="/">← Back to Messaging</a></p>
+	</div>
+</body>
+</html>`
+}
+
+/**
+ * Channel not found page
+ */
+function notFoundChannelPage(nameOrId: string): string {
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Channel Not Found | Sui Messaging</title>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background: linear-gradient(135deg, #0f1419 0%, #1a2332 100%);
+			color: #e7e9ea;
+			min-height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.container { text-align: center; padding: 2rem; }
+		h1 { color: #ef4444; margin-bottom: 1rem; }
+		p { color: #71767b; margin-bottom: 1.5rem; }
+		code { background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; }
+		a { color: #4ca2ff; text-decoration: none; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>Channel Not Found</h1>
+		<p>The channel <code>${nameOrId}</code> could not be found.</p>
+		<a href="/">← Back to Messaging</a>
+	</div>
+</body>
+</html>`
+}
+
+/**
+ * User not found page
+ */
+function notFoundUserPage(nameOrAddress: string): string {
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>User Not Found | Sui Messaging</title>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background: linear-gradient(135deg, #0f1419 0%, #1a2332 100%);
+			color: #e7e9ea;
+			min-height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.container { text-align: center; padding: 2rem; }
+		h1 { color: #ef4444; margin-bottom: 1rem; }
+		p { color: #71767b; margin-bottom: 1.5rem; }
+		code { background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; }
+		a { color: #4ca2ff; text-decoration: none; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>User Not Found</h1>
+		<p>The user <code>${nameOrAddress}</code> could not be found.</p>
+		<a href="/">← Back to Messaging</a>
+	</div>
+</body>
+</html>`
 }
 
 /**

@@ -44,6 +44,11 @@ export function parseSubdomain(hostname: string): ParsedSubdomain {
 		return { type: 'rpc', subdomain, hostname: host }
 	}
 
+	// Messaging subdomain (msg.sui.ski)
+	if (subdomain === 'msg') {
+		return { type: 'messaging', subdomain, hostname: host }
+	}
+
 	// Direct IPFS content: ipfs-{cid}.sui.ski
 	if (subdomain.startsWith('ipfs-')) {
 		return {
