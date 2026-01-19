@@ -3562,6 +3562,31 @@ export const profileStyles = `
 			font-size: 0.75rem;
 			color: var(--text-muted);
 		}
+		.msg-message-arrow {
+			color: var(--text-muted);
+			font-size: 0.75rem;
+		}
+		.msg-message-recipient {
+			font-size: 0.8rem;
+			color: var(--text-secondary);
+		}
+		.msg-encrypted-badge {
+			display: inline-flex;
+			align-items: center;
+			padding: 2px 6px;
+			background: rgba(139, 92, 246, 0.15);
+			color: #a78bfa;
+			border-radius: 4px;
+			margin-left: auto;
+		}
+		.msg-encrypted-badge svg {
+			width: 12px;
+			height: 12px;
+		}
+		.msg-message.received {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(139, 92, 246, 0.05));
+			border-left: 3px solid var(--accent);
+		}
 		.msg-message-content {
 			color: var(--text);
 			font-size: 0.9rem;

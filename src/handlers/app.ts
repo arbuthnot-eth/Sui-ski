@@ -431,6 +431,135 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 		})
 	}
 
+	// ===== ENCRYPTED MESSAGE STORAGE (Seal + Walrus) =====
+
+	// POST /api/app/messages/store - Store Seal-encrypted message on Walrus
+	if (path === 'messages/store' && request.method === 'POST') {
+		try {
+			const body = (await request.json()) as {
+				encryptedMessage?: {
+					encrypted: string
+					sealPolicy: { type: string; address: string }
+					version: number
+				}
+				sender?: string
+				recipient?: string
+			}
+
+			if (!body.encryptedMessage || !body.sender || !body.recipient) {
+				return jsonResponse({ error: 'Encrypted message, sender, and recipient required' }, 400)
+			}
+
+			// Store encrypted message on Walrus
+			const messageBlob = JSON.stringify({
+				...body.encryptedMessage,
+				sender: body.sender,
+				recipient: body.recipient,
+				storedAt: Date.now(),
+			})
+
+			const walrusResponse = await storeOnWalrus(btoa(messageBlob), env)
+
+			if (!walrusResponse.blobId) {
+				return jsonResponse({ error: 'Failed to store on Walrus' }, 500)
+			}
+
+			// Store message index in KV (for inbox lookup)
+			const indexKey = `msg_inbox_${body.recipient}_${Date.now()}`
+			await env.CACHE.put(
+				indexKey,
+				JSON.stringify({
+					blobId: walrusResponse.blobId,
+					sender: body.sender,
+					recipient: body.recipient,
+					timestamp: Date.now(),
+				}),
+				{ expirationTtl: 60 * 60 * 24 * 30 } // 30 days
+			)
+
+			return jsonResponse({
+				success: true,
+				messageId: indexKey,
+				blobId: walrusResponse.blobId,
+				storage: 'walrus',
+				encryption: 'seal',
+				note: 'Message encrypted with Seal and stored on Walrus. Only recipient can decrypt.',
+			})
+		} catch {
+			return jsonResponse({ error: 'Invalid request body' }, 400)
+		}
+	}
+
+	// GET /api/app/messages/inbox - Get encrypted messages for an address (Seal-gated)
+	if (path === 'messages/inbox' && request.method === 'GET') {
+		const address = url.searchParams.get('address')
+
+		if (!address) {
+			return jsonResponse({ error: 'Address required' }, 400)
+		}
+
+		try {
+			// List messages for this recipient from KV index
+			const prefix = `msg_inbox_${address}_`
+			const keys = await env.CACHE.list({ prefix, limit: 100 })
+
+			const messages = await Promise.all(
+				keys.keys.map(async (key) => {
+					const data = await env.CACHE.get(key.name)
+					if (data) {
+						try {
+							return JSON.parse(data)
+						} catch {
+							return null
+						}
+					}
+					return null
+				})
+			)
+
+			const validMessages = messages.filter(Boolean)
+
+			return jsonResponse({
+				address,
+				messages: validMessages,
+				count: validMessages.length,
+				encryption: {
+					method: 'seal',
+					note: 'Messages are Seal-encrypted. Decrypt client-side with your wallet.',
+				},
+			})
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Unknown error'
+			return jsonResponse({ error: 'Failed to fetch inbox: ' + message }, 500)
+		}
+	}
+
+	// GET /api/app/messages/blob/:blobId - Fetch encrypted message blob from Walrus
+	const msgBlobMatch = path.match(/^messages\/blob\/([^/]+)$/)
+	if (msgBlobMatch && request.method === 'GET') {
+		const blobId = msgBlobMatch[1]
+
+		try {
+			const aggregatorUrl =
+				env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space'
+			const response = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`)
+
+			if (!response.ok) {
+				return jsonResponse({ error: 'Message blob not found' }, 404)
+			}
+
+			const encryptedData = await response.text()
+
+			return jsonResponse({
+				blobId,
+				encryptedData,
+				note: 'Decrypt with Seal SDK using your wallet. Only recipient can decrypt.',
+			})
+		} catch {
+			return jsonResponse({ error: 'Failed to fetch message blob' }, 500)
+		}
+	}
+
 	return jsonResponse({ error: 'Unknown messaging endpoint' }, 404)
 }
 
