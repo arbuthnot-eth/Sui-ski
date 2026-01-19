@@ -291,11 +291,18 @@ export async function buildExecuteBountyTx(params: ExecuteBountyParams, env: Env
 
 	const domain = params.name.endsWith('.sui') ? params.name.toLowerCase() : `${params.name.toLowerCase()}.sui`
 	const isSubDomain = domain.replace(/\.sui$/i, '').includes('.')
+
+	// Get price info object ID (required for SUI/NS coin types)
+	const priceInfoObjectId = coinConfig.feed
+		? (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0]
+		: undefined
+
 	const nft = suinsTx.register({
 		domain,
 		years: params.years,
 		coinConfig,
 		coin: registrationCoin,
+		priceInfoObjectId,
 	})
 
 	// Step 3: Ensure the beneficiary becomes the controller/recipient
@@ -344,7 +351,12 @@ export async function buildExecuteGiftBountyTx(
 	}
 
 	const domain = params.name.endsWith('.sui') ? params.name.toLowerCase() : `${params.name.toLowerCase()}.sui`
-	
+
+	// Get price info object ID (required for SUI/NS coin types)
+	const priceInfoObjectId = coinConfig.feed
+		? (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0]
+		: undefined
+
 	// Step 1: Register the SuiNS name using executor's funds
 	// Split from gas for registration payment
 	// We need to estimate the price or get it from params
@@ -356,6 +368,7 @@ export async function buildExecuteGiftBountyTx(
 		years: params.years,
 		coinConfig,
 		coin: regCoin,
+		priceInfoObjectId,
 	})
 
 	// Step 2: Claim reward by providing the NFT

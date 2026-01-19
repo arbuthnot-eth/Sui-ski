@@ -1105,6 +1105,11 @@ export function generateRegistrationPage(name: string, env: Env): string {
 
 				showRegisterStatus('Building registration transaction...', 'info');
 
+				// Get price info object ID (required for SUI/NS coin types)
+				const priceInfoObjectId = coinConfig.feed
+					? (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0]
+					: undefined;
+
 				// Split coin for payment (SDK will use exact amount needed)
 				const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(priceWithBuffer)]);
 
@@ -1114,6 +1119,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					years: 1,
 					coinConfig: coinConfig,
 					coin: paymentCoin,
+					priceInfoObjectId: priceInfoObjectId,
 				});
 
 				// Set target address and transfer NFT to sender
