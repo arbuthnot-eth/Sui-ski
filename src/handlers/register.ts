@@ -8,11 +8,26 @@ const CORS_HEADERS = {
 	'Access-Control-Allow-Headers': 'Content-Type',
 }
 
+// SuiNS registration pricing (in SUI)
+const SUINS_PRICING: Record<number, number> = {
+	3: 500,  // 3-char names: 500 SUI/year
+	4: 100,  // 4-char names: 100 SUI/year
+	5: 20,   // 5+ char names: 20 SUI/year
+}
+
+function getRegistrationPrice(name: string, years: number = 1): number {
+	const len = name.length
+	if (len <= 3) return SUINS_PRICING[3] * years
+	if (len === 4) return SUINS_PRICING[4] * years
+	return SUINS_PRICING[5] * years
+}
+
 export function generateRegistrationPage(name: string, env: Env): string {
 	const cleanName = name.replace(/\.sui$/i, '').toLowerCase()
 	const network = env.SUI_NETWORK || 'mainnet'
 	const isRegisterable = cleanName.length >= 3
 	const defaultExec = new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16)
+	const price1Year = getRegistrationPrice(cleanName, 1)
 	const serializeJson = (value: unknown) =>
 		JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
 
@@ -262,14 +277,312 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			font-size: 0.8rem;
 			line-height: 1.4;
 		}
+		/* Global Wallet Widget */
+		.global-wallet-widget {
+			position: fixed;
+			top: 16px;
+			right: 16px;
+			z-index: 9999;
+		}
+		.global-wallet-btn {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 10px 16px;
+			background: rgba(15, 18, 32, 0.95);
+			backdrop-filter: blur(12px);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			color: var(--text);
+			font-size: 0.9rem;
+			font-weight: 500;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.global-wallet-btn:hover {
+			border-color: var(--accent);
+			background: rgba(96, 165, 250, 0.1);
+		}
+		.global-wallet-btn.connected {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(139, 92, 246, 0.15));
+			border-color: rgba(96, 165, 250, 0.3);
+		}
+		.global-wallet-dropdown {
+			position: absolute;
+			top: calc(100% + 8px);
+			right: 0;
+			min-width: 220px;
+			background: rgba(15, 18, 32, 0.98);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 8px;
+			display: none;
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+		}
+		.global-wallet-widget.open .global-wallet-dropdown {
+			display: block;
+		}
+		.global-wallet-dropdown-addr {
+			font-family: ui-monospace, monospace;
+			font-size: 0.75rem;
+			color: var(--muted);
+			padding: 8px 12px;
+			border-bottom: 1px solid var(--border);
+			margin-bottom: 4px;
+			word-break: break-all;
+		}
+		.global-wallet-dropdown-item {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			width: 100%;
+			padding: 10px 12px;
+			background: transparent;
+			border: none;
+			border-radius: 8px;
+			color: var(--text);
+			font-size: 0.85rem;
+			cursor: pointer;
+			transition: background 0.15s;
+		}
+		.global-wallet-dropdown-item:hover {
+			background: rgba(255, 255, 255, 0.05);
+		}
+		.global-wallet-dropdown-item.disconnect {
+			color: var(--error);
+		}
+		.global-wallet-dropdown-item svg {
+			width: 16px;
+			height: 16px;
+		}
+
+		/* Wallet Modal */
+		.wallet-modal {
+			display: none;
+			position: fixed;
+			inset: 0;
+			background: rgba(0, 0, 0, 0.7);
+			backdrop-filter: blur(4px);
+			z-index: 10000;
+			align-items: center;
+			justify-content: center;
+			padding: 20px;
+		}
+		.wallet-modal.open {
+			display: flex;
+		}
+		.wallet-modal-content {
+			background: var(--card);
+			border: 1px solid var(--border);
+			border-radius: 20px;
+			max-width: 400px;
+			width: 100%;
+			max-height: 80vh;
+			overflow: auto;
+		}
+		.wallet-modal-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 20px;
+			border-bottom: 1px solid var(--border);
+		}
+		.wallet-modal-header h3 {
+			font-size: 1.1rem;
+			font-weight: 700;
+		}
+		.wallet-modal-close {
+			background: none;
+			border: none;
+			color: var(--muted);
+			font-size: 1.5rem;
+			cursor: pointer;
+			padding: 0;
+			line-height: 1;
+		}
+		.wallet-list {
+			padding: 16px;
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+		.wallet-option {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			padding: 14px 16px;
+			background: rgba(255, 255, 255, 0.03);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			cursor: pointer;
+			transition: all 0.2s;
+			width: 100%;
+			text-align: left;
+			color: var(--text);
+			font-size: 0.95rem;
+		}
+		.wallet-option:hover {
+			border-color: var(--accent);
+			background: rgba(96, 165, 250, 0.08);
+		}
+		.wallet-option img {
+			width: 32px;
+			height: 32px;
+			border-radius: 8px;
+		}
+		.wallet-detecting {
+			text-align: center;
+			padding: 24px;
+			color: var(--muted);
+		}
+		.loading {
+			display: inline-block;
+			width: 16px;
+			height: 16px;
+			border: 2px solid var(--border);
+			border-top-color: var(--accent);
+			border-radius: 50%;
+			animation: spin 0.8s linear infinite;
+			margin-right: 8px;
+		}
+		@keyframes spin {
+			to { transform: rotate(360deg); }
+		}
+
+		/* Register Card */
+		.register-card {
+			background: linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(96, 165, 250, 0.12));
+			border: 1px solid rgba(52, 211, 153, 0.25);
+		}
+		.register-hero {
+			text-align: center;
+			padding: 12px 0 24px;
+		}
+		.register-price {
+			font-size: 2.5rem;
+			font-weight: 800;
+			background: linear-gradient(135deg, #34d399, #60a5fa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+		.register-price-label {
+			color: var(--muted);
+			font-size: 0.9rem;
+			margin-top: 4px;
+		}
+		.register-btn {
+			width: 100%;
+			padding: 16px 24px;
+			font-size: 1.1rem;
+			font-weight: 700;
+			background: linear-gradient(135deg, #10b981, #3b82f6);
+			color: white;
+			border: none;
+			border-radius: 14px;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			transition: all 0.2s;
+			box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+		}
+		.register-btn:hover:not(:disabled) {
+			transform: translateY(-2px);
+			box-shadow: 0 12px 32px rgba(16, 185, 129, 0.4);
+		}
+		.register-btn:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+		}
+		.register-btn svg {
+			width: 20px;
+			height: 20px;
+		}
+		.register-status {
+			margin-top: 16px;
+			padding: 12px 16px;
+			border-radius: 10px;
+			font-size: 0.9rem;
+			display: none;
+		}
+		.register-status.show {
+			display: block;
+		}
+		.register-status.info {
+			background: rgba(96, 165, 250, 0.1);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			color: var(--accent);
+		}
+		.register-status.success {
+			background: rgba(52, 211, 153, 0.1);
+			border: 1px solid rgba(52, 211, 153, 0.2);
+			color: var(--success);
+		}
+		.register-status.error {
+			background: rgba(248, 113, 113, 0.1);
+			border: 1px solid rgba(248, 113, 113, 0.2);
+			color: var(--error);
+		}
+		.register-features {
+			display: flex;
+			justify-content: center;
+			gap: 24px;
+			margin-top: 20px;
+			flex-wrap: wrap;
+		}
+		.register-feature {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 0.85rem;
+			color: var(--muted);
+		}
+		.register-feature svg {
+			width: 16px;
+			height: 16px;
+			color: var(--success);
+		}
+
 		@media (max-width: 640px) {
 			.card { padding: 20px; }
 			.bid-main { grid-template-columns: 1fr; }
 			.bid-list li { font-size: 0.8rem; }
+			.global-wallet-widget { top: 12px; right: 12px; }
+			.global-wallet-btn { padding: 8px 12px; font-size: 0.85rem; }
 		}
 	</style>
 </head>
 <body>
+	<!-- Global Wallet Widget -->
+	<div class="global-wallet-widget" id="global-wallet-widget">
+		<button class="global-wallet-btn" id="global-wallet-btn">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+				<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+				<circle cx="12" cy="7" r="4"></circle>
+			</svg>
+			<span id="global-wallet-text">Connect</span>
+			<svg class="global-wallet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+				<polyline points="6 9 12 15 18 9"></polyline>
+			</svg>
+		</button>
+		<div class="global-wallet-dropdown" id="global-wallet-dropdown"></div>
+	</div>
+
+	<!-- Wallet Modal -->
+	<div class="wallet-modal" id="wallet-modal">
+		<div class="wallet-modal-content">
+			<div class="wallet-modal-header">
+				<h3>Connect Wallet</h3>
+				<button class="wallet-modal-close" id="wallet-modal-close">&times;</button>
+			</div>
+			<div class="wallet-list" id="wallet-list">
+				<div class="wallet-detecting"><span class="loading"></span> Detecting wallets...</div>
+			</div>
+		</div>
+	</div>
+
 	<div class="container">
 		<div class="card">
 			<div class="header">
@@ -277,7 +590,46 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				<h1>${escapeHtml(cleanName)}<span>.sui</span></h1>
 				<p style="color: var(--muted); font-size: 0.95rem;">Network: ${escapeHtml(network)}</p>
 			</div>
-			<p style="color: var(--muted); text-align: center;">Queue a bid, attach offline-signed registrations for automatic relay, or broadcast your own transaction without exposing keys.</p>
+		</div>
+
+		${isRegisterable ? `
+		<!-- Quick Registration Card -->
+		<div class="card register-card">
+			<div class="section-title">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+				Quick Registration
+			</div>
+			<div class="register-hero">
+				<div class="register-price">${price1Year} SUI</div>
+				<div class="register-price-label">1 year registration</div>
+			</div>
+			<button class="register-btn" id="register-btn">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+					<circle cx="12" cy="7" r="4"></circle>
+				</svg>
+				<span id="register-btn-text">Connect Wallet to Register</span>
+			</button>
+			<div class="register-status" id="register-status"></div>
+			<div class="register-features">
+				<div class="register-feature">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+					Instant ownership
+				</div>
+				<div class="register-feature">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+					Single transaction
+				</div>
+				<div class="register-feature">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+					No middleman
+				</div>
+			</div>
+		</div>
+		` : ''}
+
+		<div class="card" style="margin-top: 8px;">
+			<p style="color: var(--muted); text-align: center; font-size: 0.9rem;">Or use the advanced options below: queue a bid, attach offline-signed registrations, or relay your own transaction.</p>
 		</div>
 
 		<div class="card" id="queue-card">
@@ -376,7 +728,338 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		const NAME = ${serializeJson(cleanName)};
 		const NETWORK = ${serializeJson(network)};
 		const CAN_REGISTER = ${isRegisterable ? 'true' : 'false'};
+		const PRICE_SUI = ${price1Year};
+		const RPC_URL = ${serializeJson(env.SUI_RPC_URL)};
 
+		// ========== WALLET CONNECTION ==========
+		const globalWalletWidget = document.getElementById('global-wallet-widget');
+		const globalWalletBtn = document.getElementById('global-wallet-btn');
+		const globalWalletText = document.getElementById('global-wallet-text');
+		const globalWalletDropdown = document.getElementById('global-wallet-dropdown');
+		const walletModal = document.getElementById('wallet-modal');
+		const walletModalClose = document.getElementById('wallet-modal-close');
+		const walletList = document.getElementById('wallet-list');
+		const registerBtn = document.getElementById('register-btn');
+		const registerBtnText = document.getElementById('register-btn-text');
+		const registerStatus = document.getElementById('register-status');
+
+		let connectedWallet = null;
+		let connectedAccount = null;
+		let connectedAddress = null;
+
+		// Wallet Standard API
+		function getWalletsApi() {
+			if (typeof window !== 'undefined' && window.navigator) {
+				const wallets = window.navigator.wallets || window.wallets;
+				if (wallets) return wallets;
+			}
+			return null;
+		}
+
+		function getSuiWallets() {
+			const wallets = [];
+			const walletsApi = getWalletsApi();
+			if (walletsApi && typeof walletsApi.get === 'function') {
+				const registered = walletsApi.get();
+				for (const w of registered) {
+					if (w.chains && w.chains.some(c => c.startsWith('sui:'))) {
+						wallets.push(w);
+					}
+				}
+			}
+			// Also check window wallets
+			if (window.suiWallet) wallets.push(window.suiWallet);
+			if (window.phantom?.sui) wallets.push(window.phantom.sui);
+			// Dedupe
+			const seen = new Set();
+			return wallets.filter(w => {
+				const key = w.name || w.id || JSON.stringify(w);
+				if (seen.has(key)) return false;
+				seen.add(key);
+				return true;
+			});
+		}
+
+		async function detectWallets() {
+			return new Promise((resolve) => {
+				const wallets = getSuiWallets();
+				if (wallets.length > 0) {
+					resolve(wallets);
+					return;
+				}
+				// Wait briefly for wallet injection
+				setTimeout(() => resolve(getSuiWallets()), 500);
+			});
+		}
+
+		function renderWalletList(wallets) {
+			if (wallets.length === 0) {
+				walletList.innerHTML = '<div class="wallet-detecting">' +
+					'No Sui wallets detected.' +
+					'<br><br>' +
+					'<a href="https://phantom.app/download" target="_blank" style="color: var(--accent);">Install Phantom →</a>' +
+					'<br>' +
+					'<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank" style="color: var(--accent);">Install Sui Wallet →</a>' +
+					'</div>';
+				return;
+			}
+
+			walletList.innerHTML = wallets.map(wallet => {
+				const icon = wallet.icon || '';
+				const name = wallet.name || 'Unknown Wallet';
+				return '<button class="wallet-option" data-wallet-name="' + escapeHtml(name) + '">' +
+					(icon ? '<img src="' + escapeHtml(icon) + '" alt="">' : '') +
+					'<span>' + escapeHtml(name) + '</span>' +
+					'</button>';
+			}).join('');
+
+			walletList.querySelectorAll('.wallet-option').forEach((btn, i) => {
+				btn.addEventListener('click', () => selectWallet(wallets[i]));
+			});
+		}
+
+		async function selectWallet(wallet) {
+			try {
+				walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Connecting...</div>';
+
+				const connectFeature = wallet.features?.['standard:connect'] || wallet.connect;
+				if (!connectFeature) throw new Error('Wallet does not support connect');
+
+				let accounts;
+				if (typeof connectFeature === 'function') {
+					const result = await connectFeature();
+					accounts = result?.accounts || result;
+				} else if (typeof connectFeature.connect === 'function') {
+					const result = await connectFeature.connect();
+					accounts = result?.accounts || result;
+				}
+
+				if (!accounts || accounts.length === 0) {
+					throw new Error('No accounts returned');
+				}
+
+				connectedWallet = wallet;
+				connectedAccount = accounts[0];
+				connectedAddress = accounts[0].address;
+
+				walletModal.classList.remove('open');
+				updateWalletUI();
+				updateRegisterButton();
+
+			} catch (error) {
+				console.error('Wallet connection failed:', error);
+				walletList.innerHTML = '<div class="wallet-detecting" style="color: var(--error);">' +
+					'Connection failed: ' + escapeHtml(error.message) +
+					'<br><br><button class="secondary-btn" onclick="location.reload()">Try Again</button></div>';
+			}
+		}
+
+		function disconnectWallet() {
+			connectedWallet = null;
+			connectedAccount = null;
+			connectedAddress = null;
+			updateWalletUI();
+			updateRegisterButton();
+		}
+
+		function updateWalletUI() {
+			if (!connectedAddress) {
+				globalWalletBtn.classList.remove('connected');
+				globalWalletText.textContent = 'Connect';
+				globalWalletDropdown.innerHTML = '';
+			} else {
+				const shortAddr = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
+				globalWalletBtn.classList.add('connected');
+				globalWalletText.textContent = shortAddr;
+				globalWalletDropdown.innerHTML =
+					'<div class="global-wallet-dropdown-addr">' + connectedAddress + '</div>' +
+					'<button class="global-wallet-dropdown-item" id="gw-switch">' +
+						'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>' +
+						'Switch Wallet' +
+					'</button>' +
+					'<button class="global-wallet-dropdown-item disconnect" id="gw-disconnect">' +
+						'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>' +
+						'Disconnect' +
+					'</button>';
+
+				document.getElementById('gw-switch')?.addEventListener('click', () => {
+					globalWalletWidget.classList.remove('open');
+					disconnectWallet();
+					setTimeout(() => openWalletModal(), 100);
+				});
+				document.getElementById('gw-disconnect')?.addEventListener('click', () => {
+					globalWalletWidget.classList.remove('open');
+					disconnectWallet();
+				});
+			}
+		}
+
+		function updateRegisterButton() {
+			if (!registerBtn || !registerBtnText) return;
+			if (connectedAddress) {
+				registerBtnText.textContent = 'Register ' + NAME + '.sui for ' + PRICE_SUI + ' SUI';
+				registerBtn.querySelector('svg').innerHTML = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>';
+			} else {
+				registerBtnText.textContent = 'Connect Wallet to Register';
+				registerBtn.querySelector('svg').innerHTML = '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>';
+			}
+		}
+
+		function openWalletModal() {
+			walletModal.classList.add('open');
+			walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Detecting wallets...</div>';
+			detectWallets().then(renderWalletList);
+		}
+
+		function showRegisterStatus(message, type = 'info') {
+			if (!registerStatus) return;
+			registerStatus.textContent = message;
+			registerStatus.className = 'register-status show ' + type;
+		}
+
+		function hideRegisterStatus() {
+			if (registerStatus) registerStatus.className = 'register-status';
+		}
+
+		// ========== REGISTRATION ==========
+		async function registerName() {
+			if (!connectedAddress || !connectedWallet) {
+				openWalletModal();
+				return;
+			}
+
+			registerBtn.disabled = true;
+			registerBtnText.textContent = 'Building transaction...';
+			hideRegisterStatus();
+
+			try {
+				// Import Sui SDK
+				const { Transaction } = await import('https://esm.sh/@mysten/sui@1.45.2/transactions');
+				const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.45.2/client');
+				const { SuinsClient, SuinsTransaction } = await import('https://esm.sh/@mysten/suins@0.8.0');
+
+				showRegisterStatus('Connecting to Sui network...', 'info');
+
+				const suiClient = new SuiClient({ url: RPC_URL });
+				const suinsClient = new SuinsClient({ client: suiClient, network: NETWORK });
+
+				const tx = new Transaction();
+				const suinsTx = new SuinsTransaction(suinsClient, tx);
+
+				const coinConfig = suinsClient.config.coins.SUI;
+				if (!coinConfig) throw new Error('SuiNS coin config not found');
+
+				const domain = NAME + '.sui';
+				const priceInMist = BigInt(PRICE_SUI) * BigInt(1_000_000_000);
+
+				showRegisterStatus('Building registration transaction...', 'info');
+
+				// Split coin for payment
+				const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(priceInMist)]);
+
+				// Register the name
+				const nft = suinsTx.register({
+					domain: domain,
+					years: 1,
+					coinConfig: coinConfig,
+					coin: paymentCoin,
+				});
+
+				// Set target address and transfer NFT to sender
+				suinsTx.setTargetAddress({
+					nft: nft,
+					address: connectedAddress,
+					isSubname: false,
+				});
+				tx.transferObjects([nft], connectedAddress);
+
+				tx.setGasBudget(100_000_000); // 0.1 SUI
+
+				registerBtnText.textContent = 'Approve in wallet...';
+				showRegisterStatus('Please approve the transaction in your wallet', 'info');
+
+				// Sign and execute
+				const signFeature = connectedWallet.features?.['sui:signAndExecuteTransaction']
+					|| connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
+
+				if (!signFeature) {
+					throw new Error('Wallet does not support transaction signing');
+				}
+
+				const result = await signFeature.signAndExecuteTransaction({
+					transaction: tx,
+					account: connectedAccount,
+					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+				});
+
+				registerBtnText.textContent = 'Confirming...';
+				showRegisterStatus('Waiting for confirmation...', 'info');
+
+				if (result.digest) {
+					await suiClient.waitForTransaction({ digest: result.digest });
+
+					showRegisterStatus('Success! ' + NAME + '.sui is now yours. Redirecting...', 'success');
+					registerBtnText.textContent = 'Registered!';
+
+					// Redirect to profile page
+					setTimeout(() => {
+						window.location.href = 'https://' + NAME + '.sui.ski';
+					}, 2000);
+				}
+
+			} catch (error) {
+				console.error('Registration failed:', error);
+
+				if (error.message?.includes('rejected') || error.message?.includes('cancelled')) {
+					showRegisterStatus('Transaction cancelled', 'error');
+				} else if (error.message?.includes('Insufficient')) {
+					showRegisterStatus('Insufficient SUI balance. You need ' + PRICE_SUI + ' SUI plus gas.', 'error');
+				} else {
+					showRegisterStatus('Failed: ' + (error.message || 'Unknown error'), 'error');
+				}
+
+				registerBtn.disabled = false;
+				updateRegisterButton();
+			}
+		}
+
+		// Event listeners
+		if (globalWalletBtn) {
+			globalWalletBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				if (!connectedAddress) {
+					openWalletModal();
+				} else {
+					globalWalletWidget.classList.toggle('open');
+				}
+			});
+		}
+
+		if (walletModalClose) {
+			walletModalClose.addEventListener('click', () => walletModal.classList.remove('open'));
+		}
+
+		if (walletModal) {
+			walletModal.addEventListener('click', (e) => {
+				if (e.target === walletModal) walletModal.classList.remove('open');
+			});
+		}
+
+		document.addEventListener('click', (e) => {
+			if (globalWalletWidget && !globalWalletWidget.contains(e.target)) {
+				globalWalletWidget.classList.remove('open');
+			}
+		});
+
+		if (registerBtn) {
+			registerBtn.addEventListener('click', registerName);
+		}
+
+		// Initialize
+		updateWalletUI();
+		updateRegisterButton();
+
+		// ========== BID QUEUE ==========
 		const bidListEl = document.getElementById('bid-list');
 		const statCount = document.getElementById('stat-count');
 		const statHigh = document.getElementById('stat-high');
