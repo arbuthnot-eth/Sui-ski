@@ -1850,9 +1850,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				connectedWallet = wallet;
 				connectedWalletName = walletName;
 
-				renderWalletBar();
-				await checkEditPermission();
-				updateBountiesSectionVisibility();
+				// Update all UI components that depend on wallet state
+				updateUIForWallet();
 				return true;
 			} catch (e) {
 				console.log('Failed to restore wallet:', e.message);
@@ -1899,9 +1898,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 				walletModal.classList.remove('open');
 				saveWalletConnection();
-				renderWalletBar();
-				await checkEditPermission();
-				updateBountiesSectionVisibility();
+				// Update all UI components that depend on wallet state
+				updateUIForWallet();
 			} catch (e) {
 				console.error('Connection error:', e);
 				const errorMsg = e.message || 'Unknown error';
@@ -1982,10 +1980,11 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			connectedAccount = null;
 			connectedAddress = null;
 			connectedWalletName = null;
+			connectedPrimaryName = null;
 			canEdit = false;
 			clearWalletConnection();
-			renderWalletBar();
-			updateEditButton();
+			// Update all UI components
+			updateUIForWallet();
 		}
 
 		// Render wallet connection status (preserves search btn and network badge)
@@ -2041,6 +2040,15 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				}
 			}
 		}
+
+		// Global function to update UI when wallet connects/disconnects
+		// This can be extended by other features (messaging, etc.)
+		var updateUIForWallet = function() {
+			renderWalletBar();
+			checkEditPermission();
+			updateEditButton();
+			updateBountiesSectionVisibility();
+		};
 
 		// Copy address to clipboard (uses NFT owner during grace period)
 		function copyAddress() {
@@ -6949,8 +6957,10 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 		// Initialize messaging client with connected wallet
 		async function initMessagingClient() {
-			if (!connectedAddress || !currentWallet) {
-				return null;
+			if (!connectedAddress || !connectedWallet) {
+				console.log('Cannot init messaging: no wallet connected');
+				// Still return fallback client for local storage
+				return createFallbackMessagingClient();
 			}
 
 			try {
@@ -6961,10 +6971,10 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 					// Initialize with wallet signer
 					messagingClient = new window.SuiStackMessagingClient({
 						suiClient: window.suiClient,
-						signer: currentWallet,
+						signer: connectedWallet,
 						// Seal encryption is automatic - messages can only be decrypted by recipient
 					});
-					console.log('Messaging client initialized');
+					console.log('Messaging client initialized with wallet');
 					return messagingClient;
 				} else {
 					// Fallback: use direct Walrus + Seal integration
@@ -6973,7 +6983,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				}
 			} catch (err) {
 				console.error('Failed to init messaging client:', err);
-				return null;
+				return createFallbackMessagingClient();
 			}
 		}
 
