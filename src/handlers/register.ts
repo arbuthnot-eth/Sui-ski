@@ -545,6 +545,49 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			color: var(--success);
 		}
 
+		/* Collapsible Sections */
+		.collapsible-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			cursor: pointer;
+			user-select: none;
+		}
+		.collapsible-header .section-title {
+			margin-bottom: 0;
+		}
+		.collapsible-toggle {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 0.8rem;
+			color: var(--muted);
+			padding: 6px 12px;
+			background: rgba(255, 255, 255, 0.03);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			transition: all 0.2s;
+		}
+		.collapsible-header:hover .collapsible-toggle {
+			border-color: var(--accent);
+			color: var(--accent);
+		}
+		.collapsible-toggle svg {
+			width: 14px;
+			height: 14px;
+			transition: transform 0.2s;
+		}
+		.collapsible-content {
+			display: none;
+			margin-top: 16px;
+		}
+		.collapsible-content.open {
+			display: block;
+		}
+		.collapsible-toggle.open svg {
+			transform: rotate(180deg);
+		}
+
 		@media (max-width: 640px) {
 			.card { padding: 20px; }
 			.bid-main { grid-template-columns: 1fr; }
@@ -628,15 +671,19 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		</div>
 		` : ''}
 
-		<div class="card" style="margin-top: 8px;">
-			<p style="color: var(--muted); text-align: center; font-size: 0.9rem;">Or use the advanced options below: queue a bid, attach offline-signed registrations, or relay your own transaction.</p>
-		</div>
-
 		<div class="card" id="queue-card">
-			<div class="section-title">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-				Registration Queue
+			<div class="collapsible-header" id="queue-header">
+				<div class="section-title">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+					Registration Queue
+				</div>
+				<div class="collapsible-toggle" id="queue-toggle">
+					<span>Advanced</span>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+				</div>
 			</div>
+			<div class="collapsible-content" id="queue-content">
+			<p class="instructions" style="margin-top: 12px; margin-bottom: 16px;">Queue a bid or attach offline-signed registrations for automatic relay when the name becomes available.</p>
 			<div class="stat-grid" id="queue-stats">
 				<div class="stat">
 					<div class="stat-label">Active Bids</div>
@@ -693,15 +740,22 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				<button class="primary-btn" id="queue-submit">Queue Bid</button>
 				<div class="status-line" id="queue-status"></div>
 			</div>
-			<p class="instructions" style="margin-top:8px;">Queued bids are stored off-chain until the name expires. Attach offline bytes to have sui.ski relay your transaction automatically when the window opens.</p>
+			</div><!-- end collapsible-content -->
 		</div>
 
 		<div class="card">
-			<div class="section-title">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"></path></svg>
-				Offline Registration Relay
+			<div class="collapsible-header" id="relay-header">
+				<div class="section-title">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"></path></svg>
+					Offline Transaction Relay
+				</div>
+				<div class="collapsible-toggle" id="relay-toggle">
+					<span>Advanced</span>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+				</div>
 			</div>
-			<p class="instructions">Bring your own signed Sui transaction block (for example, produced via <code>sui client</code> or an air-gapped wallet). sui.ski forwards the signed payload immediately—use the queue above if you want us to hold it until the grace period.</p>
+			<div class="collapsible-content" id="relay-content">
+			<p class="instructions" style="margin-top: 12px;">Bring your own signed Sui transaction block (for example, produced via <code>sui client</code> or an air-gapped wallet). sui.ski forwards the signed payload immediately.</p>
 			<ol class="instructions">
 				<li>Prepare a SuiNS registration transaction offline (choose package, calculate price, build tx bytes).</li>
 				<li>Sign the transaction bytes with every required signer.</li>
@@ -720,6 +774,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				<div class="status-line" id="tx-status"></div>
 				<pre id="tx-result" style="display:none;"></pre>
 			</div>
+			</div><!-- end collapsible-content -->
 		</div>
 	</div>
 
@@ -1058,6 +1113,28 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		// Initialize
 		updateWalletUI();
 		updateRegisterButton();
+
+		// ========== COLLAPSIBLE SECTIONS ==========
+		function setupCollapsible(headerId, toggleId, contentId) {
+			const header = document.getElementById(headerId);
+			const toggle = document.getElementById(toggleId);
+			const content = document.getElementById(contentId);
+			if (!header || !toggle || !content) return;
+
+			header.addEventListener('click', () => {
+				const isOpen = content.classList.contains('open');
+				if (isOpen) {
+					content.classList.remove('open');
+					toggle.classList.remove('open');
+				} else {
+					content.classList.add('open');
+					toggle.classList.add('open');
+				}
+			});
+		}
+
+		setupCollapsible('queue-header', 'queue-toggle', 'queue-content');
+		setupCollapsible('relay-header', 'relay-toggle', 'relay-content');
 
 		// ========== BID QUEUE ==========
 		const bidListEl = document.getElementById('bid-list');
