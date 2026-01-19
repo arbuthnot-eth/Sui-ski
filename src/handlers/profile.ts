@@ -223,6 +223,10 @@ export function generateProfilePage(
 							<svg class="visit-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polyline points="9 18 15 12 9 6"></polyline></svg>
 						</div>
 						<div class="owner-actions">
+							<button class="message-btn" id="quick-message-btn" title="Send encrypted message to @${escapeHtml(cleanName)}.sui">
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+								<span>Message</span>
+							</button>
 							<button class="copy-btn" id="copy-address-btn" title="Copy address">
 								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
 							</button>
@@ -1334,6 +1338,21 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		const savedTab = localStorage.getItem('sui_ski_active_tab');
 		if (savedTab && document.getElementById('tab-' + savedTab)) {
 			switchTab(savedTab);
+		}
+
+		// Quick message button - switches to messaging tab
+		const quickMsgBtn = document.getElementById('quick-message-btn');
+		if (quickMsgBtn) {
+			quickMsgBtn.addEventListener('click', () => {
+				switchTab('messaging');
+				// Focus the compose input after a short delay
+				setTimeout(() => {
+					const composeInput = document.getElementById('msg-compose-input');
+					if (composeInput) {
+						composeInput.focus();
+					}
+				}, 100);
+			});
 		}
 
 		function truncAddr(addr) {

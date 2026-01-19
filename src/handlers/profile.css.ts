@@ -588,6 +588,28 @@ export const profileStyles = `
 		.owner-actions .edit-btn.hidden {
 			display: none;
 		}
+		.owner-actions .message-btn {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			background: linear-gradient(135deg, var(--accent), #8b5cf6);
+			border: none;
+			color: white;
+			padding: 8px 14px;
+			border-radius: 10px;
+			font-size: 0.75rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.owner-actions .message-btn:hover {
+			transform: translateY(-1px);
+			box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
+		}
+		.owner-actions .message-btn svg {
+			width: 14px;
+			height: 14px;
+		}
 
 
 		.qr-expanded {
