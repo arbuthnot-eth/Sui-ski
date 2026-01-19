@@ -119,6 +119,23 @@ export function generateProfilePage(
 	<style>${profileStyles}</style>
 </head>
 <body>
+	<!-- Global Wallet Widget (Fixed Position) -->
+	<div class="global-wallet-widget" id="global-wallet-widget">
+		<button class="global-wallet-btn" id="global-wallet-btn">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+				<line x1="1" y1="10" x2="23" y2="10"></line>
+			</svg>
+			<span id="global-wallet-text">Connect</span>
+			<svg class="global-wallet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<polyline points="6 9 12 15 18 9"></polyline>
+			</svg>
+		</button>
+		<div class="global-wallet-dropdown" id="global-wallet-dropdown">
+			<!-- Populated by JS -->
+		</div>
+	</div>
+
 	<div class="container">
 		<div class="page-layout">
 			<div class="sidebar">
@@ -1289,6 +1306,12 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		const editBtn = document.getElementById('edit-address-btn');
 		const setSelfBtn = document.getElementById('set-self-btn');
 		const copyBtn = document.getElementById('copy-address-btn');
+
+		// Global Wallet Widget Elements
+		const globalWalletWidget = document.getElementById('global-wallet-widget');
+		const globalWalletBtn = document.getElementById('global-wallet-btn');
+		const globalWalletText = document.getElementById('global-wallet-text');
+		const globalWalletDropdown = document.getElementById('global-wallet-dropdown');
 		const editModal = document.getElementById('edit-modal');
 		const targetAddressInput = document.getElementById('target-address');
 		const resolvedAddressEl = document.getElementById('resolved-address');
@@ -2105,10 +2128,93 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			}
 		}
 
+		// Update global wallet widget
+		function updateGlobalWalletWidget() {
+			if (!globalWalletWidget || !globalWalletBtn || !globalWalletText || !globalWalletDropdown) return;
+
+			if (!connectedAddress) {
+				// Not connected - show connect button
+				globalWalletBtn.classList.remove('connected');
+				globalWalletText.textContent = 'Connect';
+				globalWalletDropdown.innerHTML = '';
+			} else {
+				// Connected - show address and dropdown
+				const displayName = connectedPrimaryName || truncAddr(connectedAddress);
+				globalWalletBtn.classList.add('connected');
+				globalWalletText.textContent = displayName;
+
+				globalWalletDropdown.innerHTML = \`
+					<div class="global-wallet-dropdown-addr">\${connectedAddress}</div>
+					\${connectedPrimaryName ? \`
+					<button class="global-wallet-dropdown-item" id="gw-view-profile">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+						View My Profile
+					</button>
+					\` : ''}
+					<button class="global-wallet-dropdown-item" id="gw-switch">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
+						Switch Wallet
+					</button>
+					<button class="global-wallet-dropdown-item disconnect" id="gw-disconnect">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+						Disconnect
+					</button>
+				\`;
+
+				// Re-attach event handlers
+				const viewProfileBtn = document.getElementById('gw-view-profile');
+				if (viewProfileBtn) {
+					viewProfileBtn.addEventListener('click', () => {
+						const cleanedName = connectedPrimaryName.replace(/\\.sui$/i, '');
+						window.location.href = \`https://\${cleanedName}.sui.ski\`;
+					});
+				}
+
+				const switchBtn = document.getElementById('gw-switch');
+				if (switchBtn) {
+					switchBtn.addEventListener('click', () => {
+						globalWalletWidget.classList.remove('open');
+						disconnectWallet();
+						setTimeout(() => showWalletModal(), 100);
+					});
+				}
+
+				const disconnectBtn = document.getElementById('gw-disconnect');
+				if (disconnectBtn) {
+					disconnectBtn.addEventListener('click', () => {
+						globalWalletWidget.classList.remove('open');
+						disconnectWallet();
+					});
+				}
+			}
+		}
+
+		// Global wallet widget click handlers
+		if (globalWalletBtn) {
+			globalWalletBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				if (!connectedAddress) {
+					// Not connected - show wallet modal
+					showWalletModal();
+				} else {
+					// Connected - toggle dropdown
+					globalWalletWidget.classList.toggle('open');
+				}
+			});
+		}
+
+		// Close global wallet dropdown when clicking outside
+		document.addEventListener('click', (e) => {
+			if (globalWalletWidget && !globalWalletWidget.contains(e.target)) {
+				globalWalletWidget.classList.remove('open');
+			}
+		});
+
 		// Global function to update UI when wallet connects/disconnects
 		// This can be extended by other features (messaging, etc.)
 		var updateUIForWallet = function() {
 			renderWalletBar();
+			updateGlobalWalletWidget();
 			checkEditPermission();
 			updateEditButton();
 			updateBountiesSectionVisibility();
@@ -2879,6 +2985,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 		// Initialize
 		renderWalletBar();
+		updateGlobalWalletWidget();
 		updateEditButton();
 		restoreWalletConnection();
 		fetchAndDisplayOwnerInfo();

@@ -47,6 +47,124 @@ export const profileStyles = `
 			pointer-events: none;
 		}
 
+		/* Global Wallet Widget - Fixed position */
+		.global-wallet-widget {
+			position: fixed;
+			top: 16px;
+			right: 16px;
+			z-index: 9999;
+		}
+		.global-wallet-btn {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 10px 16px;
+			background: rgba(22, 22, 30, 0.95);
+			backdrop-filter: blur(12px);
+			-webkit-backdrop-filter: blur(12px);
+			border: 1px solid var(--border-strong);
+			border-radius: 12px;
+			color: var(--text);
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+			box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+		}
+		.global-wallet-btn:hover {
+			border-color: var(--accent);
+			box-shadow: 0 4px 20px rgba(96, 165, 250, 0.2);
+		}
+		.global-wallet-btn svg:first-child {
+			width: 18px;
+			height: 18px;
+			color: var(--accent);
+		}
+		.global-wallet-btn.connected {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(139, 92, 246, 0.15));
+			border-color: rgba(96, 165, 250, 0.3);
+		}
+		.global-wallet-btn.connected #global-wallet-text {
+			color: var(--accent);
+		}
+		.global-wallet-chevron {
+			width: 14px;
+			height: 14px;
+			color: var(--text-muted);
+			transition: transform 0.2s;
+			display: none;
+		}
+		.global-wallet-btn.connected .global-wallet-chevron {
+			display: block;
+		}
+		.global-wallet-widget.open .global-wallet-chevron {
+			transform: rotate(180deg);
+		}
+		.global-wallet-dropdown {
+			position: absolute;
+			top: calc(100% + 8px);
+			right: 0;
+			min-width: 200px;
+			background: var(--card-bg-solid);
+			border: 1px solid var(--border-strong);
+			border-radius: 12px;
+			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+			opacity: 0;
+			visibility: hidden;
+			transform: translateY(-8px);
+			transition: all 0.2s;
+			overflow: hidden;
+		}
+		.global-wallet-widget.open .global-wallet-dropdown {
+			opacity: 1;
+			visibility: visible;
+			transform: translateY(0);
+		}
+		.global-wallet-dropdown-item {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			width: 100%;
+			padding: 14px 16px;
+			background: transparent;
+			border: none;
+			color: var(--text);
+			font-size: 0.85rem;
+			cursor: pointer;
+			transition: background 0.15s;
+			text-align: left;
+		}
+		.global-wallet-dropdown-item:hover {
+			background: rgba(96, 165, 250, 0.1);
+		}
+		.global-wallet-dropdown-item svg {
+			width: 16px;
+			height: 16px;
+			color: var(--text-muted);
+		}
+		.global-wallet-dropdown-item:hover svg {
+			color: var(--accent);
+		}
+		.global-wallet-dropdown-item.disconnect {
+			border-top: 1px solid var(--border);
+			color: var(--error);
+		}
+		.global-wallet-dropdown-item.disconnect svg {
+			color: var(--error);
+		}
+		.global-wallet-dropdown-item.disconnect:hover {
+			background: rgba(248, 113, 113, 0.1);
+		}
+		.global-wallet-dropdown-addr {
+			padding: 12px 16px;
+			background: rgba(0, 0, 0, 0.2);
+			border-bottom: 1px solid var(--border);
+			font-family: ui-monospace, monospace;
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			word-break: break-all;
+		}
+
 		/* Custom Scrollbar Styles - Black track with SuiNS blue gradient */
 		* {
 			scrollbar-width: thin;
