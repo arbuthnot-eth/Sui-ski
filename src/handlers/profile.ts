@@ -993,59 +993,127 @@ export function generateProfilePage(
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
 							</svg>
-							<h3>Encrypted Messaging</h3>
-							<span class="alpha-badge">Alpha</span>
+							<h3>Message @${escapeHtml(cleanName)}.sui</h3>
+							<span class="alpha-badge">Beta</span>
 						</div>
-						<p class="messaging-subtitle">Send encrypted messages to @${escapeHtml(cleanName)}.sui using the Sui Messaging SDK</p>
 
-						<div class="messaging-features">
-							<div class="feature-card">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-									<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-								</svg>
-								<h4>End-to-End Encrypted</h4>
-								<p>Messages encrypted with Seal protocol</p>
+						<!-- Compose Section -->
+						<div class="msg-compose-section" id="msg-compose-section">
+							<div class="msg-recipient-bar">
+								<span class="msg-recipient-label">To:</span>
+								<span class="msg-recipient-name">@${escapeHtml(cleanName)}.sui</span>
+								<span class="msg-recipient-addr" id="msg-recipient-addr">${escapeHtml(record.address.slice(0, 8))}...${escapeHtml(record.address.slice(-6))}</span>
 							</div>
-							<div class="feature-card">
+
+							<div class="msg-compose-box">
+								<textarea
+									id="msg-compose-input"
+									class="msg-compose-input"
+									placeholder="Write your message..."
+									rows="4"
+								></textarea>
+								<div class="msg-compose-footer">
+									<div class="msg-compose-info">
+										<span id="msg-char-count">0</span> / 1000 characters
+									</div>
+									<div class="msg-compose-actions">
+										<button class="msg-send-btn" id="msg-send-btn" disabled>
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+												<line x1="22" y1="2" x2="11" y2="13"></line>
+												<polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+											</svg>
+											<span id="msg-send-btn-text">Connect Wallet</span>
+										</button>
+									</div>
+								</div>
+							</div>
+
+							<div id="msg-status" class="msg-status hidden"></div>
+						</div>
+
+						<!-- Conversation History -->
+						<div class="msg-conversation-section">
+							<div class="msg-conversation-header">
+								<h4>Conversation</h4>
+								<button class="msg-refresh-btn" id="msg-refresh-btn" title="Refresh messages">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="23 4 23 10 17 10"></polyline>
+										<polyline points="1 20 1 14 7 14"></polyline>
+										<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+									</svg>
+								</button>
+							</div>
+							<div class="msg-conversation-list" id="msg-conversation-list">
+								<div class="msg-conversation-empty" id="msg-conversation-empty">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+									</svg>
+									<p>No messages yet</p>
+									<span>Start the conversation by sending a message above</span>
+								</div>
+								<div class="msg-conversation-loading hidden" id="msg-conversation-loading">
+									<span class="loading"></span>
+									<span>Loading messages...</span>
+								</div>
+							</div>
+						</div>
+
+						<!-- SDK Info -->
+						<div class="msg-sdk-info">
+							<div class="msg-sdk-toggle" id="msg-sdk-toggle">
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 									<circle cx="12" cy="12" r="10"></circle>
-									<line x1="2" y1="12" x2="22" y2="12"></line>
-									<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+									<line x1="12" y1="16" x2="12" y2="12"></line>
+									<line x1="12" y1="8" x2="12.01" y2="8"></line>
 								</svg>
-								<h4>Decentralized</h4>
-								<p>Stored on Walrus, no central server</p>
+								<span>How it works</span>
+								<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="6 9 12 15 18 9"></polyline>
+								</svg>
 							</div>
-							<div class="feature-card">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-									<circle cx="9" cy="7" r="4"></circle>
-									<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-									<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-								</svg>
-								<h4>SuiNS Integration</h4>
-								<p>Send messages using @name.sui</p>
-							</div>
-						</div>
-
-						<div class="messaging-actions">
-							<a href="https://msg.sui.ski/users/@${escapeHtml(cleanName)}.sui" class="messaging-button primary">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-								</svg>
-								View Messaging Profile
-							</a>
-							<a href="https://msg.sui.ski" class="messaging-button secondary">
-								Learn More
-							</a>
-						</div>
-
-						<div class="messaging-code-example">
-							<p class="code-label">Send a message with the SDK:</p>
-							<pre><code>import { SuiStackMessagingClient } from '@mysten/messaging';
-
-const client = new SuiStackMessagingClient({ ... });
+							<div class="msg-sdk-content hidden" id="msg-sdk-content">
+								<div class="msg-features-grid">
+									<div class="msg-feature">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+											<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+										</svg>
+										<div>
+											<strong>End-to-End Encrypted</strong>
+											<p>Messages encrypted with Seal protocol</p>
+										</div>
+									</div>
+									<div class="msg-feature">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<circle cx="12" cy="12" r="10"></circle>
+											<line x1="2" y1="12" x2="22" y2="12"></line>
+											<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+										</svg>
+										<div>
+											<strong>Decentralized Storage</strong>
+											<p>Messages stored on Walrus</p>
+										</div>
+									</div>
+									<div class="msg-feature">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+											<circle cx="9" cy="7" r="4"></circle>
+											<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+											<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+										</svg>
+										<div>
+											<strong>SuiNS Names</strong>
+											<p>Send using @name.sui addresses</p>
+										</div>
+									</div>
+								</div>
+								<div class="msg-code-example">
+									<p>Integrate in your app:</p>
+									<pre><code>import { SuiStackMessagingClient } from '@mysten/messaging';
+const client = new SuiStackMessagingClient({ suiClient, signer });
 await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre>
+								</div>
+							</div>
 						</div>
 					</div>
 				</div><!-- end tab-messaging -->
@@ -6817,6 +6885,210 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		if (nftDetailsRefresh) {
 			nftDetailsRefresh.addEventListener('click', fetchNFTDetails);
 		}
+
+		// ========== MESSAGING FUNCTIONALITY ==========
+
+		const MESSAGING_RECIPIENT = ${serializeJson(cleanName)};
+		const MESSAGING_RECIPIENT_ADDRESS = ${serializeJson(record.address)};
+
+		// DOM elements for messaging
+		const msgComposeInput = document.getElementById('msg-compose-input');
+		const msgCharCount = document.getElementById('msg-char-count');
+		const msgSendBtn = document.getElementById('msg-send-btn');
+		const msgSendBtnText = document.getElementById('msg-send-btn-text');
+		const msgStatus = document.getElementById('msg-status');
+		const msgConversationList = document.getElementById('msg-conversation-list');
+		const msgConversationEmpty = document.getElementById('msg-conversation-empty');
+		const msgConversationLoading = document.getElementById('msg-conversation-loading');
+		const msgRefreshBtn = document.getElementById('msg-refresh-btn');
+		const msgSdkToggle = document.getElementById('msg-sdk-toggle');
+		const msgSdkContent = document.getElementById('msg-sdk-content');
+
+		// Local message storage key
+		const MSG_STORAGE_KEY = \`sui_ski_messages_\${MESSAGING_RECIPIENT}\`;
+
+		// Get stored messages
+		function getStoredMessages() {
+			try {
+				const stored = localStorage.getItem(MSG_STORAGE_KEY);
+				return stored ? JSON.parse(stored) : [];
+			} catch {
+				return [];
+			}
+		}
+
+		// Save message to local storage
+		function saveMessage(message) {
+			const messages = getStoredMessages();
+			messages.push(message);
+			localStorage.setItem(MSG_STORAGE_KEY, JSON.stringify(messages));
+		}
+
+		// Render messages in conversation view
+		function renderMessages(messages) {
+			if (!messages || messages.length === 0) {
+				if (msgConversationEmpty) msgConversationEmpty.style.display = 'flex';
+				return;
+			}
+
+			if (msgConversationEmpty) msgConversationEmpty.style.display = 'none';
+
+			const html = messages.map(msg => \`
+				<div class="msg-message \${msg.direction}">
+					<div class="msg-message-header">
+						<span class="msg-message-sender">\${msg.direction === 'sent' ? 'You' : '@' + MESSAGING_RECIPIENT + '.sui'}</span>
+						<span class="msg-message-time">\${new Date(msg.timestamp).toLocaleString()}</span>
+					</div>
+					<div class="msg-message-content">\${escapeHtmlJs(msg.content)}</div>
+				</div>
+			\`).join('');
+
+			if (msgConversationList) {
+				// Keep the empty and loading states, just add messages before them
+				msgConversationList.innerHTML = html + msgConversationEmpty.outerHTML + msgConversationLoading.outerHTML;
+			}
+		}
+
+		// Update send button state
+		function updateSendButtonState() {
+			if (!msgSendBtn || !msgSendBtnText || !msgComposeInput) return;
+
+			const hasContent = msgComposeInput.value.trim().length > 0;
+
+			if (!connectedAddress) {
+				msgSendBtnText.textContent = 'Connect Wallet';
+				msgSendBtn.disabled = false;
+				msgSendBtn.classList.remove('ready');
+			} else if (!hasContent) {
+				msgSendBtnText.textContent = 'Send Message';
+				msgSendBtn.disabled = true;
+				msgSendBtn.classList.add('ready');
+			} else {
+				msgSendBtnText.textContent = 'Send Message';
+				msgSendBtn.disabled = false;
+				msgSendBtn.classList.add('ready');
+			}
+		}
+
+		// Show messaging status
+		function showMsgStatus(message, type = 'info') {
+			if (!msgStatus) return;
+			msgStatus.textContent = message;
+			msgStatus.className = \`msg-status \${type}\`;
+		}
+
+		function hideMsgStatus() {
+			if (msgStatus) msgStatus.className = 'msg-status hidden';
+		}
+
+		// Character count handler
+		if (msgComposeInput && msgCharCount) {
+			msgComposeInput.addEventListener('input', () => {
+				const len = msgComposeInput.value.length;
+				msgCharCount.textContent = len;
+				if (len > 1000) {
+					msgCharCount.style.color = 'var(--error)';
+				} else {
+					msgCharCount.style.color = '';
+				}
+				updateSendButtonState();
+			});
+		}
+
+		// Send message handler
+		if (msgSendBtn) {
+			msgSendBtn.addEventListener('click', async () => {
+				// If not connected, show wallet modal
+				if (!connectedAddress) {
+					showWalletModal();
+					return;
+				}
+
+				const content = msgComposeInput?.value.trim();
+				if (!content) return;
+
+				if (content.length > 1000) {
+					showMsgStatus('Message too long (max 1000 characters)', 'error');
+					return;
+				}
+
+				// Disable button while sending
+				msgSendBtn.disabled = true;
+				msgSendBtnText.textContent = 'Sending...';
+				hideMsgStatus();
+
+				try {
+					// For now, store message locally and show success
+					// Full SDK integration would create on-chain message here
+					const message = {
+						id: Date.now().toString(),
+						direction: 'sent',
+						from: connectedAddress,
+						to: MESSAGING_RECIPIENT_ADDRESS,
+						toName: MESSAGING_RECIPIENT + '.sui',
+						content: content,
+						timestamp: Date.now(),
+						status: 'sent'
+					};
+
+					saveMessage(message);
+					renderMessages(getStoredMessages());
+
+					// Clear input
+					if (msgComposeInput) {
+						msgComposeInput.value = '';
+						msgCharCount.textContent = '0';
+					}
+
+					showMsgStatus('Message saved locally. Full on-chain messaging coming with SDK release.', 'success');
+
+					// Auto-hide status after 5 seconds
+					setTimeout(hideMsgStatus, 5000);
+
+				} catch (error) {
+					console.error('Failed to send message:', error);
+					showMsgStatus('Failed to send: ' + (error.message || 'Unknown error'), 'error');
+				} finally {
+					updateSendButtonState();
+				}
+			});
+		}
+
+		// Refresh messages
+		if (msgRefreshBtn) {
+			msgRefreshBtn.addEventListener('click', () => {
+				renderMessages(getStoredMessages());
+			});
+		}
+
+		// SDK info toggle
+		if (msgSdkToggle && msgSdkContent) {
+			msgSdkToggle.addEventListener('click', () => {
+				const isExpanded = !msgSdkContent.classList.contains('hidden');
+				if (isExpanded) {
+					msgSdkContent.classList.add('hidden');
+					msgSdkToggle.classList.remove('expanded');
+				} else {
+					msgSdkContent.classList.remove('hidden');
+					msgSdkToggle.classList.add('expanded');
+				}
+			});
+		}
+
+		// Initial load of messages and button state
+		renderMessages(getStoredMessages());
+
+		// Update messaging button when wallet connects/disconnects
+		const originalUpdateUI = updateUIForWallet;
+		updateUIForWallet = function() {
+			originalUpdateUI();
+			updateSendButtonState();
+		};
+
+		// Initial button state
+		updateSendButtonState();
+
+		// ========== END MESSAGING FUNCTIONALITY ==========
 	</script>
 
 	<!-- Expanded QR Overlay -->
