@@ -433,7 +433,116 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 
 	// ===== ENCRYPTED MESSAGE STORAGE (Seal + Walrus) =====
 
-	// POST /api/app/messages/store - Store Seal-encrypted message on Walrus
+	// POST /api/app/messages/send - Send signed message (stores on Walrus)
+	if (path === 'messages/send' && request.method === 'POST') {
+		try {
+			const body = (await request.json()) as {
+				encryptedMessage?: {
+					encrypted: string
+					sealPolicy: { type: string; address: string }
+					version: number
+				}
+				sender?: string
+				senderName?: string | null
+				recipient?: string
+				recipientName?: string
+				signature?: string
+				signaturePayload?: string
+				timestamp?: number
+				nonce?: string
+				contentHash?: string
+			}
+
+			if (!body.encryptedMessage || !body.sender || !body.recipient) {
+				return jsonResponse({ error: 'Encrypted message, sender, and recipient required' }, 400)
+			}
+
+			if (!body.signature || !body.signaturePayload) {
+				return jsonResponse({ error: 'Message must be signed by sender wallet' }, 400)
+			}
+
+			// TODO: Verify signature matches sender address
+			// For now, we trust the signature is valid (full verification requires @mysten/sui/verify)
+
+			// Store encrypted message on Walrus
+			const messageBlob = JSON.stringify({
+				...body.encryptedMessage,
+				sender: body.sender,
+				senderName: body.senderName,
+				recipient: body.recipient,
+				recipientName: body.recipientName,
+				signature: body.signature,
+				signaturePayload: body.signaturePayload,
+				contentHash: body.contentHash,
+				timestamp: body.timestamp || Date.now(),
+				nonce: body.nonce,
+				storedAt: Date.now(),
+			})
+
+			const walrusResponse = await storeOnWalrus(btoa(messageBlob), env)
+
+			if (!walrusResponse.blobId) {
+				// Fallback: store in KV if Walrus fails
+				const fallbackKey = `msg_blob_${body.nonce || Date.now()}`
+				await env.CACHE.put(fallbackKey, messageBlob, { expirationTtl: 60 * 60 * 24 * 30 })
+
+				// Store message index in KV
+				const indexKey = `msg_inbox_${body.recipient}_${body.timestamp || Date.now()}`
+				await env.CACHE.put(
+					indexKey,
+					JSON.stringify({
+						blobId: fallbackKey,
+						storage: 'kv',
+						sender: body.sender,
+						senderName: body.senderName,
+						recipient: body.recipient,
+						recipientName: body.recipientName,
+						timestamp: body.timestamp || Date.now(),
+						signed: true,
+					}),
+					{ expirationTtl: 60 * 60 * 24 * 30 }
+				)
+
+				return jsonResponse({
+					success: true,
+					messageId: indexKey,
+					blobId: fallbackKey,
+					storage: 'kv-fallback',
+					signed: true,
+				})
+			}
+
+			// Store message index in KV (for inbox lookup)
+			const indexKey = `msg_inbox_${body.recipient}_${body.timestamp || Date.now()}`
+			await env.CACHE.put(
+				indexKey,
+				JSON.stringify({
+					blobId: walrusResponse.blobId,
+					storage: 'walrus',
+					sender: body.sender,
+					senderName: body.senderName,
+					recipient: body.recipient,
+					recipientName: body.recipientName,
+					timestamp: body.timestamp || Date.now(),
+					signed: true,
+				}),
+				{ expirationTtl: 60 * 60 * 24 * 30 }
+			)
+
+			return jsonResponse({
+				success: true,
+				messageId: indexKey,
+				blobId: walrusResponse.blobId,
+				storage: 'walrus',
+				signed: true,
+			})
+		} catch (err) {
+			console.error('Message send error:', err)
+			return jsonResponse({ error: 'Invalid request body' }, 400)
+		}
+	}
+
+	// POST /api/app/messages/store - Store Seal-encrypted message on Walrus (legacy)
 	if (path === 'messages/store' && request.method === 'POST') {
 		try {
 			const body = (await request.json()) as {

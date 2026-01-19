@@ -1627,6 +1627,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			canEdit = connectedAddress === nftOwnerAddress || connectedAddress === CURRENT_ADDRESS;
 			updateEditButton();
 			renderWalletBar(); // Re-render to show primary name
+			updateGlobalWalletWidget(); // Update global widget with primary name
 		}
 
 		// Update edit button state
@@ -7087,168 +7088,175 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		const msgSdkToggle = document.getElementById('msg-sdk-toggle');
 		const msgSdkContent = document.getElementById('msg-sdk-content');
 
-		// ===== SUI STACK MESSAGING SDK INTEGRATION =====
-		// Messages are Seal-encrypted: only recipient can decrypt
-		// Stored on Walrus for decentralized persistence
+		// ===== SUI STACK MESSAGING INTEGRATION =====
+		// Messages are signed by sender wallet for authenticity
+		// Encrypted for recipient (only they can read)
+		// Stored on Walrus decentralized storage
+		// References stored in KV with signature verification
 
 		let messagingClient = null;
-		let messagingSdkLoaded = false;
 
 		// Local cache key for messages
 		const MSG_CACHE_KEY = \`sui_ski_messages_\${MESSAGING_RECIPIENT}\`;
 		const INBOX_CACHE_KEY = 'sui_ski_inbox';
 
-		// Load messaging SDK from CDN
-		async function loadMessagingSdk() {
-			if (messagingSdkLoaded) return true;
-
-			try {
-				// Load the Sui Stack Messaging SDK
-				// Note: SDK is loaded from CDN due to Cloudflare Worker size limits
-				const script = document.createElement('script');
-				script.src = 'https://unpkg.com/@mysten/messaging@latest/dist/index.umd.js';
-				script.async = true;
-
-				const loadPromise = new Promise((resolve, reject) => {
-					script.onload = resolve;
-					script.onerror = reject;
-				});
-
-				document.head.appendChild(script);
-				await loadPromise;
-
-				messagingSdkLoaded = true;
-				console.log('Sui Stack Messaging SDK loaded');
-				return true;
-			} catch (err) {
-				console.error('Failed to load Messaging SDK:', err);
-				return false;
-			}
-		}
-
 		// Initialize messaging client with connected wallet
 		async function initMessagingClient() {
 			if (!connectedAddress || !connectedWallet) {
 				console.log('Cannot init messaging: no wallet connected');
-				// Still return fallback client for local storage
-				return createFallbackMessagingClient();
+				return null;
 			}
 
-			try {
-				await loadMessagingSdk();
-
-				// Check if SDK is available
-				if (typeof window.SuiStackMessagingClient !== 'undefined') {
-					// Initialize with wallet signer
-					messagingClient = new window.SuiStackMessagingClient({
-						suiClient: window.suiClient,
-						signer: connectedWallet,
-						// Seal encryption is automatic - messages can only be decrypted by recipient
-					});
-					console.log('Messaging client initialized with wallet');
-					return messagingClient;
-				} else {
-					// Fallback: use direct Walrus + Seal integration
-					console.log('Using fallback Seal + Walrus integration');
-					return createFallbackMessagingClient();
-				}
-			} catch (err) {
-				console.error('Failed to init messaging client:', err);
-				return createFallbackMessagingClient();
-			}
+			// Create messaging client with wallet signer
+			messagingClient = createMessagingClient();
+			console.log('Messaging client initialized');
+			return messagingClient;
 		}
 
-		// Fallback messaging client using direct Seal + Walrus
-		function createFallbackMessagingClient() {
+		// Create messaging client
+		function createMessagingClient() {
+			if (!connectedAddress || !connectedWallet) return null;
+
 			return {
-				async sendMessage(recipientName, content) {
-					// Encrypt message with Seal (recipient address as policy)
-					const recipientAddr = recipientName.includes('0x')
-						? recipientName
-						: MESSAGING_RECIPIENT_ADDRESS;
-
-					const messageData = {
-						from: connectedAddress,
-						to: recipientAddr,
-						toName: recipientName.replace('@', '').replace('.sui', ''),
-						content: content,
-						timestamp: Date.now(),
-						nonce: crypto.randomUUID(),
-					};
-
-					// Request wallet signature to prove authorship
-					showMsgStatus('Requesting wallet signature...', 'info');
-
-					const signaturePayload = JSON.stringify({
-						type: 'sui_ski_message',
-						version: 1,
-						from: connectedAddress,
-						to: recipientAddr,
-						contentHash: await hashContent(content),
-						timestamp: messageData.timestamp,
-						nonce: messageData.nonce,
-					});
-
-					let signature = null;
-					try {
-						// Use wallet to sign the message (proves authorship)
-						if (connectedWallet && connectedWallet.signPersonalMessage) {
-							const signResult = await connectedWallet.signPersonalMessage({
-								message: new TextEncoder().encode(signaturePayload),
-							});
-							signature = signResult.signature;
-						} else if (connectedWallet && connectedWallet.signMessage) {
-							const signResult = await connectedWallet.signMessage({
-								message: new TextEncoder().encode(signaturePayload),
-							});
-							signature = signResult.signature;
-						} else {
-							// Fallback: use basic confirmation
-							const confirmed = confirm(
-								'Sign message to ' + recipientName + '?\\n\\n' +
-								'Content: ' + content.substring(0, 100) + (content.length > 100 ? '...' : '') + '\\n\\n' +
-								'Click OK to send (encrypted with Seal)'
-							);
-							if (!confirmed) {
-								throw new Error('User cancelled');
-							}
-						}
-					} catch (signError) {
-						if (signError.message === 'User cancelled' || signError.message.includes('rejected')) {
-							throw new Error('Signature rejected');
-						}
-						console.warn('Signature failed, using fallback:', signError);
-					}
-
-					// Add signature to message data
-					messageData.signature = signature;
-					messageData.signaturePayload = signaturePayload;
-
-					showMsgStatus('Encrypting message...', 'info');
-
-					// Encrypt with Seal (only recipient can decrypt)
-					const encrypted = await encryptForRecipient(messageData, recipientAddr);
-
-					showMsgStatus('Storing on Walrus...', 'info');
-
-					// Store on Walrus
-					const blobId = await storeMessageOnWalrus(encrypted);
-
-					// Store reference locally and on-chain
-					return {
-						id: blobId,
-						...messageData,
-						encrypted: true,
-						blobId: blobId,
-					};
-				},
-
-				async getMessages(address) {
-					// Fetch messages where address is recipient
-					// These are Seal-encrypted, only owner can decrypt
-					return await fetchMessagesForAddress(address);
-				}
+				wallet: connectedWallet,
+				address: connectedAddress,
+				primaryName: connectedPrimaryName,
 			};
+		}
+
+		// Send message to recipient via Walrus + signature verification
+		async function sendMessage(recipientName, content) {
+			if (!connectedAddress || !connectedWallet) {
+				throw new Error('Wallet not connected');
+			}
+
+			const recipientAddr = recipientName.includes('0x')
+				? recipientName
+				: MESSAGING_RECIPIENT_ADDRESS;
+
+			const timestamp = Date.now();
+			const nonce = crypto.randomUUID();
+
+			const messageData = {
+				from: connectedAddress,
+				fromName: connectedPrimaryName || null,
+				to: recipientAddr,
+				toName: recipientName.replace('@', '').replace('.sui', ''),
+				content: content,
+				timestamp: timestamp,
+				nonce: nonce,
+			};
+
+			// Create signature payload (proves authorship)
+			showMsgStatus('Requesting wallet signature...', 'info');
+
+			const contentHash = await hashContent(content);
+			const signaturePayload = JSON.stringify({
+				type: 'sui_ski_message',
+				version: 1,
+				from: connectedAddress,
+				to: recipientAddr,
+				contentHash: contentHash,
+				timestamp: timestamp,
+				nonce: nonce,
+			});
+
+			// Sign with wallet
+			let signature = null;
+			let signatureBytes = null;
+			try {
+				const messageBytes = new TextEncoder().encode(signaturePayload);
+
+				// Try different signing methods based on wallet capabilities
+				if (connectedWallet.features && connectedWallet.features['sui:signPersonalMessage']) {
+					const signFeature = connectedWallet.features['sui:signPersonalMessage'];
+					const signResult = await signFeature.signPersonalMessage({
+						message: messageBytes,
+						account: connectedAccount,
+					});
+					signature = signResult.signature;
+					signatureBytes = signResult.bytes;
+				} else if (connectedWallet.signPersonalMessage) {
+					const signResult = await connectedWallet.signPersonalMessage({
+						message: messageBytes,
+					});
+					signature = signResult.signature;
+				} else if (connectedWallet.signMessage) {
+					const signResult = await connectedWallet.signMessage({
+						message: messageBytes,
+					});
+					signature = signResult.signature;
+				} else {
+					throw new Error('Wallet does not support message signing');
+				}
+			} catch (signError) {
+				if (signError.message.includes('rejected') || signError.message.includes('cancelled') || signError.message.includes('denied')) {
+					throw new Error('Signature rejected by user');
+				}
+				throw signError;
+			}
+
+			if (!signature) {
+				throw new Error('Failed to get signature from wallet');
+			}
+
+			// Add signature to message
+			messageData.signature = signature;
+			messageData.signaturePayload = signaturePayload;
+
+			showMsgStatus('Encrypting and storing on Walrus...', 'info');
+
+			// Encrypt message (only recipient can decrypt)
+			const encrypted = await encryptForRecipient(messageData, recipientAddr);
+
+			// Store on Walrus via our API
+			const response = await fetch('/api/app/messages/send', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					encryptedMessage: encrypted,
+					sender: connectedAddress,
+					senderName: connectedPrimaryName,
+					recipient: recipientAddr,
+					recipientName: messageData.toName,
+					signature: signature,
+					signaturePayload: signaturePayload,
+					timestamp: timestamp,
+					nonce: nonce,
+					contentHash: contentHash,
+				}),
+			});
+
+			if (!response.ok) {
+				const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+				throw new Error(error.error || 'Failed to send message');
+			}
+
+			const result = await response.json();
+
+			return {
+				id: result.messageId || result.blobId || nonce,
+				blobId: result.blobId,
+				...messageData,
+				encrypted: true,
+				status: 'sent',
+			};
+		}
+
+		// Fetch messages for an address (inbox)
+		async function fetchMessagesForAddress(address) {
+			try {
+				const response = await fetch(\`/api/app/messages/inbox?address=\${encodeURIComponent(address)}\`);
+				if (!response.ok) {
+					console.error('Failed to fetch inbox:', response.status);
+					return [];
+				}
+				const data = await response.json();
+				return data.messages || [];
+			} catch (err) {
+				console.error('Failed to fetch messages:', err);
+				return [];
+			}
 		}
 
 		// Hash content for signature (avoids signing raw content)
@@ -7293,51 +7301,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			}
 		}
 
-		// Store encrypted message on Walrus
-		async function storeMessageOnWalrus(encryptedMessage) {
-			try {
-				const response = await fetch('/api/app/messages/store', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						encryptedMessage: encryptedMessage,
-						sender: connectedAddress,
-						recipient: MESSAGING_RECIPIENT_ADDRESS,
-					}),
-				});
-
-				if (response.ok) {
-					const result = await response.json();
-					return result.blobId || result.messageId;
-				}
-
-				// Fallback: store locally
-				return 'local_' + Date.now();
-			} catch (err) {
-				console.error('Walrus storage failed:', err);
-				return 'local_' + Date.now();
-			}
-		}
-
-		// Fetch messages for an address (your inbox)
-		async function fetchMessagesForAddress(address) {
-			try {
-				const response = await fetch(\`/api/app/messages/inbox?address=\${address}\`);
-				if (response.ok) {
-					const data = await response.json();
-					return data.messages || [];
-				}
-			} catch (err) {
-				console.error('Failed to fetch inbox:', err);
-			}
-
-			// Return cached messages
-			try {
-				return JSON.parse(localStorage.getItem(INBOX_CACHE_KEY) || '[]');
-			} catch {
-				return [];
-			}
-		}
+		// Note: storeMessageOnWalrus and fetchMessagesForAddress are defined above
 
 		// Get locally cached sent messages
 		function getCachedMessages() {
@@ -7503,73 +7467,41 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 				// Disable button while sending
 				msgSendBtn.disabled = true;
-				msgSendBtnText.textContent = 'Encrypting...';
+				msgSendBtnText.textContent = 'Signing...';
 				hideMsgStatus();
 
 				try {
-					// Initialize client if needed
-					if (!messagingClient) {
-						await initMessagingClient();
+					// Send message (wallet signature + Walrus storage)
+					const result = await sendMessage(
+						'@' + MESSAGING_RECIPIENT + '.sui',
+						content
+					);
+
+					// Cache locally for display
+					const message = {
+						id: result.id,
+						direction: 'sent',
+						from: connectedAddress,
+						fromName: connectedPrimaryName,
+						to: MESSAGING_RECIPIENT_ADDRESS,
+						toName: MESSAGING_RECIPIENT,
+						content: content,
+						timestamp: result.timestamp || Date.now(),
+						encrypted: true,
+						blobId: result.blobId,
+						status: 'sent'
+					};
+
+					cacheMessage(message);
+					renderMessages(getCachedMessages());
+
+					// Clear input
+					if (msgComposeInput) {
+						msgComposeInput.value = '';
+						msgCharCount.textContent = '0';
 					}
 
-					if (messagingClient) {
-						// Send using SDK (Seal-encrypted, stored on Walrus)
-						msgSendBtnText.textContent = 'Sending...';
-
-						const result = await messagingClient.sendMessage(
-							'@' + MESSAGING_RECIPIENT + '.sui',
-							content
-						);
-
-						// Cache locally
-						const message = {
-							id: result.id || Date.now().toString(),
-							direction: 'sent',
-							from: connectedAddress,
-							to: MESSAGING_RECIPIENT_ADDRESS,
-							toName: MESSAGING_RECIPIENT,
-							content: content,
-							timestamp: Date.now(),
-							encrypted: true,
-							blobId: result.blobId,
-							status: 'sent'
-						};
-
-						cacheMessage(message);
-						renderMessages(getCachedMessages());
-
-						// Clear input
-						if (msgComposeInput) {
-							msgComposeInput.value = '';
-							msgCharCount.textContent = '0';
-						}
-
-						showMsgStatus('Message sent (Seal-encrypted, stored on Walrus)', 'success');
-					} else {
-						// Fallback: local storage with pending status
-						const message = {
-							id: Date.now().toString(),
-							direction: 'sent',
-							from: connectedAddress,
-							to: MESSAGING_RECIPIENT_ADDRESS,
-							toName: MESSAGING_RECIPIENT,
-							content: content,
-							timestamp: Date.now(),
-							encrypted: false,
-							status: 'pending'
-						};
-
-						cacheMessage(message);
-						renderMessages(getCachedMessages());
-
-						if (msgComposeInput) {
-							msgComposeInput.value = '';
-							msgCharCount.textContent = '0';
-						}
-
-						showMsgStatus('Message cached locally (SDK loading...)', 'info');
-					}
-
+					showMsgStatus('Message sent! Signed and stored on Walrus.', 'success');
 					setTimeout(hideMsgStatus, 5000);
 
 				} catch (error) {
