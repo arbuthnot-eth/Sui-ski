@@ -2138,7 +2138,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 					switchBtn.addEventListener('click', () => {
 						dropdown.classList.remove('open');
 						disconnectWallet();
-						setTimeout(() => showWalletModal(), 100);
+						setTimeout(() => connectWallet(), 100);
 					});
 				}
 
@@ -2200,7 +2200,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 					switchBtn.addEventListener('click', () => {
 						globalWalletWidget.classList.remove('open');
 						disconnectWallet();
-						setTimeout(() => showWalletModal(), 100);
+						setTimeout(() => connectWallet(), 100);
 					});
 				}
 
@@ -2220,7 +2220,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				e.stopPropagation();
 				if (!connectedAddress) {
 					// Not connected - show wallet modal
-					showWalletModal();
+					connectWallet();
 				} else {
 					// Connected - toggle dropdown
 					globalWalletWidget.classList.toggle('open');
@@ -7153,7 +7153,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// Connect button in messaging prompt
 		if (msgConnectBtn) {
 			msgConnectBtn.addEventListener('click', () => {
-				showWalletModal();
+				connectWallet();
 			});
 		}
 
@@ -7516,7 +7516,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			msgSendBtn.addEventListener('click', async () => {
 				// If not connected, show wallet modal
 				if (!connectedAddress) {
-					showWalletModal();
+					connectWallet();
 					return;
 				}
 
