@@ -1258,7 +1258,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 	</div>
 
 	<script type="module">
-		import { getWallets } from 'https://esm.sh/@mysten/wallet-standard@0.13.8';
+		import { getWallets } from 'https://esm.sh/@mysten/wallet-standard@0.19.9';
 		import { SuiClient } from 'https://esm.sh/@mysten/sui@1.45.2/client';
 		import { Transaction } from 'https://esm.sh/@mysten/sui@1.45.2/transactions';
 		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.9.13';

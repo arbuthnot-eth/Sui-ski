@@ -764,8 +764,12 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		</div>
 	</div>
 
-	<script>
-	(() => {
+	<script type="module">
+		import { getWallets } from 'https://esm.sh/@mysten/wallet-standard@0.19.9';
+		import { SuiClient } from 'https://esm.sh/@mysten/sui@1.45.2/client';
+		import { Transaction } from 'https://esm.sh/@mysten/sui@1.45.2/transactions';
+		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.9.13';
+
 		const NAME = ${serializeJson(cleanName)};
 		const NETWORK = ${serializeJson(network)};
 		const CAN_REGISTER = ${isRegisterable ? 'true' : 'false'};
@@ -777,44 +781,68 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		let currentPrice = 0;
 		const registerPriceEl = document.getElementById('register-price');
 
+		// Use SuiNS SDK to get accurate pricing
+		async function fetchPricingFromSDK() {
+			try {
+				const client = new SuiClient({ url: RPC_URL });
+				const suinsClient = new SuinsClient({ client, network: NETWORK });
+				const domain = NAME + '.sui';
+
+				// Get price for 1 year registration using the SDK
+				const priceInMist = await suinsClient.calculatePrice({
+					domain,
+					years: 1
+				});
+
+				currentPrice = Number(priceInMist) / 1e9;
+				console.log('SuiNS SDK price for', domain, ':', currentPrice, 'SUI');
+
+				if (registerPriceEl) {
+					registerPriceEl.textContent = currentPrice.toFixed(2) + ' SUI';
+				}
+				updateRegisterButton();
+			} catch (e) {
+				console.error('Failed to fetch pricing from SDK:', e);
+				// Fallback to API
+				try {
+					const res = await fetch('/api/pricing');
+					pricingData = await res.json();
+					console.log('Pricing API response:', pricingData);
+					currentPrice = getPriceForLength(NAME_LENGTH);
+					if (registerPriceEl) {
+						registerPriceEl.textContent = currentPrice.toFixed(2) + ' SUI';
+					}
+					updateRegisterButton();
+				} catch (e2) {
+					console.error('Fallback pricing also failed:', e2);
+					if (registerPriceEl) {
+						registerPriceEl.textContent = '-- SUI';
+					}
+				}
+			}
+		}
+
 		function getPriceForLength(length) {
 			if (!pricingData) return 0;
 			// Check exact length first
 			if (pricingData[String(length)]) {
-				return pricingData[String(length)] / 1e9;
+				return Number(pricingData[String(length)]) / 1e9;
 			}
 			// Check ranges
 			for (const [key, value] of Object.entries(pricingData)) {
 				if (key.includes('-')) {
 					const [min, max] = key.split('-').map(Number);
 					if (length >= min && length <= max) {
-						return value / 1e9;
+						return Number(value) / 1e9;
 					}
 				}
 			}
-			// Default
-			return (pricingData['5-63'] || pricingData['5'] || 200000000000) / 1e9;
-		}
-
-		async function fetchPricing() {
-			try {
-				const res = await fetch('/api/pricing');
-				pricingData = await res.json();
-				currentPrice = getPriceForLength(NAME_LENGTH);
-				if (registerPriceEl) {
-					registerPriceEl.textContent = currentPrice + ' SUI';
-				}
-				updateRegisterButton();
-			} catch (e) {
-				console.error('Failed to fetch pricing:', e);
-				if (registerPriceEl) {
-					registerPriceEl.textContent = '-- SUI';
-				}
-			}
+			// Default for 5+ char names: 2 SUI (2e9 MIST)
+			return 2;
 		}
 
 		// Fetch pricing immediately
-		fetchPricing();
+		fetchPricingFromSDK();
 
 		// ========== WALLET CONNECTION ==========
 		const globalWalletWidget = document.getElementById('global-wallet-widget');
@@ -832,49 +860,81 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		let connectedAccount = null;
 		let connectedAddress = null;
 
-		// Wallet Standard API
-		function getWalletsApi() {
-			if (typeof window !== 'undefined' && window.navigator) {
-				const wallets = window.navigator.wallets || window.wallets;
-				if (wallets) return wallets;
-			}
-			return null;
+		// Wallet Standard API (proper implementation)
+		let walletsApi = null;
+		try {
+			walletsApi = getWallets();
+		} catch (e) {
+			console.error('Failed to init wallet API:', e);
 		}
 
 		function getSuiWallets() {
 			const wallets = [];
-			const walletsApi = getWalletsApi();
-			if (walletsApi && typeof walletsApi.get === 'function') {
-				const registered = walletsApi.get();
-				for (const w of registered) {
-					if (w.chains && w.chains.some(c => c.startsWith('sui:'))) {
-						wallets.push(w);
+			const seenNames = new Set();
+
+			// First, try wallet-standard registry
+			if (walletsApi) {
+				try {
+					const standardWallets = walletsApi.get();
+					for (const wallet of standardWallets) {
+						if (wallet.chains?.some(chain => chain.startsWith('sui:'))) {
+							wallets.push(wallet);
+							seenNames.add(wallet.name);
+						}
 					}
+				} catch (e) {
+					console.log('Error getting wallets from standard:', e);
 				}
 			}
-			// Also check window wallets
-			if (window.suiWallet) wallets.push(window.suiWallet);
-			if (window.phantom?.sui) wallets.push(window.phantom.sui);
-			// Dedupe
-			const seen = new Set();
-			return wallets.filter(w => {
-				const key = w.name || w.id || JSON.stringify(w);
-				if (seen.has(key)) return false;
-				seen.add(key);
-				return true;
-			});
+
+			// Fallback: check window globals for common Sui wallets
+			const windowWallets = [
+				{ check: () => window.phantom?.sui, name: 'Phantom', icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4Ij48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjNTM0QkI1Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNTUxQkY5Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjEyOCIgaGVpZ2h0PSIxMjgiIGZpbGw9InVybCgjYSkiIHJ4PSIyNCIvPjxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0xMTAuNCw2NC4xYy0uMy0xNS44LTEyLjQtMjguMi0yNy4zLTI4LjVIMjcuNmMtMy4yLDAtNS44LDIuNi01LjgsNS44djg1LjRjMCwxLjQuNCwyLjguNiw0LjIuMi40LjQsLjguNSwxLjNsMCwwYy4xLjMuMi43LjQsMS4xLjIuNS41LDEsLjgsMS41LjMuNi43LDEuMSwxLjEsMS43bDAsMGMuNS43LDEuMSwxLjMsMS43LDEuOWwwLDBjLjcuNywxLjUsMS4zLDIuMywxLjhsLjEuMWMuOC41LDEuNiwuOSwyLjUsMS4yLjMuMS42LjIuOS4zaDBoMC4xYy42LjIsMS4yLjMsMS44LjRoMGMuMSwwLC4yLDAsLjMsMCwuNS4xLDEuMS4xLDEuNi4xaDYxLjljMy4yLDAsNS44LTIuNiw1LjgtNS44VjY0LjFoMFoiLz48L3N2Zz4=' },
+				{ check: () => window.suiWallet, name: 'Sui Wallet', icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cmVjdCB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIGZpbGw9IiM2RkJDRjAiIHJ4PSI4Ii8+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTI4LjYsMTUuM2MtLjktMy4yLTQuNi01LjUtOS4yLTUuNXMtOC4zLDIuMy05LjIsNS41Yy0uMi44LS4zLDEuNi0uMywyLjRzLjEsMS43LjMsMi41Yy45LDMuMiw0LjYsNS41LDkuMiw1LjVzOC4zLTIuMyw5LjItNS41Yy4yLS44LjMtMS42LjMtMi41cy0uMS0xLjYtLjMtMi40WiIvPjxwYXRoIGZpbGw9IiM2RkJDRjAiIGQ9Ik0xOS40LDE0LjVjLTIuNCwwLTQuMywxLjQtNC4zLDMuMXMxLjksMy4xLDQuMywzLjEsNC4zLTEuNCw0LjMtMy4xLTEuOS0zLjEtNC4zLTMuMVoiLz48L3N2Zz4=' },
+			];
+
+			for (const wc of windowWallets) {
+				try {
+					const wallet = wc.check();
+					if (wallet && !seenNames.has(wc.name)) {
+						// Wrap window wallet to match wallet-standard interface
+						wallets.push({
+							name: wc.name,
+							icon: wallet.icon || wc.icon,
+							chains: ['sui:mainnet', 'sui:testnet'],
+							features: wallet.features || {
+								'standard:connect': wallet.connect ? { connect: wallet.connect.bind(wallet) } : undefined,
+								'sui:signAndExecuteTransaction': wallet.signAndExecuteTransaction
+									? { signAndExecuteTransaction: wallet.signAndExecuteTransaction.bind(wallet) }
+									: undefined,
+							},
+							accounts: wallet.accounts || [],
+							_rawWallet: wallet,
+						});
+						seenNames.add(wc.name);
+					}
+				} catch (e) {
+					console.log('Error checking window wallet:', e);
+				}
+			}
+
+			return wallets;
 		}
 
 		async function detectWallets() {
-			return new Promise((resolve) => {
-				const wallets = getSuiWallets();
-				if (wallets.length > 0) {
-					resolve(wallets);
-					return;
-				}
-				// Wait briefly for wallet injection
-				setTimeout(() => resolve(getSuiWallets()), 500);
-			});
+			// Give wallets a moment to register
+			await new Promise(r => setTimeout(r, 100));
+			let wallets = getSuiWallets();
+			if (wallets.length > 0) return wallets;
+
+			// Wait a bit more for slow wallets
+			await new Promise(r => setTimeout(r, 500));
+			wallets = getSuiWallets();
+			if (wallets.length > 0) return wallets;
+
+			// Final attempt
+			await new Promise(r => setTimeout(r, 1000));
+			return getSuiWallets();
 		}
 
 		function renderWalletList(wallets) {
@@ -1016,7 +1076,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 
 			if (currentPrice <= 0) {
 				showRegisterStatus('Loading pricing...', 'info');
-				await fetchPricing();
+				await fetchPricingFromSDK();
 				if (currentPrice <= 0) {
 					showRegisterStatus('Failed to load pricing. Please refresh.', 'error');
 					return;
@@ -1028,11 +1088,6 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			hideRegisterStatus();
 
 			try {
-				// Import Sui SDK
-				const { Transaction } = await import('https://esm.sh/@mysten/sui@1.45.2/transactions');
-				const { SuiClient } = await import('https://esm.sh/@mysten/sui@1.45.2/client');
-				const { SuinsClient, SuinsTransaction } = await import('https://esm.sh/@mysten/suins@0.8.0');
-
 				showRegisterStatus('Connecting to Sui network...', 'info');
 
 				const suiClient = new SuiClient({ url: RPC_URL });
@@ -1466,7 +1521,6 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		setInterval(loadBids, 60_000);
 		document.getElementById('queue-form').addEventListener('submit', submitBid);
 		document.getElementById('tx-form').addEventListener('submit', relayTransaction);
-	})();
 	</script>
 </body>
 </html>`
