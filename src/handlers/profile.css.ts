@@ -3480,6 +3480,65 @@ export const profileStyles = `
 			border: 1px solid rgba(96, 165, 250, 0.3);
 		}
 
+		/* Owner Inbox Header */
+		.msg-owner-inbox-header {
+			display: flex;
+			align-items: center;
+			gap: 16px;
+			padding: 20px;
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.1), rgba(139, 92, 246, 0.1));
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 12px;
+			margin-bottom: 12px;
+		}
+		.msg-owner-inbox-header svg {
+			color: var(--accent);
+			flex-shrink: 0;
+		}
+		.msg-owner-inbox-header h4 {
+			margin: 0 0 4px 0;
+			font-size: 1.1rem;
+			color: var(--text);
+		}
+		.msg-owner-inbox-header p {
+			margin: 0;
+			font-size: 0.85rem;
+			color: var(--text-muted);
+		}
+		.msg-refresh-inbox-btn {
+			margin-left: auto;
+			background: rgba(96, 165, 250, 0.15);
+			border: 1px solid rgba(96, 165, 250, 0.3);
+			border-radius: 8px;
+			padding: 10px;
+			cursor: pointer;
+			transition: all 0.2s;
+			color: var(--accent);
+		}
+		.msg-refresh-inbox-btn:hover {
+			background: rgba(96, 165, 250, 0.25);
+			transform: rotate(180deg);
+		}
+		.msg-refresh-inbox-btn svg {
+			width: 18px;
+			height: 18px;
+		}
+		.msg-owner-note {
+			font-size: 0.85rem;
+			color: var(--text-muted);
+			text-align: center;
+			padding: 12px;
+			background: rgba(0, 0, 0, 0.2);
+			border-radius: 8px;
+		}
+		.msg-owner-note a {
+			color: var(--accent);
+			text-decoration: none;
+		}
+		.msg-owner-note a:hover {
+			text-decoration: underline;
+		}
+
 		/* Conversation Section */
 		.msg-conversation-section {
 			background: rgba(22, 22, 30, 0.9);

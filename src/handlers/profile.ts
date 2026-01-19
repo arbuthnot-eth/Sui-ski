@@ -7249,18 +7249,43 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			}
 		}
 
-		// Update send button state
+		// Update send button state and compose visibility
 		function updateSendButtonState() {
 			if (!msgSendBtn || !msgSendBtnText || !msgComposeInput) return;
 
 			const hasContent = msgComposeInput.value.trim().length > 0;
 			const isOwner = isProfileOwner();
+			const composeSection = document.getElementById('msg-compose-section');
 
 			if (isOwner) {
-				// Profile owner sees their inbox
-				msgSendBtnText.textContent = 'View Inbox';
-				msgSendBtn.disabled = false;
-				msgSendBtn.classList.add('ready');
+				// Profile owner sees their inbox - hide compose, show inbox view
+				if (composeSection) {
+					composeSection.innerHTML = \`
+						<div class="msg-owner-inbox-header">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+								<path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
+								<path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+							</svg>
+							<div>
+								<h4>Your Inbox</h4>
+								<p>Messages sent to @\${MESSAGING_RECIPIENT}.sui appear here</p>
+							</div>
+							<button class="msg-refresh-inbox-btn" id="msg-refresh-inbox-btn" title="Refresh inbox">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="23 4 23 10 17 10"></polyline>
+									<polyline points="1 20 1 14 7 14"></polyline>
+									<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+								</svg>
+							</button>
+						</div>
+						<p class="msg-owner-note">To send messages, visit other SuiNS profiles (e.g., <a href="https://suins.sui.ski">suins.sui.ski</a>)</p>
+					\`;
+					// Re-attach refresh handler
+					const refreshBtn = document.getElementById('msg-refresh-inbox-btn');
+					if (refreshBtn) {
+						refreshBtn.addEventListener('click', () => loadInbox());
+					}
+				}
 			} else if (!connectedAddress) {
 				msgSendBtnText.textContent = 'Connect Wallet';
 				msgSendBtn.disabled = false;
