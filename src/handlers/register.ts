@@ -8,26 +8,12 @@ const CORS_HEADERS = {
 	'Access-Control-Allow-Headers': 'Content-Type',
 }
 
-// SuiNS registration pricing (in SUI)
-const SUINS_PRICING: Record<number, number> = {
-	3: 500,  // 3-char names: 500 SUI/year
-	4: 100,  // 4-char names: 100 SUI/year
-	5: 20,   // 5+ char names: 20 SUI/year
-}
-
-function getRegistrationPrice(name: string, years: number = 1): number {
-	const len = name.length
-	if (len <= 3) return SUINS_PRICING[3] * years
-	if (len === 4) return SUINS_PRICING[4] * years
-	return SUINS_PRICING[5] * years
-}
 
 export function generateRegistrationPage(name: string, env: Env): string {
 	const cleanName = name.replace(/\.sui$/i, '').toLowerCase()
 	const network = env.SUI_NETWORK || 'mainnet'
 	const isRegisterable = cleanName.length >= 3
 	const defaultExec = new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16)
-	const price1Year = getRegistrationPrice(cleanName, 1)
 	const serializeJson = (value: unknown) =>
 		JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
 
@@ -643,7 +629,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				Quick Registration
 			</div>
 			<div class="register-hero">
-				<div class="register-price">${price1Year} SUI</div>
+				<div class="register-price" id="register-price"><span class="loading"></span></div>
 				<div class="register-price-label">1 year registration</div>
 			</div>
 			<button class="register-btn" id="register-btn">
@@ -783,8 +769,52 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		const NAME = ${serializeJson(cleanName)};
 		const NETWORK = ${serializeJson(network)};
 		const CAN_REGISTER = ${isRegisterable ? 'true' : 'false'};
-		const PRICE_SUI = ${price1Year};
 		const RPC_URL = ${serializeJson(env.SUI_RPC_URL)};
+		const NAME_LENGTH = NAME.length;
+
+		// ========== PRICING ==========
+		let pricingData = null;
+		let currentPrice = 0;
+		const registerPriceEl = document.getElementById('register-price');
+
+		function getPriceForLength(length) {
+			if (!pricingData) return 0;
+			// Check exact length first
+			if (pricingData[String(length)]) {
+				return pricingData[String(length)] / 1e9;
+			}
+			// Check ranges
+			for (const [key, value] of Object.entries(pricingData)) {
+				if (key.includes('-')) {
+					const [min, max] = key.split('-').map(Number);
+					if (length >= min && length <= max) {
+						return value / 1e9;
+					}
+				}
+			}
+			// Default
+			return (pricingData['5-63'] || pricingData['5'] || 200000000000) / 1e9;
+		}
+
+		async function fetchPricing() {
+			try {
+				const res = await fetch('/api/pricing');
+				pricingData = await res.json();
+				currentPrice = getPriceForLength(NAME_LENGTH);
+				if (registerPriceEl) {
+					registerPriceEl.textContent = currentPrice + ' SUI';
+				}
+				updateRegisterButton();
+			} catch (e) {
+				console.error('Failed to fetch pricing:', e);
+				if (registerPriceEl) {
+					registerPriceEl.textContent = '-- SUI';
+				}
+			}
+		}
+
+		// Fetch pricing immediately
+		fetchPricing();
 
 		// ========== WALLET CONNECTION ==========
 		const globalWalletWidget = document.getElementById('global-wallet-widget');
@@ -952,7 +982,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		function updateRegisterButton() {
 			if (!registerBtn || !registerBtnText) return;
 			if (connectedAddress) {
-				registerBtnText.textContent = 'Register ' + NAME + '.sui for ' + PRICE_SUI + ' SUI';
+				const priceText = currentPrice > 0 ? currentPrice + ' SUI' : '...';
+				registerBtnText.textContent = 'Register ' + NAME + '.sui for ' + priceText;
 				registerBtn.querySelector('svg').innerHTML = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>';
 			} else {
 				registerBtnText.textContent = 'Connect Wallet to Register';
@@ -983,6 +1014,15 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				return;
 			}
 
+			if (currentPrice <= 0) {
+				showRegisterStatus('Loading pricing...', 'info');
+				await fetchPricing();
+				if (currentPrice <= 0) {
+					showRegisterStatus('Failed to load pricing. Please refresh.', 'error');
+					return;
+				}
+			}
+
 			registerBtn.disabled = true;
 			registerBtnText.textContent = 'Building transaction...';
 			hideRegisterStatus();
@@ -1005,14 +1045,15 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				if (!coinConfig) throw new Error('SuiNS coin config not found');
 
 				const domain = NAME + '.sui';
-				const priceInMist = BigInt(PRICE_SUI) * BigInt(1_000_000_000);
+				// Add a small buffer (1%) for any rounding or fee changes
+				const priceWithBuffer = Math.ceil(currentPrice * 1.01 * 1_000_000_000);
 
 				showRegisterStatus('Building registration transaction...', 'info');
 
-				// Split coin for payment
-				const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(priceInMist)]);
+				// Split coin for payment (SDK will use exact amount needed)
+				const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(priceWithBuffer)]);
 
-				// Register the name
+				// Register the name - SDK handles exact pricing
 				const nft = suinsTx.register({
 					domain: domain,
 					years: 1,
@@ -1068,7 +1109,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				if (error.message?.includes('rejected') || error.message?.includes('cancelled')) {
 					showRegisterStatus('Transaction cancelled', 'error');
 				} else if (error.message?.includes('Insufficient')) {
-					showRegisterStatus('Insufficient SUI balance. You need ' + PRICE_SUI + ' SUI plus gas.', 'error');
+					showRegisterStatus('Insufficient SUI balance. You need ' + currentPrice + ' SUI plus gas.', 'error');
 				} else {
 					showRegisterStatus('Failed: ' + (error.message || 'Unknown error'), 'error');
 				}
