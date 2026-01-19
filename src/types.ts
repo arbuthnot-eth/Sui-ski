@@ -21,6 +21,12 @@ export interface Env {
 	LLM_API_URL?: string
 	// Optional: Agency registry object ID
 	AGENCY_REGISTRY_ID?: string
+	// Optional: Seal package ID for encrypted subscriptions
+	SEAL_PACKAGE_ID?: string
+	// Optional: Walrus publisher URL for storing encrypted blobs
+	WALRUS_PUBLISHER_URL?: string
+	// Optional: Walrus aggregator URL for retrieving blobs
+	WALRUS_AGGREGATOR_URL?: string
 }
 
 export type RouteType = 'suins' | 'content' | 'rpc' | 'root' | 'mvr' | 'messaging' | 'app' | 'agents'

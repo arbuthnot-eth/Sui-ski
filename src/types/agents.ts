@@ -316,7 +316,8 @@ export interface NewsPost {
 
 /**
  * Private subscription to a SuiNS name's feed
- * Subscriptions are stored locally and optionally on-chain for persistence
+ * Subscriptions are encrypted with Seal and stored on Walrus for privacy
+ * Only the subscriber can decrypt their subscription list
  */
 export interface Subscription {
 	/** Subscriber's address */
@@ -329,12 +330,43 @@ export interface Subscription {
 	subscribedAt: number
 	/** Whether to receive push notifications */
 	notifications: boolean
-	/** Privacy setting - subscriptions are private by default */
-	isPrivate: boolean
 	/** Optional nickname for the subscription */
 	nickname?: string
 	/** Last time the feed was checked */
 	lastCheckedAt?: number
+}
+
+/**
+ * Encrypted subscription blob stored on Walrus
+ * The blob contents are Seal-encrypted, only decryptable by the subscriber
+ */
+export interface EncryptedSubscriptionBlob {
+	/** Walrus blob ID containing Seal-encrypted subscription data */
+	blobId: string
+	/** Subscriber's address (public, used for lookup) */
+	subscriberAddress: string
+	/** Nonce/version for blob updates */
+	version: number
+	/** Timestamp of last update */
+	updatedAt: number
+	/** Seal policy ID used for encryption */
+	sealPolicyId: string
+}
+
+/**
+ * On-chain subscription index entry
+ * Maps subscriber address to their encrypted Walrus blob
+ * This allows cross-device sync while maintaining privacy
+ */
+export interface SubscriptionIndex {
+	/** Subscriber's address */
+	address: string
+	/** Current encrypted blob ID on Walrus */
+	blobId: string
+	/** Blob version for conflict resolution */
+	version: number
+	/** Seal policy ID for decryption */
+	sealPolicyId: string
 }
 
 /**
@@ -362,10 +394,23 @@ export interface FeedPost {
  * Subscription settings
  */
 export interface SubscriptionSettings {
-	/** Default privacy for new subscriptions */
-	defaultPrivate: boolean
 	/** Enable push notifications */
 	pushEnabled: boolean
-	/** Sync subscriptions to chain (for cross-device) */
-	syncToChain: boolean
+	/** Auto-sync subscriptions to Walrus (encrypted with Seal) */
+	autoSync: boolean
+	/** Local cache expiry in milliseconds */
+	cacheExpiry: number
+}
+
+/**
+ * Seal encryption configuration for subscriptions
+ * Uses the Seal protocol from Sui Stack Messaging SDK
+ */
+export interface SealConfig {
+	/** Seal package ID on Sui */
+	packageId: string
+	/** Policy type for subscriber-only access */
+	policyType: 'address' | 'nft' | 'token'
+	/** Network (mainnet/testnet) */
+	network: 'mainnet' | 'testnet'
 }

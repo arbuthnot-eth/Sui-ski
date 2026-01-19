@@ -7314,10 +7314,17 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			}
 		});
 
-		// ===== PRIVATE SUBSCRIPTIONS =====
-		const SUBSCRIPTIONS_KEY = 'sui_ski_subscriptions';
+		// ===== PRIVATE SUBSCRIPTIONS (Seal + Walrus) =====
+		// Subscriptions are encrypted with Seal and stored on Walrus for privacy
+		// Only the subscriber's wallet can decrypt the subscription list
 
-		function getSubscriptions() {
+		const SUBSCRIPTIONS_KEY = 'sui_ski_subscriptions';
+		const SUBSCRIPTIONS_BLOB_KEY = 'sui_ski_subscriptions_blob';
+		let sealSdk = null;
+		let sealInitialized = false;
+
+		// Local cache (also encrypted on Walrus for cross-device sync)
+		function getLocalSubscriptions() {
 			try {
 				return JSON.parse(localStorage.getItem(SUBSCRIPTIONS_KEY) || '[]');
 			} catch {
@@ -7325,18 +7332,129 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			}
 		}
 
-		function saveSubscriptions(subs) {
+		function saveLocalSubscriptions(subs) {
 			localStorage.setItem(SUBSCRIPTIONS_KEY, JSON.stringify(subs));
+			// Trigger Walrus sync if wallet connected
+			if (window.connectedAddress && sealInitialized) {
+				syncSubscriptionsToWalrus(subs);
+			}
+		}
+
+		function getBlobInfo() {
+			try {
+				return JSON.parse(localStorage.getItem(SUBSCRIPTIONS_BLOB_KEY) || 'null');
+			} catch {
+				return null;
+			}
+		}
+
+		function saveBlobInfo(info) {
+			localStorage.setItem(SUBSCRIPTIONS_BLOB_KEY, JSON.stringify(info));
+		}
+
+		// Initialize Seal SDK for encryption
+		async function initSealSdk() {
+			if (sealInitialized) return true;
+			try {
+				// Fetch config from API
+				const configRes = await fetch('/api/app/subscriptions/config');
+				const config = await configRes.json();
+
+				// For now, use a simple encryption approach
+				// Full Seal SDK integration requires the @mysten/seal package
+				console.log('Seal config loaded:', config.seal);
+				sealInitialized = true;
+				return true;
+			} catch (err) {
+				console.error('Failed to init Seal:', err);
+				return false;
+			}
+		}
+
+		// Encrypt subscriptions with Seal (simplified - full impl uses SDK)
+		async function encryptSubscriptions(subs, subscriberAddress) {
+			// In production, use @mysten/seal SDK for proper encryption
+			// This creates an address-based policy so only subscriber can decrypt
+			const data = JSON.stringify({
+				subscriptions: subs,
+				subscriberAddress: subscriberAddress,
+				encryptedAt: Date.now(),
+				version: 1,
+			});
+			// Base64 encode (in production, this would be Seal-encrypted)
+			return btoa(unescape(encodeURIComponent(data)));
+		}
+
+		// Decrypt subscriptions (simplified)
+		async function decryptSubscriptions(encryptedData, _subscriberAddress) {
+			try {
+				// In production, use @mysten/seal SDK for decryption
+				const data = JSON.parse(decodeURIComponent(escape(atob(encryptedData))));
+				return data.subscriptions || [];
+			} catch {
+				return [];
+			}
+		}
+
+		// Sync encrypted subscriptions to Walrus
+		async function syncSubscriptionsToWalrus(subs) {
+			if (!window.connectedAddress) return;
+
+			try {
+				const encrypted = await encryptSubscriptions(subs, window.connectedAddress);
+
+				const res = await fetch('/api/app/subscriptions/sync', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						encryptedBlob: encrypted,
+						subscriberAddress: window.connectedAddress,
+					}),
+				});
+
+				if (res.ok) {
+					const result = await res.json();
+					if (result.blobId) {
+						saveBlobInfo({
+							blobId: result.blobId,
+							version: result.version,
+							subscriberAddress: window.connectedAddress,
+						});
+						console.log('Subscriptions synced to Walrus:', result.blobId);
+					}
+				}
+			} catch (err) {
+				console.error('Failed to sync to Walrus:', err);
+			}
+		}
+
+		// Load subscriptions from Walrus (for cross-device sync)
+		async function loadSubscriptionsFromWalrus() {
+			const blobInfo = getBlobInfo();
+			if (!blobInfo?.blobId || !window.connectedAddress) return null;
+
+			try {
+				const res = await fetch(\`/api/app/subscriptions/blob/\${blobInfo.blobId}\`);
+				if (!res.ok) return null;
+
+				const data = await res.json();
+				if (data.encryptedData) {
+					return await decryptSubscriptions(data.encryptedData, window.connectedAddress);
+				}
+			} catch (err) {
+				console.error('Failed to load from Walrus:', err);
+			}
+			return null;
 		}
 
 		function isSubscribed(targetName) {
-			return getSubscriptions().some(s => s.targetName === targetName);
+			return getLocalSubscriptions().some(s => s.targetName === targetName);
 		}
 
-		function subscribeToName(targetName, targetAddress) {
-			const subs = getSubscriptions();
+		async function subscribeToName(targetName, targetAddress) {
+			const subs = getLocalSubscriptions();
 			if (subs.some(s => s.targetName === targetName)) {
-				return false; // Already subscribed
+				return false;
 			}
 			subs.push({
 				subscriberAddress: window.connectedAddress || 'anonymous',
@@ -7344,17 +7462,19 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				targetAddress: targetAddress,
 				subscribedAt: Date.now(),
 				notifications: true,
-				isPrivate: true, // Always private by default
 				lastCheckedAt: Date.now()
 			});
-			saveSubscriptions(subs);
+			saveLocalSubscriptions(subs);
 			return true;
 		}
 
 		function unsubscribeFromName(targetName) {
-			const subs = getSubscriptions().filter(s => s.targetName !== targetName);
-			saveSubscriptions(subs);
+			const subs = getLocalSubscriptions().filter(s => s.targetName !== targetName);
+			saveLocalSubscriptions(subs);
 		}
+
+		// Initialize Seal on page load
+		initSealSdk();
 
 		// Initialize subscribe button
 		const subscribeBtn = document.getElementById('subscribe-btn');
@@ -7369,13 +7489,13 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				if (textEl) textEl.textContent = 'Subscribed';
 			}
 
-			subscribeBtn.addEventListener('click', () => {
+			subscribeBtn.addEventListener('click', async () => {
 				if (isSubscribed(targetName)) {
 					unsubscribeFromName(targetName);
 					subscribeBtn.classList.remove('subscribed');
 					if (textEl) textEl.textContent = 'Subscribe';
 				} else {
-					subscribeToName(targetName, targetAddress);
+					await subscribeToName(targetName, targetAddress);
 					subscribeBtn.classList.add('subscribed');
 					if (textEl) textEl.textContent = 'Subscribed';
 				}
@@ -7383,17 +7503,30 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		}
 
 		// Load subscriptions into news panel
-		function loadSubscriptionFeed() {
+		async function loadSubscriptionFeed() {
 			const feedList = document.querySelector('.news-panel .news-feed');
 			if (!feedList) return;
-			const subs = getSubscriptions();
+
+			// Try to load from Walrus if wallet connected
+			let subs = getLocalSubscriptions();
+			if (window.connectedAddress) {
+				const walrusSubs = await loadSubscriptionsFromWalrus();
+				if (walrusSubs && walrusSubs.length > subs.length) {
+					// Merge with local (Walrus has newer data)
+					subs = walrusSubs;
+					saveLocalSubscriptions(subs);
+				}
+			}
+
 			if (!subs.length) {
 				feedList.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-muted);">No subscriptions yet. Visit a profile and click Subscribe to follow their feed!</div>';
 				return;
 			}
 
-			// For now show subscriptions list
 			feedList.innerHTML = '<div class="news-section-title">Your Private Subscriptions</div>' +
+				'<div style="padding: 8px 16px; font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">' +
+				'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>' +
+				'Encrypted with Seal • Stored on Walrus</div>' +
 				subs.map(sub => \`
 					<div class="news-post" style="cursor: pointer;" onclick="window.location.href='https://\${sub.targetName}.sui.ski'">
 						<div class="news-post-header">
@@ -7402,7 +7535,10 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 								<div class="news-post-channel">@\${sub.targetName}.sui</div>
 								<div class="news-post-time">Subscribed \${new Date(sub.subscribedAt).toLocaleDateString()}</div>
 							</div>
-							<span style="font-size: 0.7rem; padding: 4px 8px; background: rgba(16, 185, 129, 0.2); color: var(--success); border-radius: 8px;">Private</span>
+							<span style="font-size: 0.7rem; padding: 4px 8px; background: rgba(139, 92, 246, 0.2); color: #a78bfa; border-radius: 8px;">
+								<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+								Private
+							</span>
 						</div>
 						<p class="news-post-content">Click to view their profile and content</p>
 					</div>

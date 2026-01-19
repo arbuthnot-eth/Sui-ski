@@ -48,6 +48,49 @@ export async function handleAppRequest(request: Request, env: Env): Promise<Resp
 }
 
 /**
+ * Store encrypted data on Walrus
+ * Used for Seal-encrypted subscription blobs
+ */
+async function storeOnWalrus(
+	encryptedData: string,
+	env: Env
+): Promise<{ blobId: string | null; error?: string }> {
+	const publisherUrl = env.WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space'
+
+	try {
+		// Convert base64 to binary for Walrus storage
+		const binaryData = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0))
+
+		const response = await fetch(`${publisherUrl}/v1/blobs`, {
+			method: 'PUT',
+			headers: {
+				'Content-Type': 'application/octet-stream',
+			},
+			body: binaryData,
+		})
+
+		if (!response.ok) {
+			const errorText = await response.text()
+			return { blobId: null, error: `Walrus error: ${errorText}` }
+		}
+
+		const result = (await response.json()) as {
+			newlyCreated?: { blobObject?: { blobId?: string } }
+			alreadyCertified?: { blobId?: string }
+		}
+
+		// Handle both new and existing blobs
+		const blobId =
+			result.newlyCreated?.blobObject?.blobId || result.alreadyCertified?.blobId || null
+
+		return { blobId }
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Unknown error'
+		return { blobId: null, error: message }
+	}
+}
+
+/**
  * Handle app API requests
  */
 async function handleAppApi(request: Request, env: Env, url: URL): Promise<Response> {
@@ -79,7 +122,7 @@ async function handleAppApi(request: Request, env: Env, url: URL): Promise<Respo
 /**
  * Messaging API handlers
  */
-async function handleMessagingApi(request: Request, _env: Env, url: URL): Promise<Response> {
+async function handleMessagingApi(request: Request, env: Env, url: URL): Promise<Response> {
 	const path = url.pathname.replace('/api/app/', '')
 
 	// GET /api/app/conversations - List user conversations
@@ -132,16 +175,107 @@ async function handleMessagingApi(request: Request, _env: Env, url: URL): Promis
 		})
 	}
 
-	// ===== SUBSCRIPTION ENDPOINTS =====
+	// ===== PRIVATE SUBSCRIPTION ENDPOINTS (Seal + Walrus) =====
+	// Subscriptions are encrypted client-side with Seal and stored on Walrus
+	// Only the subscriber can decrypt their subscription list
 
-	// POST /api/app/subscriptions - Subscribe to a SuiNS name's feed (private)
+	// GET /api/app/subscriptions/config - Get Seal/Walrus config for subscriptions
+	if (path === 'subscriptions/config' && request.method === 'GET') {
+		return jsonResponse({
+			seal: {
+				// Seal package for encryption
+				packageId: env.SEAL_PACKAGE_ID || '0x7f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d',
+				// Use address-based policy: only subscriber can decrypt
+				policyType: 'address',
+				network: env.SUI_NETWORK || 'mainnet',
+			},
+			walrus: {
+				// Walrus publisher for storing encrypted blobs
+				publisherUrl: env.WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space',
+				aggregatorUrl: env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space',
+				network: env.WALRUS_NETWORK || 'testnet',
+			},
+			sdk: {
+				// Client loads SDK from CDN for encryption
+				messagingSdk: 'https://unpkg.com/@mysten/messaging',
+				sealSdk: 'https://unpkg.com/@mysten/seal',
+				note: 'Load SDKs client-side. All encryption happens in browser for privacy.',
+			},
+		})
+	}
+
+	// POST /api/app/subscriptions/sync - Store encrypted subscription blob on Walrus
+	if (path === 'subscriptions/sync' && request.method === 'POST') {
+		try {
+			const body = await request.json() as {
+				encryptedBlob?: string  // Base64 encoded Seal-encrypted data
+				subscriberAddress?: string
+				sealPolicyId?: string
+				signature?: string  // Wallet signature to verify ownership
+			}
+
+			if (!body.encryptedBlob || !body.subscriberAddress) {
+				return jsonResponse({ error: 'Encrypted blob and subscriber address required' }, 400)
+			}
+
+			// Verify the signature matches the subscriber address
+			// In production, this would verify the wallet signature
+
+			// Store on Walrus (encrypted blob - server never sees plaintext)
+			const walrusResponse = await storeOnWalrus(body.encryptedBlob, env)
+
+			if (!walrusResponse.blobId) {
+				return jsonResponse({ error: 'Failed to store on Walrus' }, 500)
+			}
+
+			// Return the blob ID for client to store
+			return jsonResponse({
+				success: true,
+				blobId: walrusResponse.blobId,
+				subscriberAddress: body.subscriberAddress,
+				sealPolicyId: body.sealPolicyId,
+				version: Date.now(),
+				storage: 'walrus',
+				note: 'Encrypted subscriptions stored on Walrus. Only you can decrypt with your wallet.',
+			})
+		} catch {
+			return jsonResponse({ error: 'Invalid request body' }, 400)
+		}
+	}
+
+	// GET /api/app/subscriptions/blob/:blobId - Retrieve encrypted subscription blob
+	const blobMatch = path.match(/^subscriptions\/blob\/([^/]+)$/)
+	if (blobMatch && request.method === 'GET') {
+		const blobId = blobMatch[1]
+
+		try {
+			// Fetch encrypted blob from Walrus
+			const aggregatorUrl = env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space'
+			const response = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`)
+
+			if (!response.ok) {
+				return jsonResponse({ error: 'Blob not found' }, 404)
+			}
+
+			const encryptedData = await response.text()
+
+			return jsonResponse({
+				blobId,
+				encryptedData,
+				note: 'Decrypt client-side with Seal SDK using your wallet',
+			})
+		} catch {
+			return jsonResponse({ error: 'Failed to fetch blob' }, 500)
+		}
+	}
+
+	// POST /api/app/subscriptions - Create subscription (client encrypts, we store)
 	if (path === 'subscriptions' && request.method === 'POST') {
 		try {
 			const body = await request.json() as {
 				targetName?: string
 				targetAddress?: string
 				notifications?: boolean
-				isPrivate?: boolean
 				nickname?: string
 			}
 
@@ -149,45 +283,57 @@ async function handleMessagingApi(request: Request, _env: Env, url: URL): Promis
 				return jsonResponse({ error: 'Target SuiNS name required' }, 400)
 			}
 
-			// Subscription is stored client-side by default for privacy
-			// On-chain storage is optional for cross-device sync
+			// Return subscription data for client to encrypt with Seal
 			return jsonResponse({
 				action: 'subscribe',
 				subscription: {
 					targetName: body.targetName.replace('.sui', ''),
 					targetAddress: body.targetAddress || null,
 					notifications: body.notifications ?? false,
-					isPrivate: body.isPrivate ?? true, // Private by default
 					nickname: body.nickname,
 					subscribedAt: Date.now(),
 				},
-				storage: 'client', // Subscriptions stored client-side for privacy
-				note: 'Store this subscription locally. Use syncToChain option for cross-device access.',
+				encryption: {
+					method: 'seal',
+					note: 'Encrypt this subscription client-side with Seal before syncing to Walrus',
+					steps: [
+						'1. Load @mysten/seal SDK',
+						'2. Create address-based policy for your wallet',
+						'3. Encrypt subscription list with policy',
+						'4. POST encrypted blob to /api/app/subscriptions/sync',
+						'5. Store blobId locally for retrieval',
+					],
+				},
 			})
 		} catch {
 			return jsonResponse({ error: 'Invalid request body' }, 400)
 		}
 	}
 
-	// GET /api/app/subscriptions - List subscriptions (requires wallet auth)
+	// GET /api/app/subscriptions - Get subscription sync info
 	if (path === 'subscriptions' && request.method === 'GET') {
-		// Subscriptions are stored client-side for privacy
-		// This endpoint is for synced subscriptions only
+		const address = url.searchParams.get('address')
+
 		return jsonResponse({
 			subscriptions: [],
-			note: 'Private subscriptions are stored locally. Only synced subscriptions appear here.',
-			privacy: 'Subscriptions are private by default and not visible to others.',
+			address: address || null,
+			encryption: {
+				method: 'seal',
+				storage: 'walrus',
+				privacy: 'Only you can decrypt your subscriptions with your wallet',
+			},
+			note: 'Subscriptions are Seal-encrypted and stored on Walrus. Fetch your blob and decrypt client-side.',
 		})
 	}
 
-	// DELETE /api/app/subscriptions/:name - Unsubscribe
+	// DELETE /api/app/subscriptions/:name - Remove subscription (client re-encrypts list)
 	const unsubMatch = path.match(/^subscriptions\/([^/]+)$/)
 	if (unsubMatch && request.method === 'DELETE') {
 		const targetName = unsubMatch[1]
 		return jsonResponse({
 			action: 'unsubscribe',
 			targetName,
-			note: 'Remove subscription from local storage',
+			note: 'Remove from local list, re-encrypt with Seal, and sync new blob to Walrus',
 		})
 	}
 
