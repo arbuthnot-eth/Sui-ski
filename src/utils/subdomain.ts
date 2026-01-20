@@ -18,6 +18,8 @@ const MVR_PATTERN = /^([a-z0-9-]+)--([a-z0-9-]+)(--v(\d+))?$/
  * - sui.ski -> root landing page
  * - myname.sui.ski -> SuiNS name resolution
  * - rpc.sui.ski -> RPC proxy endpoint
+ * - app.sui.ski -> PWA app (chat, channels, news, agents)
+ * - agents.sui.ski -> Agent marketplace and registry
  * - ipfs-{cid}.sui.ski -> Direct IPFS content
  * - walrus-{blobId}.sui.ski -> Direct Walrus content
  * - {pkg}--{name}.sui.ski -> MVR package resolution
@@ -42,6 +44,21 @@ export function parseSubdomain(hostname: string): ParsedSubdomain {
 	// RPC proxy
 	if (subdomain === 'rpc') {
 		return { type: 'rpc', subdomain, hostname: host }
+	}
+
+	// Messaging subdomain (msg.sui.ski)
+	if (subdomain === 'msg') {
+		return { type: 'messaging', subdomain, hostname: host }
+	}
+
+	// App subdomain (app.sui.ski) - PWA for chat, channels, news, agents
+	if (subdomain === 'app') {
+		return { type: 'app', subdomain, hostname: host }
+	}
+
+	// Agents subdomain (agents.sui.ski) - Agent marketplace
+	if (subdomain === 'agents') {
+		return { type: 'agents', subdomain, hostname: host }
 	}
 
 	// Direct IPFS content: ipfs-{cid}.sui.ski

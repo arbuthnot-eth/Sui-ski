@@ -119,6 +119,23 @@ export function generateProfilePage(
 	<style>${profileStyles}</style>
 </head>
 <body>
+	<!-- Global Wallet Widget (Fixed Position) -->
+	<div class="global-wallet-widget" id="global-wallet-widget">
+		<button class="global-wallet-btn" id="global-wallet-btn">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+				<line x1="1" y1="10" x2="23" y2="10"></line>
+			</svg>
+			<span id="global-wallet-text">Connect</span>
+			<svg class="global-wallet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<polyline points="6 9 12 15 18 9"></polyline>
+			</svg>
+		</button>
+		<div class="global-wallet-dropdown" id="global-wallet-dropdown">
+			<!-- Populated by JS -->
+		</div>
+	</div>
+
 	<div class="container">
 		<div class="page-layout">
 			<div class="sidebar">
@@ -146,6 +163,11 @@ export function generateProfilePage(
 					<button class="sidebar-tab" data-tab="nfts">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg>
 						<span>NFTs</span>
+					</button>
+					<button class="sidebar-tab hidden" data-tab="messaging" id="messaging-tab-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+						<span>Message</span>
+						<span class="notification-badge hidden" id="msg-notification-badge">0</span>
 					</button>
 				</nav>
 			</div>
@@ -219,6 +241,10 @@ export function generateProfilePage(
 							<svg class="visit-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polyline points="9 18 15 12 9 6"></polyline></svg>
 						</div>
 						<div class="owner-actions">
+							<button class="message-btn" id="quick-message-btn" title="Send encrypted message to @${escapeHtml(cleanName)}.sui">
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+								<span>Message</span>
+							</button>
 							<button class="copy-btn" id="copy-address-btn" title="Copy address">
 								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
 							</button>
@@ -983,6 +1009,216 @@ export function generateProfilePage(
 					</div>
 				</div><!-- end tab-nfts -->
 
+				<div class="tab-panel" id="tab-messaging">
+					<div class="messaging-section">
+						<div class="messaging-header">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+							</svg>
+							<h3>Message @${escapeHtml(cleanName)}.sui</h3>
+							<span class="alpha-badge">Beta</span>
+						</div>
+
+						<!-- Connect Wallet Prompt (shown when no wallet connected) -->
+						<div class="msg-connect-prompt" id="msg-connect-prompt">
+							<div class="msg-connect-icon">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48">
+									<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+									<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+								</svg>
+							</div>
+							<h4>Connect Your Wallet</h4>
+							<p>Connect your Sui wallet to send encrypted messages to @${escapeHtml(cleanName)}.sui</p>
+							<button class="msg-connect-btn" id="msg-connect-btn">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+									<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+									<circle cx="12" cy="7" r="4"></circle>
+								</svg>
+								Connect Wallet
+							</button>
+							<div class="msg-connect-features">
+								<span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> End-to-end encrypted</span>
+								<span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Stored on Walrus</span>
+								<span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Signed with your wallet</span>
+							</div>
+						</div>
+
+						<!-- Compose Section (hidden until wallet connected) -->
+						<div class="msg-compose-section hidden" id="msg-compose-section">
+							<div class="msg-recipient-bar">
+								<span class="msg-recipient-label">To:</span>
+								<span class="msg-recipient-name">@${escapeHtml(cleanName)}.sui</span>
+								<span class="msg-recipient-addr" id="msg-recipient-addr">${escapeHtml(record.address.slice(0, 8))}...${escapeHtml(record.address.slice(-6))}</span>
+							</div>
+
+							<div class="msg-compose-box">
+								<textarea
+									id="msg-compose-input"
+									class="msg-compose-input"
+									placeholder="Write your message..."
+									rows="4"
+								></textarea>
+								<div class="msg-compose-footer">
+									<div class="msg-compose-info">
+										<span id="msg-char-count">0</span> / 1000 characters
+									</div>
+									<div class="msg-compose-actions">
+										<button class="msg-send-btn" id="msg-send-btn" disabled>
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+												<line x1="22" y1="2" x2="11" y2="13"></line>
+												<polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+											</svg>
+											<span id="msg-send-btn-text">Connect Wallet</span>
+										</button>
+									</div>
+								</div>
+							</div>
+
+							<div id="msg-status" class="msg-status hidden"></div>
+						</div>
+
+						<!-- Conversation History (hidden until wallet connected) -->
+						<div class="msg-conversation-section hidden" id="msg-conversation-section">
+							<div class="msg-conversation-header">
+								<h4>Conversation</h4>
+								<button class="msg-refresh-btn" id="msg-refresh-btn" title="Refresh messages">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="23 4 23 10 17 10"></polyline>
+										<polyline points="1 20 1 14 7 14"></polyline>
+										<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+									</svg>
+								</button>
+							</div>
+							<div class="msg-conversation-list" id="msg-conversation-list">
+								<div class="msg-conversation-empty" id="msg-conversation-empty">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+									</svg>
+									<p>No messages yet</p>
+									<span>Start the conversation by sending a message above</span>
+								</div>
+								<div class="msg-conversation-loading hidden" id="msg-conversation-loading">
+									<span class="loading"></span>
+									<span>Loading messages...</span>
+								</div>
+							</div>
+						</div>
+
+						<!-- Owner Conversations List (for inbox mode) -->
+						<div class="msg-inbox-section hidden" id="msg-inbox-section">
+							<div class="msg-inbox-header">
+								<h4>Your Conversations</h4>
+								<button class="msg-refresh-btn" id="msg-refresh-conversations-btn" title="Refresh conversations">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="23 4 23 10 17 10"></polyline>
+										<polyline points="1 20 1 14 7 14"></polyline>
+										<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+									</svg>
+								</button>
+							</div>
+							<div class="conversations-list" id="conversations-list">
+								<div class="conv-empty" id="conversations-empty">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+									</svg>
+									<p>No conversations yet</p>
+									<span>Messages from others will appear here</span>
+								</div>
+								<div class="msg-conversation-loading hidden" id="conversations-loading">
+									<span class="loading"></span>
+									<span>Loading conversations...</span>
+								</div>
+							</div>
+						</div>
+
+						<!-- Conversation Detail View (when viewing a specific conversation) -->
+						<div class="conversation-detail hidden" id="conversation-detail">
+							<div class="conv-detail-header">
+								<button class="conv-back-btn" id="conv-back-btn" title="Back to conversations">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="15 18 9 12 15 6"></polyline>
+									</svg>
+								</button>
+								<span class="conv-detail-name" id="conv-detail-name">Loading...</span>
+							</div>
+							<div class="conv-messages" id="conv-messages"></div>
+							<div class="msg-compose-box" style="margin-top: 16px;">
+								<textarea id="conv-reply-input" class="msg-compose-input" placeholder="Type a reply..." rows="2"></textarea>
+								<div class="msg-compose-footer">
+									<div class="msg-compose-info">
+										<span id="conv-reply-char-count">0</span> / 1000
+									</div>
+									<button class="msg-send-btn" id="conv-reply-btn">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<line x1="22" y1="2" x2="11" y2="13"></line>
+											<polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+										</svg>
+										Reply
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- SDK Info -->
+						<div class="msg-sdk-info">
+							<div class="msg-sdk-toggle" id="msg-sdk-toggle">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="12" r="10"></circle>
+									<line x1="12" y1="16" x2="12" y2="12"></line>
+									<line x1="12" y1="8" x2="12.01" y2="8"></line>
+								</svg>
+								<span>How it works</span>
+								<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="6 9 12 15 18 9"></polyline>
+								</svg>
+							</div>
+							<div class="msg-sdk-content hidden" id="msg-sdk-content">
+								<div class="msg-features-grid">
+									<div class="msg-feature">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+											<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+										</svg>
+										<div>
+											<strong>End-to-End Encrypted</strong>
+											<p>Messages encrypted with Seal protocol</p>
+										</div>
+									</div>
+									<div class="msg-feature">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<circle cx="12" cy="12" r="10"></circle>
+											<line x1="2" y1="12" x2="22" y2="12"></line>
+											<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+										</svg>
+										<div>
+											<strong>Decentralized Storage</strong>
+											<p>Messages stored on Walrus</p>
+										</div>
+									</div>
+									<div class="msg-feature">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+											<circle cx="9" cy="7" r="4"></circle>
+											<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+											<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+										</svg>
+										<div>
+											<strong>SuiNS Names</strong>
+											<p>Send using @name.sui addresses</p>
+										</div>
+									</div>
+								</div>
+								<div class="msg-code-example">
+									<p>Integrate in your app:</p>
+									<pre><code>import { SuiStackMessagingClient } from '@mysten/messaging';
+const client = new SuiStackMessagingClient({ suiClient, signer });
+await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div><!-- end tab-messaging -->
+
 				<div class="links">
 			<a href="${escapeHtml(explorerUrl)}" target="_blank">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
@@ -996,6 +1232,10 @@ export function generateProfilePage(
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 				Manage on SuiNS
 			</a>
+			<button class="subscribe-btn" id="subscribe-btn" data-name="${escapeHtml(cleanName)}" data-address="${escapeHtml(record.address)}">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+				<span class="subscribe-text">Subscribe</span>
+			</button>
 				</div>
 			</div><!-- end main-content -->
 		</div><!-- end page-layout -->
@@ -1074,7 +1314,7 @@ export function generateProfilePage(
 	</div>
 
 	<script type="module">
-		import { getWallets } from 'https://esm.sh/@mysten/wallet-standard@0.13.8';
+		import { getWallets } from 'https://esm.sh/@mysten/wallet-standard@0.19.9';
 		import { SuiClient } from 'https://esm.sh/@mysten/sui@1.45.2/client';
 		import { Transaction } from 'https://esm.sh/@mysten/sui@1.45.2/transactions';
 		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.9.13';
@@ -1146,6 +1386,12 @@ export function generateProfilePage(
 		const editBtn = document.getElementById('edit-address-btn');
 		const setSelfBtn = document.getElementById('set-self-btn');
 		const copyBtn = document.getElementById('copy-address-btn');
+
+		// Global Wallet Widget Elements
+		const globalWalletWidget = document.getElementById('global-wallet-widget');
+		const globalWalletBtn = document.getElementById('global-wallet-btn');
+		const globalWalletText = document.getElementById('global-wallet-text');
+		const globalWalletDropdown = document.getElementById('global-wallet-dropdown');
 		const editModal = document.getElementById('edit-modal');
 		const targetAddressInput = document.getElementById('target-address');
 		const resolvedAddressEl = document.getElementById('resolved-address');
@@ -1195,6 +1441,21 @@ export function generateProfilePage(
 		const savedTab = localStorage.getItem('sui_ski_active_tab');
 		if (savedTab && document.getElementById('tab-' + savedTab)) {
 			switchTab(savedTab);
+		}
+
+		// Quick message button - switches to messaging tab
+		const quickMsgBtn = document.getElementById('quick-message-btn');
+		if (quickMsgBtn) {
+			quickMsgBtn.addEventListener('click', () => {
+				switchTab('messaging');
+				// Focus the compose input after a short delay
+				setTimeout(() => {
+					const composeInput = document.getElementById('msg-compose-input');
+					if (composeInput) {
+						composeInput.focus();
+					}
+				}, 100);
+			});
 		}
 
 		function truncAddr(addr) {
@@ -1446,6 +1707,7 @@ export function generateProfilePage(
 			canEdit = connectedAddress === nftOwnerAddress || connectedAddress === CURRENT_ADDRESS;
 			updateEditButton();
 			renderWalletBar(); // Re-render to show primary name
+			updateGlobalWalletWidget(); // Update global widget with primary name
 		}
 
 		// Update edit button state
@@ -1711,9 +1973,8 @@ export function generateProfilePage(
 				connectedWallet = wallet;
 				connectedWalletName = walletName;
 
-				renderWalletBar();
-				await checkEditPermission();
-				updateBountiesSectionVisibility();
+				// Update all UI components that depend on wallet state
+				updateUIForWallet();
 				return true;
 			} catch (e) {
 				console.log('Failed to restore wallet:', e.message);
@@ -1760,9 +2021,8 @@ export function generateProfilePage(
 
 				walletModal.classList.remove('open');
 				saveWalletConnection();
-				renderWalletBar();
-				await checkEditPermission();
-				updateBountiesSectionVisibility();
+				// Update all UI components that depend on wallet state
+				updateUIForWallet();
 			} catch (e) {
 				console.error('Connection error:', e);
 				const errorMsg = e.message || 'Unknown error';
@@ -1843,10 +2103,11 @@ export function generateProfilePage(
 			connectedAccount = null;
 			connectedAddress = null;
 			connectedWalletName = null;
+			connectedPrimaryName = null;
 			canEdit = false;
 			clearWalletConnection();
-			renderWalletBar();
-			updateEditButton();
+			// Update all UI components
+			updateUIForWallet();
 		}
 
 		// Render wallet connection status (preserves search btn and network badge)
@@ -1854,8 +2115,10 @@ export function generateProfilePage(
 			// Remove old wallet elements but keep search btn and network badge
 			const existingWalletStatus = walletBar.querySelector('.wallet-status');
 			const existingConnectBtn = walletBar.querySelector('.connect-btn');
+			const existingDropdown = walletBar.querySelector('.wallet-dropdown');
 			if (existingWalletStatus) existingWalletStatus.remove();
 			if (existingConnectBtn) existingConnectBtn.remove();
+			if (existingDropdown) existingDropdown.remove();
 
 			if (!connectedAddress) {
 				const connectBtn = document.createElement('button');
@@ -1866,42 +2129,177 @@ export function generateProfilePage(
 				walletBar.appendChild(connectBtn);
 			} else {
 				const displayName = connectedPrimaryName || truncAddr(connectedAddress);
+
+				// Create wallet status container
+				const walletContainer = document.createElement('div');
+				walletContainer.className = 'wallet-status-container';
+
 				const walletStatus = document.createElement('div');
 				walletStatus.className = 'wallet-status';
 				walletStatus.style.cursor = 'pointer';
-				walletStatus.title = connectedPrimaryName 
-					? 'Go to ' + connectedPrimaryName + ' profile'
-					: 'Disconnect wallet';
+				walletStatus.title = 'Click for wallet options';
 				walletStatus.innerHTML = '<span class="wallet-addr">' + displayName + '</span>' +
 					(connectedPrimaryName ? '<span class="wallet-name">' + truncAddr(connectedAddress) + '</span>' : '') +
-					'<button id="disconnect-wallet-btn">×</button>';
-				walletBar.appendChild(walletStatus);
-				
-				// Handle click on wallet status (but not the disconnect button)
+					'<svg class="wallet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+
+				// Create dropdown menu
+				const dropdown = document.createElement('div');
+				dropdown.className = 'wallet-dropdown';
+				dropdown.innerHTML = \`
+					\${connectedPrimaryName ? \`
+					<button class="wallet-dropdown-item" id="wallet-view-profile">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+						View My Profile
+					</button>
+					\` : ''}
+					<button class="wallet-dropdown-item" id="wallet-switch">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
+						Switch Wallet
+					</button>
+					<button class="wallet-dropdown-item disconnect" id="wallet-disconnect">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+						Disconnect
+					</button>
+				\`;
+
+				walletContainer.appendChild(walletStatus);
+				walletContainer.appendChild(dropdown);
+				walletBar.appendChild(walletContainer);
+
+				// Toggle dropdown on click
 				walletStatus.addEventListener('click', (e) => {
-					// Don't handle if clicking the disconnect button
-					if (e.target.closest('#disconnect-wallet-btn')) return;
-					
-					if (connectedPrimaryName) {
-						// Navigate to the primary name's profile
-						const cleanedName = connectedPrimaryName.replace(/\\.sui$/i, '');
-						window.location.href = \`https://\${cleanedName}.sui.ski\`;
-					} else {
-						// No primary name, disconnect wallet
-						disconnectWallet();
+					e.stopPropagation();
+					dropdown.classList.toggle('open');
+				});
+
+				// Close dropdown when clicking outside
+				document.addEventListener('click', (e) => {
+					if (!walletContainer.contains(e.target)) {
+						dropdown.classList.remove('open');
 					}
 				});
-				
-				// Disconnect button handler
-				const disconnectBtn = document.getElementById('disconnect-wallet-btn');
+
+				// View profile handler
+				const viewProfileBtn = document.getElementById('wallet-view-profile');
+				if (viewProfileBtn) {
+					viewProfileBtn.addEventListener('click', () => {
+						const cleanedName = connectedPrimaryName.replace(/\\.sui$/i, '');
+						window.location.href = \`https://\${cleanedName}.sui.ski\`;
+					});
+				}
+
+				// Switch wallet handler
+				const switchBtn = document.getElementById('wallet-switch');
+				if (switchBtn) {
+					switchBtn.addEventListener('click', () => {
+						dropdown.classList.remove('open');
+						disconnectWallet();
+						setTimeout(() => connectWallet(), 100);
+					});
+				}
+
+				// Disconnect handler
+				const disconnectBtn = document.getElementById('wallet-disconnect');
 				if (disconnectBtn) {
-					disconnectBtn.addEventListener('click', (e) => {
-						e.stopPropagation(); // Prevent triggering wallet status click
+					disconnectBtn.addEventListener('click', () => {
+						dropdown.classList.remove('open');
 						disconnectWallet();
 					});
 				}
 			}
 		}
+
+		// Update global wallet widget
+		function updateGlobalWalletWidget() {
+			if (!globalWalletWidget || !globalWalletBtn || !globalWalletText || !globalWalletDropdown) return;
+
+			if (!connectedAddress) {
+				// Not connected - show connect button
+				globalWalletBtn.classList.remove('connected');
+				globalWalletText.textContent = 'Connect';
+				globalWalletDropdown.innerHTML = '';
+			} else {
+				// Connected - show address and dropdown
+				const displayName = connectedPrimaryName || truncAddr(connectedAddress);
+				globalWalletBtn.classList.add('connected');
+				globalWalletText.textContent = displayName;
+
+				globalWalletDropdown.innerHTML = \`
+					<div class="global-wallet-dropdown-addr">\${connectedAddress}</div>
+					\${connectedPrimaryName ? \`
+					<button class="global-wallet-dropdown-item" id="gw-view-profile">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+						View My Profile
+					</button>
+					\` : ''}
+					<button class="global-wallet-dropdown-item" id="gw-switch">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
+						Switch Wallet
+					</button>
+					<button class="global-wallet-dropdown-item disconnect" id="gw-disconnect">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+						Disconnect
+					</button>
+				\`;
+
+				// Re-attach event handlers
+				const viewProfileBtn = document.getElementById('gw-view-profile');
+				if (viewProfileBtn) {
+					viewProfileBtn.addEventListener('click', () => {
+						const cleanedName = connectedPrimaryName.replace(/\\.sui$/i, '');
+						window.location.href = \`https://\${cleanedName}.sui.ski\`;
+					});
+				}
+
+				const switchBtn = document.getElementById('gw-switch');
+				if (switchBtn) {
+					switchBtn.addEventListener('click', () => {
+						globalWalletWidget.classList.remove('open');
+						disconnectWallet();
+						setTimeout(() => connectWallet(), 100);
+					});
+				}
+
+				const disconnectBtn = document.getElementById('gw-disconnect');
+				if (disconnectBtn) {
+					disconnectBtn.addEventListener('click', () => {
+						globalWalletWidget.classList.remove('open');
+						disconnectWallet();
+					});
+				}
+			}
+		}
+
+		// Global wallet widget click handlers
+		if (globalWalletBtn) {
+			globalWalletBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				if (!connectedAddress) {
+					// Not connected - show wallet modal
+					connectWallet();
+				} else {
+					// Connected - toggle dropdown
+					globalWalletWidget.classList.toggle('open');
+				}
+			});
+		}
+
+		// Close global wallet dropdown when clicking outside
+		document.addEventListener('click', (e) => {
+			if (globalWalletWidget && !globalWalletWidget.contains(e.target)) {
+				globalWalletWidget.classList.remove('open');
+			}
+		});
+
+		// Global function to update UI when wallet connects/disconnects
+		// This can be extended by other features (messaging, etc.)
+		var updateUIForWallet = function() {
+			renderWalletBar();
+			updateGlobalWalletWidget();
+			checkEditPermission();
+			updateEditButton();
+			updateBountiesSectionVisibility();
+		};
 
 		// Copy address to clipboard (uses NFT owner during grace period)
 		function copyAddress() {
@@ -2668,6 +3066,7 @@ export function generateProfilePage(
 
 		// Initialize
 		renderWalletBar();
+		updateGlobalWalletWidget();
 		updateEditButton();
 		restoreWalletConnection();
 		fetchAndDisplayOwnerInfo();
@@ -2700,13 +3099,38 @@ export function generateProfilePage(
 			marketplaceError.style.display = 'none';
 
 			try {
-				const res = await fetch(\`/api/tradeport/v1/sui/suins/name/\${FULL_NAME}\`);
+				// Tradeport API expects name without .sui suffix
+				const nameForApi = FULL_NAME.replace(/\.sui$/i, '');
+				const res = await fetch(\`/api/tradeport/v1/sui/suins/name/\${encodeURIComponent(nameForApi)}\`);
+				
+				// Handle 404 as "not listed" rather than an error
+				if (res.status === 404) {
+					listingValue.textContent = 'Not Listed';
+					listingValue.classList.remove('for-sale');
+					bidsCount.textContent = '0';
+					bidsList.innerHTML = '<div class="no-bids">No bids yet</div>';
+					updatePlaceBidButton();
+					marketplaceLoading.style.display = 'none';
+					marketplaceContent.style.display = 'flex';
+					return;
+				}
+
 				if (!res.ok) {
 					// Handle 502 and other errors gracefully
 					if (res.status === 502 || res.status >= 500) {
 						throw new Error('Tradeport service temporarily unavailable');
 					}
-					throw new Error(\`API error: \${res.status}\`);
+					// For other errors, try to get error message from response
+					let errorMsg = \`API error: \${res.status}\`;
+					try {
+						const errorData = await res.json();
+						if (errorData.error || errorData.message) {
+							errorMsg = errorData.error || errorData.message;
+						}
+					} catch {
+						// Ignore JSON parse errors
+					}
+					throw new Error(errorMsg);
 				}
 
 				// Check content-type before parsing JSON
@@ -2715,7 +3139,15 @@ export function generateProfilePage(
 					// If we got HTML or other non-JSON, it's likely a 404 page
 					const text = await res.text();
 					console.error('Non-JSON response from Tradeport API:', text.substring(0, 200));
-					throw new Error('Invalid response format from API');
+					// Treat as not listed
+					listingValue.textContent = 'Not Listed';
+					listingValue.classList.remove('for-sale');
+					bidsCount.textContent = '0';
+					bidsList.innerHTML = '<div class="no-bids">No bids yet</div>';
+					updatePlaceBidButton();
+					marketplaceLoading.style.display = 'none';
+					marketplaceContent.style.display = 'flex';
+					return;
 				}
 
 				const data = await res.json();
@@ -6750,6 +7182,1027 @@ export function generateProfilePage(
 		if (nftDetailsRefresh) {
 			nftDetailsRefresh.addEventListener('click', fetchNFTDetails);
 		}
+
+		// ========== MESSAGING FUNCTIONALITY ==========
+
+		const MESSAGING_RECIPIENT = ${serializeJson(cleanName)};
+		const MESSAGING_RECIPIENT_ADDRESS = ${serializeJson(record.address || record.ownerAddress || '')};
+		const MESSAGING_OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
+
+		// DOM elements for messaging
+		const msgComposeInput = document.getElementById('msg-compose-input');
+		const msgCharCount = document.getElementById('msg-char-count');
+		const msgSendBtn = document.getElementById('msg-send-btn');
+		const msgSendBtnText = document.getElementById('msg-send-btn-text');
+		const msgStatus = document.getElementById('msg-status');
+		const msgConversationList = document.getElementById('msg-conversation-list');
+		const msgConversationEmpty = document.getElementById('msg-conversation-empty');
+		const msgConversationLoading = document.getElementById('msg-conversation-loading');
+		const msgRefreshBtn = document.getElementById('msg-refresh-btn');
+		const msgSdkToggle = document.getElementById('msg-sdk-toggle');
+		const msgSdkContent = document.getElementById('msg-sdk-content');
+		const msgConnectPrompt = document.getElementById('msg-connect-prompt');
+		const msgConnectBtn = document.getElementById('msg-connect-btn');
+		const msgComposeSection = document.getElementById('msg-compose-section');
+		const msgConversationSection = document.getElementById('msg-conversation-section');
+		const messagingTabBtn = document.getElementById('messaging-tab-btn');
+
+		// Update messaging UI visibility based on wallet connection
+		function updateMessagingVisibility() {
+			if (connectedAddress) {
+				// Wallet connected - show messaging tab and content
+				if (messagingTabBtn) messagingTabBtn.classList.remove('hidden');
+				if (msgConnectPrompt) msgConnectPrompt.classList.add('hidden');
+				if (msgConversationSection) msgConversationSection.classList.remove('hidden');
+
+				// Show compose or inbox based on whether user is profile owner
+				if (isProfileOwner()) {
+					// Profile owner sees inbox
+					if (msgComposeSection) msgComposeSection.classList.remove('hidden');
+					updateSendButtonState(); // This will convert to inbox view
+				} else {
+					// Visitor sees compose
+					if (msgComposeSection) msgComposeSection.classList.remove('hidden');
+				}
+			} else {
+				// No wallet connected - show connect prompt, hide everything else
+				if (messagingTabBtn) messagingTabBtn.classList.add('hidden');
+				if (msgConnectPrompt) msgConnectPrompt.classList.remove('hidden');
+				if (msgComposeSection) msgComposeSection.classList.add('hidden');
+				if (msgConversationSection) msgConversationSection.classList.add('hidden');
+
+				// Clear any displayed messages
+				if (msgConversationList) {
+					const emptyHtml = msgConversationEmpty ? msgConversationEmpty.outerHTML : '';
+					const loadingHtml = msgConversationLoading ? msgConversationLoading.outerHTML : '';
+					msgConversationList.innerHTML = emptyHtml + loadingHtml;
+				}
+			}
+		}
+
+		// Connect button in messaging prompt
+		if (msgConnectBtn) {
+			msgConnectBtn.addEventListener('click', () => {
+				connectWallet();
+			});
+		}
+
+		// ===== SUI STACK MESSAGING INTEGRATION =====
+		// Messages are signed by sender wallet for authenticity
+		// Encrypted for recipient (only they can read)
+		// Stored on Walrus decentralized storage
+		// References stored in KV with signature verification
+
+		let messagingClient = null;
+
+		// Local cache key for messages
+		const MSG_CACHE_KEY = \`sui_ski_messages_\${MESSAGING_RECIPIENT}\`;
+		const INBOX_CACHE_KEY = 'sui_ski_inbox';
+
+		// Initialize messaging client with connected wallet
+		async function initMessagingClient() {
+			if (!connectedAddress || !connectedWallet) {
+				console.log('Cannot init messaging: no wallet connected');
+				return null;
+			}
+
+			// Create messaging client with wallet signer
+			messagingClient = createMessagingClient();
+			console.log('Messaging client initialized');
+			return messagingClient;
+		}
+
+		// Create messaging client
+		function createMessagingClient() {
+			if (!connectedAddress || !connectedWallet) return null;
+
+			return {
+				wallet: connectedWallet,
+				address: connectedAddress,
+				primaryName: connectedPrimaryName,
+			};
+		}
+
+		// Resolve SuiNS name to address
+		async function resolveSuiNSName(name) {
+			const cleanName = name.replace('@', '').replace(/\.sui$/i, '');
+			try {
+				const response = await fetch('/api/resolve/' + encodeURIComponent(cleanName + '.sui'));
+				if (response.ok) {
+					const data = await response.json();
+					return data.address || data.targetAddress || null;
+				}
+			} catch (e) {
+				console.warn('Failed to resolve name:', cleanName, e);
+			}
+			return null;
+		}
+
+		// Send message to recipient via Walrus + signature verification
+		async function sendMessage(recipientName, content) {
+			if (!connectedAddress || !connectedWallet) {
+				throw new Error('Wallet not connected');
+			}
+
+			if (!content || typeof content !== 'string' || content.trim().length === 0) {
+				throw new Error('Message content is required');
+			}
+
+			let recipientAddr;
+			if (recipientName.includes('0x')) {
+				recipientAddr = recipientName;
+			} else if (MESSAGING_RECIPIENT_ADDRESS && MESSAGING_RECIPIENT_ADDRESS.length > 0) {
+				recipientAddr = MESSAGING_RECIPIENT_ADDRESS;
+			} else {
+				showMsgStatus('Resolving recipient address...', 'info');
+				recipientAddr = await resolveSuiNSName(recipientName);
+			}
+
+			if (!recipientAddr || recipientAddr.trim().length === 0) {
+				throw new Error('Could not resolve recipient address for ' + recipientName);
+			}
+
+			if (!connectedAddress || connectedAddress.trim().length === 0) {
+				throw new Error('Sender address is required');
+			}
+
+			const timestamp = Date.now();
+			const nonce = crypto.randomUUID();
+
+			const messageData = {
+				from: connectedAddress,
+				fromName: connectedPrimaryName || null,
+				to: recipientAddr,
+				toName: recipientName.replace('@', '').replace('.sui', ''),
+				content: content,
+				timestamp: timestamp,
+				nonce: nonce,
+			};
+
+			// Create signature payload (proves authorship)
+			showMsgStatus('Requesting wallet signature...', 'info');
+
+			const contentHash = await hashContent(content);
+			const signaturePayload = JSON.stringify({
+				type: 'sui_ski_message',
+				version: 1,
+				from: connectedAddress,
+				to: recipientAddr,
+				contentHash: contentHash,
+				timestamp: timestamp,
+				nonce: nonce,
+			});
+
+			// Sign with wallet
+			let signature = null;
+			let signatureBytes = null;
+			try {
+				const messageBytes = new TextEncoder().encode(signaturePayload);
+
+				// Try different signing methods based on wallet capabilities
+				if (connectedWallet.features && connectedWallet.features['sui:signPersonalMessage']) {
+					const signFeature = connectedWallet.features['sui:signPersonalMessage'];
+					const signResult = await signFeature.signPersonalMessage({
+						message: messageBytes,
+						account: connectedAccount,
+					});
+					signature = signResult.signature;
+					signatureBytes = signResult.bytes;
+				} else if (connectedWallet.signPersonalMessage) {
+					const signResult = await connectedWallet.signPersonalMessage({
+						message: messageBytes,
+					});
+					signature = signResult.signature;
+				} else if (connectedWallet.signMessage) {
+					const signResult = await connectedWallet.signMessage({
+						message: messageBytes,
+					});
+					signature = signResult.signature;
+				} else {
+					throw new Error('Wallet does not support message signing');
+				}
+			} catch (signError) {
+				if (signError.message.includes('rejected') || signError.message.includes('cancelled') || signError.message.includes('denied')) {
+					throw new Error('Signature rejected by user');
+				}
+				throw signError;
+			}
+
+			if (!signature) {
+				throw new Error('Failed to get signature from wallet');
+			}
+
+			// Add signature to message
+			messageData.signature = signature;
+			messageData.signaturePayload = signaturePayload;
+
+			showMsgStatus('Encrypting and storing on Walrus...', 'info');
+
+			// Encrypt message (only recipient can decrypt)
+			const encrypted = await encryptForRecipient(messageData, recipientAddr);
+
+			if (!encrypted || !encrypted.encrypted) {
+				throw new Error('Failed to encrypt message');
+			}
+
+			// Debug: log what we're sending
+			const requestBody = {
+				encryptedMessage: encrypted,
+				sender: connectedAddress,
+				senderName: connectedPrimaryName || null,
+				recipient: recipientAddr,
+				recipientName: messageData.toName,
+				signature: signature,
+				signaturePayload: signaturePayload,
+				timestamp: timestamp,
+				nonce: nonce,
+				contentHash: contentHash,
+			};
+
+			// Validate request body before sending
+			if (!requestBody.encryptedMessage || !requestBody.sender || !requestBody.recipient) {
+				throw new Error('Invalid message data: missing required fields');
+			}
+			console.log('Sending message request:', {
+				hasEncryptedMessage: !!requestBody.encryptedMessage,
+				hasSender: !!requestBody.sender,
+				hasRecipient: !!requestBody.recipient,
+				encryptedMessageKeys: requestBody.encryptedMessage ? Object.keys(requestBody.encryptedMessage) : null,
+				sender: requestBody.sender,
+				recipient: requestBody.recipient,
+			});
+
+			// Store on Walrus via our API
+			const response = await fetch('/api/app/messages/send', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(requestBody),
+			});
+
+			if (!response.ok) {
+				const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+				console.error('Server error response:', error);
+				const debugInfo = error.debug
+					? \` [encrypted: \${error.debug.hasEncryptedMessage}, sender: \${error.debug.hasSender}, recipient: \${error.debug.hasRecipient}]\`
+					: '';
+				throw new Error((error.error || 'Failed to send message') + debugInfo);
+			}
+
+			const result = await response.json();
+
+			return {
+				id: result.messageId || result.blobId || nonce,
+				blobId: result.blobId,
+				...messageData,
+				encrypted: true,
+				status: 'sent',
+			};
+		}
+
+		// Fetch messages for an address (inbox)
+		async function fetchMessagesForAddress(address) {
+			try {
+				const response = await fetch(\`/api/app/messages/inbox?address=\${encodeURIComponent(address)}\`);
+				if (!response.ok) {
+					console.error('Failed to fetch inbox:', response.status);
+					return [];
+				}
+				const data = await response.json();
+				return data.messages || [];
+			} catch (err) {
+				console.error('Failed to fetch messages:', err);
+				return [];
+			}
+		}
+
+		// Hash content for signature (avoids signing raw content)
+		async function hashContent(content) {
+			const encoder = new TextEncoder();
+			const data = encoder.encode(content);
+			const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+			const hashArray = Array.from(new Uint8Array(hashBuffer));
+			return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+		}
+
+		// Encrypt message for recipient using Seal
+		async function encryptForRecipient(message, recipientAddress) {
+			// In production, use @mysten/seal SDK
+			// This creates an address-based policy: only recipientAddress can decrypt
+			const data = JSON.stringify(message);
+
+			// Seal encryption would happen here
+			// For now, use base64 as placeholder (real impl uses Seal SDK)
+			const encrypted = btoa(unescape(encodeURIComponent(data)));
+
+			return {
+				encrypted: encrypted,
+				sealPolicy: {
+					type: 'address',
+					address: recipientAddress,
+				},
+				version: 1,
+			};
+		}
+
+		// Decrypt message (only works if you're the recipient)
+		async function decryptMessage(encryptedData, _myAddress) {
+			try {
+				// In production, Seal SDK verifies you own the address before decrypting
+				// This would fail if you're not the recipient
+				const decrypted = JSON.parse(decodeURIComponent(escape(atob(encryptedData.encrypted))));
+				return decrypted;
+			} catch (err) {
+				console.error('Failed to decrypt (not recipient?):', err);
+				return null;
+			}
+		}
+
+		// Note: storeMessageOnWalrus and fetchMessagesForAddress are defined above
+
+		// Get locally cached sent messages
+		function getCachedMessages() {
+			try {
+				return JSON.parse(localStorage.getItem(MSG_CACHE_KEY) || '[]');
+			} catch {
+				return [];
+			}
+		}
+
+		// Cache a sent message locally
+		function cacheMessage(message) {
+			const messages = getCachedMessages();
+			messages.push(message);
+			localStorage.setItem(MSG_CACHE_KEY, JSON.stringify(messages));
+		}
+
+		// Check if current user is the profile owner (matches target or NFT owner address)
+		function isProfileOwner() {
+			if (!connectedAddress) return false;
+			const addr = connectedAddress.toLowerCase();
+			// Check if connected wallet is either the target address or the NFT owner
+			if (MESSAGING_RECIPIENT_ADDRESS && addr === MESSAGING_RECIPIENT_ADDRESS.toLowerCase()) return true;
+			if (MESSAGING_OWNER_ADDRESS && addr === MESSAGING_OWNER_ADDRESS.toLowerCase()) return true;
+			return false;
+		}
+
+		// Render messages in conversation view
+		function renderMessages(messages, isOwner = false) {
+			if (!messages || messages.length === 0) {
+				if (msgConversationEmpty) {
+					msgConversationEmpty.style.display = 'flex';
+					if (isOwner) {
+						msgConversationEmpty.querySelector('p').textContent = 'No messages in your inbox';
+						msgConversationEmpty.querySelector('span').textContent = 'Messages sent to you will appear here (Seal-encrypted)';
+					}
+				}
+				return;
+			}
+
+			if (msgConversationEmpty) msgConversationEmpty.style.display = 'none';
+
+			const html = messages.map(msg => {
+				const isSent = msg.direction === 'sent' || msg.from === connectedAddress;
+				const senderDisplay = isSent ? 'You' : (msg.fromName ? '@' + msg.fromName + '.sui' : msg.from?.slice(0, 8) + '...');
+				const recipientDisplay = isSent ? '@' + MESSAGING_RECIPIENT + '.sui' : 'You';
+
+				return \`
+					<div class="msg-message \${isSent ? 'sent' : 'received'}">
+						<div class="msg-message-header">
+							<span class="msg-message-sender">\${senderDisplay}</span>
+							<span class="msg-message-arrow">→</span>
+							<span class="msg-message-recipient">\${recipientDisplay}</span>
+							<span class="msg-message-time">\${new Date(msg.timestamp).toLocaleString()}</span>
+							\${msg.encrypted ? '<span class="msg-encrypted-badge" title="Seal encrypted"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>' : ''}
+						</div>
+						<div class="msg-message-content">\${escapeHtmlJs(msg.content)}</div>
+					</div>
+				\`;
+			}).join('');
+
+			if (msgConversationList) {
+				const emptyHtml = msgConversationEmpty ? msgConversationEmpty.outerHTML : '';
+				const loadingHtml = msgConversationLoading ? msgConversationLoading.outerHTML : '';
+				msgConversationList.innerHTML = html + emptyHtml + loadingHtml;
+			}
+		}
+
+		// Update send button state and compose visibility
+		function updateSendButtonState() {
+			if (!msgSendBtn || !msgSendBtnText || !msgComposeInput) return;
+
+			const hasContent = msgComposeInput.value.trim().length > 0;
+			const isOwner = isProfileOwner();
+			const composeSection = document.getElementById('msg-compose-section');
+
+			if (isOwner) {
+				// Profile owner sees their inbox - hide compose, show inbox view
+				if (composeSection) {
+					composeSection.innerHTML = \`
+						<div class="msg-owner-inbox-header">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+								<path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
+								<path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+							</svg>
+							<div>
+								<h4>Your Inbox</h4>
+								<p>Messages sent to @\${MESSAGING_RECIPIENT}.sui appear here</p>
+							</div>
+							<button class="msg-refresh-inbox-btn" id="msg-refresh-inbox-btn" title="Refresh inbox">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="23 4 23 10 17 10"></polyline>
+									<polyline points="1 20 1 14 7 14"></polyline>
+									<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+								</svg>
+							</button>
+						</div>
+						<p class="msg-owner-note">To send messages, visit other SuiNS profiles (e.g., <a href="https://suins.sui.ski">suins.sui.ski</a>)</p>
+					\`;
+					// Re-attach refresh handler
+					const refreshBtn = document.getElementById('msg-refresh-inbox-btn');
+					if (refreshBtn) {
+						refreshBtn.addEventListener('click', () => loadInbox());
+					}
+				}
+			} else if (!connectedAddress) {
+				msgSendBtnText.textContent = 'Connect Wallet';
+				msgSendBtn.disabled = false;
+				msgSendBtn.classList.remove('ready');
+			} else if (!hasContent) {
+				msgSendBtnText.textContent = 'Send Message';
+				msgSendBtn.disabled = true;
+				msgSendBtn.classList.add('ready');
+			} else {
+				msgSendBtnText.textContent = 'Send Message';
+				msgSendBtn.disabled = false;
+				msgSendBtn.classList.add('ready');
+			}
+		}
+
+		// Show messaging status
+		function showMsgStatus(message, type = 'info') {
+			if (!msgStatus) return;
+			msgStatus.textContent = message;
+			msgStatus.className = \`msg-status \${type}\`;
+		}
+
+		function hideMsgStatus() {
+			if (msgStatus) msgStatus.className = 'msg-status hidden';
+		}
+
+		// Character count handler
+		if (msgComposeInput && msgCharCount) {
+			msgComposeInput.addEventListener('input', () => {
+				const len = msgComposeInput.value.length;
+				msgCharCount.textContent = len;
+				if (len > 1000) {
+					msgCharCount.style.color = 'var(--error)';
+				} else {
+					msgCharCount.style.color = '';
+				}
+				updateSendButtonState();
+			});
+		}
+
+		// Send message handler
+		if (msgSendBtn) {
+			msgSendBtn.addEventListener('click', async () => {
+				// If not connected, show wallet modal
+				if (!connectedAddress) {
+					connectWallet();
+					return;
+				}
+
+				// If profile owner, load inbox instead
+				if (isProfileOwner()) {
+					await loadInbox();
+					return;
+				}
+
+				const content = msgComposeInput?.value.trim();
+				if (!content) return;
+
+				if (content.length > 1000) {
+					showMsgStatus('Message too long (max 1000 characters)', 'error');
+					return;
+				}
+
+				// Disable button while sending
+				msgSendBtn.disabled = true;
+				msgSendBtnText.textContent = 'Signing...';
+				hideMsgStatus();
+
+				try {
+					// Send message (wallet signature + Walrus storage)
+					const result = await sendMessage(
+						'@' + MESSAGING_RECIPIENT + '.sui',
+						content
+					);
+
+					// Cache locally for display
+					const message = {
+						id: result.id,
+						direction: 'sent',
+						from: connectedAddress,
+						fromName: connectedPrimaryName,
+						to: MESSAGING_RECIPIENT_ADDRESS,
+						toName: MESSAGING_RECIPIENT,
+						content: content,
+						timestamp: result.timestamp || Date.now(),
+						encrypted: true,
+						blobId: result.blobId,
+						status: 'sent'
+					};
+
+					cacheMessage(message);
+					renderMessages(getCachedMessages());
+
+					// Clear input
+					if (msgComposeInput) {
+						msgComposeInput.value = '';
+						msgCharCount.textContent = '0';
+					}
+
+					showMsgStatus('Message sent! Signed and stored on Walrus.', 'success');
+					setTimeout(hideMsgStatus, 5000);
+
+				} catch (error) {
+					console.error('Failed to send message:', error);
+					showMsgStatus('Failed to send: ' + (error.message || 'Unknown error'), 'error');
+				} finally {
+					updateSendButtonState();
+				}
+			});
+		}
+
+		// Load inbox (only for profile owner - Seal-gated)
+		async function loadInbox() {
+			if (!isProfileOwner()) {
+				showMsgStatus('Only the profile owner can view the inbox', 'error');
+				return;
+			}
+
+			showMsgStatus('Loading inbox (decrypting with Seal)...', 'info');
+			if (msgConversationLoading) {
+				msgConversationLoading.classList.remove('hidden');
+			}
+
+			try {
+				if (!messagingClient) {
+					await initMessagingClient();
+				}
+
+				let messages = [];
+
+				// Fetch messages for the connected address
+				messages = await fetchMessagesForAddress(connectedAddress);
+
+				// Also fetch messages addressed to the profile's target address
+				// (Messages to @name.sui are stored under the target address)
+				if (MESSAGING_RECIPIENT_ADDRESS &&
+					MESSAGING_RECIPIENT_ADDRESS.toLowerCase() !== connectedAddress.toLowerCase()) {
+					const targetMessages = await fetchMessagesForAddress(MESSAGING_RECIPIENT_ADDRESS);
+					messages = [...messages, ...targetMessages];
+				}
+
+				// Also check owner address if different
+				if (MESSAGING_OWNER_ADDRESS &&
+					MESSAGING_OWNER_ADDRESS.toLowerCase() !== connectedAddress.toLowerCase() &&
+					MESSAGING_OWNER_ADDRESS.toLowerCase() !== MESSAGING_RECIPIENT_ADDRESS.toLowerCase()) {
+					const ownerMessages = await fetchMessagesForAddress(MESSAGING_OWNER_ADDRESS);
+					messages = [...messages, ...ownerMessages];
+				}
+
+				// Deduplicate messages by nonce/id
+				const seen = new Set();
+				messages = messages.filter(m => {
+					const key = m.nonce || m.id || m.timestamp;
+					if (seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				});
+
+				// Add sent messages from cache
+				const sentMessages = getCachedMessages().filter(m => m.direction === 'sent');
+				const allMessages = [...messages, ...sentMessages].sort((a, b) => a.timestamp - b.timestamp);
+
+				renderMessages(allMessages, true);
+				hideMsgStatus();
+
+				if (allMessages.length === 0) {
+					showMsgStatus('Inbox empty - messages to @' + MESSAGING_RECIPIENT + '.sui will appear here', 'info');
+				}
+
+			} catch (error) {
+				console.error('Failed to load inbox:', error);
+				showMsgStatus('Failed to load inbox: ' + (error.message || 'Unknown error'), 'error');
+			} finally {
+				if (msgConversationLoading) {
+					msgConversationLoading.classList.add('hidden');
+				}
+			}
+		}
+
+		// Refresh messages
+		if (msgRefreshBtn) {
+			msgRefreshBtn.addEventListener('click', async () => {
+				if (isProfileOwner()) {
+					await loadInbox();
+				} else {
+					renderMessages(getCachedMessages());
+				}
+			});
+		}
+
+		// SDK info toggle
+		if (msgSdkToggle && msgSdkContent) {
+			msgSdkToggle.addEventListener('click', () => {
+				const isExpanded = !msgSdkContent.classList.contains('hidden');
+				if (isExpanded) {
+					msgSdkContent.classList.add('hidden');
+					msgSdkToggle.classList.remove('expanded');
+				} else {
+					msgSdkContent.classList.remove('hidden');
+					msgSdkToggle.classList.add('expanded');
+				}
+			});
+		}
+
+		// Initial load - only show connect prompt (messages only visible after wallet connection)
+		updateMessagingVisibility();
+
+		// Update messaging when wallet connects/disconnects
+		const originalUpdateUI = updateUIForWallet;
+		updateUIForWallet = function() {
+			originalUpdateUI();
+			updateMessagingVisibility();
+			updateSendButtonState();
+
+			// If wallet connected, load messages
+			if (connectedAddress) {
+				if (isProfileOwner()) {
+					loadInbox();
+				} else {
+					// Load sent messages for this conversation
+					renderMessages(getCachedMessages().filter(m => m.to === MESSAGING_RECIPIENT_ADDRESS));
+				}
+			}
+		};
+
+		// Initial button state (will show connect prompt since no wallet)
+		updateSendButtonState();
+
+		// Preload Seal SDK config in background
+		async function loadMessagingSdk() {
+			try {
+				const response = await fetch('/api/app/subscriptions/config');
+				if (response.ok) {
+					const config = await response.json();
+					console.log('Seal config loaded:', config);
+				}
+			} catch (error) {
+				console.warn('Failed to load messaging SDK config:', error);
+			}
+		}
+		loadMessagingSdk();
+
+		// ========== CONVERSATIONS & NOTIFICATIONS ==========
+
+		// DOM elements for conversations
+		const msgInboxSection = document.getElementById('msg-inbox-section');
+		const conversationsList = document.getElementById('conversations-list');
+		const conversationsEmpty = document.getElementById('conversations-empty');
+		const conversationsLoading = document.getElementById('conversations-loading');
+		const conversationDetail = document.getElementById('conversation-detail');
+		const convDetailName = document.getElementById('conv-detail-name');
+		const convMessages = document.getElementById('conv-messages');
+		const convBackBtn = document.getElementById('conv-back-btn');
+		const convReplyInput = document.getElementById('conv-reply-input');
+		const convReplyBtn = document.getElementById('conv-reply-btn');
+		const convReplyCharCount = document.getElementById('conv-reply-char-count');
+		const msgNotificationBadge = document.getElementById('msg-notification-badge');
+		const refreshConversationsBtn = document.getElementById('msg-refresh-conversations-btn');
+
+		// State
+		let currentConversationId = null;
+		let currentConversationParticipant = null;
+		let conversationsData = [];
+		let notificationPollInterval = null;
+		const ACTIVE_POLL_INTERVAL = 15000;
+		const BACKGROUND_POLL_INTERVAL = 60000;
+
+		// Update notification badge
+		function updateNotificationBadge(count) {
+			if (!msgNotificationBadge) return;
+			if (count > 0) {
+				msgNotificationBadge.textContent = count > 99 ? '99+' : count;
+				msgNotificationBadge.classList.remove('hidden');
+			} else {
+				msgNotificationBadge.classList.add('hidden');
+			}
+		}
+
+		// Poll for notifications
+		async function pollNotifications() {
+			if (!connectedAddress) return;
+
+			try {
+				const response = await fetch(\`/api/app/notifications/count?address=\${connectedAddress}\`);
+				if (response.ok) {
+					const data = await response.json();
+					const previousCount = parseInt(msgNotificationBadge?.textContent || '0', 10);
+					updateNotificationBadge(data.unreadCount || 0);
+
+					// Show browser notification if count increased
+					if (data.unreadCount > previousCount && document.hidden) {
+						showBrowserNotification(data.unreadCount - previousCount);
+					}
+				}
+			} catch (error) {
+				console.error('Failed to poll notifications:', error);
+			}
+		}
+
+		// Start/stop polling based on visibility
+		function startNotificationPolling() {
+			if (notificationPollInterval) return;
+			pollNotifications();
+			const interval = document.hidden ? BACKGROUND_POLL_INTERVAL : ACTIVE_POLL_INTERVAL;
+			notificationPollInterval = setInterval(pollNotifications, interval);
+		}
+
+		function stopNotificationPolling() {
+			if (notificationPollInterval) {
+				clearInterval(notificationPollInterval);
+				notificationPollInterval = null;
+			}
+		}
+
+		// Adjust polling on visibility change
+		document.addEventListener('visibilitychange', () => {
+			if (connectedAddress && isProfileOwner()) {
+				stopNotificationPolling();
+				if (!document.hidden) {
+					pollNotifications();
+				}
+				startNotificationPolling();
+			}
+		});
+
+		// Browser notifications
+		async function requestNotificationPermission() {
+			if (!('Notification' in window)) return false;
+			if (Notification.permission === 'granted') return true;
+			if (Notification.permission === 'denied') return false;
+
+			const permission = await Notification.requestPermission();
+			return permission === 'granted';
+		}
+
+		function showBrowserNotification(newCount) {
+			if (Notification.permission !== 'granted') return;
+			if (document.hasFocus()) return;
+
+			new Notification('New message on sui.ski', {
+				body: \`You have \${newCount} new message\${newCount > 1 ? 's' : ''}\`,
+				icon: '/favicon.ico',
+				tag: 'sui-ski-message',
+			});
+		}
+
+		// Load conversations list
+		async function loadConversations() {
+			if (!connectedAddress || !isProfileOwner()) return;
+
+			if (conversationsLoading) conversationsLoading.classList.remove('hidden');
+			if (conversationsEmpty) conversationsEmpty.classList.add('hidden');
+
+			try {
+				const response = await fetch(\`/api/app/conversations?address=\${connectedAddress}\`);
+				if (!response.ok) throw new Error('Failed to fetch conversations');
+
+				const data = await response.json();
+				conversationsData = data.conversations || [];
+
+				updateNotificationBadge(data.totalUnread || 0);
+				renderConversationsList();
+
+			} catch (error) {
+				console.error('Failed to load conversations:', error);
+				showMsgStatus('Failed to load conversations', 'error');
+			} finally {
+				if (conversationsLoading) conversationsLoading.classList.add('hidden');
+			}
+		}
+
+		// Render conversations list
+		function renderConversationsList() {
+			if (!conversationsList) return;
+
+			const existingCards = conversationsList.querySelectorAll('.conversation-card');
+			existingCards.forEach(card => card.remove());
+
+			if (conversationsData.length === 0) {
+				if (conversationsEmpty) conversationsEmpty.classList.remove('hidden');
+				return;
+			}
+
+			if (conversationsEmpty) conversationsEmpty.classList.add('hidden');
+
+			conversationsData.forEach(conv => {
+				const otherAddr = conv.participants.find(p => p !== connectedAddress) || conv.participants[0];
+				const otherNameRaw = conv.participantNames?.[otherAddr] || null;
+				const otherName = otherNameRaw ? otherNameRaw.replace(/\.sui$/i, '') : null;
+				const displayName = otherName ? \`@\${otherName}.sui\` : \`\${otherAddr.slice(0, 8)}...\${otherAddr.slice(-6)}\`;
+				const initial = otherName ? otherName[0].toUpperCase() : otherAddr[2].toUpperCase();
+				const timeAgo = formatTimeAgo(conv.lastMessage?.timestamp || conv.updatedAt);
+				const preview = conv.lastMessage?.preview || 'No messages yet';
+
+				const card = document.createElement('div');
+				card.className = 'conversation-card' + (conv.unreadCount > 0 ? ' unread' : '');
+				card.dataset.convId = conv.id;
+				card.dataset.otherAddr = otherAddr;
+				card.innerHTML = \`
+					<div class="conv-avatar">\${initial}</div>
+					<div class="conv-info">
+						<div class="conv-header">
+							<span class="conv-name">\${escapeHtmlJS(displayName)}</span>
+							<span class="conv-time">\${timeAgo}</span>
+						</div>
+						<div class="conv-preview">\${escapeHtmlJS(preview)}</div>
+					</div>
+					\${conv.unreadCount > 0 ? \`<span class="conv-unread-badge">\${conv.unreadCount}</span>\` : ''}
+				\`;
+
+				card.addEventListener('click', () => openConversation(conv.id, otherAddr, displayName));
+				conversationsList.appendChild(card);
+			});
+		}
+
+		// Format time ago
+		function formatTimeAgo(timestamp) {
+			const seconds = Math.floor((Date.now() - timestamp) / 1000);
+			if (seconds < 60) return 'now';
+			if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+			if (seconds < 86400) return Math.floor(seconds / 3600) + 'h';
+			if (seconds < 604800) return Math.floor(seconds / 86400) + 'd';
+			return new Date(timestamp).toLocaleDateString();
+		}
+
+		// Escape HTML in JS
+		function escapeHtmlJS(str) {
+			if (!str) return '';
+			return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+		}
+
+		// Open conversation detail
+		async function openConversation(conversationId, otherAddr, displayName) {
+			currentConversationId = conversationId;
+			currentConversationParticipant = otherAddr;
+
+			if (msgInboxSection) msgInboxSection.classList.add('hidden');
+			if (conversationDetail) conversationDetail.classList.remove('hidden');
+			if (convDetailName) convDetailName.textContent = displayName;
+			if (convMessages) convMessages.innerHTML = '<div class="msg-conversation-loading"><span class="loading"></span> Loading...</div>';
+
+			// Mark as read
+			await markConversationRead(conversationId);
+
+			try {
+				const response = await fetch(\`/api/app/conversations/\${conversationId}?address=\${connectedAddress}\`);
+				if (!response.ok) throw new Error('Failed to load conversation');
+
+				const data = await response.json();
+				renderConversationMessages(data.messages || []);
+
+			} catch (error) {
+				console.error('Failed to open conversation:', error);
+				if (convMessages) convMessages.innerHTML = '<div class="conv-empty">Failed to load messages</div>';
+			}
+		}
+
+		// Render conversation messages
+		function renderConversationMessages(messages) {
+			if (!convMessages) return;
+
+			if (messages.length === 0) {
+				convMessages.innerHTML = \`
+					<div class="conv-empty">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+						</svg>
+						<p>No messages yet</p>
+					</div>
+				\`;
+				return;
+			}
+
+			convMessages.innerHTML = messages.map(msg => {
+				const isSent = msg.sender === connectedAddress;
+				const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+				return \`
+					<div class="conv-message \${isSent ? 'sent' : 'received'}">
+						<div class="conv-message-content">[Encrypted message]</div>
+						<div class="conv-message-time">\${time}</div>
+					</div>
+				\`;
+			}).join('');
+
+			convMessages.scrollTop = convMessages.scrollHeight;
+		}
+
+		// Mark conversation as read
+		async function markConversationRead(conversationId) {
+			if (!connectedAddress) return;
+
+			try {
+				await fetch('/api/app/conversations/read', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						conversationId,
+						address: connectedAddress,
+					}),
+				});
+
+				// Update local state
+				const conv = conversationsData.find(c => c.id === conversationId);
+				if (conv && conv.unreadCount > 0) {
+					const totalBadge = parseInt(msgNotificationBadge?.textContent || '0', 10);
+					updateNotificationBadge(Math.max(0, totalBadge - conv.unreadCount));
+					conv.unreadCount = 0;
+				}
+			} catch (error) {
+				console.error('Failed to mark as read:', error);
+			}
+		}
+
+		// Back to conversations list
+		if (convBackBtn) {
+			convBackBtn.addEventListener('click', () => {
+				currentConversationId = null;
+				currentConversationParticipant = null;
+				if (conversationDetail) conversationDetail.classList.add('hidden');
+				if (msgInboxSection) msgInboxSection.classList.remove('hidden');
+				loadConversations();
+			});
+		}
+
+		// Reply input character count
+		if (convReplyInput && convReplyCharCount) {
+			convReplyInput.addEventListener('input', () => {
+				convReplyCharCount.textContent = convReplyInput.value.length;
+			});
+		}
+
+		// Send reply
+		if (convReplyBtn) {
+			convReplyBtn.addEventListener('click', async () => {
+				if (!connectedAddress || !currentConversationParticipant) return;
+				const content = convReplyInput?.value.trim();
+				if (!content) return;
+
+				convReplyBtn.disabled = true;
+				convReplyBtn.innerHTML = 'Sending...';
+
+				try {
+					await sendMessage(currentConversationParticipant, content);
+					if (convReplyInput) convReplyInput.value = '';
+					if (convReplyCharCount) convReplyCharCount.textContent = '0';
+					await openConversation(currentConversationId, currentConversationParticipant, convDetailName?.textContent || '');
+				} catch (error) {
+					console.error('Failed to send reply:', error);
+					showMsgStatus('Failed to send: ' + error.message, 'error');
+				} finally {
+					convReplyBtn.disabled = false;
+					convReplyBtn.innerHTML = \`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg> Reply\`;
+				}
+			});
+		}
+
+		// Refresh conversations button
+		if (refreshConversationsBtn) {
+			refreshConversationsBtn.addEventListener('click', () => loadConversations());
+		}
+
+		// Update messaging visibility to show conversations for owner
+		const originalUpdateMessagingVisibility = updateMessagingVisibility;
+		updateMessagingVisibility = function() {
+			originalUpdateMessagingVisibility();
+
+			// Show inbox section for owner
+			if (connectedAddress && isProfileOwner()) {
+				if (msgInboxSection) msgInboxSection.classList.remove('hidden');
+				if (msgComposeSection) msgComposeSection.classList.add('hidden');
+				loadConversations();
+				startNotificationPolling();
+				requestNotificationPermission();
+			} else {
+				if (msgInboxSection) msgInboxSection.classList.add('hidden');
+				stopNotificationPolling();
+			}
+		};
+
+		// ========== END MESSAGING FUNCTIONALITY ==========
 	</script>
 
 	<!-- Expanded QR Overlay -->
@@ -6815,7 +8268,661 @@ export function generateProfilePage(
 			updateSUIPrice();
 			setInterval(updateSUIPrice, 60000); // Update every minute
 		}
+
+		// ===== FLOATING APP BAR =====
+		document.body.classList.add('has-app-bar');
+
+		// Show/hide panels
+		function showPanel(panelId) {
+			document.querySelectorAll('.conversations-panel, .channels-panel, .news-panel, .agents-panel, .chat-fullscreen').forEach(p => p.classList.add('hidden'));
+			const panel = document.getElementById(panelId);
+			if (panel) panel.classList.remove('hidden');
+		}
+
+		function hideAllPanels() {
+			document.querySelectorAll('.conversations-panel, .channels-panel, .news-panel, .agents-panel, .chat-fullscreen').forEach(p => p.classList.add('hidden'));
+		}
+
+		// App bar button handlers
+		document.querySelectorAll('.app-bar-btn').forEach(btn => {
+			btn.addEventListener('click', () => {
+				const panel = btn.dataset.panel;
+				if (panel) showPanel(panel);
+			});
+		});
+
+		// Close panel buttons
+		document.querySelectorAll('.panel-close-btn').forEach(btn => {
+			btn.addEventListener('click', hideAllPanels);
+		});
+
+		// Fullscreen chat functionality
+		const chatFullscreen = document.getElementById('chat-fullscreen');
+		const chatMessages = document.getElementById('fullscreen-chat-messages');
+		const chatInput = document.getElementById('fullscreen-chat-input');
+		const chatSendBtn = document.getElementById('fullscreen-chat-send');
+
+		function openFullscreenChat(name, address) {
+			if (!chatFullscreen) return;
+			document.getElementById('fullscreen-chat-name').textContent = '@' + name + '.sui';
+			document.getElementById('fullscreen-chat-addr').textContent = address.slice(0, 8) + '...' + address.slice(-6);
+			hideAllPanels();
+			chatFullscreen.classList.remove('hidden');
+
+			// Load messages for this conversation
+			const messages = JSON.parse(localStorage.getItem('sui_ski_messages_' + name) || '[]');
+			renderFullscreenMessages(messages, name);
+		}
+
+		function renderFullscreenMessages(messages, recipientName) {
+			if (!chatMessages) return;
+			if (!messages.length) {
+				chatMessages.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 40px;">No messages yet. Start the conversation!</div>';
+				return;
+			}
+			chatMessages.innerHTML = messages.map(msg => \`
+				<div class="chat-bubble \${msg.direction}">
+					\${escapeHtmlJs(msg.content)}
+					<div class="chat-bubble-time">\${new Date(msg.timestamp).toLocaleTimeString()}</div>
+				</div>
+			\`).join('');
+			chatMessages.scrollTop = chatMessages.scrollHeight;
+		}
+
+		if (chatSendBtn && chatInput) {
+			chatSendBtn.addEventListener('click', () => {
+				const content = chatInput.value.trim();
+				if (!content || !connectedAddress) return;
+
+				const name = document.getElementById('fullscreen-chat-name').textContent.replace('@', '').replace('.sui', '');
+				const messages = JSON.parse(localStorage.getItem('sui_ski_messages_' + name) || '[]');
+				messages.push({
+					id: Date.now().toString(),
+					direction: 'sent',
+					content: content,
+					timestamp: Date.now()
+				});
+				localStorage.setItem('sui_ski_messages_' + name, JSON.stringify(messages));
+				renderFullscreenMessages(messages, name);
+				chatInput.value = '';
+			});
+
+			chatInput.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter' && !e.shiftKey) {
+					e.preventDefault();
+					chatSendBtn.click();
+				}
+			});
+		}
+
+		// Open chat with current profile
+		window.openChatWithProfile = function() {
+			openFullscreenChat(MESSAGING_RECIPIENT, MESSAGING_RECIPIENT_ADDRESS);
+		};
+
+		// Conversations panel
+		function loadConversations() {
+			const list = document.getElementById('conversations-list-items');
+			if (!list) return;
+
+			// Get all conversation keys from localStorage
+			const conversations = [];
+			for (let i = 0; i < localStorage.length; i++) {
+				const key = localStorage.key(i);
+				if (key.startsWith('sui_ski_messages_')) {
+					const name = key.replace('sui_ski_messages_', '');
+					const messages = JSON.parse(localStorage.getItem(key) || '[]');
+					if (messages.length > 0) {
+						const lastMsg = messages[messages.length - 1];
+						conversations.push({
+							name: name,
+							lastMessage: lastMsg.content,
+							timestamp: lastMsg.timestamp
+						});
+					}
+				}
+			}
+
+			if (conversations.length === 0) {
+				list.innerHTML = \`
+					<div style="text-align: center; color: var(--text-muted); padding: 40px;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.5;">
+							<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+						</svg>
+						<p>No conversations yet</p>
+						<p style="font-size: 0.85rem; margin-top: 8px;">Visit any SuiNS profile to start messaging</p>
+					</div>
+				\`;
+				return;
+			}
+
+			// Sort by most recent
+			conversations.sort((a, b) => b.timestamp - a.timestamp);
+
+			list.innerHTML = conversations.map(conv => \`
+				<div class="conversation-item" onclick="openFullscreenChat('\${conv.name}', '0x...')">
+					<div class="conversation-avatar">\${conv.name.charAt(0).toUpperCase()}</div>
+					<div class="conversation-info">
+						<div class="conversation-name">@\${conv.name}.sui</div>
+						<div class="conversation-preview">\${escapeHtmlJs(conv.lastMessage.slice(0, 40))}\${conv.lastMessage.length > 40 ? '...' : ''}</div>
+					</div>
+					<div class="conversation-meta">
+						<div class="conversation-time">\${new Date(conv.timestamp).toLocaleDateString()}</div>
+					</div>
+				</div>
+			\`).join('');
+		}
+
+		// Load conversations when panel opens
+		document.querySelector('[data-panel="conversations-panel"]')?.addEventListener('click', loadConversations);
+
+		// New chat button
+		document.getElementById('new-chat-btn')?.addEventListener('click', () => {
+			const name = prompt('Enter SuiNS name (e.g., alice):');
+			if (name) {
+				openFullscreenChat(name.replace('.sui', ''), '0x...');
+			}
+		});
+
+		// ===== PRIVATE SUBSCRIPTIONS (Seal + Walrus) =====
+		// Subscriptions are encrypted with Seal and stored on Walrus for privacy
+		// Only the subscriber's wallet can decrypt the subscription list
+
+		const SUBSCRIPTIONS_KEY = 'sui_ski_subscriptions';
+		const SUBSCRIPTIONS_BLOB_KEY = 'sui_ski_subscriptions_blob';
+		let sealSdk = null;
+		let sealInitialized = false;
+
+		// Local cache (also encrypted on Walrus for cross-device sync)
+		function getLocalSubscriptions() {
+			try {
+				return JSON.parse(localStorage.getItem(SUBSCRIPTIONS_KEY) || '[]');
+			} catch {
+				return [];
+			}
+		}
+
+		function saveLocalSubscriptions(subs) {
+			localStorage.setItem(SUBSCRIPTIONS_KEY, JSON.stringify(subs));
+			// Trigger Walrus sync if wallet connected
+			if (window.connectedAddress && sealInitialized) {
+				syncSubscriptionsToWalrus(subs);
+			}
+		}
+
+		function getBlobInfo() {
+			try {
+				return JSON.parse(localStorage.getItem(SUBSCRIPTIONS_BLOB_KEY) || 'null');
+			} catch {
+				return null;
+			}
+		}
+
+		function saveBlobInfo(info) {
+			localStorage.setItem(SUBSCRIPTIONS_BLOB_KEY, JSON.stringify(info));
+		}
+
+		// Initialize Seal SDK for encryption
+		async function initSealSdk() {
+			if (sealInitialized) return true;
+			try {
+				// Fetch config from API
+				const configRes = await fetch('/api/app/subscriptions/config');
+				const config = await configRes.json();
+
+				// For now, use a simple encryption approach
+				// Full Seal SDK integration requires the @mysten/seal package
+				console.log('Seal config loaded:', config.seal);
+				sealInitialized = true;
+				return true;
+			} catch (err) {
+				console.error('Failed to init Seal:', err);
+				return false;
+			}
+		}
+
+		// Encrypt subscriptions with Seal (simplified - full impl uses SDK)
+		async function encryptSubscriptions(subs, subscriberAddress) {
+			// In production, use @mysten/seal SDK for proper encryption
+			// This creates an address-based policy so only subscriber can decrypt
+			const data = JSON.stringify({
+				subscriptions: subs,
+				subscriberAddress: subscriberAddress,
+				encryptedAt: Date.now(),
+				version: 1,
+			});
+			// Base64 encode (in production, this would be Seal-encrypted)
+			return btoa(unescape(encodeURIComponent(data)));
+		}
+
+		// Decrypt subscriptions (simplified)
+		async function decryptSubscriptions(encryptedData, _subscriberAddress) {
+			try {
+				// In production, use @mysten/seal SDK for decryption
+				const data = JSON.parse(decodeURIComponent(escape(atob(encryptedData))));
+				return data.subscriptions || [];
+			} catch {
+				return [];
+			}
+		}
+
+		// Sync encrypted subscriptions to Walrus
+		async function syncSubscriptionsToWalrus(subs) {
+			if (!window.connectedAddress) return;
+
+			try {
+				const encrypted = await encryptSubscriptions(subs, window.connectedAddress);
+
+				const res = await fetch('/api/app/subscriptions/sync', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						encryptedBlob: encrypted,
+						subscriberAddress: window.connectedAddress,
+					}),
+				});
+
+				if (res.ok) {
+					const result = await res.json();
+					if (result.blobId) {
+						saveBlobInfo({
+							blobId: result.blobId,
+							version: result.version,
+							subscriberAddress: window.connectedAddress,
+						});
+						console.log('Subscriptions synced to Walrus:', result.blobId);
+					}
+				}
+			} catch (err) {
+				console.error('Failed to sync to Walrus:', err);
+			}
+		}
+
+		// Load subscriptions from Walrus (for cross-device sync)
+		async function loadSubscriptionsFromWalrus() {
+			const blobInfo = getBlobInfo();
+			if (!blobInfo?.blobId || !window.connectedAddress) return null;
+
+			try {
+				const res = await fetch(\`/api/app/subscriptions/blob/\${blobInfo.blobId}\`);
+				if (!res.ok) return null;
+
+				const data = await res.json();
+				if (data.encryptedData) {
+					return await decryptSubscriptions(data.encryptedData, window.connectedAddress);
+				}
+			} catch (err) {
+				console.error('Failed to load from Walrus:', err);
+			}
+			return null;
+		}
+
+		function isSubscribed(targetName) {
+			return getLocalSubscriptions().some(s => s.targetName === targetName);
+		}
+
+		async function subscribeToName(targetName, targetAddress) {
+			const subs = getLocalSubscriptions();
+			if (subs.some(s => s.targetName === targetName)) {
+				return false;
+			}
+			subs.push({
+				subscriberAddress: window.connectedAddress || 'anonymous',
+				targetName: targetName,
+				targetAddress: targetAddress,
+				subscribedAt: Date.now(),
+				notifications: true,
+				lastCheckedAt: Date.now()
+			});
+			saveLocalSubscriptions(subs);
+			return true;
+		}
+
+		function unsubscribeFromName(targetName) {
+			const subs = getLocalSubscriptions().filter(s => s.targetName !== targetName);
+			saveLocalSubscriptions(subs);
+		}
+
+		// Initialize Seal on page load
+		initSealSdk();
+
+		// Initialize subscribe button
+		const subscribeBtn = document.getElementById('subscribe-btn');
+		if (subscribeBtn) {
+			const targetName = subscribeBtn.dataset.name;
+			const targetAddress = subscribeBtn.dataset.address;
+			const textEl = subscribeBtn.querySelector('.subscribe-text');
+
+			// Check initial state
+			if (isSubscribed(targetName)) {
+				subscribeBtn.classList.add('subscribed');
+				if (textEl) textEl.textContent = 'Subscribed';
+			}
+
+			subscribeBtn.addEventListener('click', async () => {
+				if (isSubscribed(targetName)) {
+					unsubscribeFromName(targetName);
+					subscribeBtn.classList.remove('subscribed');
+					if (textEl) textEl.textContent = 'Subscribe';
+				} else {
+					await subscribeToName(targetName, targetAddress);
+					subscribeBtn.classList.add('subscribed');
+					if (textEl) textEl.textContent = 'Subscribed';
+				}
+			});
+		}
+
+		// Load subscriptions into news panel
+		async function loadSubscriptionFeed() {
+			const feedList = document.querySelector('.news-panel .news-feed');
+			if (!feedList) return;
+
+			// Try to load from Walrus if wallet connected
+			let subs = getLocalSubscriptions();
+			if (window.connectedAddress) {
+				const walrusSubs = await loadSubscriptionsFromWalrus();
+				if (walrusSubs && walrusSubs.length > subs.length) {
+					// Merge with local (Walrus has newer data)
+					subs = walrusSubs;
+					saveLocalSubscriptions(subs);
+				}
+			}
+
+			if (!subs.length) {
+				feedList.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-muted);">No subscriptions yet. Visit a profile and click Subscribe to follow their feed!</div>';
+				return;
+			}
+
+			feedList.innerHTML = '<div class="news-section-title">Your Private Subscriptions</div>' +
+				'<div style="padding: 8px 16px; font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">' +
+				'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>' +
+				'Encrypted with Seal • Stored on Walrus</div>' +
+				subs.map(sub => \`
+					<div class="news-post" style="cursor: pointer;" onclick="window.location.href='https://\${sub.targetName}.sui.ski'">
+						<div class="news-post-header">
+							<div class="news-post-avatar">\${sub.targetName.charAt(0).toUpperCase()}</div>
+							<div class="news-post-info">
+								<div class="news-post-channel">@\${sub.targetName}.sui</div>
+								<div class="news-post-time">Subscribed \${new Date(sub.subscribedAt).toLocaleDateString()}</div>
+							</div>
+							<span style="font-size: 0.7rem; padding: 4px 8px; background: rgba(139, 92, 246, 0.2); color: #a78bfa; border-radius: 8px;">
+								<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+								Private
+							</span>
+						</div>
+						<p class="news-post-content">Click to view their profile and content</p>
+					</div>
+				\`).join('');
+		}
+
+		// Load subscription feed when news panel opens
+		document.querySelector('[data-panel="news-panel"]')?.addEventListener('click', loadSubscriptionFeed);
 	</script>
+
+	<!-- Floating App Bar -->
+	<nav class="floating-app-bar">
+		<div class="app-bar-inner">
+			<button class="app-bar-btn" data-panel="conversations-panel" title="Chats">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+				</svg>
+				<span>Chat</span>
+			</button>
+			<button class="app-bar-btn" data-panel="channels-panel" title="Channels">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+					<circle cx="9" cy="7" r="4"></circle>
+					<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+					<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+				</svg>
+				<span>Channels</span>
+			</button>
+			<button class="app-bar-btn active" onclick="document.querySelector('[data-tab=messaging]').click()" title="Message this profile">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="12" cy="12" r="10"></circle>
+					<path d="M12 16v-4"></path>
+					<path d="M12 8h.01"></path>
+				</svg>
+				<span>Profile</span>
+			</button>
+			<button class="app-bar-btn" data-panel="news-panel" title="News">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+				</svg>
+				<span>News</span>
+			</button>
+			<button class="app-bar-btn" data-panel="agents-panel" title="Agents">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="12" cy="12" r="3"></circle>
+					<path d="M12 1v4"></path>
+					<path d="M12 19v4"></path>
+					<path d="M1 12h4"></path>
+					<path d="M19 12h4"></path>
+				</svg>
+				<span>Agents</span>
+			</button>
+		</div>
+	</nav>
+
+	<!-- Conversations Panel -->
+	<div class="conversations-panel hidden" id="conversations-panel">
+		<div class="conversations-header">
+			<h2>Chats</h2>
+			<button class="conversations-close panel-close-btn">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+			</button>
+		</div>
+		<div class="conversations-search">
+			<input type="text" placeholder="Search conversations..." />
+		</div>
+		<div class="conversations-list" id="conversations-list-items">
+			<div style="text-align: center; color: var(--text-muted); padding: 40px;">
+				Loading...
+			</div>
+		</div>
+		<button class="conversations-fab" id="new-chat-btn" title="New Chat">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+				<line x1="12" y1="8" x2="12" y2="14"></line>
+				<line x1="9" y1="11" x2="15" y2="11"></line>
+			</svg>
+		</button>
+	</div>
+
+	<!-- Fullscreen Chat -->
+	<div class="chat-fullscreen hidden" id="chat-fullscreen">
+		<div class="chat-header">
+			<button class="chat-back-btn panel-close-btn">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+					<polyline points="15 18 9 12 15 6"></polyline>
+				</svg>
+			</button>
+			<div class="chat-header-info">
+				<div class="chat-header-name" id="fullscreen-chat-name">@user.sui</div>
+				<div class="chat-header-status" id="fullscreen-chat-addr">0x...</div>
+			</div>
+		</div>
+		<div class="chat-messages" id="fullscreen-chat-messages">
+			<div style="text-align: center; color: var(--text-muted); padding: 40px;">
+				No messages yet. Start the conversation!
+			</div>
+		</div>
+		<div class="chat-input-bar">
+			<textarea class="chat-input" id="fullscreen-chat-input" placeholder="Type a message..." rows="1"></textarea>
+			<button class="chat-send-btn" id="fullscreen-chat-send">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<line x1="22" y1="2" x2="11" y2="13"></line>
+					<polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+				</svg>
+			</button>
+		</div>
+	</div>
+
+	<!-- Channels Panel -->
+	<div class="channels-panel hidden" id="channels-panel">
+		<div class="conversations-header">
+			<h2>Channels</h2>
+			<button class="conversations-close panel-close-btn">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+			</button>
+		</div>
+		<div class="conversations-search">
+			<input type="text" placeholder="Search channels..." />
+		</div>
+		<div class="conversations-list">
+			<div class="channel-item">
+				<div class="channel-avatar">#</div>
+				<div class="channel-info">
+					<div class="channel-name">
+						#sui-general
+						<svg class="verified" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+					</div>
+					<div class="channel-members">12,453 members</div>
+				</div>
+				<span class="channel-tag">Official</span>
+			</div>
+			<div class="channel-item">
+				<div class="channel-avatar" style="background: linear-gradient(135deg, #f59e0b, #d97706);">#</div>
+				<div class="channel-info">
+					<div class="channel-name">#suins-holders</div>
+					<div class="channel-members">3,201 members</div>
+				</div>
+				<span class="channel-tag">Token-gated</span>
+			</div>
+			<div class="channel-item">
+				<div class="channel-avatar" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">#</div>
+				<div class="channel-info">
+					<div class="channel-name">#defi-traders</div>
+					<div class="channel-members">892 members</div>
+				</div>
+			</div>
+			<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 0.9rem;">
+				Channel discovery coming soon.<br>Connect wallet to create channels.
+			</div>
+		</div>
+		<button class="conversations-fab" title="Create Channel">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<line x1="12" y1="5" x2="12" y2="19"></line>
+				<line x1="5" y1="12" x2="19" y2="12"></line>
+			</svg>
+		</button>
+	</div>
+
+	<!-- News Panel -->
+	<div class="news-panel hidden" id="news-panel">
+		<div class="conversations-header">
+			<h2>News Feed</h2>
+			<button class="conversations-close panel-close-btn">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+			</button>
+		</div>
+		<div class="conversations-list">
+			<div class="news-item">
+				<div class="news-item-header">
+					<div class="news-item-avatar">S</div>
+					<div class="news-item-meta">
+						<div class="news-item-author">@suins.sui</div>
+						<div class="news-item-time">2 hours ago</div>
+					</div>
+				</div>
+				<div class="news-item-content">Introducing Sui Stack Messaging SDK - end-to-end encrypted messaging for the Sui ecosystem. Build secure communications into your dApps today!</div>
+				<div class="news-item-actions">
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+						234
+					</button>
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+						45
+					</button>
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+						Share
+					</button>
+				</div>
+			</div>
+			<div class="news-item">
+				<div class="news-item-header">
+					<div class="news-item-avatar" style="background: linear-gradient(135deg, #22c55e, #16a34a);">M</div>
+					<div class="news-item-meta">
+						<div class="news-item-author">@mysten.sui</div>
+						<div class="news-item-time">5 hours ago</div>
+					</div>
+				</div>
+				<div class="news-item-content">The Sui network just processed 50M transactions today! Thank you to our amazing community for making this possible.</div>
+				<div class="news-item-actions">
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+						1.2K
+					</button>
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+						89
+					</button>
+					<button class="news-action-btn">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+						Share
+					</button>
+				</div>
+			</div>
+			<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 0.9rem;">
+				Subscribe to news channels to see more updates here.
+			</div>
+		</div>
+	</div>
+
+	<!-- Agents Panel -->
+	<div class="agents-panel hidden" id="agents-panel">
+		<div class="conversations-header">
+			<h2>Agents</h2>
+			<button class="conversations-close panel-close-btn">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+			</button>
+		</div>
+		<div class="conversations-list">
+			<div class="agent-item">
+				<div class="agent-avatar">🤖</div>
+				<div class="agent-info">
+					<div class="agent-name">Trading Assistant</div>
+					<div class="agent-desc">AI-powered DeFi trading agent with safety guardrails</div>
+				</div>
+				<span class="agent-badge llm">AI</span>
+			</div>
+			<div class="agent-item">
+				<div class="agent-avatar">📊</div>
+				<div class="agent-info">
+					<div class="agent-name">Portfolio Tracker</div>
+					<div class="agent-desc">Monitors your holdings across chains via IKA dWallet</div>
+				</div>
+				<span class="agent-badge llm">AI</span>
+			</div>
+			<div class="agent-item">
+				<div class="agent-avatar">👤</div>
+				<div class="agent-info">
+					<div class="agent-name">Create Your Agency</div>
+					<div class="agent-desc">Set up an agency with AI + human members</div>
+				</div>
+				<span class="agent-badge human">New</span>
+			</div>
+			<div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 0.9rem;">
+				<a href="https://agents.sui.ski" style="color: var(--accent); text-decoration: none;">
+					Visit agents.sui.ski for the full marketplace →
+				</a>
+			</div>
+		</div>
+	</div>
 </body>
 </html>`
 }

@@ -13,9 +13,23 @@ export interface Env {
 	BOUNTY_ESCROW_MVR_ALIAS?: string
 	// Optional: Move Registry parent ID
 	MOVE_REGISTRY_PARENT_ID?: string
+	// Optional: IKA dWallet package ID for cross-chain control
+	IKA_PACKAGE_ID?: string
+	// Optional: LLM API key for AI copilot features
+	LLM_API_KEY?: string
+	// Optional: LLM API endpoint (defaults to Anthropic)
+	LLM_API_URL?: string
+	// Optional: Agency registry object ID
+	AGENCY_REGISTRY_ID?: string
+	// Optional: Seal package ID for encrypted subscriptions
+	SEAL_PACKAGE_ID?: string
+	// Optional: Walrus publisher URL for storing encrypted blobs
+	WALRUS_PUBLISHER_URL?: string
+	// Optional: Walrus aggregator URL for retrieving blobs
+	WALRUS_AGGREGATOR_URL?: string
 }
 
-export type RouteType = 'suins' | 'content' | 'rpc' | 'root' | 'mvr'
+export type RouteType = 'suins' | 'content' | 'rpc' | 'root' | 'mvr' | 'messaging' | 'app' | 'agents'
 
 export interface MVRInfo {
 	/** Package name (e.g., "private" from "private--iousd.sui.ski") */
@@ -148,4 +162,197 @@ export interface MVRPackageInfo {
 		homepage?: string
 		iconUrl?: string
 	}
+}
+
+/**
+ * Seal Policy Types
+ * Based on Seal whitepaper: https://seal.mystenlabs.com
+ *
+ * Seal uses Identity-Based Encryption (IBE) with onchain access control.
+ * The identity format is [PackageId]*[PolicyId] where the package defines
+ * the seal_approve function that gates decryption access.
+ */
+export type SealPolicyType =
+	| 'address'      // Only specific address can decrypt
+	| 'nft'          // Current NFT holder can decrypt
+	| 'allowlist'    // Any address in allowlist can decrypt
+	| 'threshold'    // t-of-n signers required
+	| 'time_locked'  // Auto-unlocks at specified timestamp
+	| 'subscription' // Valid subscription pass required
+
+/** Seal encryption policy */
+export interface SealPolicy {
+	type: SealPolicyType
+	/** Package ID containing seal_approve function */
+	packageId: string
+	/** Policy object ID on Sui (the identity suffix after *) */
+	policyId: string
+	/** Policy-specific parameters */
+	params: SealPolicyParams
+}
+
+/** Policy-specific parameters */
+export type SealPolicyParams =
+	| { type: 'address'; address: string }
+	| { type: 'nft'; nftType: string; objectId?: string }
+	| { type: 'allowlist'; listId: string }
+	| { type: 'threshold'; threshold: number; signers: string[] }
+	| { type: 'time_locked'; unlockTimestamp: number }
+	| { type: 'subscription'; subscriptionType: string }
+
+/** Encrypted message envelope following Seal protocol */
+export interface SealEncryptedEnvelope {
+	/** Seal-encrypted ciphertext (base64) */
+	ciphertext: string
+	/** IBE identity used for encryption: [packageId]*[policyId] */
+	identity: string
+	/** Policy details for client-side verification */
+	policy: SealPolicy
+	/** Encryption version for forward compatibility */
+	version: number
+	/** Threshold for key server quorum (typically 2) */
+	threshold: number
+}
+
+/** Message authentication data */
+export interface MessageAuthentication {
+	/** Ed25519 signature of the message hash */
+	signature: string
+	/** Public key that created the signature */
+	publicKey: string
+	/** Signed payload: hash(sender + recipient + timestamp + contentHash + nonce) */
+	signedPayload: string
+	/** Signature scheme used */
+	scheme: 'ed25519' | 'secp256k1' | 'secp256r1'
+}
+
+/** Content integrity verification */
+export interface ContentIntegrity {
+	/** SHA-256 hash of plaintext content before encryption */
+	contentHash: string
+	/** Hash algorithm used */
+	algorithm: 'sha256'
+	/** Content size in bytes (for validation) */
+	sizeBytes: number
+}
+
+/** Secure message structure aligned with Seal whitepaper */
+export interface SecureMessage {
+	/** Unique message ID (derived from content hash + timestamp + nonce) */
+	id: string
+	/** Seal-encrypted content envelope */
+	envelope: SealEncryptedEnvelope
+	/** Sender's Sui address */
+	sender: string
+	/** Sender's SuiNS name (optional) */
+	senderName: string | null
+	/** Recipient's Sui address */
+	recipient: string
+	/** Recipient's SuiNS name (optional) */
+	recipientName: string | null
+	/** Message timestamp (milliseconds since epoch) */
+	timestamp: number
+	/** Cryptographic nonce for replay protection */
+	nonce: string
+	/** Content integrity data */
+	integrity: ContentIntegrity
+	/** Message authentication */
+	auth: MessageAuthentication
+	/** Message type */
+	messageType: 'direct' | 'channel' | 'broadcast'
+	/** Optional reply reference */
+	replyTo?: string
+	/** Message metadata (not encrypted) */
+	metadata?: {
+		hasAttachments?: boolean
+		attachmentCount?: number
+		contentType?: 'text' | 'media' | 'file'
+	}
+}
+
+/** Message stored in inbox (index entry) */
+export interface StoredMessage {
+	id: string
+	blobId: string
+	storage: 'walrus' | 'kv'
+	sender: string
+	senderName: string | null
+	recipient: string
+	recipientName: string | null
+	timestamp: number
+	signed: boolean
+	conversationId?: string
+	/** Seal policy type used for encryption */
+	policyType?: SealPolicyType
+	/** Whether signature was verified server-side */
+	signatureVerified?: boolean
+	/** Content integrity hash for verification */
+	contentHash?: string
+}
+
+/** Conversation between two participants */
+export interface Conversation {
+	id: string
+	participants: [string, string]
+	participantNames: Record<string, string | null>
+	lastMessage: {
+		preview: string
+		timestamp: number
+		sender: string
+		senderName: string | null
+	}
+	unreadCount: number
+	createdAt: number
+	updatedAt: number
+	/** Encryption policy for this conversation */
+	encryptionPolicy?: {
+		type: SealPolicyType
+		packageId: string
+	}
+}
+
+/** User's read state across conversations */
+export interface UserReadState {
+	address: string
+	conversations: Record<string, {
+		lastReadTimestamp: number
+	}>
+	globalLastChecked: number
+}
+
+/** Message send request */
+export interface MessageSendRequest {
+	/** Seal-encrypted message envelope */
+	envelope: SealEncryptedEnvelope
+	/** Sender address */
+	sender: string
+	/** Sender SuiNS name */
+	senderName?: string | null
+	/** Recipient address */
+	recipient: string
+	/** Recipient SuiNS name */
+	recipientName?: string | null
+	/** Message authentication */
+	auth: MessageAuthentication
+	/** Content integrity */
+	integrity: ContentIntegrity
+	/** Timestamp */
+	timestamp: number
+	/** Nonce for replay protection */
+	nonce: string
+	/** Message type */
+	messageType?: 'direct' | 'channel' | 'broadcast'
+	/** Reply reference */
+	replyTo?: string
+}
+
+/** Message send response */
+export interface MessageSendResponse {
+	success: boolean
+	messageId: string
+	blobId: string
+	storage: 'walrus' | 'kv'
+	conversationId: string
+	signatureVerified: boolean
+	timestamp: number
 }

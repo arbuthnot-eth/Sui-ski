@@ -1,3 +1,4 @@
+import type { Transaction } from '@mysten/sui/transactions'
 import type { Env, Bounty, PublicBounty } from '../types'
 import { relaySignedTransaction } from '../utils/transactions'
 import { buildExecuteBountyTx, buildExecuteGiftBountyTx, serializeTransaction } from '../utils/bounty-transactions'
