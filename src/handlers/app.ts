@@ -343,7 +343,7 @@ async function updateConversationWithMessage(
 		preview: messagePreview.slice(0, 100),
 		timestamp,
 		sender,
-		senderName,
+		senderName: stripSuiSuffix(senderName),
 	}
 	conversation.updatedAt = timestamp
 	conversation.unreadCount += 1
