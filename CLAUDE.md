@@ -644,6 +644,72 @@ public entry fun seal_approve(id: vector<u8>, ctx: &TxContext) {
 
 ---
 
+## Nautilus TEE Framework
+
+[Nautilus](https://github.com/MystenLabs/nautilus) enables verifiable offchain computation using Trusted Execution Environments (TEEs). Mainnet launch: June 5, 2025.
+
+### Architecture
+
+Two integrated components:
+1. **Offchain Server (TEE)**: Runs inside AWS Nitro Enclave, handles user inputs, scheduled tasks, and private computation
+2. **Onchain Contract (Move)**: Verifies TEE attestations before accepting computation results
+
+### Attestation Flow
+
+1. Deploy offchain server to self-managed TEE
+2. TEE generates cryptographic attestation (proves execution environment integrity)
+3. Submit computation result + attestation to Sui
+4. Move contract verifies attestation against provider's root of trust
+5. Accept output only if attestation valid
+
+### Nautilus + Seal Integration
+
+Solves the problem of TEEs losing secrets on restart/migration:
+- Seal stores long-term encryption keys
+- Seal grants key access only to properly attested TEEs
+- Nautilus handles computation over encrypted data
+- Seal controls who can decrypt results
+
+### Use Cases
+
+- Private AI model inference
+- Federated learning coordination
+- ZK-ML proof generation
+- High-cost offchain computation
+
+---
+
+## Walrus Decentralized Storage
+
+[Walrus](https://docs.wal.app) is a decentralized blob storage network using Red Stuff 2D erasure coding. Mainnet launch: March 25, 2025. Whitepaper v2.0: April 2025.
+
+### Red Stuff Encoding
+
+1. Original blob organized into a data matrix (rows × columns)
+2. **Primary encoding**: Columns erasure-coded independently
+3. **Secondary encoding**: Rows erasure-coded independently
+4. Each storage node receives one primary + one secondary sliver (3f+1 total pairs)
+
+### Certification Flow
+
+1. Client encodes blob into slivers
+2. Distribute slivers to storage nodes
+3. Collect signed acknowledgments (2/3 quorum required)
+4. Form "write certificate"
+5. Publish certificate on Sui as Proof of Availability (PoA)
+
+### Key Properties
+
+| Property | Value |
+| -------- | ----- |
+| Storage overhead | 4-5x (vs 3x simple replication) |
+| Recovery threshold | 1/3 of slivers |
+| Fault tolerance | 2/3 node failures |
+| Recovery bandwidth | Proportional to sliver size (not blob size) |
+| Token | WAL (delegated proof-of-stake) |
+
+---
+
 ## Cloudflare DNS Setup
 
 Required DNS records:
@@ -651,3 +717,17 @@ Required DNS records:
 2. `A` record: `@` → `192.0.2.0` (proxied) - root domain
 3. Worker route: `*.sui.ski/*` → `sui-ski-gateway`
 4. Worker route: `sui.ski/*` → `sui-ski-gateway`
+
+---
+
+## Sui Stack System Diagram
+
+For a comprehensive visual reference of the complete Sui ecosystem architecture, see `docs/SUI_STACK_SYSTEM_DIAGRAM.md`. This includes:
+
+- High-level architecture diagrams
+- Component deep dives (Sui Core, SuiNS, MVR, Walrus, Vortex, Seal, Nautilus)
+- Data flow diagrams (transaction lifecycle, content resolution)
+- Integration patterns for full-stack dApps
+- Network topology and SDK reference
+- Performance benchmarks (Mysticeti v2)
+- 2026 roadmap highlights (Remora horizontal scaling, protocol-level privacy)
