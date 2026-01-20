@@ -1101,7 +1101,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 
 				const domain = NAME + '.sui';
 				// Add a small buffer (1%) for any rounding or fee changes
-				const priceWithBuffer = Math.ceil(currentPrice * 1.01 * 1_000_000_000);
+				const priceWithBuffer = Math.ceil(currentPrice * 1.01 * 1000000000);
 
 				showRegisterStatus('Building registration transaction...', 'info');
 
@@ -1130,7 +1130,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				});
 				tx.transferObjects([nft], connectedAddress);
 
-				tx.setGasBudget(100_000_000); // 0.1 SUI
+				tx.setGasBudget(100000000); // 0.1 SUI
 
 				registerBtnText.textContent = 'Approve in wallet...';
 				showRegisterStatus('Please approve the transaction in your wallet', 'info');
@@ -1524,7 +1524,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 
 		loadBids();
-		setInterval(loadBids, 60_000);
+		setInterval(loadBids, 60000);
 		document.getElementById('queue-form').addEventListener('submit', submitBid);
 		document.getElementById('tx-form').addEventListener('submit', relayTransaction);
 	</script>

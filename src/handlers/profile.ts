@@ -8634,12 +8634,13 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				};
 			} catch (error) {
 				console.error('Seal encryption failed:', error);
+				window.sealUnavailableReason = 'Key servers require authentication (permissioned mode)';
 				const data = JSON.stringify(message);
 				const encrypted = btoa(unescape(encodeURIComponent(data)));
 				return {
 					encrypted: encrypted,
 					sealPolicy: {
-						type: 'address',
+						type: 'base64',
 						address: recipientAddress,
 					},
 					version: 1,
@@ -9424,10 +9425,19 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 				try {
 					if (msg.envelope?.ciphertext) {
-						const decryptResult = await decryptWithSeal(msg.envelope, msg.recipient);
-						if (decryptResult?.content) {
-							content = escapeHtmlJS(decryptResult.content);
-							decrypted = true;
+						// Check if it's base64-encoded (not Seal encrypted)
+						if (msg.envelope.policy?.type === 'base64') {
+							const decoded = JSON.parse(decodeURIComponent(escape(atob(msg.envelope.ciphertext))));
+							if (decoded?.content) {
+								content = escapeHtmlJS(decoded.content);
+								decrypted = true;
+							}
+						} else {
+							const decryptResult = await decryptWithSeal(msg.envelope, msg.recipient);
+							if (decryptResult?.content) {
+								content = escapeHtmlJS(decryptResult.content);
+								decrypted = true;
+							}
 						}
 					} else if (msg.encryptedContent) {
 						const legacy = await decryptMessage({ encrypted: msg.encryptedContent }, connectedAddress);
