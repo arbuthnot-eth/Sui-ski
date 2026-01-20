@@ -760,8 +760,10 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				],
 				keyServers: {
 					threshold: 2,
+					objectIds: (env.SEAL_KEY_SERVERS || '').split(',').filter(Boolean),
 					note: 'Decryption requires 2-of-n key server quorum',
 				},
+				approveTarget: env.SEAL_APPROVE_TARGET || null,
 				encryption: {
 					scheme: 'IBE',
 					curve: 'BLS12-381',

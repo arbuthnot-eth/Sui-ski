@@ -23,6 +23,10 @@ export interface Env {
 	AGENCY_REGISTRY_ID?: string
 	// Optional: Seal package ID for encrypted subscriptions
 	SEAL_PACKAGE_ID?: string
+	// Optional: Seal key server object IDs (comma-separated)
+	SEAL_KEY_SERVERS?: string
+	// Optional: Seal approval Move target (e.g., "0x...::messaging::seal_approve")
+	SEAL_APPROVE_TARGET?: string
 	// Optional: Walrus publisher URL for storing encrypted blobs
 	WALRUS_PUBLISHER_URL?: string
 	// Optional: Walrus aggregator URL for retrieving blobs

@@ -1318,6 +1318,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		import { SuiClient } from 'https://esm.sh/@mysten/sui@1.45.2/client';
 		import { Transaction } from 'https://esm.sh/@mysten/sui@1.45.2/transactions';
 		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.9.13';
+		import { SealClient, SessionKey, getAllowlistedKeyServers } from 'https://esm.sh/@mysten/seal@0.2.6';
+		import { fromHex, toHex } from 'https://esm.sh/@mysten/bcs@1.3.0';
 
 		const NAME = ${serializeJson(cleanName)};
 		const FULL_NAME = ${serializeJson(fullName)};
@@ -7254,6 +7256,9 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// References stored in KV with signature verification
 
 		let messagingClient = null;
+		let sealClient = null;
+		let sealConfig = null;
+		let currentSessionKey = null;
 
 		// Local cache key for messages
 		const MSG_CACHE_KEY = \`sui_ski_messages_\${MESSAGING_RECIPIENT}\`;
@@ -7561,8 +7566,10 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			if (msgConversationEmpty) msgConversationEmpty.style.display = 'none';
 
 			const html = messages.map(msg => {
-				const isSent = msg.direction === 'sent' || msg.from === connectedAddress;
-				const senderDisplay = isSent ? 'You' : (msg.fromName ? '@' + msg.fromName + '.sui' : msg.from?.slice(0, 8) + '...');
+				const senderAddr = msg.from || msg.sender || '';
+				const isSent = msg.direction === 'sent' || senderAddr === connectedAddress;
+				const senderName = msg.fromName || msg.senderName || null;
+				const senderDisplay = isSent ? 'You' : (senderName ? '@' + senderName.replace(/\.sui$/i, '') + '.sui' : (senderAddr ? senderAddr.slice(0, 8) + '...' : 'Unknown'));
 				const recipientDisplay = isSent ? '@' + MESSAGING_RECIPIENT + '.sui' : 'You';
 
 				return \`
@@ -7851,19 +7858,147 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// Initial button state (will show connect prompt since no wallet)
 		updateSendButtonState();
 
-		// Preload Seal SDK config in background
-		async function loadMessagingSdk() {
+		// Initialize Seal SDK with config from server
+		async function initSealClient() {
+			if (sealClient) return sealClient;
+
 			try {
 				const response = await fetch('/api/app/subscriptions/config');
-				if (response.ok) {
-					const config = await response.json();
-					console.log('Seal config loaded:', config);
+				if (!response.ok) {
+					console.warn('Failed to fetch Seal config');
+					return null;
 				}
+
+				sealConfig = await response.json();
+				console.log('Seal config loaded:', sealConfig.seal?.packageId);
+
+				const keyServerObjectIds = sealConfig.seal?.keyServers?.objectIds || [];
+				if (keyServerObjectIds.length === 0) {
+					const allowlisted = await getAllowlistedKeyServers(NETWORK);
+					keyServerObjectIds.push(...allowlisted.map(s => s.objectId));
+				}
+
+				if (keyServerObjectIds.length === 0) {
+					console.warn('No Seal key servers configured');
+					return null;
+				}
+
+				const suiClient = getSuiClient();
+				sealClient = new SealClient({
+					suiClient,
+					serverObjectIds: keyServerObjectIds,
+					verifyKeyServers: true,
+				});
+
+				console.log('SealClient initialized with', keyServerObjectIds.length, 'key servers');
+				return sealClient;
 			} catch (error) {
-				console.warn('Failed to load messaging SDK config:', error);
+				console.error('Failed to init SealClient:', error);
+				return null;
 			}
 		}
-		loadMessagingSdk();
+
+		// Create a session key for decryption (proves wallet ownership)
+		async function createSessionKey() {
+			if (!connectedAddress || !connectedWallet) {
+				console.log('Cannot create session key: no wallet');
+				return null;
+			}
+
+			if (!sealConfig?.seal?.packageId) {
+				await initSealClient();
+			}
+
+			if (!sealConfig?.seal?.packageId) {
+				console.warn('No Seal package ID configured');
+				return null;
+			}
+
+			try {
+				const suiClient = getSuiClient();
+				const packageId = sealConfig.seal.packageId;
+
+				currentSessionKey = new SessionKey({
+					address: connectedAddress,
+					packageId,
+					ttlMin: 60,
+				});
+
+				const signPersonalMessage = async (message) => {
+					const result = await connectedWallet.features['sui:signPersonalMessage'].signPersonalMessage({
+						account: connectedAccount,
+						message,
+					});
+					return { signature: result.signature };
+				};
+
+				await currentSessionKey.setPersonalMessageSignCallback(signPersonalMessage);
+				console.log('Session key created for address:', connectedAddress);
+				return currentSessionKey;
+			} catch (error) {
+				console.error('Failed to create session key:', error);
+				return null;
+			}
+		}
+
+		// Decrypt a message using Seal SDK
+		async function decryptWithSeal(encryptedEnvelope, recipientAddress) {
+			if (!sealClient) {
+				await initSealClient();
+			}
+			if (!sealClient) {
+				console.warn('SealClient not available');
+				return null;
+			}
+
+			if (!currentSessionKey) {
+				await createSessionKey();
+			}
+			if (!currentSessionKey) {
+				console.warn('Session key not available');
+				return null;
+			}
+
+			try {
+				const approveTarget = sealConfig?.seal?.approveTarget;
+				if (!approveTarget) {
+					console.warn('No seal_approve target configured');
+					return null;
+				}
+
+				const [packageId, moduleName, functionName] = approveTarget.split('::');
+				const policyId = encryptedEnvelope.policy?.policyId || recipientAddress;
+
+				const tx = new Transaction();
+				tx.moveCall({
+					target: approveTarget,
+					arguments: [tx.pure.vector('u8', fromHex(policyId.startsWith('0x') ? policyId.slice(2) : policyId))],
+				});
+
+				const suiClient = getSuiClient();
+				const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
+
+				const ciphertext = typeof encryptedEnvelope.ciphertext === 'string'
+					? new Uint8Array(atob(encryptedEnvelope.ciphertext).split('').map(c => c.charCodeAt(0)))
+					: encryptedEnvelope.ciphertext;
+
+				const decrypted = await sealClient.decrypt({
+					data: { data: ciphertext, id: policyId },
+					sessionKey: currentSessionKey,
+					txBytes,
+				});
+
+				const decoder = new TextDecoder();
+				const decryptedText = decoder.decode(decrypted);
+				return JSON.parse(decryptedText);
+			} catch (error) {
+				console.error('Seal decryption failed:', error);
+				return null;
+			}
+		}
+
+		// Initialize Seal in background
+		initSealClient();
 
 		// ========== CONVERSATIONS & NOTIFICATIONS ==========
 
@@ -8080,8 +8215,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			}
 		}
 
-		// Render conversation messages
-		function renderConversationMessages(messages) {
+		// Render conversation messages with decryption
+		async function renderConversationMessages(messages) {
 			if (!convMessages) return;
 
 			if (messages.length === 0) {
@@ -8096,16 +8231,44 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				return;
 			}
 
-			convMessages.innerHTML = messages.map(msg => {
+			convMessages.innerHTML = '<div class="msg-conversation-loading"><span class="loading"></span> Decrypting messages...</div>';
+
+			const decryptedMessages = await Promise.all(messages.map(async (msg) => {
 				const isSent = msg.sender === connectedAddress;
 				const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-				return \`
-					<div class="conv-message \${isSent ? 'sent' : 'received'}">
-						<div class="conv-message-content">[Encrypted message]</div>
-						<div class="conv-message-time">\${time}</div>
-					</div>
-				\`;
-			}).join('');
+				let content = '[Encrypted message]';
+				let decrypted = false;
+
+				try {
+					if (msg.envelope?.ciphertext) {
+						const decryptResult = await decryptWithSeal(msg.envelope, msg.recipient);
+						if (decryptResult?.content) {
+							content = escapeHtmlJS(decryptResult.content);
+							decrypted = true;
+						}
+					} else if (msg.encryptedContent) {
+						const legacy = await decryptMessage({ encrypted: msg.encryptedContent }, connectedAddress);
+						if (legacy?.content) {
+							content = escapeHtmlJS(legacy.content);
+							decrypted = true;
+						}
+					} else if (msg.content && typeof msg.content === 'string') {
+						content = escapeHtmlJS(msg.content);
+						decrypted = true;
+					}
+				} catch (err) {
+					console.warn('Failed to decrypt message:', err);
+				}
+
+				return { isSent, time, content, decrypted };
+			}));
+
+			convMessages.innerHTML = decryptedMessages.map(msg => \`
+				<div class="conv-message \${msg.isSent ? 'sent' : 'received'}">
+					<div class="conv-message-content">\${msg.content}\${!msg.decrypted ? ' <span class="encrypted-icon" title="Could not decrypt">🔒</span>' : ''}</div>
+					<div class="conv-message-time">\${msg.time}</div>
+				</div>
+			\`).join('');
 
 			convMessages.scrollTop = convMessages.scrollHeight;
 		}
