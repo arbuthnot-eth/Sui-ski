@@ -8492,7 +8492,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			const encrypted = await encryptForRecipient(messageData, recipientAddr);
 
 			if (!encrypted || !encrypted.encrypted) {
-				throw new Error('Failed to encrypt message');
+				const reason = window.sealUnavailableReason || 'Encryption unavailable';
+				throw new Error('Cannot send message: ' + reason);
 			}
 
 			// Debug: log what we're sending
@@ -8574,37 +8575,19 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 		}
 
-		// Encrypt message for recipient using Seal
+		// Encrypt message for recipient using Seal (returns null if encryption unavailable)
 		async function encryptForRecipient(message, recipientAddress) {
 			if (!sealClient) {
 				await initSealClient();
 			}
 			if (!sealClient) {
-				console.warn('SealClient not available, falling back to base64');
-				const data = JSON.stringify(message);
-				const encrypted = btoa(unescape(encodeURIComponent(data)));
-				return {
-					encrypted: encrypted,
-					sealPolicy: {
-						type: 'address',
-						address: recipientAddress,
-					},
-					version: 1,
-				};
+				window.sealUnavailableReason = 'Seal client not initialized';
+				return null;
 			}
 
 			if (!sealConfig?.seal?.packageId) {
-				console.warn('Seal package ID not configured, falling back to base64');
-				const data = JSON.stringify(message);
-				const encrypted = btoa(unescape(encodeURIComponent(data)));
-				return {
-					encrypted: encrypted,
-					sealPolicy: {
-						type: 'address',
-						address: recipientAddress,
-					},
-					version: 1,
-				};
+				window.sealUnavailableReason = 'Seal package ID not configured';
+				return null;
 			}
 
 			try {
@@ -8625,7 +8608,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				return {
 					encrypted: ciphertext,
 					sealPolicy: {
-						type: 'address',
+						type: 'seal',
 						address: recipientAddress,
 						packageId: packageId,
 						policyId: recipientAddress,
@@ -8634,17 +8617,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				};
 			} catch (error) {
 				console.error('Seal encryption failed:', error);
-				window.sealUnavailableReason = 'Key servers require authentication (permissioned mode)';
-				const data = JSON.stringify(message);
-				const encrypted = btoa(unescape(encodeURIComponent(data)));
-				return {
-					encrypted: encrypted,
-					sealPolicy: {
-						type: 'base64',
-						address: recipientAddress,
-					},
-					version: 1,
-				};
+				window.sealUnavailableReason = 'Key servers require authentication - contact provider to register package';
+				return null;
 			}
 		}
 
@@ -8773,14 +8747,21 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				msgSendBtnText.textContent = 'Connect Wallet';
 				msgSendBtn.disabled = false;
 				msgSendBtn.classList.remove('ready');
+			} else if (window.sealUnavailableReason) {
+				msgSendBtnText.textContent = 'Encryption Unavailable';
+				msgSendBtn.disabled = true;
+				msgSendBtn.classList.remove('ready');
+				msgSendBtn.title = window.sealUnavailableReason;
 			} else if (!hasContent) {
-				msgSendBtnText.textContent = 'Send Message';
+				msgSendBtnText.textContent = 'Send Encrypted Message';
 				msgSendBtn.disabled = true;
 				msgSendBtn.classList.add('ready');
+				msgSendBtn.title = '';
 			} else {
-				msgSendBtnText.textContent = 'Send Message';
+				msgSendBtnText.textContent = 'Send Encrypted Message';
 				msgSendBtn.disabled = false;
 				msgSendBtn.classList.add('ready');
+				msgSendBtn.title = '';
 			}
 		}
 
@@ -9162,8 +9143,10 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			}
 		}
 
-		// Initialize Seal in background
-		initSealClient();
+		// Initialize Seal in background and update UI
+		initSealClient().then(() => {
+			updateSendButtonState();
+		});
 
 		// Expose Seal functions to window for cross-script access
 		window.sealClient = null;
@@ -9172,6 +9155,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			await initSealClient();
 			window.sealClient = sealClient;
 			window.sealConfig = sealConfig;
+			updateSendButtonState();
 		};
 		window.fromHex = fromHex;
 
@@ -9425,19 +9409,10 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 				try {
 					if (msg.envelope?.ciphertext) {
-						// Check if it's base64-encoded (not Seal encrypted)
-						if (msg.envelope.policy?.type === 'base64') {
-							const decoded = JSON.parse(decodeURIComponent(escape(atob(msg.envelope.ciphertext))));
-							if (decoded?.content) {
-								content = escapeHtmlJS(decoded.content);
-								decrypted = true;
-							}
-						} else {
-							const decryptResult = await decryptWithSeal(msg.envelope, msg.recipient);
-							if (decryptResult?.content) {
-								content = escapeHtmlJS(decryptResult.content);
-								decrypted = true;
-							}
+						const decryptResult = await decryptWithSeal(msg.envelope, msg.recipient);
+						if (decryptResult?.content) {
+							content = escapeHtmlJS(decryptResult.content);
+							decrypted = true;
 						}
 					} else if (msg.encryptedContent) {
 						const legacy = await decryptMessage({ encrypted: msg.encryptedContent }, connectedAddress);
