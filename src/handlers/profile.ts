@@ -9017,7 +9017,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				sealClient = new SealClient({
 					suiClient,
 					serverConfigs: SEAL_TESTNET_KEY_SERVERS.map(id => ({ objectId: id, weight: 1 })),
-					verifyKeyServers: true,
+					verifyKeyServers: false, // Skip verification - using trusted providers (Mysten Labs, Triton One)
 				});
 
 				console.log('SealClient initialized with', SEAL_TESTNET_KEY_SERVERS.length, 'testnet key servers');
