@@ -7288,21 +7288,6 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			};
 		}
 
-		// Resolve SuiNS name to address
-		async function resolveSuiNSName(name) {
-			const cleanName = name.replace('@', '').replace(/\.sui$/i, '');
-			try {
-				const response = await fetch('/api/resolve/' + encodeURIComponent(cleanName + '.sui'));
-				if (response.ok) {
-					const data = await response.json();
-					return data.address || data.targetAddress || null;
-				}
-			} catch (e) {
-				console.warn('Failed to resolve name:', cleanName, e);
-			}
-			return null;
-		}
-
 		// Send message to recipient via Walrus + signature verification
 		async function sendMessage(recipientName, content) {
 			if (!connectedAddress || !connectedWallet) {
@@ -7320,7 +7305,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				recipientAddr = MESSAGING_RECIPIENT_ADDRESS;
 			} else {
 				showMsgStatus('Resolving recipient address...', 'info');
-				recipientAddr = await resolveSuiNSName(recipientName);
+				const resolved = await resolveSuiNSName(recipientName);
+				recipientAddr = resolved?.address || null;
 			}
 
 			if (!recipientAddr || recipientAddr.trim().length === 0) {
@@ -8053,6 +8039,16 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// Initialize Seal in background
 		initSealClient();
 
+		// Expose Seal functions to window for cross-script access
+		window.sealClient = null;
+		window.sealConfig = null;
+		window.initSealClient = async () => {
+			await initSealClient();
+			window.sealClient = sealClient;
+			window.sealConfig = sealConfig;
+		};
+		window.fromHex = fromHex;
+
 		// ========== CONVERSATIONS & NOTIFICATIONS ==========
 
 		// DOM elements for conversations
@@ -8678,12 +8674,14 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			localStorage.setItem(SUBSCRIPTIONS_BLOB_KEY, JSON.stringify(info));
 		}
 
-		// Initialize Seal SDK for encryption
+		// Initialize Seal SDK for encryption (uses module-scoped functions via window)
 		async function initSealSdk() {
 			if (sealInitialized) return true;
 			try {
-				await initSealClient();
-				sealInitialized = sealClient !== null;
+				if (window.initSealClient) {
+					await window.initSealClient();
+					sealInitialized = window.sealClient !== null;
+				}
 				return sealInitialized;
 			} catch (err) {
 				console.error('Failed to init Seal:', err);
@@ -8693,10 +8691,10 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 		// Encrypt subscriptions with Seal
 		async function encryptSubscriptions(subs, subscriberAddress) {
-			if (!sealClient) {
-				await initSealClient();
+			if (!window.sealClient) {
+				if (window.initSealClient) await window.initSealClient();
 			}
-			if (!sealClient || !sealConfig?.seal?.packageId) {
+			if (!window.sealClient || !window.sealConfig?.seal?.packageId) {
 				console.warn('SealClient not available, falling back to base64');
 				const data = JSON.stringify({
 					subscriptions: subs,
@@ -8708,7 +8706,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			}
 
 			try {
-				const packageId = sealConfig.seal.packageId;
+				const packageId = window.sealConfig.seal.packageId;
 				const data = JSON.stringify({
 					subscriptions: subs,
 					subscriberAddress: subscriberAddress,
@@ -8718,10 +8716,10 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				const plaintext = new TextEncoder().encode(data);
 				const policyId = subscriberAddress.startsWith('0x') ? subscriberAddress.slice(2) : subscriberAddress;
 
-				const { encryptedObject } = await sealClient.encrypt({
+				const { encryptedObject } = await window.sealClient.encrypt({
 					threshold: 2,
-					packageId: fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
-					id: fromHex(policyId),
+					packageId: window.fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
+					id: window.fromHex(policyId),
 					data: plaintext,
 				});
 
