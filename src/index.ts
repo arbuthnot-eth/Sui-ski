@@ -20,13 +20,14 @@ export default {
 	async fetch(request: Request, rawEnv: Env, _ctx: ExecutionContext): Promise<Response> {
 		const env = ensureRpcEnv(rawEnv)
 		
-		// Handle CORS preflight
+		// Handle CORS preflight - reflect requested headers
 		if (request.method === 'OPTIONS') {
+			const requestedHeaders = request.headers.get('Access-Control-Request-Headers') || 'Content-Type'
 			return new Response(null, {
 				headers: {
 					'Access-Control-Allow-Origin': '*',
-					'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-					'Access-Control-Allow-Headers': 'Content-Type',
+					'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, DELETE, OPTIONS',
+					'Access-Control-Allow-Headers': requestedHeaders,
 					'Access-Control-Max-Age': '86400',
 				},
 			})

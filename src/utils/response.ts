@@ -3,8 +3,8 @@ import type { Env, GatewayError } from '../types'
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
-	'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
-	'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+	'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, DELETE, OPTIONS',
+	'Access-Control-Allow-Headers': '*',
 }
 
 export function jsonResponse<T>(data: T, status = 200, headers: Record<string, string> = {}) {
