@@ -15,12 +15,13 @@ routes = [
 SUI_NETWORK = "mainnet"
 # SUI_RPC_URL set via `wrangler secret put SUI_RPC_URL` (Triton token URL)
 WALRUS_NETWORK = "mainnet"
-# Seal configuration for encrypted messaging
-SEAL_PACKAGE_ID = "0xcb83a248bda5f7a0a431e6bf9e96d184e604130ec5218696e3f1211113b447b7"
-SEAL_APPROVE_TARGET = "0x790d89fae525d757e0be2d4f154db7c53e97c2aa939b9f6a1201c573de117326::access::seal_approve"
-# Mainnet Seal key servers (discovered via RPC query)
-# Mysten Labs, ProjectSonar, Natsai - using 3 for threshold encryption
-SEAL_KEY_SERVERS = "0x7ead02107dd2d66d839ce64bab9a793e0db3d4669147d7059ccdb4a059e50d45,0x41d7f55f8b1686e26d2cadcbb2cb53572945623a31a276e6e6ee95887384b8d5,0x72829123b9bdf679d208382c79b097a03211a38e8d72dcbd0e926c4a7e82c83f"
+# Seal configuration for encrypted messaging (using TESTNET for open mode key servers)
+# Main app uses mainnet, but Seal uses testnet because mainnet key servers require registration
+SEAL_NETWORK = "testnet"
+SEAL_PACKAGE_ID = "0x8afa5d31dbaa0a8fb07082692940ca3d56b5e856c5126cb5a3693f0a4de63b82"
+# Testnet open mode key servers (no registration required)
+# Mysten Labs #1, Mysten Labs #2, Triton One - using 3 for threshold encryption
+SEAL_KEY_SERVERS = "0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8,0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46"
 # IKA dWallet package ID for cross-chain control (set when deploying IKA integration)
 # IKA_PACKAGE_ID = ""
 # Agency registry object ID (set after deploying agency registry contract)

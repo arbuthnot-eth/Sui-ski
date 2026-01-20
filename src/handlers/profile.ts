@@ -8978,61 +8978,53 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// Initial button state (will show connect prompt since no wallet)
 		updateSendButtonState();
 
-		// Hardcoded key server IDs by network (discovered via RPC query)
-		const TESTNET_KEY_SERVERS = [
-			'0xb35a7228d8cf224ad1e828c0217c95a5153bafc2906d6f9c178197dce26fbcf8',
-			'0x2d6cde8a9d9a65bde3b0a346566945a63b4bfb70e9a06c41bdb70807e2502b06',
+		// Seal uses TESTNET for open mode key servers (mainnet requires registration)
+		// These are open mode servers that don't require API keys or package registration
+		const SEAL_TESTNET_KEY_SERVERS = [
+			'0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75', // Mysten Labs #1
+			'0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8', // Mysten Labs #2
+			'0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46', // Triton One
 		];
-		const MAINNET_KEY_SERVERS = [
-			'0x7ead02107dd2d66d839ce64bab9a793e0db3d4669147d7059ccdb4a059e50d45', // Mysten Labs
-			'0x41d7f55f8b1686e26d2cadcbb2cb53572945623a31a276e6e6ee95887384b8d5', // ProjectSonar
-			'0x72829123b9bdf679d208382c79b097a03211a38e8d72dcbd0e926c4a7e82c83f', // Natsai
-		];
+		const SEAL_TESTNET_PACKAGE_ID = '0x8afa5d31dbaa0a8fb07082692940ca3d56b5e856c5126cb5a3693f0a4de63b82';
+		const SEAL_TESTNET_RPC = 'https://fullnode.testnet.sui.io:443';
 
-		// Initialize Seal SDK with config from server
+		// Separate SuiClient for Seal operations (uses testnet)
+		let sealSuiClient = null;
+		const getSealSuiClient = () => {
+			if (!sealSuiClient) {
+				sealSuiClient = new SuiClient({ url: SEAL_TESTNET_RPC });
+			}
+			return sealSuiClient;
+		};
+
+		// Initialize Seal SDK with testnet open mode servers
 		async function initSealClient() {
 			if (sealClient) return sealClient;
 
 			try {
-				const response = await fetch('/api/app/subscriptions/config');
-				if (!response.ok) {
-					console.warn('Failed to fetch Seal config');
-					return null;
-				}
-
-				sealConfig = await response.json();
-				console.log('Seal config loaded:', sealConfig.seal?.packageId);
-
-				let keyServerObjectIds = sealConfig.seal?.keyServers?.objectIds || [];
-
-				// Use hardcoded servers if none configured from server
-				if (keyServerObjectIds.length === 0) {
-					if (NETWORK === 'testnet') {
-						keyServerObjectIds = TESTNET_KEY_SERVERS;
-						console.log('Using hardcoded testnet key servers');
-					} else if (NETWORK === 'mainnet') {
-						keyServerObjectIds = MAINNET_KEY_SERVERS;
-						console.log('Using hardcoded mainnet key servers');
+				// Use hardcoded testnet config (open mode servers)
+				sealConfig = {
+					seal: {
+						packageId: SEAL_TESTNET_PACKAGE_ID,
+						keyServers: {
+							objectIds: SEAL_TESTNET_KEY_SERVERS
+						}
 					}
-				}
+				};
+				console.log('Using testnet Seal config (open mode):', sealConfig.seal.packageId);
 
-				if (keyServerObjectIds.length === 0) {
-					console.warn('No Seal key servers configured for', NETWORK);
-					window.sealUnavailableReason = 'No key servers configured for ' + NETWORK;
-					return null;
-				}
-
-				const suiClient = getSuiClient();
+				const suiClient = getSealSuiClient();
 				sealClient = new SealClient({
 					suiClient,
-					serverConfigs: keyServerObjectIds.map(id => ({ objectId: id, weight: 1 })),
+					serverConfigs: SEAL_TESTNET_KEY_SERVERS.map(id => ({ objectId: id, weight: 1 })),
 					verifyKeyServers: true,
 				});
 
-				console.log('SealClient initialized with', keyServerObjectIds.length, 'key servers');
+				console.log('SealClient initialized with', SEAL_TESTNET_KEY_SERVERS.length, 'testnet key servers');
 				return sealClient;
 			} catch (error) {
 				console.error('Failed to init SealClient:', error);
+				window.sealUnavailableReason = 'Failed to initialize: ' + (error.message || 'Unknown error');
 				return null;
 			}
 		}
@@ -9054,7 +9046,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			}
 
 			try {
-				const suiClient = getSuiClient();
+				// Use testnet SuiClient for Seal operations
+				const suiClient = getSealSuiClient();
 				const packageId = sealConfig.seal.packageId;
 
 				// Create a custom signer that uses the wallet
