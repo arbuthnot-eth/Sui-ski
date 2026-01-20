@@ -10200,7 +10200,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				}
 
 				// Parse MVR name format (@name/package)
-				const mvrNameMatch = text.match(/@([a-zA-Z0-9_-]+)/([a-zA-Z0-9_-]+)/);
+				const mvrNameMatch = text.match(/@([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/);
 				if (mvrNameMatch) {
 					const pkgNameInput = document.getElementById('mvr-reg-pkgname');
 					if (pkgNameInput) pkgNameInput.value = mvrNameMatch[2];
