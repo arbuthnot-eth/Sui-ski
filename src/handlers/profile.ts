@@ -52,7 +52,7 @@ export function generateProfilePage(
 	const expiresMs = record.expirationTimestampMs ? Number(record.expirationTimestampMs) : undefined
 	const expiresAt =
 		typeof expiresMs === 'number' && Number.isFinite(expiresMs) ? new Date(expiresMs) : null
-	const daysToExpire = expiresAt ? Math.ceil((expiresAt.getTime() - Date.now()) / 86_400_000) : null
+	const daysToExpire = expiresAt ? Math.ceil((expiresAt.getTime() - Date.now()) / 86400000) : null
 	const escapeHtml = (value: string) =>
 		value.replace(/[&<>"']/g, (char) => {
 			switch (char) {
@@ -2790,30 +2790,37 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		}
 
 		// Check if connected wallet can edit
+		var isCheckingEditPermission = false;
 		async function checkEditPermission() {
-			if (!connectedAddress) {
-				canEdit = false;
-				connectedPrimaryName = null;
+			if (isCheckingEditPermission) return;
+			isCheckingEditPermission = true;
+			try {
+				if (!connectedAddress) {
+					canEdit = false;
+					connectedPrimaryName = null;
+					updateEditButton();
+					return;
+				}
+
+				// Fetch NFT owner and primary name in parallel
+				const [owner, primaryName] = await Promise.all([
+					nftOwnerAddress ? Promise.resolve(nftOwnerAddress) : fetchNftOwner(),
+					fetchPrimaryName(connectedAddress)
+				]);
+
+				if (!nftOwnerAddress && owner) {
+					nftOwnerAddress = owner;
+				}
+				connectedPrimaryName = primaryName;
+
+				// Can edit if wallet is the NFT owner OR the current target address
+				canEdit = connectedAddress === nftOwnerAddress || connectedAddress === CURRENT_ADDRESS;
 				updateEditButton();
-				return;
+				renderWalletBar(); // Re-render to show primary name
+				updateGlobalWalletWidget(); // Update global widget with primary name
+			} finally {
+				isCheckingEditPermission = false;
 			}
-
-			// Fetch NFT owner and primary name in parallel
-			const [owner, primaryName] = await Promise.all([
-				nftOwnerAddress ? Promise.resolve(nftOwnerAddress) : fetchNftOwner(),
-				fetchPrimaryName(connectedAddress)
-			]);
-
-			if (!nftOwnerAddress && owner) {
-				nftOwnerAddress = owner;
-			}
-			connectedPrimaryName = primaryName;
-
-			// Can edit if wallet is the NFT owner OR the current target address
-			canEdit = connectedAddress === nftOwnerAddress || connectedAddress === CURRENT_ADDRESS;
-			updateEditButton();
-			renderWalletBar(); // Re-render to show primary name
-			updateGlobalWalletWidget(); // Update global widget with primary name
 		}
 
 		// Update edit button state
@@ -4195,7 +4202,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 		// Format SUI amount from MIST
 		function formatSui(mist) {
-			return (mist / 1_000_000_000).toFixed(2);
+			return (mist / 1000000000).toFixed(2);
 		}
 
 		// Load marketplace data from Tradeport API
@@ -4364,7 +4371,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				return;
 			}
 
-			const amountMist = Math.floor(amount * 1_000_000_000);
+			const amountMist = Math.floor(amount * 1000000000);
 
 			placeBidBtn.disabled = true;
 			placeBidBtn.querySelector('.btn-text').textContent = 'Building...';
@@ -4985,8 +4992,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		checkEditPermission = async function() {
 			await originalCheckEditPermission();
 			updateUploadVisibility();
-			// Update MVR section if expanded
-			if (typeof window.updateMvrSectionVisibility === 'function') {
+			// Update MVR section only if expanded
+			if (window.mvrExpanded && typeof window.updateMvrSectionVisibility === 'function') {
 				await window.updateMvrSectionVisibility();
 			}
 		};
@@ -6287,12 +6294,12 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				highestAmountMist = BigInt(currentBounties[0].totalAmountMist);
 			}
 
-			const minAmountMist = BigInt(10 * 1_000_000_000);
+			const minAmountMist = BigInt(10 * 1000000000);
 			const totalAmountMist = highestAmountMist >= minAmountMist
-				? highestAmountMist + BigInt(1 * 1_000_000_000)
+				? highestAmountMist + BigInt(1 * 1000000000)
 				: minAmountMist;
 
-			const executorRewardMist = BigInt(1 * 1_000_000_000);
+			const executorRewardMist = BigInt(1 * 1000000000);
 			const years = 1;
 
 			if (quickBountyBtn) quickBountyBtn.disabled = true;
@@ -6653,8 +6660,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			const executorRewardSui = 1;
 			const years = 1;
 
-			const totalAmountMist = BigInt(totalAmountSui * 1_000_000_000);
-			const executorRewardMist = BigInt(executorRewardSui * 1_000_000_000);
+			const totalAmountMist = BigInt(totalAmountSui * 1000000000);
+			const executorRewardMist = BigInt(executorRewardSui * 1000000000);
 
 			if (graceSnipeBtn) graceSnipeBtn.disabled = true;
 			showSnipeStatus('<span class="loading-spinner"></span> Building transaction...', 'loading');
@@ -7773,18 +7780,11 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			}
 		}
 
-		// Make MVR update function globally available for wallet state changes
+		// Make MVR state globally available for other code sections
 		window.updateMvrSectionVisibility = updateMvrSectionVisibility;
-		// Also update when wallet connects
-		if (typeof window.checkEditPermission === 'function') {
-			const originalCheckEdit = window.checkEditPermission;
-			window.checkEditPermission = async function() {
-				await originalCheckEdit();
-				if (mvrExpanded) {
-					await updateMvrSectionVisibility();
-				}
-			};
-		}
+		Object.defineProperty(window, 'mvrExpanded', {
+			get: function() { return mvrExpanded; }
+		});
 
 		// MVR Auto-fill parsing
 		var mvrAutofill = document.getElementById('mvr-autofill');
