@@ -2463,7 +2463,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 	const EXPLORER_BASE = ${serializeJson(explorerBase)};
 	const IS_SUBNAME = NAME.includes('.');
 	const STORAGE_KEY = 'sui_ski_wallet';
-	const EXPIRATION_MS = ${expiresMs || 0};
+	const EXPIRATION_MS = ${typeof expiresMs === 'number' ? expiresMs : 0};
 	const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 	const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
 	const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
@@ -7634,20 +7634,101 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 					return;
 				}
 
-				// Check ownership - if owned, must be owned by the current user
+				// Check ownership - if owned, must be owned by the current user or an object they own
 				const owner = upgradeCapObj.data.owner;
-				if (owner && typeof owner === 'object' && 'AddressOwner' in owner) {
-					const ownerAddress = owner.AddressOwner;
-					if (ownerAddress !== connectedAddress) {
-						showMvrStatus(
-							'UpgradeCap is owned by a different address (' + ownerAddress.slice(0, 8) + '...). ' +
-							'You can only register packages with UpgradeCaps that you own, or that are shared/immutable. ' +
-							'Please use your own UpgradeCap or contact the owner to make it shared.',
-							'error'
-						);
-						mvrRegisterBtn.disabled = false;
-						mvrRegisterBtnText.textContent = 'Register Package';
-						return;
+				let parentObjectId = null; // Track if UpgradeCap is owned by an object ID we own
+				
+				if (owner && typeof owner === 'object') {
+					if ('AddressOwner' in owner) {
+						const ownerAddress = owner.AddressOwner;
+						if (ownerAddress !== connectedAddress) {
+							showMvrStatus(
+								'UpgradeCap is owned by a different address (' + ownerAddress.slice(0, 8) + '...). ' +
+								'You can only register packages with UpgradeCaps that you own, or that are shared/immutable. ' +
+								'Please use your own UpgradeCap or contact the owner to make it shared.',
+								'error'
+							);
+							mvrRegisterBtn.disabled = false;
+							mvrRegisterBtnText.textContent = 'Register Package';
+							return;
+						}
+					} else if ('ObjectOwner' in owner) {
+						// UpgradeCap is owned by an object ID (like a SuiNS NFT)
+						const objectOwnerId = owner.ObjectOwner;
+						
+						// Check if this is the current domain's NFT
+						if (NFT_ID && objectOwnerId === NFT_ID) {
+							// Check if we own the NFT
+							try {
+								const nftObj = await suiClient.getObject({
+									id: NFT_ID,
+									options: { showOwner: true }
+								});
+								if (nftObj.data?.owner && typeof nftObj.data.owner === 'object' && 'AddressOwner' in nftObj.data.owner) {
+									const nftOwner = nftObj.data.owner.AddressOwner;
+									if (nftOwner === connectedAddress) {
+										parentObjectId = NFT_ID; // We own the NFT, can use the UpgradeCap
+									} else {
+										showMvrStatus(
+											'UpgradeCap is owned by this domain\'s NFT, but you don\'t own the NFT. ' +
+											'Please connect the wallet that owns ' + NAME + ' to register the package.',
+											'error'
+										);
+										mvrRegisterBtn.disabled = false;
+										mvrRegisterBtnText.textContent = 'Register Package';
+										return;
+									}
+								}
+							} catch (e) {
+								console.error('Error checking NFT ownership:', e);
+								showMvrStatus('Failed to verify NFT ownership. Please try again.', 'error');
+								mvrRegisterBtn.disabled = false;
+								mvrRegisterBtnText.textContent = 'Register Package';
+								return;
+							}
+						} else {
+							// Check if we own the parent object
+							try {
+								const parentObj = await suiClient.getObject({
+									id: objectOwnerId,
+									options: { showOwner: true }
+								});
+								if (parentObj.data?.owner && typeof parentObj.data.owner === 'object' && 'AddressOwner' in parentObj.data.owner) {
+									const parentOwner = parentObj.data.owner.AddressOwner;
+									if (parentOwner === connectedAddress) {
+										parentObjectId = objectOwnerId; // We own the parent object
+									} else {
+										showMvrStatus(
+											'UpgradeCap is owned by an object (' + objectOwnerId.slice(0, 8) + '...), but you don\'t own that object. ' +
+											'Please connect the wallet that owns the parent object to register the package.',
+											'error'
+										);
+										mvrRegisterBtn.disabled = false;
+										mvrRegisterBtnText.textContent = 'Register Package';
+										return;
+									}
+								} else {
+									showMvrStatus(
+										'UpgradeCap is owned by an object (' + objectOwnerId.slice(0, 8) + '...), but we cannot verify ownership. ' +
+										'Please transfer the UpgradeCap to your address first, or make it shared.',
+										'error'
+									);
+									mvrRegisterBtn.disabled = false;
+									mvrRegisterBtnText.textContent = 'Register Package';
+									return;
+								}
+							} catch (e) {
+								console.error('Error checking parent object ownership:', e);
+								showMvrStatus(
+									'UpgradeCap is owned by an object ID, but we cannot verify ownership. ' +
+									'Please transfer the UpgradeCap to your address first, or make it shared.',
+									'error'
+								);
+								mvrRegisterBtn.disabled = false;
+								mvrRegisterBtnText.textContent = 'Register Package';
+								return;
+							}
+						}
 					}
 				}
 				// If it's shared or immutable, we can use it
@@ -7664,6 +7745,10 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 				// Step 1: Create PackageInfo from UpgradeCap
 				// @mvr/metadata::package_info::new(upgrade_cap)
+				// Note: If UpgradeCap is owned by an object ID, the parent object must be in the transaction.
+				// If parentObjectId is set, we've verified the user owns it, and it will be included
+				// automatically when we use the NFT in the register call below (if they're the same),
+				// or Sui's transaction builder will include it when we reference the UpgradeCap.
 				const [packageInfo] = tx.moveCall({
 					target: MVR_METADATA_PACKAGE + '::package_info::new',
 					arguments: [tx.object(upgradeCap)],
@@ -7671,6 +7756,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 				// Step 2: Register the app name in MVR using SuiNS NFT
 				// @mvr/core::move_registry::register(registry, suins_nft, app_name, clock)
+				// The NFT is included here. If the UpgradeCap is owned by this NFT (parentObjectId === NFT_ID),
+				// Sui will automatically verify that the transaction signer owns the NFT and can use the UpgradeCap.
 				const [appCap] = tx.moveCall({
 					target: MVR_CORE_PACKAGE + '::move_registry::register',
 					arguments: [
