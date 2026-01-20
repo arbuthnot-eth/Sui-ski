@@ -3,7 +3,7 @@ import { errorResponse, jsonResponse } from '../utils/response'
 
 // Allowed RPC methods - limit to read-only operations for public gateway
 const ALLOWED_METHODS = new Set([
-	// Read methods
+	// Read methods (sui_ prefix - legacy)
 	'sui_getObject',
 	'sui_multiGetObjects',
 	'sui_getOwnedObjects',
@@ -16,10 +16,15 @@ const ALLOWED_METHODS = new Set([
 	'sui_getCheckpoints',
 	'sui_getProtocolConfig',
 	'sui_getChainIdentifier',
+	// Read methods (suix_ prefix - newer SDK)
+	'suix_getOwnedObjects',
+	'suix_queryTransactionBlocks',
+	'suix_queryEvents',
 	// Coin queries
 	'suix_getBalance',
 	'suix_getAllBalances',
 	'suix_getCoins',
+	'suix_getAllCoins',
 	'suix_getTotalSupply',
 	'suix_getCoinMetadata',
 	// Name service
@@ -37,7 +42,7 @@ const ALLOWED_METHODS = new Set([
 	// Dry run (no state changes)
 	'sui_dryRunTransactionBlock',
 	'sui_devInspectTransactionBlock',
-	// Gas price (read-only, needed by Seal SDK)
+	// Gas price (read-only)
 	'suix_getReferenceGasPrice',
 ])
 
