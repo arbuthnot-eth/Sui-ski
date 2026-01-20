@@ -269,6 +269,14 @@ function validateSealPolicy(envelope: SealEncryptedEnvelope): { valid: boolean; 
 }
 
 /**
+ * Strip .sui suffix from name if present
+ */
+function stripSuiSuffix(name: string | null): string | null {
+	if (!name) return null
+	return name.replace(/\.sui$/i, '')
+}
+
+/**
  * Get or create a conversation between two addresses
  */
 async function getOrCreateConversation(
@@ -290,19 +298,22 @@ async function getOrCreateConversation(
 		}
 	}
 
+	const cleanName1 = stripSuiSuffix(name1)
+	const cleanName2 = stripSuiSuffix(name2)
+
 	const now = Date.now()
 	const conversation: Conversation = {
 		id: conversationId,
 		participants: [addr1, addr2],
 		participantNames: {
-			[addr1]: name1,
-			[addr2]: name2,
+			[addr1]: cleanName1,
+			[addr2]: cleanName2,
 		},
 		lastMessage: {
 			preview: '',
 			timestamp: now,
 			sender: addr1,
-			senderName: name1,
+			senderName: cleanName1,
 		},
 		unreadCount: 0,
 		createdAt: now,
