@@ -7912,13 +7912,17 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				console.log('Seal config loaded:', sealConfig.seal?.packageId);
 
 				const keyServerObjectIds = sealConfig.seal?.keyServers?.objectIds || [];
-				if (keyServerObjectIds.length === 0) {
-					const allowlisted = await getAllowlistedKeyServers(NETWORK);
-					keyServerObjectIds.push(...allowlisted.map(s => s.objectId));
+				if (keyServerObjectIds.length === 0 && NETWORK === 'testnet') {
+					try {
+						const allowlisted = await getAllowlistedKeyServers(NETWORK);
+						keyServerObjectIds.push(...allowlisted);
+					} catch (e) {
+						console.warn('getAllowlistedKeyServers failed:', e.message);
+					}
 				}
 
 				if (keyServerObjectIds.length === 0) {
-					console.warn('No Seal key servers configured');
+					console.warn('No Seal key servers configured for', NETWORK, '- encryption will use base64 fallback');
 					return null;
 				}
 
