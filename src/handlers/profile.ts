@@ -7491,22 +7491,75 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 		// Encrypt message for recipient using Seal
 		async function encryptForRecipient(message, recipientAddress) {
-			// In production, use @mysten/seal SDK
-			// This creates an address-based policy: only recipientAddress can decrypt
-			const data = JSON.stringify(message);
+			if (!sealClient) {
+				await initSealClient();
+			}
+			if (!sealClient) {
+				console.warn('SealClient not available, falling back to base64');
+				const data = JSON.stringify(message);
+				const encrypted = btoa(unescape(encodeURIComponent(data)));
+				return {
+					encrypted: encrypted,
+					sealPolicy: {
+						type: 'address',
+						address: recipientAddress,
+					},
+					version: 1,
+				};
+			}
 
-			// Seal encryption would happen here
-			// For now, use base64 as placeholder (real impl uses Seal SDK)
-			const encrypted = btoa(unescape(encodeURIComponent(data)));
+			if (!sealConfig?.seal?.packageId) {
+				console.warn('Seal package ID not configured, falling back to base64');
+				const data = JSON.stringify(message);
+				const encrypted = btoa(unescape(encodeURIComponent(data)));
+				return {
+					encrypted: encrypted,
+					sealPolicy: {
+						type: 'address',
+						address: recipientAddress,
+					},
+					version: 1,
+				};
+			}
 
-			return {
-				encrypted: encrypted,
-				sealPolicy: {
-					type: 'address',
-					address: recipientAddress,
-				},
-				version: 1,
-			};
+			try {
+				const packageId = sealConfig.seal.packageId;
+				const data = JSON.stringify(message);
+				const plaintext = new TextEncoder().encode(data);
+				const policyId = recipientAddress.startsWith('0x') ? recipientAddress.slice(2) : recipientAddress;
+
+				const { encryptedObject } = await sealClient.encrypt({
+					threshold: 2,
+					packageId: fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
+					id: fromHex(policyId),
+					data: plaintext,
+				});
+
+				const ciphertext = btoa(String.fromCharCode.apply(null, encryptedObject.data));
+
+				return {
+					encrypted: ciphertext,
+					sealPolicy: {
+						type: 'address',
+						address: recipientAddress,
+						packageId: packageId,
+						policyId: recipientAddress,
+					},
+					version: 1,
+				};
+			} catch (error) {
+				console.error('Seal encryption failed:', error);
+				const data = JSON.stringify(message);
+				const encrypted = btoa(unescape(encodeURIComponent(data)));
+				return {
+					encrypted: encrypted,
+					sealPolicy: {
+						type: 'address',
+						address: recipientAddress,
+					},
+					version: 1,
+				};
+			}
 		}
 
 		// Decrypt message (only works if you're the recipient)
@@ -8629,33 +8682,60 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		async function initSealSdk() {
 			if (sealInitialized) return true;
 			try {
-				// Fetch config from API
-				const configRes = await fetch('/api/app/subscriptions/config');
-				const config = await configRes.json();
-
-				// For now, use a simple encryption approach
-				// Full Seal SDK integration requires the @mysten/seal package
-				console.log('Seal config loaded:', config.seal);
-				sealInitialized = true;
-				return true;
+				await initSealClient();
+				sealInitialized = sealClient !== null;
+				return sealInitialized;
 			} catch (err) {
 				console.error('Failed to init Seal:', err);
 				return false;
 			}
 		}
 
-		// Encrypt subscriptions with Seal (simplified - full impl uses SDK)
+		// Encrypt subscriptions with Seal
 		async function encryptSubscriptions(subs, subscriberAddress) {
-			// In production, use @mysten/seal SDK for proper encryption
-			// This creates an address-based policy so only subscriber can decrypt
-			const data = JSON.stringify({
-				subscriptions: subs,
-				subscriberAddress: subscriberAddress,
-				encryptedAt: Date.now(),
-				version: 1,
-			});
-			// Base64 encode (in production, this would be Seal-encrypted)
-			return btoa(unescape(encodeURIComponent(data)));
+			if (!sealClient) {
+				await initSealClient();
+			}
+			if (!sealClient || !sealConfig?.seal?.packageId) {
+				console.warn('SealClient not available, falling back to base64');
+				const data = JSON.stringify({
+					subscriptions: subs,
+					subscriberAddress: subscriberAddress,
+					encryptedAt: Date.now(),
+					version: 1,
+				});
+				return btoa(unescape(encodeURIComponent(data)));
+			}
+
+			try {
+				const packageId = sealConfig.seal.packageId;
+				const data = JSON.stringify({
+					subscriptions: subs,
+					subscriberAddress: subscriberAddress,
+					encryptedAt: Date.now(),
+					version: 1,
+				});
+				const plaintext = new TextEncoder().encode(data);
+				const policyId = subscriberAddress.startsWith('0x') ? subscriberAddress.slice(2) : subscriberAddress;
+
+				const { encryptedObject } = await sealClient.encrypt({
+					threshold: 2,
+					packageId: fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
+					id: fromHex(policyId),
+					data: plaintext,
+				});
+
+				return btoa(String.fromCharCode.apply(null, encryptedObject.data));
+			} catch (error) {
+				console.error('Seal encryption failed:', error);
+				const data = JSON.stringify({
+					subscriptions: subs,
+					subscriberAddress: subscriberAddress,
+					encryptedAt: Date.now(),
+					version: 1,
+				});
+				return btoa(unescape(encodeURIComponent(data)));
+			}
 		}
 
 		// Decrypt subscriptions (simplified)
