@@ -163,3 +163,42 @@ export interface MVRPackageInfo {
 		iconUrl?: string
 	}
 }
+
+/** Message stored in inbox */
+export interface StoredMessage {
+	id: string
+	blobId: string
+	storage: 'walrus' | 'kv'
+	sender: string
+	senderName: string | null
+	recipient: string
+	recipientName: string | null
+	timestamp: number
+	signed: boolean
+	conversationId?: string
+}
+
+/** Conversation between two participants */
+export interface Conversation {
+	id: string
+	participants: [string, string]
+	participantNames: Record<string, string | null>
+	lastMessage: {
+		preview: string
+		timestamp: number
+		sender: string
+		senderName: string | null
+	}
+	unreadCount: number
+	createdAt: number
+	updatedAt: number
+}
+
+/** User's read state across conversations */
+export interface UserReadState {
+	address: string
+	conversations: Record<string, {
+		lastReadTimestamp: number
+	}>
+	globalLastChecked: number
+}

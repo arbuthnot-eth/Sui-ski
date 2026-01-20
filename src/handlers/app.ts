@@ -21,9 +21,124 @@
  * /api/llm/*     - LLM completion proxy
  */
 
-import type { Env } from '../types'
+import type { Conversation, Env, StoredMessage } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
 import { getPWAMetaTags } from './pwa'
+
+/**
+ * Compute a deterministic conversation ID from two addresses
+ * Sorts addresses to ensure same ID regardless of who initiated
+ */
+function computeConversationId(addr1: string, addr2: string): string {
+	const sorted = [addr1.toLowerCase(), addr2.toLowerCase()].sort()
+	const combined = sorted.join(':')
+	let hash = 0
+	for (let i = 0; i < combined.length; i++) {
+		const char = combined.charCodeAt(i)
+		hash = ((hash << 5) - hash) + char
+		hash = hash & hash
+	}
+	return `conv_${Math.abs(hash).toString(16)}`
+}
+
+/**
+ * Get or create a conversation between two addresses
+ */
+async function getOrCreateConversation(
+	env: Env,
+	addr1: string,
+	addr2: string,
+	name1: string | null,
+	name2: string | null
+): Promise<Conversation> {
+	const conversationId = computeConversationId(addr1, addr2)
+	const key = `conv_data_${conversationId}`
+
+	const existing = await env.CACHE.get(key)
+	if (existing) {
+		try {
+			return JSON.parse(existing) as Conversation
+		} catch {
+			// Fall through to create new
+		}
+	}
+
+	const now = Date.now()
+	const conversation: Conversation = {
+		id: conversationId,
+		participants: [addr1, addr2],
+		participantNames: {
+			[addr1]: name1,
+			[addr2]: name2,
+		},
+		lastMessage: {
+			preview: '',
+			timestamp: now,
+			sender: addr1,
+			senderName: name1,
+		},
+		unreadCount: 0,
+		createdAt: now,
+		updatedAt: now,
+	}
+
+	await env.CACHE.put(key, JSON.stringify(conversation), { expirationTtl: 60 * 60 * 24 * 90 })
+	return conversation
+}
+
+/**
+ * Update conversation with new message
+ */
+async function updateConversationWithMessage(
+	env: Env,
+	sender: string,
+	senderName: string | null,
+	recipient: string,
+	recipientName: string | null,
+	messagePreview: string,
+	timestamp: number
+): Promise<string> {
+	const conversationId = computeConversationId(sender, recipient)
+	const conversation = await getOrCreateConversation(env, sender, recipient, senderName, recipientName)
+
+	conversation.lastMessage = {
+		preview: messagePreview.slice(0, 100),
+		timestamp,
+		sender,
+		senderName,
+	}
+	conversation.updatedAt = timestamp
+	conversation.unreadCount += 1
+
+	// Update conversation data
+	await env.CACHE.put(
+		`conv_data_${conversationId}`,
+		JSON.stringify(conversation),
+		{ expirationTtl: 60 * 60 * 24 * 90 }
+	)
+
+	// Add to recipient's conversation index
+	await env.CACHE.put(
+		`conv_index_${recipient}_${conversationId}`,
+		JSON.stringify({ conversationId, updatedAt: timestamp }),
+		{ expirationTtl: 60 * 60 * 24 * 90 }
+	)
+
+	// Add to sender's conversation index
+	await env.CACHE.put(
+		`conv_index_${sender}_${conversationId}`,
+		JSON.stringify({ conversationId, updatedAt: timestamp }),
+		{ expirationTtl: 60 * 60 * 24 * 90 }
+	)
+
+	// Update recipient's unread count
+	const unreadKey = `unread_count_${recipient}`
+	const currentUnread = await env.CACHE.get(unreadKey)
+	const newCount = (currentUnread ? Number.parseInt(currentUnread, 10) : 0) + 1
+	await env.CACHE.put(unreadKey, String(newCount), { expirationTtl: 60 * 60 * 24 * 30 })
+
+	return conversationId
+}
 
 /**
  * Handle all /app requests
@@ -127,11 +242,199 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 
 	// GET /api/app/conversations - List user conversations
 	if (path === 'conversations' && request.method === 'GET') {
-		// Note: Full implementation requires wallet signature verification
-		return jsonResponse({
-			conversations: [],
-			note: 'Connect wallet and load @mysten/messaging SDK client-side for encrypted conversations',
-		})
+		const address = url.searchParams.get('address')
+		if (!address) {
+			return jsonResponse({ error: 'Address required' }, 400)
+		}
+
+		try {
+			const prefix = `conv_index_${address}_`
+			const keys = await env.CACHE.list({ prefix, limit: 50 })
+
+			const conversationIds = new Set<string>()
+			for (const key of keys.keys) {
+				const data = await env.CACHE.get(key.name)
+				if (data) {
+					try {
+						const parsed = JSON.parse(data) as { conversationId: string }
+						conversationIds.add(parsed.conversationId)
+					} catch {
+						// Skip invalid entries
+					}
+				}
+			}
+
+			const conversations: Conversation[] = []
+			for (const convId of conversationIds) {
+				const convData = await env.CACHE.get(`conv_data_${convId}`)
+				if (convData) {
+					try {
+						const conv = JSON.parse(convData) as Conversation
+						conversations.push(conv)
+					} catch {
+						// Skip invalid entries
+					}
+				}
+			}
+
+			conversations.sort((a, b) => b.updatedAt - a.updatedAt)
+
+			const unreadCountStr = await env.CACHE.get(`unread_count_${address}`)
+			const totalUnread = unreadCountStr ? Number.parseInt(unreadCountStr, 10) : 0
+
+			return jsonResponse({
+				address,
+				conversations,
+				totalUnread,
+				count: conversations.length,
+			})
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Unknown error'
+			return jsonResponse({ error: 'Failed to fetch conversations: ' + message }, 500)
+		}
+	}
+
+	// GET /api/app/conversations/:id - Get conversation detail with messages
+	const convDetailMatch = path.match(/^conversations\/([^/]+)$/)
+	if (convDetailMatch && request.method === 'GET') {
+		const conversationId = convDetailMatch[1]
+		const address = url.searchParams.get('address')
+
+		if (!address) {
+			return jsonResponse({ error: 'Address required' }, 400)
+		}
+
+		try {
+			const convData = await env.CACHE.get(`conv_data_${conversationId}`)
+			if (!convData) {
+				return jsonResponse({ error: 'Conversation not found' }, 404)
+			}
+
+			const conversation = JSON.parse(convData) as Conversation
+
+			if (!conversation.participants.includes(address)) {
+				return jsonResponse({ error: 'Not a participant' }, 403)
+			}
+
+			const otherParticipant = conversation.participants.find(p => p !== address) || conversation.participants[0]
+
+			const messages: StoredMessage[] = []
+			const inboxPrefix = `msg_inbox_${address}_`
+			const inboxKeys = await env.CACHE.list({ prefix: inboxPrefix, limit: 100 })
+			for (const key of inboxKeys.keys) {
+				const data = await env.CACHE.get(key.name)
+				if (data) {
+					try {
+						const msg = JSON.parse(data) as StoredMessage
+						if (msg.sender === otherParticipant || msg.recipient === otherParticipant) {
+							messages.push(msg)
+						}
+					} catch {
+						// Skip
+					}
+				}
+			}
+
+			const sentPrefix = `msg_inbox_${otherParticipant}_`
+			const sentKeys = await env.CACHE.list({ prefix: sentPrefix, limit: 100 })
+			for (const key of sentKeys.keys) {
+				const data = await env.CACHE.get(key.name)
+				if (data) {
+					try {
+						const msg = JSON.parse(data) as StoredMessage
+						if (msg.sender === address) {
+							messages.push(msg)
+						}
+					} catch {
+						// Skip
+					}
+				}
+			}
+
+			const uniqueMessages = Array.from(
+				new Map(messages.map(m => [m.id || `${m.sender}_${m.timestamp}`, m])).values()
+			)
+			uniqueMessages.sort((a, b) => a.timestamp - b.timestamp)
+
+			return jsonResponse({
+				conversation,
+				messages: uniqueMessages,
+				count: uniqueMessages.length,
+			})
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Unknown error'
+			return jsonResponse({ error: 'Failed to fetch conversation: ' + message }, 500)
+		}
+	}
+
+	// POST /api/app/conversations/read - Mark conversation as read
+	if (path === 'conversations/read' && request.method === 'POST') {
+		try {
+			const body = await request.json() as {
+				conversationId?: string
+				address?: string
+			}
+
+			if (!body.conversationId || !body.address) {
+				return jsonResponse({ error: 'Conversation ID and address required' }, 400)
+			}
+
+			const convData = await env.CACHE.get(`conv_data_${body.conversationId}`)
+			if (!convData) {
+				return jsonResponse({ error: 'Conversation not found' }, 404)
+			}
+
+			const conversation = JSON.parse(convData) as Conversation
+
+			if (!conversation.participants.includes(body.address)) {
+				return jsonResponse({ error: 'Not a participant' }, 403)
+			}
+
+			const previousUnread = conversation.unreadCount
+			conversation.unreadCount = 0
+
+			await env.CACHE.put(
+				`conv_data_${body.conversationId}`,
+				JSON.stringify(conversation),
+				{ expirationTtl: 60 * 60 * 24 * 90 }
+			)
+
+			if (previousUnread > 0) {
+				const unreadKey = `unread_count_${body.address}`
+				const currentUnread = await env.CACHE.get(unreadKey)
+				const newCount = Math.max(0, (currentUnread ? Number.parseInt(currentUnread, 10) : 0) - previousUnread)
+				await env.CACHE.put(unreadKey, String(newCount), { expirationTtl: 60 * 60 * 24 * 30 })
+			}
+
+			return jsonResponse({
+				success: true,
+				conversationId: body.conversationId,
+				markedRead: previousUnread,
+			})
+		} catch {
+			return jsonResponse({ error: 'Invalid request body' }, 400)
+		}
+	}
+
+	// GET /api/app/notifications/count - Get unread message count for badge
+	if (path === 'notifications/count' && request.method === 'GET') {
+		const address = url.searchParams.get('address')
+		if (!address) {
+			return jsonResponse({ error: 'Address required' }, 400)
+		}
+
+		try {
+			const unreadCountStr = await env.CACHE.get(`unread_count_${address}`)
+			const unreadCount = unreadCountStr ? Number.parseInt(unreadCountStr, 10) : 0
+
+			return jsonResponse({
+				address,
+				unreadCount,
+				timestamp: Date.now(),
+			})
+		} catch {
+			return jsonResponse({ unreadCount: 0, timestamp: Date.now() })
+		}
 	}
 
 	// GET /api/app/channels - Browse public channels
@@ -487,7 +790,17 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				await env.CACHE.put(fallbackKey, messageBlob, { expirationTtl: 60 * 60 * 24 * 30 })
 
 				// Store message index in KV
-				const indexKey = `msg_inbox_${body.recipient}_${body.timestamp || Date.now()}`
+				const msgTimestamp = body.timestamp || Date.now()
+				const indexKey = `msg_inbox_${body.recipient}_${msgTimestamp}`
+				const conversationId = await updateConversationWithMessage(
+					env,
+					body.sender,
+					body.senderName || null,
+					body.recipient,
+					body.recipientName || null,
+					'[Encrypted message]',
+					msgTimestamp
+				)
 				await env.CACHE.put(
 					indexKey,
 					JSON.stringify({
@@ -497,8 +810,9 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 						senderName: body.senderName,
 						recipient: body.recipient,
 						recipientName: body.recipientName,
-						timestamp: body.timestamp || Date.now(),
+						timestamp: msgTimestamp,
 						signed: true,
+						conversationId,
 					}),
 					{ expirationTtl: 60 * 60 * 24 * 30 }
 				)
@@ -509,11 +823,22 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 					blobId: fallbackKey,
 					storage: 'kv-fallback',
 					signed: true,
+					conversationId,
 				})
 			}
 
 			// Store message index in KV (for inbox lookup)
-			const indexKey = `msg_inbox_${body.recipient}_${body.timestamp || Date.now()}`
+			const walrusMsgTimestamp = body.timestamp || Date.now()
+			const indexKey = `msg_inbox_${body.recipient}_${walrusMsgTimestamp}`
+			const walrusConvId = await updateConversationWithMessage(
+				env,
+				body.sender,
+				body.senderName || null,
+				body.recipient,
+				body.recipientName || null,
+				'[Encrypted message]',
+				walrusMsgTimestamp
+			)
 			await env.CACHE.put(
 				indexKey,
 				JSON.stringify({
@@ -523,8 +848,9 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 					senderName: body.senderName,
 					recipient: body.recipient,
 					recipientName: body.recipientName,
-					timestamp: body.timestamp || Date.now(),
+					timestamp: walrusMsgTimestamp,
 					signed: true,
+					conversationId: walrusConvId,
 				}),
 				{ expirationTtl: 60 * 60 * 24 * 30 }
 			)
@@ -535,6 +861,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				blobId: walrusResponse.blobId,
 				storage: 'walrus',
 				signed: true,
+				conversationId: walrusConvId,
 			})
 		} catch (err) {
 			console.error('Message send error:', err)

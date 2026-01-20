@@ -234,6 +234,196 @@ export const profileStyles = `
 			height: 16px;
 			flex-shrink: 0;
 		}
+		.sidebar-tab {
+			position: relative;
+		}
+		.notification-badge {
+			position: absolute;
+			top: 4px;
+			right: 8px;
+			min-width: 18px;
+			height: 18px;
+			background: var(--error);
+			color: white;
+			font-size: 0.7rem;
+			font-weight: 700;
+			border-radius: 9px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 0 5px;
+			animation: pulse-badge 2s infinite;
+		}
+		.notification-badge.hidden {
+			display: none;
+		}
+		@keyframes pulse-badge {
+			0%, 100% { transform: scale(1); }
+			50% { transform: scale(1.1); }
+		}
+
+		/* Conversation List Styles */
+		.conversations-list {
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+		}
+		.conversation-card {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			padding: 14px 16px;
+			background: rgba(255, 255, 255, 0.02);
+			border: 1px solid transparent;
+			border-radius: 12px;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.conversation-card:hover {
+			background: rgba(96, 165, 250, 0.08);
+			border-color: rgba(96, 165, 250, 0.2);
+		}
+		.conversation-card.unread {
+			background: rgba(96, 165, 250, 0.05);
+			border-color: rgba(96, 165, 250, 0.15);
+		}
+		.conversation-card.unread .conv-name {
+			font-weight: 700;
+		}
+		.conv-avatar {
+			width: 44px;
+			height: 44px;
+			border-radius: 50%;
+			background: linear-gradient(135deg, var(--accent), #8b5cf6);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-weight: 600;
+			font-size: 1.1rem;
+			color: white;
+			flex-shrink: 0;
+		}
+		.conv-info {
+			flex: 1;
+			min-width: 0;
+		}
+		.conv-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 3px;
+		}
+		.conv-name {
+			font-weight: 500;
+			color: var(--text);
+			font-size: 0.9rem;
+		}
+		.conv-time {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+		}
+		.conv-preview {
+			font-size: 0.82rem;
+			color: var(--text-muted);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.conv-unread-badge {
+			background: var(--accent);
+			color: white;
+			font-size: 0.72rem;
+			font-weight: 700;
+			min-width: 20px;
+			height: 20px;
+			border-radius: 10px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 0 6px;
+			flex-shrink: 0;
+		}
+
+		/* Conversation Detail View */
+		.conversation-detail {
+			display: flex;
+			flex-direction: column;
+			height: 100%;
+		}
+		.conv-detail-header {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			padding: 12px 0;
+			border-bottom: 1px solid var(--border);
+			margin-bottom: 16px;
+		}
+		.conv-back-btn {
+			background: none;
+			border: none;
+			color: var(--accent);
+			cursor: pointer;
+			padding: 8px;
+			border-radius: 8px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: background 0.2s;
+		}
+		.conv-back-btn:hover {
+			background: var(--accent-light);
+		}
+		.conv-back-btn svg {
+			width: 20px;
+			height: 20px;
+		}
+		.conv-detail-name {
+			font-weight: 600;
+			font-size: 1rem;
+		}
+		.conv-messages {
+			flex: 1;
+			overflow-y: auto;
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+			padding: 8px 0;
+			max-height: 400px;
+		}
+		.conv-message {
+			max-width: 80%;
+			padding: 10px 14px;
+			border-radius: 16px;
+			font-size: 0.9rem;
+			line-height: 1.4;
+		}
+		.conv-message.sent {
+			align-self: flex-end;
+			background: linear-gradient(135deg, var(--accent), #8b5cf6);
+			color: white;
+			border-bottom-right-radius: 4px;
+		}
+		.conv-message.received {
+			align-self: flex-start;
+			background: rgba(255, 255, 255, 0.08);
+			border-bottom-left-radius: 4px;
+		}
+		.conv-message-time {
+			font-size: 0.7rem;
+			opacity: 0.7;
+			margin-top: 4px;
+		}
+		.conv-empty {
+			text-align: center;
+			padding: 32px;
+			color: var(--text-muted);
+		}
+		.conv-empty svg {
+			width: 48px;
+			height: 48px;
+			margin-bottom: 12px;
+			opacity: 0.5;
+		}
 		.main-content {
 			flex: 1;
 			min-width: 0;

@@ -167,6 +167,7 @@ export function generateProfilePage(
 					<button class="sidebar-tab hidden" data-tab="messaging" id="messaging-tab-btn">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
 						<span>Message</span>
+						<span class="notification-badge hidden" id="msg-notification-badge">0</span>
 					</button>
 				</nav>
 			</div>
@@ -1099,6 +1100,61 @@ export function generateProfilePage(
 								<div class="msg-conversation-loading hidden" id="msg-conversation-loading">
 									<span class="loading"></span>
 									<span>Loading messages...</span>
+								</div>
+							</div>
+						</div>
+
+						<!-- Owner Conversations List (for inbox mode) -->
+						<div class="msg-inbox-section hidden" id="msg-inbox-section">
+							<div class="msg-inbox-header">
+								<h4>Your Conversations</h4>
+								<button class="msg-refresh-btn" id="msg-refresh-conversations-btn" title="Refresh conversations">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="23 4 23 10 17 10"></polyline>
+										<polyline points="1 20 1 14 7 14"></polyline>
+										<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+									</svg>
+								</button>
+							</div>
+							<div class="conversations-list" id="conversations-list">
+								<div class="conv-empty" id="conversations-empty">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+									</svg>
+									<p>No conversations yet</p>
+									<span>Messages from others will appear here</span>
+								</div>
+								<div class="msg-conversation-loading hidden" id="conversations-loading">
+									<span class="loading"></span>
+									<span>Loading conversations...</span>
+								</div>
+							</div>
+						</div>
+
+						<!-- Conversation Detail View (when viewing a specific conversation) -->
+						<div class="conversation-detail hidden" id="conversation-detail">
+							<div class="conv-detail-header">
+								<button class="conv-back-btn" id="conv-back-btn" title="Back to conversations">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="15 18 9 12 15 6"></polyline>
+									</svg>
+								</button>
+								<span class="conv-detail-name" id="conv-detail-name">Loading...</span>
+							</div>
+							<div class="conv-messages" id="conv-messages"></div>
+							<div class="msg-compose-box" style="margin-top: 16px;">
+								<textarea id="conv-reply-input" class="msg-compose-input" placeholder="Type a reply..." rows="2"></textarea>
+								<div class="msg-compose-footer">
+									<div class="msg-compose-info">
+										<span id="conv-reply-char-count">0</span> / 1000
+									</div>
+									<button class="msg-send-btn" id="conv-reply-btn">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<line x1="22" y1="2" x2="11" y2="13"></line>
+											<polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+										</svg>
+										Reply
+									</button>
 								</div>
 							</div>
 						</div>
@@ -7712,6 +7768,342 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 		// Preload SDK in background
 		loadMessagingSdk();
+
+		// ========== CONVERSATIONS & NOTIFICATIONS ==========
+
+		// DOM elements for conversations
+		const msgInboxSection = document.getElementById('msg-inbox-section');
+		const conversationsList = document.getElementById('conversations-list');
+		const conversationsEmpty = document.getElementById('conversations-empty');
+		const conversationsLoading = document.getElementById('conversations-loading');
+		const conversationDetail = document.getElementById('conversation-detail');
+		const convDetailName = document.getElementById('conv-detail-name');
+		const convMessages = document.getElementById('conv-messages');
+		const convBackBtn = document.getElementById('conv-back-btn');
+		const convReplyInput = document.getElementById('conv-reply-input');
+		const convReplyBtn = document.getElementById('conv-reply-btn');
+		const convReplyCharCount = document.getElementById('conv-reply-char-count');
+		const msgNotificationBadge = document.getElementById('msg-notification-badge');
+		const refreshConversationsBtn = document.getElementById('msg-refresh-conversations-btn');
+
+		// State
+		let currentConversationId = null;
+		let currentConversationParticipant = null;
+		let conversationsData = [];
+		let notificationPollInterval = null;
+		const ACTIVE_POLL_INTERVAL = 15000;
+		const BACKGROUND_POLL_INTERVAL = 60000;
+
+		// Update notification badge
+		function updateNotificationBadge(count) {
+			if (!msgNotificationBadge) return;
+			if (count > 0) {
+				msgNotificationBadge.textContent = count > 99 ? '99+' : count;
+				msgNotificationBadge.classList.remove('hidden');
+			} else {
+				msgNotificationBadge.classList.add('hidden');
+			}
+		}
+
+		// Poll for notifications
+		async function pollNotifications() {
+			if (!connectedAddress) return;
+
+			try {
+				const response = await fetch(\`/api/app/notifications/count?address=\${connectedAddress}\`);
+				if (response.ok) {
+					const data = await response.json();
+					const previousCount = parseInt(msgNotificationBadge?.textContent || '0', 10);
+					updateNotificationBadge(data.unreadCount || 0);
+
+					// Show browser notification if count increased
+					if (data.unreadCount > previousCount && document.hidden) {
+						showBrowserNotification(data.unreadCount - previousCount);
+					}
+				}
+			} catch (error) {
+				console.error('Failed to poll notifications:', error);
+			}
+		}
+
+		// Start/stop polling based on visibility
+		function startNotificationPolling() {
+			if (notificationPollInterval) return;
+			pollNotifications();
+			const interval = document.hidden ? BACKGROUND_POLL_INTERVAL : ACTIVE_POLL_INTERVAL;
+			notificationPollInterval = setInterval(pollNotifications, interval);
+		}
+
+		function stopNotificationPolling() {
+			if (notificationPollInterval) {
+				clearInterval(notificationPollInterval);
+				notificationPollInterval = null;
+			}
+		}
+
+		// Adjust polling on visibility change
+		document.addEventListener('visibilitychange', () => {
+			if (connectedAddress && isProfileOwner()) {
+				stopNotificationPolling();
+				if (!document.hidden) {
+					pollNotifications();
+				}
+				startNotificationPolling();
+			}
+		});
+
+		// Browser notifications
+		async function requestNotificationPermission() {
+			if (!('Notification' in window)) return false;
+			if (Notification.permission === 'granted') return true;
+			if (Notification.permission === 'denied') return false;
+
+			const permission = await Notification.requestPermission();
+			return permission === 'granted';
+		}
+
+		function showBrowserNotification(newCount) {
+			if (Notification.permission !== 'granted') return;
+			if (document.hasFocus()) return;
+
+			new Notification('New message on sui.ski', {
+				body: \`You have \${newCount} new message\${newCount > 1 ? 's' : ''}\`,
+				icon: '/favicon.ico',
+				tag: 'sui-ski-message',
+			});
+		}
+
+		// Load conversations list
+		async function loadConversations() {
+			if (!connectedAddress || !isProfileOwner()) return;
+
+			if (conversationsLoading) conversationsLoading.classList.remove('hidden');
+			if (conversationsEmpty) conversationsEmpty.classList.add('hidden');
+
+			try {
+				const response = await fetch(\`/api/app/conversations?address=\${connectedAddress}\`);
+				if (!response.ok) throw new Error('Failed to fetch conversations');
+
+				const data = await response.json();
+				conversationsData = data.conversations || [];
+
+				updateNotificationBadge(data.totalUnread || 0);
+				renderConversationsList();
+
+			} catch (error) {
+				console.error('Failed to load conversations:', error);
+				showMsgStatus('Failed to load conversations', 'error');
+			} finally {
+				if (conversationsLoading) conversationsLoading.classList.add('hidden');
+			}
+		}
+
+		// Render conversations list
+		function renderConversationsList() {
+			if (!conversationsList) return;
+
+			const existingCards = conversationsList.querySelectorAll('.conversation-card');
+			existingCards.forEach(card => card.remove());
+
+			if (conversationsData.length === 0) {
+				if (conversationsEmpty) conversationsEmpty.classList.remove('hidden');
+				return;
+			}
+
+			if (conversationsEmpty) conversationsEmpty.classList.add('hidden');
+
+			conversationsData.forEach(conv => {
+				const otherAddr = conv.participants.find(p => p !== connectedAddress) || conv.participants[0];
+				const otherName = conv.participantNames?.[otherAddr] || null;
+				const displayName = otherName ? \`@\${otherName}.sui\` : \`\${otherAddr.slice(0, 8)}...\${otherAddr.slice(-6)}\`;
+				const initial = otherName ? otherName[0].toUpperCase() : otherAddr[2].toUpperCase();
+				const timeAgo = formatTimeAgo(conv.lastMessage?.timestamp || conv.updatedAt);
+				const preview = conv.lastMessage?.preview || 'No messages yet';
+
+				const card = document.createElement('div');
+				card.className = 'conversation-card' + (conv.unreadCount > 0 ? ' unread' : '');
+				card.dataset.convId = conv.id;
+				card.dataset.otherAddr = otherAddr;
+				card.innerHTML = \`
+					<div class="conv-avatar">\${initial}</div>
+					<div class="conv-info">
+						<div class="conv-header">
+							<span class="conv-name">\${escapeHtmlJS(displayName)}</span>
+							<span class="conv-time">\${timeAgo}</span>
+						</div>
+						<div class="conv-preview">\${escapeHtmlJS(preview)}</div>
+					</div>
+					\${conv.unreadCount > 0 ? \`<span class="conv-unread-badge">\${conv.unreadCount}</span>\` : ''}
+				\`;
+
+				card.addEventListener('click', () => openConversation(conv.id, otherAddr, displayName));
+				conversationsList.appendChild(card);
+			});
+		}
+
+		// Format time ago
+		function formatTimeAgo(timestamp) {
+			const seconds = Math.floor((Date.now() - timestamp) / 1000);
+			if (seconds < 60) return 'now';
+			if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+			if (seconds < 86400) return Math.floor(seconds / 3600) + 'h';
+			if (seconds < 604800) return Math.floor(seconds / 86400) + 'd';
+			return new Date(timestamp).toLocaleDateString();
+		}
+
+		// Escape HTML in JS
+		function escapeHtmlJS(str) {
+			if (!str) return '';
+			return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+		}
+
+		// Open conversation detail
+		async function openConversation(conversationId, otherAddr, displayName) {
+			currentConversationId = conversationId;
+			currentConversationParticipant = otherAddr;
+
+			if (msgInboxSection) msgInboxSection.classList.add('hidden');
+			if (conversationDetail) conversationDetail.classList.remove('hidden');
+			if (convDetailName) convDetailName.textContent = displayName;
+			if (convMessages) convMessages.innerHTML = '<div class="msg-conversation-loading"><span class="loading"></span> Loading...</div>';
+
+			// Mark as read
+			await markConversationRead(conversationId);
+
+			try {
+				const response = await fetch(\`/api/app/conversations/\${conversationId}?address=\${connectedAddress}\`);
+				if (!response.ok) throw new Error('Failed to load conversation');
+
+				const data = await response.json();
+				renderConversationMessages(data.messages || []);
+
+			} catch (error) {
+				console.error('Failed to open conversation:', error);
+				if (convMessages) convMessages.innerHTML = '<div class="conv-empty">Failed to load messages</div>';
+			}
+		}
+
+		// Render conversation messages
+		function renderConversationMessages(messages) {
+			if (!convMessages) return;
+
+			if (messages.length === 0) {
+				convMessages.innerHTML = \`
+					<div class="conv-empty">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+						</svg>
+						<p>No messages yet</p>
+					</div>
+				\`;
+				return;
+			}
+
+			convMessages.innerHTML = messages.map(msg => {
+				const isSent = msg.sender === connectedAddress;
+				const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+				return \`
+					<div class="conv-message \${isSent ? 'sent' : 'received'}">
+						<div class="conv-message-content">[Encrypted message]</div>
+						<div class="conv-message-time">\${time}</div>
+					</div>
+				\`;
+			}).join('');
+
+			convMessages.scrollTop = convMessages.scrollHeight;
+		}
+
+		// Mark conversation as read
+		async function markConversationRead(conversationId) {
+			if (!connectedAddress) return;
+
+			try {
+				await fetch('/api/app/conversations/read', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						conversationId,
+						address: connectedAddress,
+					}),
+				});
+
+				// Update local state
+				const conv = conversationsData.find(c => c.id === conversationId);
+				if (conv && conv.unreadCount > 0) {
+					const totalBadge = parseInt(msgNotificationBadge?.textContent || '0', 10);
+					updateNotificationBadge(Math.max(0, totalBadge - conv.unreadCount));
+					conv.unreadCount = 0;
+				}
+			} catch (error) {
+				console.error('Failed to mark as read:', error);
+			}
+		}
+
+		// Back to conversations list
+		if (convBackBtn) {
+			convBackBtn.addEventListener('click', () => {
+				currentConversationId = null;
+				currentConversationParticipant = null;
+				if (conversationDetail) conversationDetail.classList.add('hidden');
+				if (msgInboxSection) msgInboxSection.classList.remove('hidden');
+				loadConversations();
+			});
+		}
+
+		// Reply input character count
+		if (convReplyInput && convReplyCharCount) {
+			convReplyInput.addEventListener('input', () => {
+				convReplyCharCount.textContent = convReplyInput.value.length;
+			});
+		}
+
+		// Send reply
+		if (convReplyBtn) {
+			convReplyBtn.addEventListener('click', async () => {
+				if (!connectedAddress || !currentConversationParticipant) return;
+				const content = convReplyInput?.value.trim();
+				if (!content) return;
+
+				convReplyBtn.disabled = true;
+				convReplyBtn.innerHTML = 'Sending...';
+
+				try {
+					await sendMessage(currentConversationParticipant, content);
+					if (convReplyInput) convReplyInput.value = '';
+					if (convReplyCharCount) convReplyCharCount.textContent = '0';
+					await openConversation(currentConversationId, currentConversationParticipant, convDetailName?.textContent || '');
+				} catch (error) {
+					console.error('Failed to send reply:', error);
+					showMsgStatus('Failed to send: ' + error.message, 'error');
+				} finally {
+					convReplyBtn.disabled = false;
+					convReplyBtn.innerHTML = \`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg> Reply\`;
+				}
+			});
+		}
+
+		// Refresh conversations button
+		if (refreshConversationsBtn) {
+			refreshConversationsBtn.addEventListener('click', () => loadConversations());
+		}
+
+		// Update messaging visibility to show conversations for owner
+		const originalUpdateMessagingVisibility = updateMessagingVisibility;
+		updateMessagingVisibility = function() {
+			originalUpdateMessagingVisibility();
+
+			// Show inbox section for owner
+			if (connectedAddress && isProfileOwner()) {
+				if (msgInboxSection) msgInboxSection.classList.remove('hidden');
+				if (msgComposeSection) msgComposeSection.classList.add('hidden');
+				loadConversations();
+				startNotificationPolling();
+				requestNotificationPermission();
+			} else {
+				if (msgInboxSection) msgInboxSection.classList.add('hidden');
+				stopNotificationPolling();
+			}
+		};
 
 		// ========== END MESSAGING FUNCTIONALITY ==========
 	</script>
