@@ -7186,7 +7186,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// ========== MESSAGING FUNCTIONALITY ==========
 
 		const MESSAGING_RECIPIENT = ${serializeJson(cleanName)};
-		const MESSAGING_RECIPIENT_ADDRESS = ${serializeJson(record.address)};
+		const MESSAGING_RECIPIENT_ADDRESS = ${serializeJson(record.address || record.ownerAddress || '')};
 		const MESSAGING_OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
 
 		// DOM elements for messaging
