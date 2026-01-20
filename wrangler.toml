@@ -18,7 +18,9 @@ WALRUS_NETWORK = "mainnet"
 # Seal configuration for encrypted messaging
 SEAL_PACKAGE_ID = "0xcb83a248bda5f7a0a431e6bf9e96d184e604130ec5218696e3f1211113b447b7"
 SEAL_APPROVE_TARGET = "0x790d89fae525d757e0be2d4f154db7c53e97c2aa939b9f6a1201c573de117326::access::seal_approve"
-# SEAL_KEY_SERVERS = "" # Optional: comma-separated key server object IDs (defaults to allowlisted servers)
+# Mainnet Seal key servers (discovered via RPC query)
+# Mysten Labs, ProjectSonar, Natsai - using 3 for threshold encryption
+SEAL_KEY_SERVERS = "0x7ead02107dd2d66d839ce64bab9a793e0db3d4669147d7059ccdb4a059e50d45,0x41d7f55f8b1686e26d2cadcbb2cb53572945623a31a276e6e6ee95887384b8d5,0x72829123b9bdf679d208382c79b097a03211a38e8d72dcbd0e926c4a7e82c83f"
 # IKA dWallet package ID for cross-chain control (set when deploying IKA integration)
 # IKA_PACKAGE_ID = ""
 # Agency registry object ID (set after deploying agency registry contract)

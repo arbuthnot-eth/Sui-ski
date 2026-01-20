@@ -413,6 +413,54 @@ export const profileStyles = `
 			opacity: 0.7;
 			margin-top: 4px;
 		}
+		.conv-message-sender {
+			font-size: 0.75rem;
+			font-weight: 600;
+			color: var(--accent);
+			margin-bottom: 4px;
+			cursor: help;
+		}
+		.conv-message-content {
+			word-break: break-word;
+		}
+		.conv-date-separator {
+			text-align: center;
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			padding: 12px 0;
+			position: relative;
+		}
+		.conv-date-separator::before,
+		.conv-date-separator::after {
+			content: '';
+			position: absolute;
+			top: 50%;
+			width: 30%;
+			height: 1px;
+			background: rgba(255, 255, 255, 0.1);
+		}
+		.conv-date-separator::before { left: 0; }
+		.conv-date-separator::after { right: 0; }
+		.encrypted-icon {
+			opacity: 0.7;
+			font-size: 0.8em;
+			cursor: help;
+		}
+		.conv-encryption-warning {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 10px 14px;
+			background: rgba(245, 158, 11, 0.15);
+			border: 1px solid rgba(245, 158, 11, 0.3);
+			border-radius: 8px;
+			margin-bottom: 12px;
+			font-size: 0.8rem;
+			color: #f59e0b;
+		}
+		.conv-encryption-warning .warning-icon {
+			flex-shrink: 0;
+		}
 		.conv-empty {
 			text-align: center;
 			padding: 32px;

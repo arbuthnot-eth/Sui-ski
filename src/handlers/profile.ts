@@ -8996,10 +8996,15 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// Initial button state (will show connect prompt since no wallet)
 		updateSendButtonState();
 
-		// Hardcoded testnet key server IDs (from Seal SDK source)
+		// Hardcoded key server IDs by network (discovered via RPC query)
 		const TESTNET_KEY_SERVERS = [
 			'0xb35a7228d8cf224ad1e828c0217c95a5153bafc2906d6f9c178197dce26fbcf8',
 			'0x2d6cde8a9d9a65bde3b0a346566945a63b4bfb70e9a06c41bdb70807e2502b06',
+		];
+		const MAINNET_KEY_SERVERS = [
+			'0x7ead02107dd2d66d839ce64bab9a793e0db3d4669147d7059ccdb4a059e50d45', // Mysten Labs
+			'0x41d7f55f8b1686e26d2cadcbb2cb53572945623a31a276e6e6ee95887384b8d5', // ProjectSonar
+			'0x72829123b9bdf679d208382c79b097a03211a38e8d72dcbd0e926c4a7e82c83f', // Natsai
 		];
 
 		// Initialize Seal SDK with config from server
@@ -9018,14 +9023,20 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 				let keyServerObjectIds = sealConfig.seal?.keyServers?.objectIds || [];
 
-				// Use hardcoded testnet servers if none configured
-				if (keyServerObjectIds.length === 0 && NETWORK === 'testnet') {
-					keyServerObjectIds = TESTNET_KEY_SERVERS;
-					console.log('Using hardcoded testnet key servers');
+				// Use hardcoded servers if none configured from server
+				if (keyServerObjectIds.length === 0) {
+					if (NETWORK === 'testnet') {
+						keyServerObjectIds = TESTNET_KEY_SERVERS;
+						console.log('Using hardcoded testnet key servers');
+					} else if (NETWORK === 'mainnet') {
+						keyServerObjectIds = MAINNET_KEY_SERVERS;
+						console.log('Using hardcoded mainnet key servers');
+					}
 				}
 
 				if (keyServerObjectIds.length === 0) {
 					console.warn('No Seal key servers configured for', NETWORK);
+					window.sealUnavailableReason = 'No key servers configured for ' + NETWORK;
 					return null;
 				}
 
@@ -9394,13 +9405,22 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				return;
 			}
 
-			convMessages.innerHTML = '<div class="msg-conversation-loading"><span class="loading"></span> Decrypting messages...</div>';
+			convMessages.innerHTML = '<div class="msg-conversation-loading"><span class="loading"></span> Loading messages...</div>';
 
 			const decryptedMessages = await Promise.all(messages.map(async (msg) => {
-				const isSent = msg.sender === connectedAddress;
-				const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+				const isSent = msg.sender?.toLowerCase() === connectedAddress?.toLowerCase();
+				const timestamp = new Date(msg.timestamp);
+				const time = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+				const date = timestamp.toLocaleDateString([], { month: 'short', day: 'numeric' });
 				let content = '[Encrypted message]';
 				let decrypted = false;
+
+				// Get sender display info
+				const senderAddr = msg.sender || '';
+				const senderName = msg.senderName || null;
+				const senderDisplay = senderName
+					? \`@\${senderName.replace(/\\.sui$/i, '')}.sui\`
+					: \`\${senderAddr.slice(0, 6)}...\${senderAddr.slice(-4)}\`;
 
 				try {
 					if (msg.envelope?.ciphertext) {
@@ -9423,16 +9443,40 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 					console.warn('Failed to decrypt message:', err);
 				}
 
-				return { isSent, time, content, decrypted };
+				return { isSent, time, date, content, decrypted, senderDisplay, senderAddr };
 			}));
 
-			convMessages.innerHTML = decryptedMessages.map(msg => \`
-				<div class="conv-message \${msg.isSent ? 'sent' : 'received'}">
-					<div class="conv-message-content">\${msg.content}\${!msg.decrypted ? ' <span class="encrypted-icon" title="Could not decrypt">🔒</span>' : ''}</div>
-					<div class="conv-message-time">\${msg.time}</div>
-				</div>
-			\`).join('');
+			// Check if any messages failed to decrypt
+			const hasEncryptedMessages = decryptedMessages.some(m => !m.decrypted);
+			const sealReason = window.sealUnavailableReason || 'Seal key servers not configured';
 
+			// Group messages by date
+			let lastDate = null;
+			let html = '';
+
+			// Show warning if there are encrypted messages
+			if (hasEncryptedMessages) {
+				html += \`<div class="conv-encryption-warning">
+					<span class="warning-icon">⚠️</span>
+					<span>Some messages cannot be decrypted. \${escapeHtmlJS(sealReason)}.</span>
+				</div>\`;
+			}
+
+			decryptedMessages.forEach(msg => {
+				if (msg.date !== lastDate) {
+					html += \`<div class="conv-date-separator">\${msg.date}</div>\`;
+					lastDate = msg.date;
+				}
+				html += \`
+					<div class="conv-message \${msg.isSent ? 'sent' : 'received'}">
+						\${!msg.isSent ? \`<div class="conv-message-sender" title="\${msg.senderAddr}">\${escapeHtmlJS(msg.senderDisplay)}</div>\` : ''}
+						<div class="conv-message-content">\${msg.content}\${!msg.decrypted ? ' <span class="encrypted-icon" title="Could not decrypt - \${escapeHtmlJS(sealReason)}">🔒</span>' : ''}</div>
+						<div class="conv-message-time">\${msg.time}</div>
+					</div>
+				\`;
+			});
+
+			convMessages.innerHTML = html;
 			convMessages.scrollTop = convMessages.scrollHeight;
 		}
 
