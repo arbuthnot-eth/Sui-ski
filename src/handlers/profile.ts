@@ -7896,7 +7896,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			var result = { packageName: null, packageAddress: null, upgradeCap: null };
 			var addrRegex = new RegExp('0x[a-fA-F0-9]{64}', 'g');
 			var addresses = text.match(addrRegex) || [];
-			var lines = text.split(new RegExp('[\\r\\n]+'));
+			var lines = text.split(/[\r\n]+/);
 
 			for (var i = 0; i < lines.length; i++) {
 				var line = lines[i];
@@ -10225,7 +10225,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				if (!textarea || !resultsDiv || !listDiv) return;
 
 				const text = textarea.value.trim();
-				const addresses = text.split(/[,\\n]/).map(s => s.trim()).filter(s => s.startsWith('0x'));
+				const addresses = text.split(/[,\n]/).map(s => s.trim()).filter(s => s.startsWith('0x'));
 
 				if (addresses.length === 0) return;
 
