@@ -7989,7 +7989,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 			conversationsData.forEach(conv => {
 				const otherAddr = conv.participants.find(p => p !== connectedAddress) || conv.participants[0];
-				const otherName = conv.participantNames?.[otherAddr] || null;
+				const otherNameRaw = conv.participantNames?.[otherAddr] || null;
+				const otherName = otherNameRaw ? otherNameRaw.replace(/\.sui$/i, '') : null;
 				const displayName = otherName ? \`@\${otherName}.sui\` : \`\${otherAddr.slice(0, 8)}...\${otherAddr.slice(-6)}\`;
 				const initial = otherName ? otherName[0].toUpperCase() : otherAddr[2].toUpperCase();
 				const timeAgo = formatTimeAgo(conv.lastMessage?.timestamp || conv.updatedAt);
