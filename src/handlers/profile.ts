@@ -4225,7 +4225,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 			try {
 				// Tradeport API expects name without .sui suffix
-				const nameForApi = FULL_NAME.replace(/.sui$/i, '');
+				const nameForApi = FULL_NAME.replace(/\\.sui$/i, '');
 				const res = await fetch(\`/api/tradeport/v1/sui/suins/name/\${encodeURIComponent(nameForApi)}\`);
 				
 				// Handle 404 as "not listed" rather than an error
@@ -7683,7 +7683,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 										parentObjectId = NFT_ID; // We own the NFT, can use the UpgradeCap
 									} else {
 										showMvrStatus(
-											'UpgradeCap is owned by this domain's NFT, but you don't own the NFT. ' +
+											'UpgradeCap is owned by this domain\\'s NFT, but you don\\'t own the NFT. ' +
 											'Please connect the wallet that owns ' + NAME + ' to register the package.',
 											'error'
 										);
@@ -7712,7 +7712,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 										parentObjectId = objectOwnerId; // We own the parent object
 									} else {
 										showMvrStatus(
-											'UpgradeCap is owned by an object (' + objectOwnerId.slice(0, 8) + '...), but you don't own that object. ' +
+											'UpgradeCap is owned by an object (' + objectOwnerId.slice(0, 8) + '...), but you don\\'t own that object. ' +
 											'Please connect the wallet that owns the parent object to register the package.',
 											'error'
 										);
@@ -8777,7 +8777,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				const senderAddr = msg.from || msg.sender || '';
 				const isSent = msg.direction === 'sent' || senderAddr === connectedAddress;
 				const senderName = msg.fromName || msg.senderName || null;
-				const senderDisplay = isSent ? 'You' : (senderName ? '@' + senderName.replace(/.sui$/i, '') + '.sui' : (senderAddr ? senderAddr.slice(0, 8) + '...' : 'Unknown'));
+				const senderDisplay = isSent ? 'You' : (senderName ? '@' + senderName.replace(/\\.sui$/i, '') + '.sui' : (senderAddr ? senderAddr.slice(0, 8) + '...' : 'Unknown'));
 				const recipientDisplay = isSent ? '@' + MESSAGING_RECIPIENT + '.sui' : 'You';
 
 				return \`
@@ -9380,7 +9380,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			conversationsData.forEach(conv => {
 				const otherAddr = conv.participants.find(p => p !== connectedAddress) || conv.participants[0];
 				const otherNameRaw = conv.participantNames?.[otherAddr] || null;
-				const otherName = otherNameRaw ? otherNameRaw.replace(/.sui$/i, '') : null;
+				const otherName = otherNameRaw ? otherNameRaw.replace(/\\.sui$/i, '') : null;
 				const displayName = otherName ? \`@\${otherName}.sui\` : \`\${otherAddr.slice(0, 8)}...\${otherAddr.slice(-6)}\`;
 				const initial = otherName ? otherName[0].toUpperCase() : otherAddr[2].toUpperCase();
 				const timeAgo = formatTimeAgo(conv.lastMessage?.timestamp || conv.updatedAt);
