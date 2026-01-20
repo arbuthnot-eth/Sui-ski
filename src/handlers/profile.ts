@@ -1554,6 +1554,581 @@ network = "${escapeHtml(network)}"</code></pre>
 					</div>
 				</div><!-- end tab-mvr -->
 
+				<div class="tab-panel" id="tab-privacy">
+					<div class="privacy-dashboard">
+						<div class="privacy-header">
+							<div class="privacy-title">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28">
+									<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+								</svg>
+								<div>
+									<h2>Privacy Suite</h2>
+									<p class="privacy-subtitle">Confidential transactions, encrypted storage & secrets management</p>
+								</div>
+							</div>
+						</div>
+
+						<!-- Protocol Status Cards -->
+						<div class="privacy-protocols">
+							<div class="protocol-card vortex-card">
+								<div class="protocol-icon">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<circle cx="12" cy="12" r="10"></circle>
+										<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+									</svg>
+								</div>
+								<div class="protocol-info">
+									<h3>Vortex</h3>
+									<p>Zero-knowledge privacy pools</p>
+									<span class="protocol-status" id="vortex-status">
+										<span class="status-dot loading"></span>
+										Checking...
+									</span>
+								</div>
+								<div class="protocol-actions">
+									<button class="protocol-action-btn" data-action="vortex-deposit">Deposit</button>
+									<button class="protocol-action-btn secondary" data-action="vortex-withdraw">Withdraw</button>
+								</div>
+							</div>
+
+							<div class="protocol-card seal-card">
+								<div class="protocol-icon">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+										<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+									</svg>
+								</div>
+								<div class="protocol-info">
+									<h3>Seal</h3>
+									<p>Decentralized secrets management</p>
+									<span class="protocol-status online">
+										<span class="status-dot"></span>
+										Available
+									</span>
+								</div>
+								<div class="protocol-actions">
+									<button class="protocol-action-btn" data-action="seal-encrypt">Encrypt</button>
+									<button class="protocol-action-btn secondary" data-action="seal-decrypt">Decrypt</button>
+								</div>
+							</div>
+
+							<div class="protocol-card walrus-card">
+								<div class="protocol-icon">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+										<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+										<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+									</svg>
+								</div>
+								<div class="protocol-info">
+									<h3>Walrus</h3>
+									<p>Decentralized blob storage</p>
+									<span class="protocol-status online">
+										<span class="status-dot"></span>
+										Available
+									</span>
+								</div>
+								<div class="protocol-actions">
+									<button class="protocol-action-btn" data-action="walrus-upload">Upload</button>
+									<button class="protocol-action-btn secondary" data-action="walrus-browse">Browse</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- Privacy Sub-tabs -->
+						<div class="privacy-tabs">
+							<button class="privacy-tab active" data-privacy-tab="encrypted-notes">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+									<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+									<polyline points="14 2 14 8 20 8"></polyline>
+									<rect x="8" y="13" width="8" height="4" rx="1"></rect>
+								</svg>
+								Encrypted Notes
+							</button>
+							<button class="privacy-tab" data-privacy-tab="vortex-pools">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+									<circle cx="12" cy="12" r="10"></circle>
+									<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+								</svg>
+								Vortex Pools
+							</button>
+							<button class="privacy-tab" data-privacy-tab="seal-policies">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+									<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+								</svg>
+								Seal Policies
+							</button>
+							<button class="privacy-tab" data-privacy-tab="walrus-storage">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+									<ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+									<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+								</svg>
+								Walrus Storage
+							</button>
+						</div>
+
+						<!-- Encrypted Notes Panel -->
+						<div class="privacy-tab-content active" id="privacy-encrypted-notes">
+							<div class="encrypted-notes-section">
+								<div class="notes-header">
+									<h3>
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+											<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+											<polyline points="14 2 14 8 20 8"></polyline>
+											<rect x="8" y="13" width="8" height="4" rx="1"></rect>
+										</svg>
+										Private Notes
+									</h3>
+									<p>Create encrypted notes stored on Walrus with Seal access control</p>
+								</div>
+
+								<div class="notes-compose">
+									<div class="notes-policy-selector">
+										<label>Access Policy</label>
+										<select id="notes-policy-type">
+											<option value="owner">Only Me (Owner)</option>
+											<option value="address">Specific Address</option>
+											<option value="nft">NFT Holders</option>
+											<option value="allowlist">Allowlist</option>
+											<option value="time_locked">Time-Locked</option>
+										</select>
+									</div>
+									<div class="notes-policy-config hidden" id="notes-policy-config">
+										<input type="text" id="notes-policy-value" placeholder="Enter address or policy parameters..." />
+									</div>
+									<textarea id="notes-content" placeholder="Write your encrypted note..." rows="6"></textarea>
+									<div class="notes-actions">
+										<span class="notes-info">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+												<circle cx="12" cy="12" r="10"></circle>
+												<line x1="12" y1="16" x2="12" y2="12"></line>
+												<line x1="12" y1="8" x2="12.01" y2="8"></line>
+											</svg>
+											Encrypted with Seal, stored on Walrus
+										</span>
+										<button class="notes-save-btn" id="notes-save-btn">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+												<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+												<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+											</svg>
+											Encrypt & Save
+										</button>
+									</div>
+								</div>
+
+								<div class="notes-list" id="notes-list">
+									<div class="notes-list-header">
+										<h4>Your Encrypted Notes</h4>
+										<button class="notes-refresh-btn" id="notes-refresh-btn">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+												<polyline points="23 4 23 10 17 10"></polyline>
+												<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+											</svg>
+										</button>
+									</div>
+									<div class="notes-list-content" id="notes-list-content">
+										<div class="notes-empty">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32">
+												<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+												<polyline points="14 2 14 8 20 8"></polyline>
+											</svg>
+											<p>No encrypted notes yet</p>
+											<span>Create your first private note above</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Vortex Pools Panel -->
+						<div class="privacy-tab-content" id="privacy-vortex-pools">
+							<div class="vortex-pools-section">
+								<div class="vortex-overview">
+									<div class="vortex-info-card">
+										<div class="vortex-info-icon">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+												<circle cx="12" cy="12" r="10"></circle>
+												<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+											</svg>
+										</div>
+										<div class="vortex-info-text">
+											<h3>How Vortex Works</h3>
+											<p>Vortex is a privacy protocol using zero-knowledge proofs (Groth16) for confidential transactions on Sui. Deposit tokens into privacy pools, then withdraw to any address with complete anonymity.</p>
+											<ul class="vortex-features">
+												<li>
+													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"></polyline></svg>
+													2-input/2-output UTXO model
+												</li>
+												<li>
+													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"></polyline></svg>
+													Merkle tree commitments (depth 20)
+												</li>
+												<li>
+													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"></polyline></svg>
+													Relayer-based withdrawals for privacy
+												</li>
+											</ul>
+										</div>
+									</div>
+								</div>
+
+								<div class="vortex-pools-list">
+									<div class="pools-header">
+										<h3>Available Privacy Pools</h3>
+										<button class="pools-refresh-btn" id="pools-refresh-btn">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+												<polyline points="23 4 23 10 17 10"></polyline>
+												<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+											</svg>
+											Refresh
+										</button>
+									</div>
+									<div class="pools-grid" id="vortex-pools-grid">
+										<div class="pools-loading">
+											<div class="loading-spinner"></div>
+											<span>Loading pools...</span>
+										</div>
+									</div>
+								</div>
+
+								<div class="vortex-deposit-form" id="vortex-deposit-form">
+									<h3>Deposit to Pool</h3>
+									<div class="form-group">
+										<label for="vortex-pool-select">Select Pool</label>
+										<select id="vortex-pool-select">
+											<option value="">Select a privacy pool...</option>
+										</select>
+									</div>
+									<div class="form-group">
+										<label for="vortex-deposit-amount">Amount</label>
+										<div class="input-with-suffix">
+											<input type="number" id="vortex-deposit-amount" placeholder="0.0" step="0.001" />
+											<span class="input-suffix" id="vortex-deposit-suffix">SUI</span>
+										</div>
+									</div>
+									<div class="form-info">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+											<circle cx="12" cy="12" r="10"></circle>
+											<line x1="12" y1="16" x2="12" y2="12"></line>
+											<line x1="12" y1="8" x2="12.01" y2="8"></line>
+										</svg>
+										<span>A secret will be generated locally. <strong>Store it safely</strong> - it's required for withdrawal.</span>
+									</div>
+									<button class="vortex-deposit-btn" id="vortex-deposit-btn" disabled>
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+											<line x1="12" y1="5" x2="12" y2="19"></line>
+											<polyline points="19 12 12 19 5 12"></polyline>
+										</svg>
+										Connect Wallet to Deposit
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- Seal Policies Panel -->
+						<div class="privacy-tab-content" id="privacy-seal-policies">
+							<div class="seal-policies-section">
+								<div class="seal-overview">
+									<div class="seal-info-card">
+										<div class="seal-info-icon">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+												<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+												<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+											</svg>
+										</div>
+										<div class="seal-info-text">
+											<h3>Seal Encryption</h3>
+											<p>Decentralized secrets management using Identity-Based Encryption (IBE) with BLS12-381. Access controlled by onchain Move policies.</p>
+											<div class="seal-policy-types">
+												<span class="policy-type">
+													<strong>Owner:</strong> Single address
+												</span>
+												<span class="policy-type">
+													<strong>NFT:</strong> Token holders
+												</span>
+												<span class="policy-type">
+													<strong>Allowlist:</strong> Group access
+												</span>
+												<span class="policy-type">
+													<strong>Time-Lock:</strong> Scheduled reveal
+												</span>
+											</div>
+										</div>
+									</div>
+								</div>
+
+								<div class="seal-encrypt-form">
+									<h3>Encrypt Data</h3>
+									<div class="form-group">
+										<label for="seal-policy-type">Access Policy</label>
+										<select id="seal-policy-type">
+											<option value="address">Address-Based</option>
+											<option value="nft">NFT Ownership</option>
+											<option value="allowlist">Allowlist</option>
+											<option value="threshold">Threshold (M-of-N)</option>
+											<option value="time_locked">Time-Locked</option>
+											<option value="subscription">Subscription</option>
+										</select>
+									</div>
+									<div class="form-group policy-config" id="seal-policy-config">
+										<label for="seal-policy-params">Policy Parameters</label>
+										<input type="text" id="seal-policy-params" placeholder="Enter address, NFT type, or policy ID..." />
+									</div>
+									<div class="form-group">
+										<label for="seal-data-input">Data to Encrypt</label>
+										<textarea id="seal-data-input" placeholder="Enter text or paste data to encrypt..." rows="4"></textarea>
+									</div>
+									<div class="form-group">
+										<label for="seal-threshold">Key Server Threshold</label>
+										<select id="seal-threshold">
+											<option value="2">2-of-3 (Recommended)</option>
+											<option value="1">1-of-3 (Less secure)</option>
+											<option value="3">3-of-3 (Maximum security)</option>
+										</select>
+									</div>
+									<button class="seal-encrypt-btn" id="seal-encrypt-btn">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+											<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+											<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+										</svg>
+										Encrypt Data
+									</button>
+								</div>
+
+								<div class="seal-decrypt-form">
+									<h3>Decrypt Data</h3>
+									<div class="form-group">
+										<label for="seal-encrypted-input">Encrypted Data (Base64)</label>
+										<textarea id="seal-encrypted-input" placeholder="Paste encrypted data..." rows="4"></textarea>
+									</div>
+									<button class="seal-decrypt-btn" id="seal-decrypt-btn" disabled>
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+											<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+											<path d="M7 11V7a5 5 0 0 1 9.9 1"></path>
+											<path d="M18 8l3-3"></path>
+										</svg>
+										Connect Wallet to Decrypt
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- Walrus Storage Panel -->
+						<div class="privacy-tab-content" id="privacy-walrus-storage">
+							<div class="walrus-storage-section">
+								<div class="walrus-overview">
+									<div class="walrus-info-card">
+										<div class="walrus-info-icon">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+												<ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+												<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+												<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+											</svg>
+										</div>
+										<div class="walrus-info-text">
+											<h3>Walrus Decentralized Storage</h3>
+											<p>Store files on the Walrus network using Red Stuff 2D erasure coding. Files are split across storage nodes with 4-5x redundancy.</p>
+											<ul class="walrus-features">
+												<li>
+													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"></polyline></svg>
+													Tolerates 2/3 node failures
+												</li>
+												<li>
+													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"></polyline></svg>
+													Recoverable from 1/3 of slivers
+												</li>
+												<li>
+													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"></polyline></svg>
+													Proof of Availability on Sui
+												</li>
+											</ul>
+										</div>
+									</div>
+								</div>
+
+								<div class="walrus-upload-form">
+									<h3>Upload to Walrus</h3>
+									<div class="walrus-dropzone" id="walrus-dropzone">
+										<div class="dropzone-content">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48">
+												<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+												<polyline points="17 8 12 3 7 8"></polyline>
+												<line x1="12" y1="3" x2="12" y2="15"></line>
+											</svg>
+											<p>Drag & drop files here or <span class="dropzone-browse">browse</span></p>
+											<span class="dropzone-hint">Max file size: 10MB per file</span>
+										</div>
+										<input type="file" id="walrus-file-input" multiple hidden />
+									</div>
+									<div class="walrus-upload-options">
+										<label class="checkbox-label">
+											<input type="checkbox" id="walrus-encrypt-option" />
+											<span>Encrypt with Seal before upload</span>
+										</label>
+										<div class="form-group storage-duration">
+											<label for="walrus-epochs">Storage Duration</label>
+											<select id="walrus-epochs">
+												<option value="1">1 Epoch (~24h)</option>
+												<option value="7" selected>7 Epochs (~1 week)</option>
+												<option value="30">30 Epochs (~1 month)</option>
+												<option value="365">365 Epochs (~1 year)</option>
+											</select>
+										</div>
+									</div>
+									<div class="walrus-upload-queue hidden" id="walrus-upload-queue">
+										<h4>Upload Queue</h4>
+										<div class="queue-list" id="walrus-queue-list"></div>
+									</div>
+									<button class="walrus-upload-btn" id="walrus-upload-btn" disabled>
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+											<polyline points="17 8 12 3 7 8"></polyline>
+											<line x1="12" y1="3" x2="12" y2="15"></line>
+										</svg>
+										Select Files to Upload
+									</button>
+								</div>
+
+								<div class="walrus-browse-section">
+									<div class="browse-header">
+										<h3>Your Stored Blobs</h3>
+										<div class="browse-actions">
+											<input type="text" id="walrus-blob-search" placeholder="Search by blob ID..." />
+											<button class="browse-refresh-btn" id="walrus-refresh-btn">
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+													<polyline points="23 4 23 10 17 10"></polyline>
+													<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+												</svg>
+											</button>
+										</div>
+									</div>
+									<div class="walrus-blobs-list" id="walrus-blobs-list">
+										<div class="blobs-empty">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32">
+												<ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+												<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+											</svg>
+											<p>No blobs found</p>
+											<span>Upload files to store them on Walrus</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- SDK Reference Section -->
+						<div class="privacy-sdk-reference">
+							<h3>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+									<polyline points="16 18 22 12 16 6"></polyline>
+									<polyline points="8 6 2 12 8 18"></polyline>
+								</svg>
+								SDK Integration
+							</h3>
+							<div class="sdk-tabs">
+								<button class="sdk-tab active" data-sdk="vortex-sdk">Vortex</button>
+								<button class="sdk-tab" data-sdk="seal-sdk">Seal</button>
+								<button class="sdk-tab" data-sdk="walrus-sdk">Walrus</button>
+							</div>
+							<div class="sdk-content">
+								<div class="sdk-panel active" id="sdk-vortex-sdk">
+									<pre class="code-block"><code><span class="code-comment">// Client-side Vortex SDK (load from CDN due to size)</span>
+&lt;script src="https://unpkg.com/@interest-protocol/vortex-sdk"&gt;&lt;/script&gt;
+&lt;script&gt;
+  const { VortexAPI, Vortex } = window.VortexSDK;
+  const api = new VortexAPI({ apiUrl: '/api/vortex' });
+
+  <span class="code-comment">// Get privacy pools</span>
+  const pools = await api.getPools();
+
+  <span class="code-comment">// Generate deposit proof</span>
+  const secret = Vortex.generateSecret();
+  const commitment = Vortex.computeCommitment(secret);
+
+  <span class="code-comment">// Create withdrawal proof</span>
+  const proof = await Vortex.generateWithdrawProof({
+    secret,
+    recipient: '0x...',
+    merklePath: await api.getMerklePath(commitment)
+  });
+&lt;/script&gt;</code></pre>
+									<button class="copy-code-btn" data-code="vortex-sdk">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+											<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+											<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+										</svg>
+										Copy
+									</button>
+								</div>
+								<div class="sdk-panel" id="sdk-seal-sdk">
+									<pre class="code-block"><code><span class="code-comment">// Seal SDK for encryption/decryption</span>
+import { SealClient, SessionKey } from '@mysten/seal';
+import { fromHEX } from '@mysten/bcs';
+
+const client = new SealClient({
+  suiClient,
+  serverConfigs: serverObjectIds.map(id =&gt; ({ objectId: id, weight: 1 })),
+  verifyKeyServers: true,
+});
+
+<span class="code-comment">// Encrypt data with access policy</span>
+const { encryptedObject, key } = await client.encrypt({
+  threshold: 2,
+  packageId: fromHEX(packageId),
+  id: fromHEX(policyId),
+  data: plaintextBytes,
+});
+
+<span class="code-comment">// Create session key for decryption</span>
+const sessionKey = await SessionKey.create({
+  address: suiAddress,
+  packageId: fromHEX(packageId),
+  ttlMin: 10,
+  suiClient,
+});</code></pre>
+									<button class="copy-code-btn" data-code="seal-sdk">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+											<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+											<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+										</svg>
+										Copy
+									</button>
+								</div>
+								<div class="sdk-panel" id="sdk-walrus-sdk">
+									<pre class="code-block"><code><span class="code-comment">// Walrus SDK for blob storage</span>
+import { WalrusClient } from '@mysten/walrus';
+
+const client = new WalrusClient({
+  network: 'mainnet',
+  suiClient,
+});
+
+<span class="code-comment">// Upload a blob</span>
+const { blobId, suiObject } = await client.writeBlob({
+  blob: fileData,
+  deletable: true,
+  epochs: 7,
+  signer: keypair,
+});
+
+<span class="code-comment">// Read a blob</span>
+const data = await client.readBlob({ blobId });
+
+<span class="code-comment">// Access via gateway</span>
+const url = \`https://walrus-\${blobId}.sui.ski\`;</code></pre>
+									<button class="copy-code-btn" data-code="walrus-sdk">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+											<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+											<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+										</svg>
+										Copy
+									</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div><!-- end tab-privacy -->
+
 				<div class="tab-panel" id="tab-messaging">
 					<div class="messaging-section">
 						<div class="messaging-header">
@@ -9984,6 +10559,256 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 		// Load subscription feed when news panel opens
 		document.querySelector('[data-panel="news-panel"]')?.addEventListener('click', loadSubscriptionFeed);
+
+		// ========================================
+		// Privacy Tab Handlers
+		// ========================================
+
+		// Privacy sub-tab switching
+		document.querySelectorAll('.privacy-tab').forEach(tab => {
+			tab.addEventListener('click', () => {
+				document.querySelectorAll('.privacy-tab').forEach(t => t.classList.remove('active'));
+				document.querySelectorAll('.privacy-tab-content').forEach(c => c.classList.remove('active'));
+				tab.classList.add('active');
+				const targetId = 'privacy-' + tab.dataset.privacyTab;
+				document.getElementById(targetId)?.classList.add('active');
+			});
+		});
+
+		// SDK tab switching
+		document.querySelectorAll('.sdk-tab').forEach(tab => {
+			tab.addEventListener('click', () => {
+				document.querySelectorAll('.sdk-tab').forEach(t => t.classList.remove('active'));
+				document.querySelectorAll('.sdk-panel').forEach(p => p.classList.remove('active'));
+				tab.classList.add('active');
+				const targetId = 'sdk-' + tab.dataset.sdk;
+				document.getElementById(targetId)?.classList.add('active');
+			});
+		});
+
+		// Copy code buttons for SDK examples
+		document.querySelectorAll('.copy-code-btn').forEach(btn => {
+			btn.addEventListener('click', () => {
+				const codeBlock = btn.previousElementSibling?.querySelector('code');
+				if (codeBlock) {
+					const text = codeBlock.textContent || '';
+					navigator.clipboard.writeText(text).then(() => {
+						const originalText = btn.innerHTML;
+						btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!';
+						setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+					});
+				}
+			});
+		});
+
+		// Protocol action buttons
+		document.querySelectorAll('.protocol-action-btn').forEach(btn => {
+			btn.addEventListener('click', () => {
+				const action = btn.dataset.action;
+				switch (action) {
+					case 'vortex-deposit':
+						document.querySelector('[data-privacy-tab="vortex-pools"]')?.click();
+						document.getElementById('vortex-deposit-form')?.scrollIntoView({ behavior: 'smooth' });
+						break;
+					case 'vortex-withdraw':
+						document.querySelector('[data-privacy-tab="vortex-pools"]')?.click();
+						break;
+					case 'seal-encrypt':
+						document.querySelector('[data-privacy-tab="seal-policies"]')?.click();
+						document.querySelector('.seal-encrypt-form')?.scrollIntoView({ behavior: 'smooth' });
+						break;
+					case 'seal-decrypt':
+						document.querySelector('[data-privacy-tab="seal-policies"]')?.click();
+						document.querySelector('.seal-decrypt-form')?.scrollIntoView({ behavior: 'smooth' });
+						break;
+					case 'walrus-upload':
+						document.querySelector('[data-privacy-tab="walrus-storage"]')?.click();
+						document.getElementById('walrus-dropzone')?.scrollIntoView({ behavior: 'smooth' });
+						break;
+					case 'walrus-browse':
+						document.querySelector('[data-privacy-tab="walrus-storage"]')?.click();
+						document.querySelector('.walrus-browse-section')?.scrollIntoView({ behavior: 'smooth' });
+						break;
+				}
+			});
+		});
+
+		// Notes policy selector
+		const notesPolicyType = document.getElementById('notes-policy-type');
+		const notesPolicyConfig = document.getElementById('notes-policy-config');
+		const notesPolicyValue = document.getElementById('notes-policy-value');
+		if (notesPolicyType && notesPolicyConfig) {
+			notesPolicyType.addEventListener('change', () => {
+				const val = notesPolicyType.value;
+				if (val === 'owner') {
+					notesPolicyConfig.classList.add('hidden');
+				} else {
+					notesPolicyConfig.classList.remove('hidden');
+					const placeholders = {
+						address: 'Enter recipient address (0x...)',
+						nft: 'Enter NFT type (e.g., 0x2::kiosk::KioskOwnerCap)',
+						allowlist: 'Enter comma-separated addresses',
+						time_locked: 'Enter unlock timestamp (Unix)'
+					};
+					if (notesPolicyValue) notesPolicyValue.placeholder = placeholders[val] || 'Enter policy parameters...';
+				}
+			});
+		}
+
+		// Check Vortex status on privacy tab load
+		async function checkVortexStatus() {
+			const statusEl = document.getElementById('vortex-status');
+			if (!statusEl) return;
+			try {
+				const resp = await fetch('/api/vortex/health');
+				if (resp.ok) {
+					const data = await resp.json();
+					statusEl.innerHTML = '<span class="status-dot"></span>' + (data.status === 'ok' ? 'Online' : 'Degraded');
+					statusEl.classList.add(data.status === 'ok' ? 'online' : 'degraded');
+				} else {
+					statusEl.innerHTML = '<span class="status-dot"></span>Offline';
+					statusEl.classList.add('offline');
+				}
+			} catch {
+				statusEl.innerHTML = '<span class="status-dot"></span>Offline';
+				statusEl.classList.add('offline');
+			}
+		}
+
+		// Load Vortex pools
+		async function loadVortexPools() {
+			const poolsGrid = document.getElementById('vortex-pools-grid');
+			const poolSelect = document.getElementById('vortex-pool-select');
+			if (!poolsGrid) return;
+
+			try {
+				const resp = await fetch('/api/vortex/pools');
+				if (!resp.ok) throw new Error('Failed to load pools');
+				const pools = await resp.json();
+
+				if (!pools || pools.length === 0) {
+					poolsGrid.innerHTML = '<div class="pools-empty"><p>No privacy pools available</p></div>';
+					return;
+				}
+
+				poolsGrid.innerHTML = pools.map(pool => \`
+					<div class="pool-card" data-coin-type="\${pool.coinType || pool.coin_type}">
+						<div class="pool-header">
+							<span class="pool-token">\${pool.symbol || 'SUI'}</span>
+							<span class="pool-tvl">\${pool.tvl ? (pool.tvl / 1e9).toFixed(2) : '0'} TVL</span>
+						</div>
+						<div class="pool-stats">
+							<div class="pool-stat">
+								<span class="stat-label">Deposits</span>
+								<span class="stat-value">\${pool.depositCount || pool.deposit_count || 0}</span>
+							</div>
+							<div class="pool-stat">
+								<span class="stat-label">Anonymity Set</span>
+								<span class="stat-value">\${pool.anonymitySet || pool.anonymity_set || 0}</span>
+							</div>
+						</div>
+						<button class="pool-deposit-btn" data-pool="\${pool.coinType || pool.coin_type}">
+							Deposit \${pool.symbol || 'SUI'}
+						</button>
+					</div>
+				\`).join('');
+
+				// Populate pool selector
+				if (poolSelect) {
+					poolSelect.innerHTML = '<option value="">Select a privacy pool...</option>' +
+						pools.map(pool => \`<option value="\${pool.coinType || pool.coin_type}">\${pool.symbol || 'SUI'}</option>\`).join('');
+				}
+
+				// Add click handlers for pool cards
+				poolsGrid.querySelectorAll('.pool-deposit-btn').forEach(btn => {
+					btn.addEventListener('click', () => {
+						const poolType = btn.dataset.pool;
+						if (poolSelect) poolSelect.value = poolType;
+						document.getElementById('vortex-deposit-form')?.scrollIntoView({ behavior: 'smooth' });
+					});
+				});
+			} catch (err) {
+				console.error('Error loading Vortex pools:', err);
+				poolsGrid.innerHTML = '<div class="pools-error"><p>Failed to load pools. Check API connection.</p></div>';
+			}
+		}
+
+		// Walrus dropzone handlers
+		const walrusDropzone = document.getElementById('walrus-dropzone');
+		const walrusFileInput = document.getElementById('walrus-file-input');
+		const walrusUploadBtn = document.getElementById('walrus-upload-btn');
+		const walrusUploadQueue = document.getElementById('walrus-upload-queue');
+		const walrusQueueList = document.getElementById('walrus-queue-list');
+
+		let uploadFiles = [];
+
+		if (walrusDropzone && walrusFileInput) {
+			walrusDropzone.addEventListener('click', () => walrusFileInput.click());
+
+			walrusDropzone.addEventListener('dragover', (e) => {
+				e.preventDefault();
+				walrusDropzone.classList.add('dragover');
+			});
+
+			walrusDropzone.addEventListener('dragleave', () => {
+				walrusDropzone.classList.remove('dragover');
+			});
+
+			walrusDropzone.addEventListener('drop', (e) => {
+				e.preventDefault();
+				walrusDropzone.classList.remove('dragover');
+				const files = Array.from(e.dataTransfer?.files || []);
+				handleWalrusFiles(files);
+			});
+
+			walrusFileInput.addEventListener('change', () => {
+				const files = Array.from(walrusFileInput.files || []);
+				handleWalrusFiles(files);
+			});
+		}
+
+		function handleWalrusFiles(files) {
+			uploadFiles = files.filter(f => f.size <= 10 * 1024 * 1024);
+			if (uploadFiles.length !== files.length) {
+				alert('Some files were skipped (max 10MB per file)');
+			}
+
+			if (uploadFiles.length > 0 && walrusUploadQueue && walrusQueueList && walrusUploadBtn) {
+				walrusUploadQueue.classList.remove('hidden');
+				walrusQueueList.innerHTML = uploadFiles.map((f, i) => \`
+					<div class="queue-item" data-index="\${i}">
+						<span class="queue-file-name">\${f.name}</span>
+						<span class="queue-file-size">\${(f.size / 1024).toFixed(1)} KB</span>
+						<span class="queue-status">Ready</span>
+					</div>
+				\`).join('');
+				walrusUploadBtn.disabled = false;
+				walrusUploadBtn.innerHTML = \`
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+						<polyline points="17 8 12 3 7 8"></polyline>
+						<line x1="12" y1="3" x2="12" y2="15"></line>
+					</svg>
+					Upload \${uploadFiles.length} File\${uploadFiles.length > 1 ? 's' : ''}
+				\`;
+			}
+		}
+
+		// Initialize privacy features when tab is opened
+		const privacyTab = document.querySelector('[data-tab="privacy"]');
+		if (privacyTab) {
+			let privacyInitialized = false;
+			privacyTab.addEventListener('click', () => {
+				if (!privacyInitialized) {
+					checkVortexStatus();
+					loadVortexPools();
+					privacyInitialized = true;
+				}
+			});
+		}
+
+		// Pool refresh button
+		document.getElementById('pools-refresh-btn')?.addEventListener('click', loadVortexPools);
 	</script>
 
 	<!-- Floating App Bar -->
