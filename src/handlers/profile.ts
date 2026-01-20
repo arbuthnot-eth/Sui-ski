@@ -8034,7 +8034,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			// Clean the username - remove @ prefix and extract from URL if needed
 			if (username) {
 				username = username.replace(/^@/, '');
-				const urlMatch = username.match(new RegExp('(?:x\\.com|twitter\\.com)\\/([a-zA-Z0-9_]+)', 'i'));
+				const urlMatch = username.match(/(?:x\.com|twitter\.com)\/([a-zA-Z0-9_]+)/i);
 				if (urlMatch) {
 					username = urlMatch[1];
 				}
@@ -9080,12 +9080,15 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 			try {
 				// Use hardcoded testnet config (open mode servers)
+				// For testnet open mode, we use a default approve target
+				// In production/mainnet, this would be your package's seal_approve function
 				sealConfig = {
 					seal: {
 						packageId: SEAL_TESTNET_PACKAGE_ID,
 						keyServers: {
 							objectIds: SEAL_TESTNET_KEY_SERVERS
-						}
+						},
+						approveTarget: SEAL_TESTNET_PACKAGE_ID + '::seal::seal_approve'
 					}
 				};
 				console.log('Using testnet Seal config (open mode):', sealConfig.seal.packageId);
@@ -9177,22 +9180,24 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 			try {
 				const approveTarget = sealConfig?.seal?.approveTarget;
-				if (!approveTarget) {
-					console.warn('No seal_approve target configured');
-					return null;
-				}
-
-				const [packageId, moduleName, functionName] = approveTarget.split('::');
 				const policyId = encryptedEnvelope.policy?.policyId || recipientAddress;
 
 				const tx = new Transaction();
-				tx.moveCall({
-					target: approveTarget,
-					arguments: [tx.pure.vector('u8', fromHex(policyId.startsWith('0x') ? policyId.slice(2) : policyId))],
-				});
+				
+				// If approveTarget is configured, use it; otherwise skip the approval call
+				// (testnet open mode may not require explicit approval)
+				if (approveTarget) {
+					tx.moveCall({
+						target: approveTarget,
+						arguments: [tx.pure.vector('u8', fromHex(policyId.startsWith('0x') ? policyId.slice(2) : policyId))],
+					});
+				}
 
 				const suiClient = getSuiClient();
-				const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
+				// Build transaction bytes only if we have an approveTarget, otherwise pass empty bytes
+				const txBytes = approveTarget 
+					? await tx.build({ client: suiClient, onlyTransactionKind: true })
+					: new Uint8Array(0);
 
 				const ciphertext = typeof encryptedEnvelope.ciphertext === 'string'
 					? new Uint8Array(atob(encryptedEnvelope.ciphertext).split('').map(c => c.charCodeAt(0)))
@@ -9201,7 +9206,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				const decrypted = await sealClient.decrypt({
 					data: { data: ciphertext, id: policyId },
 					sessionKey: currentSessionKey,
-					txBytes,
+					txBytes: txBytes.length > 0 ? txBytes : undefined,
 				});
 
 				const decoder = new TextDecoder();
