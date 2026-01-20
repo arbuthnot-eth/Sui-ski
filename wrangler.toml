@@ -13,7 +13,7 @@ routes = [
 # Environment variables (non-sensitive)
 [vars]
 SUI_NETWORK = "mainnet"
-SUI_RPC_URL = "https://brandon-suimain-e98b.mainnet.sui.rpcpool.com"
+# SUI_RPC_URL set via `wrangler secret put SUI_RPC_URL` (Triton token URL)
 WALRUS_NETWORK = "mainnet"
 # Seal configuration for encrypted messaging
 SEAL_PACKAGE_ID = "0xcb83a248bda5f7a0a431e6bf9e96d184e604130ec5218696e3f1211113b447b7"
