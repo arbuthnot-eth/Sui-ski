@@ -168,6 +168,10 @@ export function generateProfilePage(
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
 						<span>Packages</span>
 					</button>
+					<button class="sidebar-tab" data-tab="privacy">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+						<span>Privacy</span>
+					</button>
 					<button class="sidebar-tab hidden" data-tab="messaging" id="messaging-tab-btn">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
 						<span>Message</span>
@@ -9644,6 +9648,270 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			origUpdateEditButton();
 			updateMvrWalletWarning();
 		};
+
+		// MVR Full Registration Form Handler
+		const mvrRegisterFormFull = document.getElementById('mvr-register-form-full');
+		if (mvrRegisterFormFull) {
+			mvrRegisterFormFull.addEventListener('submit', async (e) => {
+				e.preventDefault();
+
+				const statusDiv = document.getElementById('mvr-register-status');
+				const submitBtn = document.getElementById('mvr-register-submit');
+				const submitText = document.getElementById('mvr-register-submit-text');
+
+				const showStatus = (msg, type) => {
+					if (!statusDiv) return;
+					statusDiv.classList.remove('hidden');
+					statusDiv.className = 'mvr-status ' + type;
+					statusDiv.innerHTML = msg;
+				};
+
+				if (!connectedWallet || !connectedAccount || !connectedAddress) {
+					showStatus('Please connect your wallet first.', 'error');
+					return;
+				}
+
+				const pkgName = document.getElementById('mvr-reg-pkgname')?.value?.trim();
+				const pkgAddr = document.getElementById('mvr-reg-pkgaddr')?.value?.trim();
+				const upgradeCap = document.getElementById('mvr-reg-upgradecap')?.value?.trim();
+				const description = document.getElementById('mvr-reg-desc')?.value?.trim() || '';
+				const repoUrl = document.getElementById('mvr-reg-repo')?.value?.trim() || '';
+				const docsUrl = document.getElementById('mvr-reg-docs')?.value?.trim() || '';
+
+				if (!pkgName || !/^[a-z0-9-]+$/.test(pkgName)) {
+					showStatus('Package name must contain only lowercase letters, numbers, and hyphens.', 'error');
+					return;
+				}
+
+				if (!pkgAddr || !/^0x[a-f0-9]{64}$/i.test(pkgAddr)) {
+					showStatus('Valid package address required (0x + 64 hex characters).', 'error');
+					return;
+				}
+
+				if (!upgradeCap || !/^0x[a-f0-9]{64}$/i.test(upgradeCap)) {
+					showStatus('Valid UpgradeCap object ID required.', 'error');
+					return;
+				}
+
+				if (!NFT_ID) {
+					showStatus('SuiNS NFT ID not found for this name.', 'error');
+					return;
+				}
+
+				try {
+					if (submitBtn) submitBtn.disabled = true;
+					if (submitText) submitText.textContent = 'Checking ownership...';
+					statusDiv?.classList.add('hidden');
+
+					const suiClient = getSuiClient();
+
+					// Verify UpgradeCap ownership
+					const ucObj = await suiClient.getObject({ id: upgradeCap, options: { showOwner: true } });
+					if (!ucObj.data) {
+						showStatus('UpgradeCap not found. Verify the object ID.', 'error');
+						return;
+					}
+
+					const owner = ucObj.data.owner;
+					if (owner && typeof owner === 'object' && 'AddressOwner' in owner) {
+						if (owner.AddressOwner !== connectedAddress) {
+							showStatus('UpgradeCap owned by different address. You must own it or it must be shared.', 'error');
+							return;
+						}
+					}
+
+					if (submitText) submitText.textContent = 'Building transaction...';
+
+					const tx = new Transaction();
+
+					// Create PackageInfo from UpgradeCap
+					const [packageInfo] = tx.moveCall({
+						target: MVR_METADATA_PACKAGE + '::package_info::new',
+						arguments: [tx.object(upgradeCap)],
+					});
+
+					// Register the app name
+					const [appCap] = tx.moveCall({
+						target: MVR_CORE_PACKAGE + '::move_registry::register',
+						arguments: [
+							tx.object(MVR_REGISTRY_ID),
+							tx.object(NFT_ID),
+							tx.pure.string(pkgName),
+							tx.object('0x6'),
+						],
+					});
+
+					// Assign package to app
+					tx.moveCall({
+						target: MVR_CORE_PACKAGE + '::move_registry::assign_package',
+						arguments: [tx.object(MVR_REGISTRY_ID), appCap, packageInfo],
+					});
+
+					// Transfer AppCap to sender
+					tx.transferObjects([appCap], connectedAddress);
+					tx.setSender(connectedAddress);
+
+					if (submitText) submitText.textContent = 'Approve in wallet...';
+
+					const builtTx = await tx.build({ client: suiClient });
+					const txWrapper = {
+						_bytes: builtTx,
+						toJSON() { return btoa(String.fromCharCode.apply(null, this._bytes)); },
+						serialize() { return this._bytes; }
+					};
+
+					const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
+						transaction: txWrapper,
+						account: connectedAccount,
+						chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+					});
+
+					if (!result?.digest) throw new Error('No transaction digest');
+
+					showStatus(
+						'Package registered! <a href="' + EXPLORER_BASE + '/tx/' + result.digest + '" target="_blank">View tx</a><br>' +
+						'<code>@' + NAME + '/' + pkgName + '</code>',
+						'success'
+					);
+
+					document.getElementById('mvr-reg-pkgname').value = '';
+					document.getElementById('mvr-reg-pkgaddr').value = '';
+					document.getElementById('mvr-reg-upgradecap').value = '';
+					document.getElementById('mvr-reg-desc').value = '';
+					document.getElementById('mvr-reg-repo').value = '';
+					document.getElementById('mvr-reg-docs').value = '';
+
+					loadMvrPackages();
+				} catch (err) {
+					console.error('MVR registration error:', err);
+					showStatus('Registration failed: ' + (err.message || 'Unknown error'), 'error');
+				} finally {
+					if (submitBtn) submitBtn.disabled = false;
+					if (submitText) submitText.textContent = 'Register Package';
+				}
+			});
+		}
+
+		// MVR Version Form Handler
+		const mvrVersionForm = document.getElementById('mvr-version-form');
+		if (mvrVersionForm) {
+			mvrVersionForm.addEventListener('submit', async (e) => {
+				e.preventDefault();
+				const statusDiv = document.getElementById('mvr-version-status');
+				const showStatus = (msg, type) => {
+					if (!statusDiv) return;
+					statusDiv.classList.remove('hidden');
+					statusDiv.className = 'mvr-status ' + type;
+					statusDiv.innerHTML = msg;
+				};
+
+				if (!connectedWallet || !connectedAddress) {
+					showStatus('Please connect your wallet first.', 'error');
+					return;
+				}
+
+				const pkgSelect = document.getElementById('mvr-ver-package')?.value;
+				const versionNum = document.getElementById('mvr-ver-number')?.value;
+				const newAddr = document.getElementById('mvr-ver-addr')?.value?.trim();
+
+				if (!pkgSelect || !versionNum || !newAddr) {
+					showStatus('All fields are required.', 'error');
+					return;
+				}
+
+				showStatus('Version publishing coming soon. Use MVR CLI for now.', 'info');
+			});
+		}
+
+		// MVR Metadata Form Handler
+		const mvrMetadataForm = document.getElementById('mvr-metadata-form');
+		if (mvrMetadataForm) {
+			mvrMetadataForm.addEventListener('submit', async (e) => {
+				e.preventDefault();
+				const statusDiv = document.getElementById('mvr-metadata-status');
+				const showStatus = (msg, type) => {
+					if (!statusDiv) return;
+					statusDiv.classList.remove('hidden');
+					statusDiv.className = 'mvr-status ' + type;
+					statusDiv.innerHTML = msg;
+				};
+
+				if (!connectedWallet || !connectedAddress) {
+					showStatus('Please connect your wallet first.', 'error');
+					return;
+				}
+
+				showStatus('Metadata updates coming soon. Use MVR CLI for now.', 'info');
+			});
+		}
+
+		// MVR PackageInfo Form Handler
+		const mvrPackageInfoForm = document.getElementById('mvr-packageinfo-form');
+		if (mvrPackageInfoForm) {
+			mvrPackageInfoForm.addEventListener('submit', async (e) => {
+				e.preventDefault();
+				const statusDiv = document.getElementById('mvr-packageinfo-status');
+				const showStatus = (msg, type) => {
+					if (!statusDiv) return;
+					statusDiv.classList.remove('hidden');
+					statusDiv.className = 'mvr-status ' + type;
+					statusDiv.innerHTML = msg;
+				};
+
+				if (!connectedWallet || !connectedAddress) {
+					showStatus('Please connect your wallet first.', 'error');
+					return;
+				}
+
+				const upgradeCap = document.getElementById('mvr-pkginfo-upgradecap')?.value?.trim();
+				const displayName = document.getElementById('mvr-pkginfo-display')?.value?.trim();
+				const mvrName = document.getElementById('mvr-pkginfo-mvrname')?.value?.trim();
+				const transferTo = document.getElementById('mvr-pkginfo-transfer')?.value?.trim() || connectedAddress;
+
+				if (!upgradeCap || !/^0x[a-f0-9]{64}$/i.test(upgradeCap)) {
+					showStatus('Valid UpgradeCap object ID required.', 'error');
+					return;
+				}
+
+				try {
+					const suiClient = getSuiClient();
+					const tx = new Transaction();
+
+					// Create PackageInfo from UpgradeCap
+					const [packageInfo] = tx.moveCall({
+						target: MVR_METADATA_PACKAGE + '::package_info::new',
+						arguments: [tx.object(upgradeCap)],
+					});
+
+					// Transfer to specified address
+					tx.transferObjects([packageInfo], transferTo);
+					tx.setSender(connectedAddress);
+
+					const builtTx = await tx.build({ client: suiClient });
+					const txWrapper = {
+						_bytes: builtTx,
+						toJSON() { return btoa(String.fromCharCode.apply(null, this._bytes)); },
+						serialize() { return this._bytes; }
+					};
+
+					const result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
+						transaction: txWrapper,
+						account: connectedAccount,
+						chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+					});
+
+					if (!result?.digest) throw new Error('No transaction digest');
+
+					showStatus(
+						'PackageInfo created! <a href="' + EXPLORER_BASE + '/tx/' + result.digest + '" target="_blank">View tx</a>',
+						'success'
+					);
+				} catch (err) {
+					console.error('PackageInfo creation error:', err);
+					showStatus('Failed: ' + (err.message || 'Unknown error'), 'error');
+				}
+			});
+		}
 
 		// Initialize subscribe button
 		const subscribeBtn = document.getElementById('subscribe-btn');
