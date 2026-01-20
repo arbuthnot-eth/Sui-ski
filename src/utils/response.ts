@@ -50,9 +50,10 @@ export function proxyResponse(response: Response) {
 	})
 }
 
-export function notFoundPage(name: string, env?: Env) {
-	// If env is provided, show registration page
-	if (env) {
+export function notFoundPage(name: string, env?: Env, available?: boolean) {
+	// Only show registration page if env is provided AND we confirmed the name is available
+	// If available is false/undefined, there was a resolution error - don't show registration
+	if (env && available === true) {
 		return htmlResponse(generateRegistrationPage(name, env), 200)
 	}
 
