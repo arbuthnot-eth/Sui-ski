@@ -37,6 +37,8 @@ const ALLOWED_METHODS = new Set([
 	// Dry run (no state changes)
 	'sui_dryRunTransactionBlock',
 	'sui_devInspectTransactionBlock',
+	// Gas price (read-only, needed by Seal SDK)
+	'suix_getReferenceGasPrice',
 ])
 
 // Rate limiting - simple in-memory counter (use Durable Objects for production)
