@@ -7732,28 +7732,23 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 				let messages = [];
 
-				if (messagingClient) {
-					// Fetch and decrypt messages (only works for owner)
-					messages = await messagingClient.getMessages(connectedAddress);
-				} else {
-					// Fetch messages for the connected address
-					messages = await fetchMessagesForAddress(connectedAddress);
+				// Fetch messages for the connected address
+				messages = await fetchMessagesForAddress(connectedAddress);
 
-					// Also fetch messages addressed to the profile's target address
-					// (Messages to @name.sui are stored under the target address)
-					if (MESSAGING_RECIPIENT_ADDRESS &&
-						MESSAGING_RECIPIENT_ADDRESS.toLowerCase() !== connectedAddress.toLowerCase()) {
-						const targetMessages = await fetchMessagesForAddress(MESSAGING_RECIPIENT_ADDRESS);
-						messages = [...messages, ...targetMessages];
-					}
+				// Also fetch messages addressed to the profile's target address
+				// (Messages to @name.sui are stored under the target address)
+				if (MESSAGING_RECIPIENT_ADDRESS &&
+					MESSAGING_RECIPIENT_ADDRESS.toLowerCase() !== connectedAddress.toLowerCase()) {
+					const targetMessages = await fetchMessagesForAddress(MESSAGING_RECIPIENT_ADDRESS);
+					messages = [...messages, ...targetMessages];
+				}
 
-					// Also check owner address if different
-					if (MESSAGING_OWNER_ADDRESS &&
-						MESSAGING_OWNER_ADDRESS.toLowerCase() !== connectedAddress.toLowerCase() &&
-						MESSAGING_OWNER_ADDRESS.toLowerCase() !== MESSAGING_RECIPIENT_ADDRESS.toLowerCase()) {
-						const ownerMessages = await fetchMessagesForAddress(MESSAGING_OWNER_ADDRESS);
-						messages = [...messages, ...ownerMessages];
-					}
+				// Also check owner address if different
+				if (MESSAGING_OWNER_ADDRESS &&
+					MESSAGING_OWNER_ADDRESS.toLowerCase() !== connectedAddress.toLowerCase() &&
+					MESSAGING_OWNER_ADDRESS.toLowerCase() !== MESSAGING_RECIPIENT_ADDRESS.toLowerCase()) {
+					const ownerMessages = await fetchMessagesForAddress(MESSAGING_OWNER_ADDRESS);
+					messages = [...messages, ...ownerMessages];
 				}
 
 				// Deduplicate messages by nonce/id
