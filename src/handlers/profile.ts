@@ -49,7 +49,10 @@ export function generateProfilePage(
 
 	const cleanName = name.replace(/\.sui$/i, '').toLowerCase()
 	const fullName = `${cleanName}.sui`
-	const expiresMs = record.expirationTimestampMs ? Number(record.expirationTimestampMs) : undefined
+	const expiresMs = record.expirationTimestampMs ? (() => {
+		const num = Number(record.expirationTimestampMs);
+		return Number.isFinite(num) ? num : undefined;
+	})() : undefined
 	const expiresAt =
 		typeof expiresMs === 'number' && Number.isFinite(expiresMs) ? new Date(expiresMs) : null
 	const daysToExpire = expiresAt ? Math.ceil((expiresAt.getTime() - Date.now()) / 86400000) : null
@@ -73,6 +76,15 @@ export function generateProfilePage(
 
 	const serializeJson = (value: unknown) =>
 		JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
+	
+	// Helper to safely output numbers in JavaScript code (prevents numeric separator issues)
+	const safeNumber = (value: unknown): string => {
+		if (typeof value === 'number') {
+			if (!Number.isFinite(value)) return '0';
+			return String(value);
+		}
+		return '0';
+	}
 
 	const recordEntries = Object.entries(record.records || {})
 		.filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
@@ -386,7 +398,7 @@ export function generateProfilePage(
 							</div>
 						</div>
 						<div class="avail-timer-date">
-							${new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+							${expiresMs && typeof expiresMs === 'number' && Number.isFinite(expiresMs) ? new Date(expiresMs + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
 						</div>
 					</div>
 
@@ -2463,7 +2475,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 	const EXPLORER_BASE = ${serializeJson(explorerBase)};
 	const IS_SUBNAME = NAME.includes('.');
 	const STORAGE_KEY = 'sui_ski_wallet';
-	const EXPIRATION_MS = ${typeof expiresMs === 'number' ? expiresMs : 0};
+	const EXPIRATION_MS = ${safeNumber(expiresMs)};
 	const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 	const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
 	const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
@@ -6322,7 +6334,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 						tx.pure.address(connectedAddress),
 						depositCoin,
 						tx.pure.u64(executorRewardMist),
-						tx.pure.u64(BigInt(AVAILABLE_AT)),
+						tx.pure.u64(BigInt(Number(AVAILABLE_AT) || 0)),
 						tx.pure.u8(years),
 						tx.object('0x6'),
 					],
@@ -6683,7 +6695,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 						tx.pure.address(connectedAddress),
 						depositCoin,
 						tx.pure.u64(executorRewardMist),
-						tx.pure.u64(BigInt(AVAILABLE_AT)),
+						tx.pure.u64(BigInt(Number(AVAILABLE_AT) || 0)),
 						tx.pure.u8(years),
 						tx.object('0x6'),
 					],
