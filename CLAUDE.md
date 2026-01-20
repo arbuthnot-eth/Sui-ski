@@ -469,6 +469,51 @@ The gateway parses hostnames to determine routing:
 
 ---
 
+## SuiNS Integration
+
+[SuiNS (Sui Name Service)](https://docs.suins.io/developer) is a decentralized naming service on the Sui blockchain that enables users to replace complex wallet addresses with human-readable names.
+
+### Resolution Types
+
+SuiNS supports two types of resolution:
+
+- **Lookup:** A name can point to an address or an object (target address). This allows you to resolve a name like `example.sui` to its target address.
+- **Reverse lookup:** An address can have a default name. This allows you to find the name associated with a particular address.
+
+### Address Types
+
+Lookups work with different types of addresses:
+
+- **Target address:** The address that a SuiNS name resolves to. For example, `example.sui` might point to `0x2`, making `0x2` the target address for `example.sui`. Lookup resolution retrieves this information.
+- **Default address:** The SuiNS name that the owner of a particular address has selected to represent that address. For example, if you own `0x2` you can make `example.sui` its default address. The owner must sign and execute a set default transaction to establish this connection. The default address resets anytime the target address changes. Reverse lookup resolution retrieves this name.
+
+### SuiNS NFT Ownership
+
+Do not use ownership of a SuiNS NFT as a resolution method. An NFT is used as the key (capability) to change the target address, but should not be used to identify any name with an address.
+
+SuiNS NFT ownership allows any address to be set as the target address. So, the `example.sui` address used in the previous section can point to any address, not just `0x2`. Consequently, when you want to display default addresses, you should trust the default address over target address because it is guaranteed on chain.
+
+### Active Constants
+
+**Mainnet:**
+- SuiNS Core V3: `0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5`
+- SuiNS Core V2: `0xb7004c7914308557f7afbaf0dca8dd258e18e306cb7a45b28019f3d0a693f162`
+- SuiNS Core V1: `0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0`
+- SuiNS Core Object: `0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871`
+
+**Testnet:**
+- SuiNS Core: `0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93`
+- SuiNS Core Object: `0x300369e8909b9a6464da265b9a5a9ab6fe2158a040e84e808628cde7a07ee5a3`
+
+For the complete list of active packages and objects, see the [SuiNS Developer Documentation](https://docs.suins.io/developer#addresses).
+
+### Integration Methods
+
+- **Off-chain resolution:** Use available Sui API endpoints (JSON-RPC or GraphQL). For GraphQL's default name resolution, use the `defaultSuinsName` field.
+- **On-chain resolution:** Use the SuiNS core package. Add the appropriate dependency in your `Move.toml` file depending on which network you are targeting.
+
+---
+
 ## RPC Proxy Security
 
 The RPC proxy at `rpc.sui.ski` only allows read-only methods. Write operations (`sui_executeTransactionBlock`, etc.) are blocked. Rate limiting is 100 requests/minute per IP.
@@ -477,7 +522,29 @@ The RPC proxy at `rpc.sui.ski` only allows read-only methods. Write operations (
 
 ## MVR Registry Integration
 
-MVR names follow the format `@{suins_name}/{package_name}`. The gateway translates subdomain patterns:
+[Move Registry (MVR)](https://www.moveregistry.com/apps) provides uniform naming for Sui packages. Reference packages and types by name in PTBs; MVR resolves addresses across networks. Supports Mainnet and Testnet.
+
+**Name Format:** `@{suins_name}/{package_name}` or `{suins_name}.sui/{package_name}`
+- With version: `@myname/mypackage/2` (resolves to specific on-chain version)
+- Without version: defaults to latest
+
+**Design:**
+- `PackageInfo` registration: exists independently per network (metadata + ownership proof)
+- MVR registration: single source of truth on Mainnet only
+
+**Registration Flow:**
+1. Register `PackageInfo` object when publishing (once per network)
+2. Register application using SuiNS name
+3. Associate application with `PackageInfo`:
+   - Mainnet: full `PackageInfo` object (complete mapping)
+   - Other networks: `PackageInfo` object ID (pointer only)
+
+**Source Code:**
+- [MVR CLI & Web App](https://github.com/MystenLabs/mvr)
+- [MVR GraphQL](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/src/types/move_registry)
+- [TypeScript SDK Plugin](https://github.com/MystenLabs/ts-sdks/tree/main/packages/typescript/src/transactions/plugins/NamedPackagesPlugin.ts)
+
+**Gateway Subdomain Patterns:**
 - `core--suifrens.sui.ski` → `@suifrens/core`
 - `nft--myname--v2.sui.ski` → `@myname/nft/2`
 
@@ -495,6 +562,162 @@ MVR names follow the format `@{suins_name}/{package_name}`. The gateway translat
 - `GET /api/mvr/search?q={query}` - Search packages
 
 See `docs/MVR_IMPROVEMENTS.md` for detailed documentation.
+
+### MVR TypeScript SDK
+
+The `namedPackagesPlugin` from `@mysten/sui` (v1.25.0+) streamlines PTB construction by resolving MVR names to addresses with runtime caching.
+
+**Public Endpoints:**
+- Mainnet: `https://mainnet.mvr.mystenlabs.com`
+- Testnet: `https://testnet.mvr.mystenlabs.com`
+
+**Global Registration:**
+```typescript
+import { namedPackagesPlugin, Transaction } from '@mysten/sui/transactions';
+
+const plugin = namedPackagesPlugin({ url: 'https://mainnet.mvr.mystenlabs.com' });
+Transaction.registerGlobalSerializationPlugin('namedPackagesPlugin', plugin);
+```
+
+**Per-Transaction Registration:**
+```typescript
+const mainnetPlugin = namedPackagesPlugin({
+  url: 'https://mainnet.mvr.mystenlabs.com'
+});
+const transaction = new Transaction();
+transaction.addSerializationPlugin(mainnetPlugin);
+```
+
+**With Overrides (local dev/custom caching):**
+```typescript
+const overrides = {
+  packages: { '@suifrens/accessories': '0xe177...' },
+  types: { '@suifrens/core::suifren::SuiFren': '0x8894...' }
+};
+const plugin = namedPackagesPlugin({ url: '<endpoint>', overrides });
+```
+
+**Alternative:** Consider `@mysten/mvr-static` for build-time static resolution (better performance, no runtime API calls).
+
+### MVR CLI
+
+Command-line tool for managing Move project dependencies with the Move Registry.
+
+**Installation:**
+```bash
+cargo install --locked --git https://github.com/mystenlabs/mvr --branch release mvr
+```
+
+**Adding Dependencies:**
+```bash
+mvr add <package_name> --network <mainnet|testnet>
+```
+
+This updates `Move.toml`:
+```toml
+[dependencies]
+app = { r.mvr = "@mvr/app" }
+
+[r.mvr]
+network = "mainnet"
+```
+
+**Building:** Standard `sui move build` automatically invokes MVR dependency resolution.
+
+**Verify Installation:** `mvr --help`
+
+### MVR Names & Applications
+
+Managing applications involves four operations:
+
+1. **Create Application**: Register with SuiNS name + package name. Returns `appCap` for subsequent operations.
+
+2. **Set Metadata** (strongly recommended):
+   - `description`, `icon_url`, `documentation_url`, `homepage_url`, `contact`
+
+3. **Mainnet Package Attachment**: Links `PackageInfo` to application permanently (cannot be detached).
+
+4. **Non-Mainnet Attachment**: Attaches pointers (not strict bindings). Can update by unsetting then resetting the network.
+
+### MVR Package Metadata
+
+Create a `PackageInfo` object when first deploying (once per network) as the source of truth for package metadata.
+
+**Create PackageInfo:**
+```typescript
+const packageInfo = transaction.moveCall({
+  target: `@mvr/metadata::package_info::new`,
+  arguments: [transaction.object('<UpgradeCap>')],
+});
+
+const display = transaction.moveCall({
+  target: `@mvr/metadata::display::default`,
+  arguments: [transaction.pure.string('<package display name>')],
+});
+
+transaction.moveCall({
+  target: `@mvr/metadata::package_info::set_display`,
+  arguments: [transaction.object(packageInfo), display],
+});
+
+transaction.moveCall({
+  target: `@mvr/metadata::package_info::set_metadata`,
+  arguments: [
+    transaction.object(packageInfo),
+    transaction.pure.string('default'),
+    transaction.pure.string('<MVR name>'),  // e.g., @suins/core
+  ],
+});
+
+transaction.moveCall({
+  target: `@mvr/metadata::package_info::transfer`,
+  arguments: [transaction.object(packageInfo), transaction.pure.address('<safe address>')],
+});
+```
+
+**Reverse Resolution** (lookup MVR name from package ID):
+```bash
+curl -X POST 'https://mainnet.mvr.mystenlabs.com/v1/reverse-resolution/bulk' \
+  -H 'Content-Type: application/json' \
+  -d '{"package_ids": ["0x00c2f85e07..."]}'
+```
+
+**Add Source Code Info:**
+```typescript
+const git = transaction.moveCall({
+  target: `@mvr/metadata::git::new`,
+  arguments: [
+    transaction.pure.string('<repo URL>'),
+    transaction.pure.string('<subdirectory>'),
+    transaction.pure.string('<commit hash or tag>'),
+  ],
+});
+
+transaction.moveCall({
+  target: `@mvr/metadata::package_info::set_git_versioning`,
+  arguments: [
+    transaction.object('<PackageInfo>'),
+    transaction.pure.u64('<version number>'),
+    git,
+  ],
+});
+```
+
+**Update Source:** Call `unset_git_versioning` first, then `set_git_versioning` with new info.
+
+**Transfer:** Use `@mvr/metadata::package_info::transfer`. No public transfers (ensures indexability).
+
+### MVR Maintainer Practices
+
+Best practices for maintaining packages in the Move Registry:
+
+1. **Automated Address Management**: Use Sui's automated address management when publishing/upgrading. Commit and tag changes after configuration.
+
+2. **Network-Specific Dependencies**: Switch `Sui` dependency to correct network (testnet/mainnet). Starting with Sui v1.45, system dependencies are auto-managed and should be removed from `Move.toml`.
+
+3. **Release Tagging**: Use `<network>/<version>` format (e.g., `mainnet/v1`). Update `PackageInfo` source origin with commit SHA or tag reference.
+
+4. **Package Naming**: In multi-package repos, prefix package names with project identifier (e.g., `mvr_utils` not `utils`) to avoid conflicts and improve discoverability.
 
 ---
 

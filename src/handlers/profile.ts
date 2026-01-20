@@ -164,6 +164,10 @@ export function generateProfilePage(
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg>
 						<span>NFTs</span>
 					</button>
+					<button class="sidebar-tab" data-tab="mvr">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+						<span>Packages</span>
+					</button>
 					<button class="sidebar-tab hidden" data-tab="messaging" id="messaging-tab-btn">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
 						<span>Message</span>
@@ -1008,6 +1012,543 @@ export function generateProfilePage(
 						</div>
 					</div>
 				</div><!-- end tab-nfts -->
+
+				<div class="tab-panel" id="tab-mvr">
+					<div class="mvr-dashboard">
+						<!-- Header -->
+						<div class="mvr-header">
+							<div class="mvr-header-title">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+									<polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+									<line x1="12" y1="22.08" x2="12" y2="12"></line>
+								</svg>
+								<div>
+									<h2>Move Registry</h2>
+									<span class="mvr-namespace">@${escapeHtml(cleanName)}</span>
+								</div>
+							</div>
+							<a href="https://www.moveregistry.com/apps" target="_blank" class="mvr-external-link">
+								<span>Open MVR</span>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+							</a>
+						</div>
+
+						<!-- Quick Stats -->
+						<div class="mvr-stats">
+							<div class="mvr-stat">
+								<span class="mvr-stat-value" id="mvr-pkg-count">--</span>
+								<span class="mvr-stat-label">Packages</span>
+							</div>
+							<div class="mvr-stat">
+								<span class="mvr-stat-value" id="mvr-version-count">--</span>
+								<span class="mvr-stat-label">Total Versions</span>
+							</div>
+							<div class="mvr-stat">
+								<span class="mvr-stat-value mvr-stat-network">${escapeHtml(network)}</span>
+								<span class="mvr-stat-label">Network</span>
+							</div>
+						</div>
+
+						<!-- Sub-tabs Navigation -->
+						<div class="mvr-tabs">
+							<button class="mvr-tab active" data-mvr-tab="packages">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+								Your Packages
+							</button>
+							<button class="mvr-tab" data-mvr-tab="register">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+								Register
+							</button>
+							<button class="mvr-tab" data-mvr-tab="version">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+								Version
+							</button>
+							<button class="mvr-tab" data-mvr-tab="metadata">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+								Metadata
+							</button>
+							<button class="mvr-tab" data-mvr-tab="lookup">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+								Lookup
+							</button>
+							<button class="mvr-tab" data-mvr-tab="sdk">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+								SDK/CLI
+							</button>
+						</div>
+
+						<!-- Tab Content: Your Packages -->
+						<div class="mvr-tab-content active" data-mvr-content="packages">
+							<div class="mvr-packages-header">
+								<h3>Packages for @${escapeHtml(cleanName)}</h3>
+								<button class="mvr-refresh-btn" id="mvr-refresh-packages">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15A9 9 0 1 1 21 5.64"></path></svg>
+									Refresh
+								</button>
+							</div>
+							<div class="mvr-packages-list" id="mvr-packages-list">
+								<div class="mvr-loading">
+									<span class="loading"></span>
+									<span>Loading packages...</span>
+								</div>
+							</div>
+							<div class="mvr-packages-empty hidden" id="mvr-packages-empty">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+								<p>No packages registered yet</p>
+								<span>Register your first package to get started</span>
+								<button class="mvr-empty-action" id="mvr-go-register">Register Package</button>
+							</div>
+						</div>
+
+						<!-- Tab Content: Register Package -->
+						<div class="mvr-tab-content" data-mvr-content="register">
+							<div class="mvr-form-section">
+								<h3>Register New Package</h3>
+								<p class="mvr-form-desc">Register a Move package in the on-chain registry. Your package will be accessible as <code>@${escapeHtml(cleanName)}/package-name</code></p>
+
+								<div id="mvr-register-wallet-warning" class="mvr-warning hidden">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+									<span>Connect wallet to register packages</span>
+								</div>
+
+								<form id="mvr-register-form-full" class="mvr-form">
+									<!-- Quick Fill -->
+									<div class="mvr-quick-fill">
+										<label>
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+											Quick Fill (paste deployment output)
+										</label>
+										<textarea id="mvr-quick-fill-input" placeholder="Paste sui client publish output, @name/package, or package address..."></textarea>
+										<div class="mvr-quick-fill-actions">
+											<button type="button" id="mvr-parse-quick-fill" class="mvr-btn-secondary">Parse & Fill</button>
+											<span id="mvr-parse-feedback"></span>
+										</div>
+									</div>
+
+									<div class="mvr-form-grid">
+										<div class="mvr-form-group">
+											<label>SuiNS Name</label>
+											<input type="text" id="mvr-reg-suins" value="${escapeHtml(cleanName)}" readonly />
+										</div>
+										<div class="mvr-form-group">
+											<label>Package Name</label>
+											<input type="text" id="mvr-reg-pkgname" placeholder="e.g., core, nft, utils" />
+											<span class="mvr-hint">Letters, numbers, hyphens only</span>
+										</div>
+									</div>
+
+									<div class="mvr-form-group">
+										<label>Package Address</label>
+										<input type="text" id="mvr-reg-pkgaddr" placeholder="0x..." class="mono" />
+										<span class="mvr-hint">On-chain address of your published Move package</span>
+									</div>
+
+									<div class="mvr-form-group">
+										<label>UpgradeCap Object ID</label>
+										<input type="text" id="mvr-reg-upgradecap" placeholder="0x..." class="mono" />
+										<span class="mvr-hint">Required for mainnet registration - proves package ownership</span>
+									</div>
+
+									<div class="mvr-form-group">
+										<label>Description <span class="optional">(optional)</span></label>
+										<textarea id="mvr-reg-desc" placeholder="Brief description of your package" rows="2"></textarea>
+									</div>
+
+									<div class="mvr-form-grid">
+										<div class="mvr-form-group">
+											<label>Repository URL <span class="optional">(optional)</span></label>
+											<input type="url" id="mvr-reg-repo" placeholder="https://github.com/..." />
+										</div>
+										<div class="mvr-form-group">
+											<label>Documentation URL <span class="optional">(optional)</span></label>
+											<input type="url" id="mvr-reg-docs" placeholder="https://docs..." />
+										</div>
+									</div>
+
+									<div class="mvr-form-actions">
+										<button type="submit" class="mvr-btn-primary" id="mvr-register-submit">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+											<span id="mvr-register-submit-text">Register Package</span>
+										</button>
+									</div>
+									<div id="mvr-register-status" class="mvr-status hidden"></div>
+								</form>
+							</div>
+						</div>
+
+						<!-- Tab Content: Publish Version -->
+						<div class="mvr-tab-content" data-mvr-content="version">
+							<div class="mvr-form-section">
+								<h3>Publish New Version</h3>
+								<p class="mvr-form-desc">Publish a new version of an existing package. Versions must be sequential.</p>
+
+								<form id="mvr-version-form" class="mvr-form">
+									<div class="mvr-form-grid">
+										<div class="mvr-form-group">
+											<label>Package</label>
+											<select id="mvr-ver-package">
+												<option value="">Select a package...</option>
+											</select>
+										</div>
+										<div class="mvr-form-group">
+											<label>Version Number</label>
+											<input type="number" id="mvr-ver-number" min="1" placeholder="2" />
+											<span class="mvr-hint">Must be current version + 1</span>
+										</div>
+									</div>
+
+									<div class="mvr-form-group">
+										<label>New Package Address</label>
+										<input type="text" id="mvr-ver-addr" placeholder="0x..." class="mono" />
+										<span class="mvr-hint">Address of the upgraded package</span>
+									</div>
+
+									<div class="mvr-form-actions">
+										<button type="submit" class="mvr-btn-primary">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+											Publish Version
+										</button>
+									</div>
+									<div id="mvr-version-status" class="mvr-status hidden"></div>
+								</form>
+							</div>
+
+							<!-- Git Versioning Info -->
+							<div class="mvr-info-box">
+								<h4>
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path></svg>
+									Source Code Versioning
+								</h4>
+								<p>Link each version to its source code for verification:</p>
+								<pre><code>const git = tx.moveCall({
+  target: '@mvr/metadata::git::new',
+  arguments: [
+    tx.pure.string('https://github.com/user/repo'),
+    tx.pure.string('packages/core'),
+    tx.pure.string('v1.0.0'), // tag or commit
+  ],
+});
+tx.moveCall({
+  target: '@mvr/metadata::package_info::set_git_versioning',
+  arguments: [packageInfo, tx.pure.u64(1), git],
+});</code></pre>
+							</div>
+						</div>
+
+						<!-- Tab Content: Metadata -->
+						<div class="mvr-tab-content" data-mvr-content="metadata">
+							<div class="mvr-form-section">
+								<h3>Update Package Metadata</h3>
+								<p class="mvr-form-desc">Update description, links, and other metadata for your packages.</p>
+
+								<form id="mvr-metadata-form" class="mvr-form">
+									<div class="mvr-form-group">
+										<label>Package</label>
+										<select id="mvr-meta-package">
+											<option value="">Select a package...</option>
+										</select>
+									</div>
+
+									<div class="mvr-form-group">
+										<label>Description</label>
+										<textarea id="mvr-meta-desc" placeholder="Package description" rows="3"></textarea>
+									</div>
+
+									<div class="mvr-form-grid">
+										<div class="mvr-form-group">
+											<label>Icon URL</label>
+											<input type="url" id="mvr-meta-icon" placeholder="https://..." />
+										</div>
+										<div class="mvr-form-group">
+											<label>Homepage URL</label>
+											<input type="url" id="mvr-meta-homepage" placeholder="https://..." />
+										</div>
+									</div>
+
+									<div class="mvr-form-grid">
+										<div class="mvr-form-group">
+											<label>Documentation URL</label>
+											<input type="url" id="mvr-meta-docs" placeholder="https://docs..." />
+										</div>
+										<div class="mvr-form-group">
+											<label>Contact</label>
+											<input type="text" id="mvr-meta-contact" placeholder="@username or email" />
+										</div>
+									</div>
+
+									<div class="mvr-form-actions">
+										<button type="submit" class="mvr-btn-primary">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline></svg>
+											Update Metadata
+										</button>
+									</div>
+									<div id="mvr-metadata-status" class="mvr-status hidden"></div>
+								</form>
+							</div>
+
+							<!-- PackageInfo Creation -->
+							<div class="mvr-form-section">
+								<h3>Create PackageInfo Object</h3>
+								<p class="mvr-form-desc">Create a PackageInfo object for a new package deployment. This is the source of truth for package metadata.</p>
+
+								<form id="mvr-packageinfo-form" class="mvr-form">
+									<div class="mvr-form-group">
+										<label>UpgradeCap Object ID</label>
+										<input type="text" id="mvr-pkginfo-upgradecap" placeholder="0x..." class="mono" />
+										<span class="mvr-hint">From your package deployment output</span>
+									</div>
+
+									<div class="mvr-form-group">
+										<label>Display Name</label>
+										<input type="text" id="mvr-pkginfo-display" placeholder="My Package" />
+										<span class="mvr-hint">Human-readable name for identification</span>
+									</div>
+
+									<div class="mvr-form-group">
+										<label>MVR Name (for reverse resolution)</label>
+										<input type="text" id="mvr-pkginfo-mvrname" placeholder="@${escapeHtml(cleanName)}/package" />
+										<span class="mvr-hint">Enables lookup from package ID to name</span>
+									</div>
+
+									<div class="mvr-form-group">
+										<label>Transfer To Address</label>
+										<input type="text" id="mvr-pkginfo-transfer" placeholder="0x... (defaults to your wallet)" class="mono" />
+									</div>
+
+									<div class="mvr-form-actions">
+										<button type="submit" class="mvr-btn-primary">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+											Create PackageInfo
+										</button>
+									</div>
+									<div id="mvr-packageinfo-status" class="mvr-status hidden"></div>
+								</form>
+							</div>
+						</div>
+
+						<!-- Tab Content: Lookup / Reverse Resolution -->
+						<div class="mvr-tab-content" data-mvr-content="lookup">
+							<div class="mvr-form-section">
+								<h3>Reverse Resolution</h3>
+								<p class="mvr-form-desc">Look up the MVR name for a package address. Useful for identifying packages on-chain.</p>
+
+								<form id="mvr-lookup-form" class="mvr-form">
+									<div class="mvr-form-group">
+										<label>Package Address(es)</label>
+										<textarea id="mvr-lookup-addrs" placeholder="Enter package addresses, one per line or comma-separated&#10;&#10;0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5&#10;0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809" rows="4" class="mono"></textarea>
+									</div>
+
+									<div class="mvr-form-actions">
+										<button type="submit" class="mvr-btn-primary">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+											Lookup Names
+										</button>
+									</div>
+								</form>
+
+								<div id="mvr-lookup-results" class="mvr-lookup-results hidden">
+									<h4>Results</h4>
+									<div id="mvr-lookup-list"></div>
+								</div>
+							</div>
+
+							<!-- Name to Address Resolution -->
+							<div class="mvr-form-section">
+								<h3>Name Resolution</h3>
+								<p class="mvr-form-desc">Resolve an MVR name to its package address.</p>
+
+								<form id="mvr-resolve-form" class="mvr-form">
+									<div class="mvr-form-group">
+										<label>MVR Name</label>
+										<input type="text" id="mvr-resolve-name" placeholder="@suins/core or @deepbook/core/2" />
+										<span class="mvr-hint">Format: @name/package or @name/package/version</span>
+									</div>
+
+									<div class="mvr-form-actions">
+										<button type="submit" class="mvr-btn-secondary">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+											Resolve
+										</button>
+									</div>
+								</form>
+
+								<div id="mvr-resolve-result" class="mvr-resolve-result hidden"></div>
+							</div>
+						</div>
+
+						<!-- Tab Content: SDK/CLI Reference -->
+						<div class="mvr-tab-content" data-mvr-content="sdk">
+							<div class="mvr-sdk-section">
+								<h3>TypeScript SDK</h3>
+								<p class="mvr-form-desc">Use the MVR plugin for seamless name resolution in your transactions.</p>
+
+								<div class="mvr-code-block">
+									<div class="mvr-code-header">
+										<span>Installation</span>
+										<button class="mvr-copy-btn" data-copy="npm install @mysten/sui">Copy</button>
+									</div>
+									<pre><code>npm install @mysten/sui  # v1.25.0+</code></pre>
+								</div>
+
+								<div class="mvr-code-block">
+									<div class="mvr-code-header">
+										<span>Global Plugin Registration</span>
+										<button class="mvr-copy-btn" data-copy="import { namedPackagesPlugin, Transaction } from '@mysten/sui/transactions';
+
+const plugin = namedPackagesPlugin({
+  url: '${network === 'mainnet' ? 'https://mainnet.mvr.mystenlabs.com' : 'https://testnet.mvr.mystenlabs.com'}'
+});
+Transaction.registerGlobalSerializationPlugin('namedPackagesPlugin', plugin);">Copy</button>
+									</div>
+									<pre><code>import { namedPackagesPlugin, Transaction } from '@mysten/sui/transactions';
+
+const plugin = namedPackagesPlugin({
+  url: '${network === 'mainnet' ? 'https://mainnet.mvr.mystenlabs.com' : 'https://testnet.mvr.mystenlabs.com'}'
+});
+Transaction.registerGlobalSerializationPlugin('namedPackagesPlugin', plugin);</code></pre>
+								</div>
+
+								<div class="mvr-code-block">
+									<div class="mvr-code-header">
+										<span>Using MVR Names in Transactions</span>
+										<button class="mvr-copy-btn" data-copy="const tx = new Transaction();
+tx.moveCall({
+  target: '@${escapeHtml(cleanName)}/core::module::function',
+  arguments: [/* ... */],
+});
+// Plugin auto-resolves @${escapeHtml(cleanName)}/core to package address">Copy</button>
+									</div>
+									<pre><code>const tx = new Transaction();
+tx.moveCall({
+  target: '@${escapeHtml(cleanName)}/core::module::function',
+  arguments: [/* ... */],
+});
+// Plugin auto-resolves @${escapeHtml(cleanName)}/core to package address</code></pre>
+								</div>
+
+								<div class="mvr-code-block">
+									<div class="mvr-code-header">
+										<span>Create PackageInfo Object</span>
+										<button class="mvr-copy-btn" data-copy="const packageInfo = tx.moveCall({
+  target: '@mvr/metadata::package_info::new',
+  arguments: [tx.object('&lt;UpgradeCap&gt;')],
+});
+const display = tx.moveCall({
+  target: '@mvr/metadata::display::default',
+  arguments: [tx.pure.string('My Package')],
+});
+tx.moveCall({
+  target: '@mvr/metadata::package_info::set_display',
+  arguments: [packageInfo, display],
+});
+tx.moveCall({
+  target: '@mvr/metadata::package_info::set_metadata',
+  arguments: [packageInfo, tx.pure.string('default'), tx.pure.string('@${escapeHtml(cleanName)}/package')],
+});
+tx.moveCall({
+  target: '@mvr/metadata::package_info::transfer',
+  arguments: [packageInfo, tx.pure.address('&lt;your-address&gt;')],
+});">Copy</button>
+									</div>
+									<pre><code>const packageInfo = tx.moveCall({
+  target: '@mvr/metadata::package_info::new',
+  arguments: [tx.object('&lt;UpgradeCap&gt;')],
+});
+const display = tx.moveCall({
+  target: '@mvr/metadata::display::default',
+  arguments: [tx.pure.string('My Package')],
+});
+tx.moveCall({
+  target: '@mvr/metadata::package_info::set_display',
+  arguments: [packageInfo, display],
+});
+tx.moveCall({
+  target: '@mvr/metadata::package_info::set_metadata',
+  arguments: [packageInfo, tx.pure.string('default'), tx.pure.string('@${escapeHtml(cleanName)}/package')],
+});
+tx.moveCall({
+  target: '@mvr/metadata::package_info::transfer',
+  arguments: [packageInfo, tx.pure.address('&lt;your-address&gt;')],
+});</code></pre>
+								</div>
+							</div>
+
+							<div class="mvr-sdk-section">
+								<h3>MVR CLI</h3>
+								<p class="mvr-form-desc">Command-line tool for managing Move dependencies.</p>
+
+								<div class="mvr-code-block">
+									<div class="mvr-code-header">
+										<span>Installation</span>
+										<button class="mvr-copy-btn" data-copy="cargo install --locked --git https://github.com/mystenlabs/mvr --branch release mvr">Copy</button>
+									</div>
+									<pre><code>cargo install --locked --git https://github.com/mystenlabs/mvr --branch release mvr</code></pre>
+								</div>
+
+								<div class="mvr-code-block">
+									<div class="mvr-code-header">
+										<span>Add Dependency</span>
+										<button class="mvr-copy-btn" data-copy="mvr add @${escapeHtml(cleanName)}/core --network ${escapeHtml(network)}">Copy</button>
+									</div>
+									<pre><code>mvr add @${escapeHtml(cleanName)}/core --network ${escapeHtml(network)}</code></pre>
+								</div>
+
+								<div class="mvr-code-block">
+									<div class="mvr-code-header">
+										<span>Move.toml Result</span>
+									</div>
+									<pre><code>[dependencies]
+core = { r.mvr = "@${escapeHtml(cleanName)}/core" }
+
+[r.mvr]
+network = "${escapeHtml(network)}"</code></pre>
+								</div>
+							</div>
+
+							<div class="mvr-sdk-section">
+								<h3>API Endpoints</h3>
+								<div class="mvr-api-list">
+									<div class="mvr-api-item">
+										<span class="mvr-api-method">GET</span>
+										<code>/v1/names/{name}</code>
+										<span class="mvr-api-desc">Resolve MVR name to address</span>
+									</div>
+									<div class="mvr-api-item">
+										<span class="mvr-api-method post">POST</span>
+										<code>/v1/reverse-resolution/bulk</code>
+										<span class="mvr-api-desc">Bulk reverse lookup</span>
+									</div>
+								</div>
+								<div class="mvr-code-block" style="margin-top: 12px;">
+									<div class="mvr-code-header">
+										<span>Reverse Resolution Example</span>
+										<button class="mvr-copy-btn" data-copy="curl -X POST '${network === 'mainnet' ? 'https://mainnet.mvr.mystenlabs.com' : 'https://testnet.mvr.mystenlabs.com'}/v1/reverse-resolution/bulk' \\
+  -H 'Content-Type: application/json' \\
+  -d '{&quot;package_ids&quot;: [&quot;0x...&quot;]}'">Copy</button>
+									</div>
+									<pre><code>curl -X POST '${network === 'mainnet' ? 'https://mainnet.mvr.mystenlabs.com' : 'https://testnet.mvr.mystenlabs.com'}/v1/reverse-resolution/bulk' \\
+  -H 'Content-Type: application/json' \\
+  -d '{"package_ids": ["0x..."]}'</code></pre>
+								</div>
+							</div>
+
+							<!-- Best Practices -->
+							<div class="mvr-info-box mvr-practices">
+								<h4>
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+									Maintainer Best Practices
+								</h4>
+								<ul>
+									<li><strong>Automated Address Management:</strong> Use Sui's automated address management when publishing. Commit and tag after config.</li>
+									<li><strong>Network Dependencies:</strong> Switch Sui dependency to correct network. From v1.45+, system deps are auto-managed.</li>
+									<li><strong>Release Tags:</strong> Use <code>&lt;network&gt;/&lt;version&gt;</code> format (e.g., <code>mainnet/v1</code>)</li>
+									<li><strong>Package Naming:</strong> In multi-package repos, prefix with project name (e.g., <code>mvr_utils</code> not <code>utils</code>)</li>
+								</ul>
+							</div>
+						</div>
+					</div>
+				</div><!-- end tab-mvr -->
 
 				<div class="tab-panel" id="tab-messaging">
 					<div class="messaging-section">
