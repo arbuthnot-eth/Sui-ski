@@ -1318,7 +1318,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		import { SuiClient } from 'https://esm.sh/@mysten/sui@1.45.2/client';
 		import { Transaction } from 'https://esm.sh/@mysten/sui@1.45.2/transactions';
 		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.9.13';
-		import { SealClient, SessionKey, getAllowlistedKeyServers } from 'https://esm.sh/@mysten/seal@0.2.6';
+		import { SealClient, SessionKey, getAllowlistedKeyServers } from 'https://esm.sh/@mysten/seal@0.4.0';
 		import { fromHex, toHex } from 'https://esm.sh/@mysten/bcs@1.3.0';
 
 		const NAME = ${serializeJson(cleanName)};
