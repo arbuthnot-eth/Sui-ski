@@ -1064,6 +1064,12 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 						error: 'Encrypted message, sender, and recipient required',
 						hint: 'Expected fields: encryptedMessage (or encrypted/message), sender (or from), recipient (or to)',
 						received: Object.keys(body),
+						debug: {
+							hasEncryptedMessage: !!encryptedMessage,
+							encryptedMessageType: typeof encryptedMessage,
+							hasSender: !!senderAddr,
+							hasRecipient: !!recipientAddr,
+						},
 					}, 400)
 				}
 

@@ -7335,22 +7335,33 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			// Encrypt message (only recipient can decrypt)
 			const encrypted = await encryptForRecipient(messageData, recipientAddr);
 
+			// Debug: log what we're sending
+			const requestBody = {
+				encryptedMessage: encrypted,
+				sender: connectedAddress,
+				senderName: connectedPrimaryName,
+				recipient: recipientAddr,
+				recipientName: messageData.toName,
+				signature: signature,
+				signaturePayload: signaturePayload,
+				timestamp: timestamp,
+				nonce: nonce,
+				contentHash: contentHash,
+			};
+			console.log('Sending message request:', {
+				hasEncryptedMessage: !!requestBody.encryptedMessage,
+				hasSender: !!requestBody.sender,
+				hasRecipient: !!requestBody.recipient,
+				encryptedMessageKeys: requestBody.encryptedMessage ? Object.keys(requestBody.encryptedMessage) : null,
+				sender: requestBody.sender,
+				recipient: requestBody.recipient,
+			});
+
 			// Store on Walrus via our API
 			const response = await fetch('/api/app/messages/send', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					encryptedMessage: encrypted,
-					sender: connectedAddress,
-					senderName: connectedPrimaryName,
-					recipient: recipientAddr,
-					recipientName: messageData.toName,
-					signature: signature,
-					signaturePayload: signaturePayload,
-					timestamp: timestamp,
-					nonce: nonce,
-					contentHash: contentHash,
-				}),
+				body: JSON.stringify(requestBody),
 			});
 
 			if (!response.ok) {
@@ -7766,7 +7777,18 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// Initial button state (will show connect prompt since no wallet)
 		updateSendButtonState();
 
-		// Preload SDK in background
+		// Preload Seal SDK config in background
+		async function loadMessagingSdk() {
+			try {
+				const response = await fetch('/api/app/subscriptions/config');
+				if (response.ok) {
+					const config = await response.json();
+					console.log('Seal config loaded:', config);
+				}
+			} catch (error) {
+				console.warn('Failed to load messaging SDK config:', error);
+			}
+		}
 		loadMessagingSdk();
 
 		// ========== CONVERSATIONS & NOTIFICATIONS ==========
