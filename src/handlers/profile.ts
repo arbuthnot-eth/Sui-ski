@@ -7334,11 +7334,12 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			
 			// If the UpgradeCap is owned by an object ID that we own, we need to include the parent object
 			// In Sui, when transferring an object owned by another object, the parent must be in the transaction.
-			// The simplest approach is to just use transferObjects - Sui will automatically include
-			// the parent object if we own it and it's needed to authorize the transfer.
 			if (canTransfer && parentObjectId) {
-				// Simply transfer the UpgradeCap - Sui's transaction builder will automatically
-				// include the parent object (which we own) to authorize the transfer
+				// For object-owned objects, we need to explicitly reference the parent object
+				// This ensures Sui includes it in the transaction and can verify ownership
+				// Reference the parent object (NFT) so it's included in transaction inputs
+				tx.object(parentObjectId);
+				// Then transfer the UpgradeCap - Sui will use the parent object to authorize
 				tx.transferObjects([tx.object(upgradeCap)], connectedAddress);
 			} else {
 				// Regular transfer from address owner
