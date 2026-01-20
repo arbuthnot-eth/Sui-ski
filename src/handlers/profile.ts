@@ -2444,18 +2444,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		const NAME = ${serializeJson(cleanName)};
 		const FULL_NAME = ${serializeJson(fullName)};
 		const NETWORK = ${serializeJson(network)};
-		const RPC_URL = ${serializeJson(env.SUI_RPC_URL)};
-		const DEFAULT_PUBLIC_RPC = {
-			mainnet: 'https://fullnode.mainnet.sui.io:443',
-			testnet: 'https://fullnode.testnet.sui.io:443',
-			devnet: 'https://fullnode.devnet.sui.io:443',
-		};
-		const normalizedRpcUrl =
-			typeof RPC_URL === 'string' ? RPC_URL.trim() : '';
-		const ACTIVE_RPC_URL =
-			normalizedRpcUrl ||
-			DEFAULT_PUBLIC_RPC[NETWORK] ||
-			DEFAULT_PUBLIC_RPC.mainnet;
+		// Use rpc.sui.ski proxy for client-side requests (routes through Triton server-side)
+		const ACTIVE_RPC_URL = 'https://rpc.sui.ski';
 		let cachedSuiClient = null;
 		const getSuiClient = () => {
 			if (!cachedSuiClient) {
@@ -2463,12 +2453,6 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			}
 			return cachedSuiClient;
 		};
-		if (!normalizedRpcUrl) {
-			console.warn(
-				'[sui.ski] SUI_RPC_URL not configured, using public RPC:',
-				ACTIVE_RPC_URL,
-			);
-		}
 		const BOUNTY_ESCROW_PACKAGE_ID = ${serializeJson(bountyPackageId || null)};
 	const NFT_ID = ${serializeJson(record.nftId || '')};
 	const TARGET_ADDRESS = ${serializeJson(record.address)};
