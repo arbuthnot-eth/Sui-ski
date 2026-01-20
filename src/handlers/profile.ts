@@ -7896,7 +7896,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			var result = { packageName: null, packageAddress: null, upgradeCap: null };
 			var addrRegex = new RegExp('0x[a-fA-F0-9]{64}', 'g');
 			var addresses = text.match(addrRegex) || [];
-			var lines = text.split(/[\r\n]+/);
+			var lines = text.split(new RegExp('[\\\\r\\\\n]+'));
 
 			for (var i = 0; i < lines.length; i++) {
 				var line = lines[i];
@@ -8034,7 +8034,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			// Clean the username - remove @ prefix and extract from URL if needed
 			if (username) {
 				username = username.replace(/^@/, '');
-				const urlMatch = username.match(/(?:x\.com|twitter\.com)\/([a-zA-Z0-9_]+)/i);
+				const urlMatch = username.match(new RegExp('(?:x\\\\.com|twitter\\\\.com)\\\\/([a-zA-Z0-9_]+)', 'i'));
 				if (urlMatch) {
 					username = urlMatch[1];
 				}
@@ -10200,7 +10200,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				}
 
 				// Parse MVR name format (@name/package)
-				const mvrNameMatch = text.match(/@([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/);
+				const mvrNameMatch = text.match(new RegExp('@([a-zA-Z0-9_-]+)\\\\/([a-zA-Z0-9_-]+)'));
 				if (mvrNameMatch) {
 					const pkgNameInput = document.getElementById('mvr-reg-pkgname');
 					if (pkgNameInput) pkgNameInput.value = mvrNameMatch[2];
@@ -10225,7 +10225,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				if (!textarea || !resultsDiv || !listDiv) return;
 
 				const text = textarea.value.trim();
-				const addresses = text.split(/[,\n]/).map(s => s.trim()).filter(s => s.startsWith('0x'));
+				const addresses = text.split(new RegExp('[,\\\\n]')).map(s => s.trim()).filter(s => s.startsWith('0x'));
 
 				if (addresses.length === 0) return;
 
