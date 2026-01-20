@@ -791,7 +791,7 @@ export function generateProfilePage(
 										([key, value]) => `
 						<tr>
 							<td class="record-key">${escapeHtml(key)}</td>
-							<td class="record-value">${(function() { const isUrl = value && (value.toLowerCase().startsWith('http://') || value.toLowerCase().startsWith('https://')); return isUrl ? `<a href="${escapeHtml(value)}" target="_blank">${escapeHtml(value)}</a>` : escapeHtml(value); })()}</td>
+							<td class="record-value">${(() => { const isUrl = value && (value.toLowerCase().startsWith('http://') || value.toLowerCase().startsWith('https://')); return isUrl ? `<a href="${escapeHtml(value)}" target="_blank">${escapeHtml(value)}</a>` : escapeHtml(value); })()}</td>
 						</tr>
 					`,
 									)
@@ -4225,7 +4225,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 			try {
 				// Tradeport API expects name without .sui suffix
-				const nameForApi = FULL_NAME.replace(/\.sui$/i, '');
+				const nameForApi = FULL_NAME.replace(/.sui$/i, '');
 				const res = await fetch(\`/api/tradeport/v1/sui/suins/name/\${encodeURIComponent(nameForApi)}\`);
 				
 				// Handle 404 as "not listed" rather than an error
@@ -7683,7 +7683,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 										parentObjectId = NFT_ID; // We own the NFT, can use the UpgradeCap
 									} else {
 										showMvrStatus(
-											'UpgradeCap is owned by this domain\'s NFT, but you don\'t own the NFT. ' +
+											'UpgradeCap is owned by this domain's NFT, but you don't own the NFT. ' +
 											'Please connect the wallet that owns ' + NAME + ' to register the package.',
 											'error'
 										);
@@ -7712,7 +7712,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 										parentObjectId = objectOwnerId; // We own the parent object
 									} else {
 										showMvrStatus(
-											'UpgradeCap is owned by an object (' + objectOwnerId.slice(0, 8) + '...), but you don\'t own that object. ' +
+											'UpgradeCap is owned by an object (' + objectOwnerId.slice(0, 8) + '...), but you don't own that object. ' +
 											'Please connect the wallet that owns the parent object to register the package.',
 											'error'
 										);
@@ -8453,6 +8453,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// Encrypted for recipient (only they can read)
 		// Stored on Walrus decentralized storage
 		// References stored in KV with signature verification
+		// 
+		// Uses simplified MessagingClient patterns (see src/sdk/messaging-client.ts)
 
 		let messagingClient = null;
 		let sealClient = null;
@@ -8463,6 +8465,24 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		const MSG_CACHE_KEY = \`sui_ski_messages_\${MESSAGING_RECIPIENT}\`;
 		const INBOX_CACHE_KEY = 'sui_ski_inbox';
 
+		// Seal configuration (testnet open mode)
+		const SEAL_TESTNET_KEY_SERVERS = [
+			'0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75', // Mysten Labs #1
+			'0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8', // Mysten Labs #2
+			'0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46', // Triton One
+		];
+		const SEAL_TESTNET_PACKAGE_ID = '0x8afa5d31dbaa0a8fb07082692940ca3d56b5e856c5126cb5a3693f0a4de63b82';
+		const SEAL_TESTNET_RPC = 'https://fullnode.testnet.sui.io:443';
+
+		// Separate SuiClient for Seal operations (uses testnet)
+		let sealSuiClient = null;
+		const getSealSuiClient = () => {
+			if (!sealSuiClient) {
+				sealSuiClient = new SuiClient({ url: SEAL_TESTNET_RPC });
+			}
+			return sealSuiClient;
+		};
+
 		// Initialize messaging client with connected wallet
 		async function initMessagingClient() {
 			if (!connectedAddress || !connectedWallet) {
@@ -8470,24 +8490,20 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				return null;
 			}
 
-			// Create messaging client with wallet signer
-			messagingClient = createMessagingClient();
-			console.log('Messaging client initialized');
-			return messagingClient;
-		}
+			// Initialize Seal client in background
+			await initSealClient();
 
-		// Create messaging client
-		function createMessagingClient() {
-			if (!connectedAddress || !connectedWallet) return null;
-
-			return {
+			messagingClient = {
 				wallet: connectedWallet,
 				address: connectedAddress,
 				primaryName: connectedPrimaryName,
 			};
+			console.log('Messaging client initialized');
+			return messagingClient;
 		}
 
 		// Send message to recipient via Walrus + signature verification
+		// Simplified version using MessagingClient patterns (see src/sdk/messaging-client.ts)
 		async function sendMessage(recipientName, content) {
 			if (!connectedAddress || !connectedWallet) {
 				throw new Error('Wallet not connected');
@@ -8497,6 +8513,11 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				throw new Error('Message content is required');
 			}
 
+			if (content.length > 1000) {
+				throw new Error('Message too long (max 1000 characters)');
+			}
+
+			// Resolve recipient address
 			let recipientAddr;
 			if (recipientName.includes('0x')) {
 				recipientAddr = recipientName;
@@ -8512,10 +8533,6 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				throw new Error('Could not resolve recipient address for ' + recipientName);
 			}
 
-			if (!connectedAddress || connectedAddress.trim().length === 0) {
-				throw new Error('Sender address is required');
-			}
-
 			const timestamp = Date.now();
 			const nonce = crypto.randomUUID();
 
@@ -8524,7 +8541,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				fromName: connectedPrimaryName || null,
 				to: recipientAddr,
 				toName: recipientName.replace('@', '').replace('.sui', ''),
-				content: content,
+				content: content.trim(),
 				timestamp: timestamp,
 				nonce: nonce,
 			};
@@ -8545,11 +8562,9 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 			// Sign with wallet
 			let signature = null;
-			let signatureBytes = null;
 			try {
 				const messageBytes = new TextEncoder().encode(signaturePayload);
 
-				// Try different signing methods based on wallet capabilities
 				if (connectedWallet.features && connectedWallet.features['sui:signPersonalMessage']) {
 					const signFeature = connectedWallet.features['sui:signPersonalMessage'];
 					const signResult = await signFeature.signPersonalMessage({
@@ -8557,16 +8572,11 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 						account: connectedAccount,
 					});
 					signature = signResult.signature;
-					signatureBytes = signResult.bytes;
 				} else if (connectedWallet.signPersonalMessage) {
-					const signResult = await connectedWallet.signPersonalMessage({
-						message: messageBytes,
-					});
+					const signResult = await connectedWallet.signPersonalMessage({ message: messageBytes });
 					signature = signResult.signature;
 				} else if (connectedWallet.signMessage) {
-					const signResult = await connectedWallet.signMessage({
-						message: messageBytes,
-					});
+					const signResult = await connectedWallet.signMessage({ message: messageBytes });
 					signature = signResult.signature;
 				} else {
 					throw new Error('Wallet does not support message signing');
@@ -8582,7 +8592,6 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				throw new Error('Failed to get signature from wallet');
 			}
 
-			// Add signature to message
 			messageData.signature = signature;
 			messageData.signaturePayload = signaturePayload;
 
@@ -8596,7 +8605,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				throw new Error('Cannot send message: ' + reason);
 			}
 
-			// Debug: log what we're sending
+			// Send to API
 			const requestBody = {
 				encryptedMessage: encrypted,
 				sender: connectedAddress,
@@ -8610,20 +8619,6 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				contentHash: contentHash,
 			};
 
-			// Validate request body before sending
-			if (!requestBody.encryptedMessage || !requestBody.sender || !requestBody.recipient) {
-				throw new Error('Invalid message data: missing required fields');
-			}
-			console.log('Sending message request:', {
-				hasEncryptedMessage: !!requestBody.encryptedMessage,
-				hasSender: !!requestBody.sender,
-				hasRecipient: !!requestBody.recipient,
-				encryptedMessageKeys: requestBody.encryptedMessage ? Object.keys(requestBody.encryptedMessage) : null,
-				sender: requestBody.sender,
-				recipient: requestBody.recipient,
-			});
-
-			// Store on Walrus via our API
 			const response = await fetch('/api/app/messages/send', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -8782,7 +8777,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				const senderAddr = msg.from || msg.sender || '';
 				const isSent = msg.direction === 'sent' || senderAddr === connectedAddress;
 				const senderName = msg.fromName || msg.senderName || null;
-				const senderDisplay = isSent ? 'You' : (senderName ? '@' + senderName.replace(/\.sui$/i, '') + '.sui' : (senderAddr ? senderAddr.slice(0, 8) + '...' : 'Unknown'));
+				const senderDisplay = isSent ? 'You' : (senderName ? '@' + senderName.replace(/.sui$/i, '') + '.sui' : (senderAddr ? senderAddr.slice(0, 8) + '...' : 'Unknown'));
 				const recipientDisplay = isSent ? '@' + MESSAGING_RECIPIENT + '.sui' : 'You';
 
 				return \`
@@ -9078,24 +9073,6 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// Initial button state (will show connect prompt since no wallet)
 		updateSendButtonState();
 
-		// Seal uses TESTNET for open mode key servers (mainnet requires registration)
-		// These are open mode servers that don't require API keys or package registration
-		const SEAL_TESTNET_KEY_SERVERS = [
-			'0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75', // Mysten Labs #1
-			'0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8', // Mysten Labs #2
-			'0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46', // Triton One
-		];
-		const SEAL_TESTNET_PACKAGE_ID = '0x8afa5d31dbaa0a8fb07082692940ca3d56b5e856c5126cb5a3693f0a4de63b82';
-		const SEAL_TESTNET_RPC = 'https://fullnode.testnet.sui.io:443';
-
-		// Separate SuiClient for Seal operations (uses testnet)
-		let sealSuiClient = null;
-		const getSealSuiClient = () => {
-			if (!sealSuiClient) {
-				sealSuiClient = new SuiClient({ url: SEAL_TESTNET_RPC });
-			}
-			return sealSuiClient;
-		};
 
 		// Initialize Seal SDK with testnet open mode servers
 		async function initSealClient() {
@@ -9398,7 +9375,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			conversationsData.forEach(conv => {
 				const otherAddr = conv.participants.find(p => p !== connectedAddress) || conv.participants[0];
 				const otherNameRaw = conv.participantNames?.[otherAddr] || null;
-				const otherName = otherNameRaw ? otherNameRaw.replace(/\.sui$/i, '') : null;
+				const otherName = otherNameRaw ? otherNameRaw.replace(/.sui$/i, '') : null;
 				const displayName = otherName ? \`@\${otherName}.sui\` : \`\${otherAddr.slice(0, 8)}...\${otherAddr.slice(-6)}\`;
 				const initial = otherName ? otherName[0].toUpperCase() : otherAddr[2].toUpperCase();
 				const timeAgo = formatTimeAgo(conv.lastMessage?.timestamp || conv.updatedAt);
@@ -10218,7 +10195,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				}
 
 				// Parse MVR name format (@name/package)
-				const mvrNameMatch = text.match(/@([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/);
+				const mvrNameMatch = text.match(/@([a-zA-Z0-9_-]+)/([a-zA-Z0-9_-]+)/);
 				if (mvrNameMatch) {
 					const pkgNameInput = document.getElementById('mvr-reg-pkgname');
 					if (pkgNameInput) pkgNameInput.value = mvrNameMatch[2];
@@ -11181,7 +11158,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 }
 
 function collapseWhitespace(value: string): string {
-	const whitespacePattern = new RegExp('\\s+', 'g');
+	const whitespacePattern = /\s+/g;
 	return value.replace(whitespacePattern, ' ').trim()
 }
 
@@ -11289,7 +11266,7 @@ function extractXUsername(value: string): string {
 	const cleaned = value.replace(/^@/, '')
 
 	// Extract from URL
-	const urlMatch = cleaned.match(new RegExp('(?:x\\.com|twitter\\.com)\\/([a-zA-Z0-9_]+)', 'i'))
+	const urlMatch = cleaned.match(/(?:x\.com|twitter\.com)\/([a-zA-Z0-9_]+)/i)
 	if (urlMatch) {
 		return urlMatch[1]
 	}

@@ -8,7 +8,7 @@
  * - Discount eligibility checking
  */
 import type { Env } from '../types'
-import { jsonResponse, errorResponse } from '../utils/response'
+import { errorResponse, jsonResponse } from '../utils/response'
 
 // SuiNS Contract addresses (mainnet)
 const SUINS_CONTRACTS = {
@@ -84,7 +84,7 @@ export async function handleSuinsManagerRequest(request: Request, env: Env): Pro
 	// Check discount eligibility
 	if (path === '/check-discounts' && request.method === 'POST') {
 		try {
-			const body = await request.json() as { address: string }
+			const body = (await request.json()) as { address: string }
 			const { address } = body
 			if (!address) {
 				return errorResponse('Address required', 'INVALID_REQUEST', 400)
@@ -102,7 +102,7 @@ export async function handleSuinsManagerRequest(request: Request, env: Env): Pro
 	// Request gas sponsorship for a transaction
 	if (path === '/sponsor-tx' && request.method === 'POST') {
 		try {
-			const body = await request.json() as {
+			const body = (await request.json()) as {
 				txBytes: string
 				sender: string
 				operation: 'register' | 'renew' | 'subdomain'

@@ -108,4 +108,3 @@ export function toSuiNSName(subdomain: string): string {
 	}
 	return `${subdomain}.sui`
 }
-

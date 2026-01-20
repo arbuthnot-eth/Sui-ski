@@ -33,7 +33,15 @@ export interface Env {
 	WALRUS_AGGREGATOR_URL?: string
 }
 
-export type RouteType = 'suins' | 'content' | 'rpc' | 'root' | 'mvr' | 'messaging' | 'app' | 'agents'
+export type RouteType =
+	| 'suins'
+	| 'content'
+	| 'rpc'
+	| 'root'
+	| 'mvr'
+	| 'messaging'
+	| 'app'
+	| 'agents'
 
 export interface MVRInfo {
 	/** Package name (e.g., "private" from "private--iousd.sui.ski") */
@@ -128,7 +136,13 @@ export interface PublicBounty extends Omit<Bounty, 'txBytes' | 'signatures'> {
 }
 
 /** Scheduled claim status */
-export type ScheduledClaimStatus = 'pending' | 'ready' | 'processing' | 'completed' | 'failed' | 'cancelled'
+export type ScheduledClaimStatus =
+	| 'pending'
+	| 'ready'
+	| 'processing'
+	| 'completed'
+	| 'failed'
+	| 'cancelled'
 
 /** Scheduled claim for SuiNS name */
 export interface ScheduledClaim {
@@ -179,11 +193,11 @@ export interface MVRPackageInfo {
  * the seal_approve function that gates decryption access.
  */
 export type SealPolicyType =
-	| 'address'      // Only specific address can decrypt
-	| 'nft'          // Current NFT holder can decrypt
-	| 'allowlist'    // Any address in allowlist can decrypt
-	| 'threshold'    // t-of-n signers required
-	| 'time_locked'  // Auto-unlocks at specified timestamp
+	| 'address' // Only specific address can decrypt
+	| 'nft' // Current NFT holder can decrypt
+	| 'allowlist' // Any address in allowlist can decrypt
+	| 'threshold' // t-of-n signers required
+	| 'time_locked' // Auto-unlocks at specified timestamp
 	| 'subscription' // Valid subscription pass required
 
 /** Seal encryption policy */
@@ -320,9 +334,12 @@ export interface Conversation {
 /** User's read state across conversations */
 export interface UserReadState {
 	address: string
-	conversations: Record<string, {
-		lastReadTimestamp: number
-	}>
+	conversations: Record<
+		string,
+		{
+			lastReadTimestamp: number
+		}
+	>
 	globalLastChecked: number
 }
 

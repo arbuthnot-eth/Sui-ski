@@ -57,16 +57,24 @@ async function handleAgentsApi(request: Request, env: Env, url: URL): Promise<Re
 	if (agencyMatch && request.method === 'GET') {
 		const agencyId = agencyMatch[1]
 		// Placeholder - would fetch from chain
-		return jsonResponse({
-			error: 'Agency not found',
-			agencyId,
-		}, 404)
+		return jsonResponse(
+			{
+				error: 'Agency not found',
+				agencyId,
+			},
+			404,
+		)
 	}
 
 	// POST /api/agencies/create - Create agency (returns tx builder)
 	if (path === 'agencies/create' && request.method === 'POST') {
 		try {
-			const body = await request.json() as { name?: string; description?: string; isPublic?: boolean; tags?: string[] }
+			const body = (await request.json()) as {
+				name?: string
+				description?: string
+				isPublic?: boolean
+				tags?: string[]
+			}
 
 			if (!body.name) {
 				return jsonResponse({ error: 'Agency name required' }, 400)
@@ -97,7 +105,7 @@ async function handleAgentsApi(request: Request, env: Env, url: URL): Promise<Re
 	if (addMemberMatch && request.method === 'POST') {
 		const agencyId = addMemberMatch[1]
 		try {
-			const body = await request.json() as {
+			const body = (await request.json()) as {
 				address?: string
 				type?: string
 				role?: string
@@ -137,10 +145,13 @@ async function handleAgentsApi(request: Request, env: Env, url: URL): Promise<Re
 		const agencyId = dwalletMatch[1]
 
 		if (!env.IKA_PACKAGE_ID) {
-			return jsonResponse({
-				error: 'IKA not configured',
-				note: 'Set IKA_PACKAGE_ID in environment to enable dWallet features',
-			}, 503)
+			return jsonResponse(
+				{
+					error: 'IKA not configured',
+					note: 'Set IKA_PACKAGE_ID in environment to enable dWallet features',
+				},
+				503,
+			)
 		}
 
 		return jsonResponse({
@@ -156,7 +167,7 @@ async function handleAgentsApi(request: Request, env: Env, url: URL): Promise<Re
 	if (delegateMatch && request.method === 'POST') {
 		const agencyId = delegateMatch[1]
 		try {
-			const body = await request.json() as {
+			const body = (await request.json()) as {
 				memberAddress?: string
 				capabilities?: string[]
 				dwalletPermission?: string

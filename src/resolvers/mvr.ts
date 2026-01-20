@@ -36,7 +36,11 @@ export async function resolveMVRPackage(
 ): Promise<ResolverResult> {
 	const cleanSuinsName = suinsName.toLowerCase().replace(/\.sui$/i, '')
 	const cleanPackageName = packageName.toLowerCase()
-	const key = cacheKey('mvr', env.SUI_NETWORK, `${cleanSuinsName}/${cleanPackageName}${version ? `@${version}` : ''}`)
+	const key = cacheKey(
+		'mvr',
+		env.SUI_NETWORK,
+		`${cleanSuinsName}/${cleanPackageName}${version ? `@${version}` : ''}`,
+	)
 
 	// Check cache first
 	const cached = await getCached<MVRPackageInfo>(env, key)

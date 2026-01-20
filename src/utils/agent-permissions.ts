@@ -22,7 +22,11 @@ export function hasCapability(member: AgencyMember, capability: Capability): boo
 /**
  * Check if a member's role allows a specific action
  */
-export function roleAllowsAction(role: MemberRole, action: Capability, permissions: PermissionMatrix): boolean {
+export function roleAllowsAction(
+	role: MemberRole,
+	action: Capability,
+	permissions: PermissionMatrix,
+): boolean {
 	// Owners can do everything
 	if (role === 'owner') {
 		return true
@@ -45,10 +49,7 @@ export function roleAllowsAction(role: MemberRole, action: Capability, permissio
 /**
  * Check if an LLM agent can perform an action autonomously
  */
-export function llmCanActAutonomously(
-	action: Capability,
-	permissions: PermissionMatrix,
-): boolean {
+export function llmCanActAutonomously(action: Capability, permissions: PermissionMatrix): boolean {
 	return permissions.llmAutonomous.includes(action)
 }
 
@@ -137,9 +138,7 @@ export function getCapabilitiesForRole(role: MemberRole): Capability[] {
 		case 'owner':
 			return allCapabilities
 		case 'admin':
-			return allCapabilities.filter(c =>
-				!['remove_members', 'manage_dwallet'].includes(c)
-			)
+			return allCapabilities.filter((c) => !['remove_members', 'manage_dwallet'].includes(c))
 		case 'operator':
 			return ['send_messages', 'read_messages', 'broadcast_news']
 		default:
@@ -155,8 +154,8 @@ export function getDefaultCapabilities(type: MemberType, role: MemberRole): Capa
 
 	// LLM agents have restricted defaults
 	if (type === 'llm_agent') {
-		return roleCapabilities.filter(c =>
-			['send_messages', 'read_messages', 'broadcast_news'].includes(c)
+		return roleCapabilities.filter((c) =>
+			['send_messages', 'read_messages', 'broadcast_news'].includes(c),
 		)
 	}
 
@@ -172,7 +171,10 @@ export function getDefaultCapabilities(type: MemberType, role: MemberRole): Capa
 /**
  * Validate member configuration
  */
-export function validateMemberConfig(member: Partial<AgencyMember>): { valid: boolean; errors: string[] } {
+export function validateMemberConfig(member: Partial<AgencyMember>): {
+	valid: boolean
+	errors: string[]
+} {
 	const errors: string[] = []
 
 	if (!member.address) {
@@ -199,7 +201,10 @@ export function validateMemberConfig(member: Partial<AgencyMember>): { valid: bo
 	}
 
 	// Validate dWallet permission if set
-	if (member.dwalletPermission && !['view', 'propose', 'execute', 'full'].includes(member.dwalletPermission)) {
+	if (
+		member.dwalletPermission &&
+		!['view', 'propose', 'execute', 'full'].includes(member.dwalletPermission)
+	) {
 		errors.push('Invalid dWallet permission level')
 	}
 

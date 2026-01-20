@@ -254,10 +254,7 @@ export function buildUpdateMetadataTx(
 	if (params.metadata.documentation !== undefined) {
 		tx.moveCall({
 			target: `${metadataPackageId}::package_info::set_documentation`,
-			arguments: [
-				tx.object(params.packageInfoId),
-				tx.pure.string(params.metadata.documentation),
-			],
+			arguments: [tx.object(params.packageInfoId), tx.pure.string(params.metadata.documentation)],
 		})
 	}
 

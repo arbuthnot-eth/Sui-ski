@@ -8,7 +8,6 @@ const CORS_HEADERS = {
 	'Access-Control-Allow-Headers': 'Content-Type',
 }
 
-
 export function generateRegistrationPage(name: string, env: Env): string {
 	const cleanName = name.replace(/\.sui$/i, '').toLowerCase()
 	const network = env.SUI_NETWORK || 'mainnet'
@@ -621,7 +620,9 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			</div>
 		</div>
 
-		${isRegisterable ? `
+		${
+			isRegisterable
+				? `
 		<!-- Quick Registration Card -->
 		<div class="card register-card">
 			<div class="section-title">
@@ -655,7 +656,9 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				</div>
 			</div>
 		</div>
-		` : ''}
+		`
+				: ''
+		}
 
 		<div class="card" id="queue-card">
 			<div class="collapsible-header" id="queue-header">

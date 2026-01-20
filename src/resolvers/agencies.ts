@@ -21,8 +21,8 @@ interface OnChainAgency {
 	owner: string
 	members: Array<{
 		address: string
-		member_type: number  // 0: human, 1: llm_agent, 2: backend_bot
-		role: number         // 0: owner, 1: admin, 2: operator
+		member_type: number // 0: human, 1: llm_agent, 2: backend_bot
+		role: number // 0: owner, 1: admin, 2: operator
 		capabilities: number // Bitmask of capabilities
 		display_name: string
 		model_id: string
@@ -56,10 +56,14 @@ interface OnChainAgency {
  */
 function memberTypeFromNumber(n: number): 'human' | 'llm_agent' | 'backend_bot' {
 	switch (n) {
-		case 0: return 'human'
-		case 1: return 'llm_agent'
-		case 2: return 'backend_bot'
-		default: return 'human'
+		case 0:
+			return 'human'
+		case 1:
+			return 'llm_agent'
+		case 2:
+			return 'backend_bot'
+		default:
+			return 'human'
 	}
 }
 
@@ -68,10 +72,14 @@ function memberTypeFromNumber(n: number): 'human' | 'llm_agent' | 'backend_bot' 
  */
 function roleFromNumber(n: number): 'owner' | 'admin' | 'operator' {
 	switch (n) {
-		case 0: return 'owner'
-		case 1: return 'admin'
-		case 2: return 'operator'
-		default: return 'operator'
+		case 0:
+			return 'owner'
+		case 1:
+			return 'admin'
+		case 2:
+			return 'operator'
+		default:
+			return 'operator'
 	}
 }
 
@@ -103,13 +111,20 @@ function capabilitiesFromBitmask(bitmask: number): AgencyMember['capabilities'] 
 /**
  * Convert dWallet permission number to string
  */
-function dwalletPermissionFromNumber(n: number): 'view' | 'propose' | 'execute' | 'full' | undefined {
+function dwalletPermissionFromNumber(
+	n: number,
+): 'view' | 'propose' | 'execute' | 'full' | undefined {
 	switch (n) {
-		case 1: return 'view'
-		case 2: return 'propose'
-		case 3: return 'execute'
-		case 4: return 'full'
-		default: return undefined
+		case 1:
+			return 'view'
+		case 2:
+			return 'propose'
+		case 3:
+			return 'execute'
+		case 4:
+			return 'full'
+		default:
+			return undefined
 	}
 }
 
@@ -122,7 +137,7 @@ function convertAgency(onChain: OnChainAgency): Agency {
 		name: onChain.name,
 		description: onChain.description || undefined,
 		avatar: onChain.avatar || undefined,
-		members: onChain.members.map(m => ({
+		members: onChain.members.map((m) => ({
 			address: m.address,
 			type: memberTypeFromNumber(m.member_type),
 			role: roleFromNumber(m.role),
@@ -192,11 +207,9 @@ export function createAgenciesResolver(env: Env) {
 				const agency = convertAgency(onChain)
 
 				// Cache result
-				await env.CACHE.put(
-					`${cachePrefix}${agencyId}`,
-					JSON.stringify(agency),
-					{ expirationTtl: cacheTtl }
-				)
+				await env.CACHE.put(`${cachePrefix}${agencyId}`, JSON.stringify(agency), {
+					expirationTtl: cacheTtl,
+				})
 
 				return agency
 			} catch (error) {
@@ -208,11 +221,9 @@ export function createAgenciesResolver(env: Env) {
 		/**
 		 * List public agencies from the registry
 		 */
-		async listAgencies(options: {
-			limit?: number
-			cursor?: string
-			tags?: string[]
-		} = {}): Promise<{
+		async listAgencies(
+			options: { limit?: number; cursor?: string; tags?: string[] } = {},
+		): Promise<{
 			agencies: Agency[]
 			cursor?: string
 			hasMore: boolean
@@ -237,7 +248,7 @@ export function createAgenciesResolver(env: Env) {
 					if (agency && agency.isPublic) {
 						// Filter by tags if specified
 						if (options.tags?.length) {
-							const hasMatchingTag = options.tags.some(t => agency.tags.includes(t))
+							const hasMatchingTag = options.tags.some((t) => agency.tags.includes(t))
 							if (!hasMatchingTag) continue
 						}
 						agencies.push(agency)
@@ -283,7 +294,7 @@ export function createAgenciesResolver(env: Env) {
 		async isMember(agencyId: string, address: string): Promise<boolean> {
 			const agency = await this.getAgency(agencyId)
 			if (!agency) return false
-			return agency.members.some(m => m.address === address)
+			return agency.members.some((m) => m.address === address)
 		},
 
 		/**
@@ -292,7 +303,7 @@ export function createAgenciesResolver(env: Env) {
 		async getMemberInfo(agencyId: string, address: string): Promise<AgencyMember | null> {
 			const agency = await this.getAgency(agencyId)
 			if (!agency) return null
-			return agency.members.find(m => m.address === address) || null
+			return agency.members.find((m) => m.address === address) || null
 		},
 
 		/**

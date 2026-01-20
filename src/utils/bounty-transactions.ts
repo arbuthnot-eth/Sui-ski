@@ -1,8 +1,8 @@
-import { Transaction } from '@mysten/sui/transactions'
 import { SuiClient } from '@mysten/sui/client'
+import { Transaction } from '@mysten/sui/transactions'
 import { SuinsClient, SuinsTransaction } from '@mysten/suins'
-import type { Env } from '../types'
 import { resolveMVRPackage } from '../resolvers/mvr'
+import type { Env } from '../types'
 
 /**
  * Bounty Transaction Builder Utilities
@@ -23,14 +23,25 @@ function resolveNetwork(env: { SUI_NETWORK: string }): 'mainnet' | 'testnet' {
 
 /**
  * Resolve bounty escrow package ID
- * 
+ *
  * Priority:
  * 1. MVR alias (if configured) - e.g., "sui.ski/bounty-escrow"
  * 2. Environment variable (BOUNTY_ESCROW_PACKAGE_MAINNET/TESTNET)
  * 3. Default hardcoded value
  */
 export async function resolveBountyPackageId(
-	env: Pick<Env, 'BOUNTY_ESCROW_PACKAGE_MAINNET' | 'BOUNTY_ESCROW_PACKAGE_TESTNET' | 'BOUNTY_ESCROW_MVR_ALIAS' | 'SUI_NETWORK' | 'CACHE' | 'SUI_RPC_URL' | 'MOVE_REGISTRY_PARENT_ID'> | undefined,
+	env:
+		| Pick<
+				Env,
+				| 'BOUNTY_ESCROW_PACKAGE_MAINNET'
+				| 'BOUNTY_ESCROW_PACKAGE_TESTNET'
+				| 'BOUNTY_ESCROW_MVR_ALIAS'
+				| 'SUI_NETWORK'
+				| 'CACHE'
+				| 'SUI_RPC_URL'
+				| 'MOVE_REGISTRY_PARENT_ID'
+		  >
+		| undefined,
 	overrideNetwork?: 'mainnet' | 'testnet',
 ): Promise<string> {
 	const network = overrideNetwork || (env ? resolveNetwork(env) : undefined)
@@ -45,8 +56,13 @@ export async function resolveBountyPackageId(
 			const aliasParts = env.BOUNTY_ESCROW_MVR_ALIAS.split('/')
 			if (aliasParts.length === 2) {
 				const [suinsName, packageName] = aliasParts
-				const mvrResult = await resolveMVRPackage(suinsName.trim(), packageName.trim(), undefined, env as Env)
-				
+				const mvrResult = await resolveMVRPackage(
+					suinsName.trim(),
+					packageName.trim(),
+					undefined,
+					env as Env,
+				)
+
 				if (mvrResult.found && mvrResult.data && 'address' in mvrResult.data) {
 					return mvrResult.data.address
 				}
@@ -68,7 +84,9 @@ export async function resolveBountyPackageId(
 	const candidate = fromEnv?.trim() || DEFAULT_BOUNTY_ESCROW_PACKAGE_ID[network]
 
 	if (!candidate || candidate === '0x0' || candidate === '0x' || /^0x0+$/.test(candidate)) {
-		throw new Error(`Bounty escrow package id is not configured for ${network}. Set BOUNTY_ESCROW_MVR_ALIAS (e.g., "sui.ski/bounty-escrow") or BOUNTY_ESCROW_PACKAGE_${network.toUpperCase()}`)
+		throw new Error(
+			`Bounty escrow package id is not configured for ${network}. Set BOUNTY_ESCROW_MVR_ALIAS (e.g., "sui.ski/bounty-escrow") or BOUNTY_ESCROW_PACKAGE_${network.toUpperCase()}`,
+		)
 	}
 
 	return candidate
@@ -218,7 +236,10 @@ export async function buildCreateBountyTx(
  * The executor provides their own SUI for the registration.
  */
 export async function buildCreateGiftBountyTx(
-	params: Pick<CreateBountyParams, 'name' | 'beneficiary' | 'coinObjectId' | 'executorRewardMist' | 'gasBudget'>,
+	params: Pick<
+		CreateBountyParams,
+		'name' | 'beneficiary' | 'coinObjectId' | 'executorRewardMist' | 'gasBudget'
+	>,
 	env: Env,
 	networkOverride?: 'mainnet' | 'testnet',
 ): Promise<Transaction> {
@@ -235,11 +256,7 @@ export async function buildCreateGiftBountyTx(
 
 	tx.moveCall({
 		target: `${packageId}::escrow::create_and_share_gift_bounty`,
-		arguments: [
-			tx.pure.string(params.name),
-			tx.pure.address(params.beneficiary),
-			rewardCoin,
-		],
+		arguments: [tx.pure.string(params.name), tx.pure.address(params.beneficiary), rewardCoin],
 	})
 
 	return tx
@@ -258,7 +275,10 @@ export async function buildCreateGiftBountyTx(
  * IMPORTANT: The bounty can only be claimed if the name is transferred to the beneficiary.
  * This atomic transaction ensures the executor cannot take funds without completing registration.
  */
-export async function buildExecuteBountyTx(params: ExecuteBountyParams, env: Env): Promise<Transaction> {
+export async function buildExecuteBountyTx(
+	params: ExecuteBountyParams,
+	env: Env,
+): Promise<Transaction> {
 	const network = resolveNetwork(env)
 	const bountyPackageId = await resolveBountyPackageId(env, network)
 	const tx = new Transaction()
@@ -289,7 +309,9 @@ export async function buildExecuteBountyTx(params: ExecuteBountyParams, env: Env
 		throw new Error('SuiNS configuration for SUI coin is missing')
 	}
 
-	const domain = params.name.endsWith('.sui') ? params.name.toLowerCase() : `${params.name.toLowerCase()}.sui`
+	const domain = params.name.endsWith('.sui')
+		? params.name.toLowerCase()
+		: `${params.name.toLowerCase()}.sui`
 	const isSubDomain = domain.replace(/\.sui$/i, '').includes('.')
 
 	// Get price info object ID (required for SUI/NS coin types)
@@ -328,7 +350,10 @@ export async function buildExecuteBountyTx(params: ExecuteBountyParams, env: Env
  * 3. The contract transfers the NFT to the beneficiary and the reward to the executor
  */
 export async function buildExecuteGiftBountyTx(
-	params: Pick<ExecuteBountyParams, 'bountyObjectId' | 'name' | 'beneficiary' | 'years' | 'gasBudget'>,
+	params: Pick<
+		ExecuteBountyParams,
+		'bountyObjectId' | 'name' | 'beneficiary' | 'years' | 'gasBudget'
+	>,
 	env: Env,
 ): Promise<Transaction> {
 	const network = resolveNetwork(env)
@@ -350,7 +375,9 @@ export async function buildExecuteGiftBountyTx(
 		throw new Error('SuiNS configuration for SUI coin is missing')
 	}
 
-	const domain = params.name.endsWith('.sui') ? params.name.toLowerCase() : `${params.name.toLowerCase()}.sui`
+	const domain = params.name.endsWith('.sui')
+		? params.name.toLowerCase()
+		: `${params.name.toLowerCase()}.sui`
 
 	// Get price info object ID (required for SUI/NS coin types)
 	const priceInfoObjectId = coinConfig.feed
@@ -374,10 +401,7 @@ export async function buildExecuteGiftBountyTx(
 	// Step 2: Claim reward by providing the NFT
 	tx.moveCall({
 		target: `${bountyPackageId}::escrow::claim_gift_reward`,
-		arguments: [
-			tx.object(params.bountyObjectId),
-			nft,
-		],
+		arguments: [tx.object(params.bountyObjectId), nft],
 	})
 
 	return tx
@@ -388,7 +412,11 @@ export async function buildExecuteGiftBountyTx(
  *
  * Only the creator can cancel, and only if the bounty is not locked.
  */
-export async function buildCancelBountyTx(bountyObjectId: string, env: Env, gasBudget?: string): Promise<Transaction> {
+export async function buildCancelBountyTx(
+	bountyObjectId: string,
+	env: Env,
+	gasBudget?: string,
+): Promise<Transaction> {
 	const packageId = await resolveBountyPackageId(env)
 	const tx = new Transaction()
 
@@ -407,7 +435,11 @@ export async function buildCancelBountyTx(bountyObjectId: string, env: Env, gasB
 /**
  * Build transaction to lock a bounty (after pre-signing the execution tx)
  */
-export async function buildLockBountyTx(bountyObjectId: string, env: Env, gasBudget?: string): Promise<Transaction> {
+export async function buildLockBountyTx(
+	bountyObjectId: string,
+	env: Env,
+	gasBudget?: string,
+): Promise<Transaction> {
 	const packageId = await resolveBountyPackageId(env)
 	const tx = new Transaction()
 
@@ -429,7 +461,11 @@ export async function buildLockBountyTx(bountyObjectId: string, env: Env, gasBud
  * Anyone can call this after the bounty expires (7 days after available_at).
  * Funds are returned to the original creator.
  */
-export async function buildReclaimExpiredTx(bountyObjectId: string, env: Env, gasBudget?: string): Promise<Transaction> {
+export async function buildReclaimExpiredTx(
+	bountyObjectId: string,
+	env: Env,
+	gasBudget?: string,
+): Promise<Transaction> {
 	const packageId = await resolveBountyPackageId(env)
 	const tx = new Transaction()
 
@@ -476,7 +512,9 @@ export async function serializeTransaction(
  */
 export async function fetchSuiPrice(): Promise<number> {
 	try {
-		const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd')
+		const res = await fetch(
+			'https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd',
+		)
 		const data = (await res.json()) as { sui?: { usd?: number } }
 		return data.sui?.usd ?? 1 // Default to $1 if fetch fails
 	} catch {

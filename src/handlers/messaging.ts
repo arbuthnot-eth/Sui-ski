@@ -10,15 +10,15 @@
  * - #channel → resolves to channel object ID
  */
 
-import type { Env } from '../types'
 import {
+	type ChannelInfo,
 	createMessagingResolver,
 	isChannelName,
 	isSuiNSName,
-	normalizeChannelName,
-	type ChannelInfo,
 	type MessagingProfile,
+	normalizeChannelName,
 } from '../resolvers/messaging'
+import type { Env } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
 import { renderSocialMeta } from '../utils/social'
 
@@ -277,9 +277,7 @@ async function handleGetUser(nameOrAddress: string, env: Env): Promise<Response>
 	return jsonResponse({
 		profile,
 		links: {
-			suiski: profile.suinsName
-				? `https://${profile.suinsName.replace('.sui', '')}.sui.ski`
-				: null,
+			suiski: profile.suinsName ? `https://${profile.suinsName.replace('.sui', '')}.sui.ski` : null,
 			explorer: `https://suiscan.xyz/${env.SUI_NETWORK}/account/${profile.address}`,
 			messaging: `/users/${profile.suinsName || profile.address}`,
 		},
@@ -631,8 +629,7 @@ function channelPageHTML(channel: ChannelInfo, env: Env): string {
  * User profile page HTML
  */
 function userPageHTML(profile: MessagingProfile, env: Env): string {
-	const title =
-		profile.displayName || profile.suinsName || `${profile.address.slice(0, 8)}...`
+	const title = profile.displayName || profile.suinsName || `${profile.address.slice(0, 8)}...`
 	const suiskiLink = profile.suinsName
 		? `https://${profile.suinsName.replace('.sui', '')}.sui.ski`
 		: null

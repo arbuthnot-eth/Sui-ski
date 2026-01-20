@@ -22,15 +22,15 @@
  */
 
 import type {
+	ContentIntegrity,
 	Conversation,
 	Env,
-	StoredMessage,
+	MessageAuthentication,
 	MessageSendRequest,
 	MessageSendResponse,
-	MessageAuthentication,
-	ContentIntegrity,
 	SealEncryptedEnvelope,
 	SealPolicyType,
+	StoredMessage,
 } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
 import { getPWAMetaTags } from './pwa'
@@ -71,7 +71,7 @@ async function computeConversationId(addr1: string, addr2: string): Promise<stri
 async function generateMessageId(
 	contentHash: string,
 	timestamp: number,
-	nonce: string
+	nonce: string,
 ): Promise<string> {
 	const data = `${contentHash}:${timestamp}:${nonce}`
 	const hash = await sha256(data)
@@ -85,7 +85,7 @@ async function generateMessageId(
 async function verifyEd25519Signature(
 	publicKeyHex: string,
 	signatureHex: string,
-	message: string
+	message: string,
 ): Promise<boolean> {
 	try {
 		const publicKeyBytes = hexToBytes(publicKeyHex)
@@ -97,15 +97,10 @@ async function verifyEd25519Signature(
 			publicKeyBytes,
 			{ name: 'Ed25519' },
 			false,
-			['verify']
+			['verify'],
 		)
 
-		return await crypto.subtle.verify(
-			'Ed25519',
-			publicKey,
-			signatureBytes,
-			messageBytes
-		)
+		return await crypto.subtle.verify('Ed25519', publicKey, signatureBytes, messageBytes)
 	} catch {
 		return false
 	}
@@ -116,10 +111,7 @@ async function verifyEd25519Signature(
  * Note: Web Crypto doesn't natively support secp256k1, so we do basic validation
  * Full verification requires the @noble/secp256k1 library on client side
  */
-function verifySecp256k1SignatureFormat(
-	publicKeyHex: string,
-	signatureHex: string
-): boolean {
+function verifySecp256k1SignatureFormat(publicKeyHex: string, signatureHex: string): boolean {
 	if (publicKeyHex.length !== 66 && publicKeyHex.length !== 130) {
 		return false
 	}
@@ -139,10 +131,10 @@ async function verifyMessageAuth(
 	recipient: string,
 	timestamp: number,
 	contentHash: string,
-	nonce: string
+	nonce: string,
 ): Promise<{ valid: boolean; reason?: string }> {
 	const expectedPayload = await sha256(
-		`${sender}:${recipient}:${timestamp}:${contentHash}:${nonce}`
+		`${sender}:${recipient}:${timestamp}:${contentHash}:${nonce}`,
 	)
 
 	if (auth.signedPayload !== expectedPayload) {
@@ -150,11 +142,7 @@ async function verifyMessageAuth(
 	}
 
 	if (auth.scheme === 'ed25519') {
-		const isValid = await verifyEd25519Signature(
-			auth.publicKey,
-			auth.signature,
-			auth.signedPayload
-		)
+		const isValid = await verifyEd25519Signature(auth.publicKey, auth.signature, auth.signedPayload)
 		if (!isValid) {
 			return { valid: false, reason: 'Ed25519 signature verification failed' }
 		}
@@ -174,7 +162,7 @@ async function verifyMessageAuth(
  */
 async function verifyContentIntegrity(
 	integrity: ContentIntegrity,
-	envelopeSize: number
+	envelopeSize: number,
 ): Promise<{ valid: boolean; reason?: string }> {
 	if (integrity.algorithm !== 'sha256') {
 		return { valid: false, reason: 'Only sha256 algorithm supported' }
@@ -251,7 +239,12 @@ function validateSealPolicy(envelope: SealEncryptedEnvelope): { valid: boolean; 
 	}
 
 	const validPolicyTypes: SealPolicyType[] = [
-		'address', 'nft', 'allowlist', 'threshold', 'time_locked', 'subscription'
+		'address',
+		'nft',
+		'allowlist',
+		'threshold',
+		'time_locked',
+		'subscription',
 	]
 	if (!validPolicyTypes.includes(envelope.policy.type)) {
 		return { valid: false, reason: `Invalid policy type: ${envelope.policy.type}` }
@@ -284,7 +277,7 @@ async function getOrCreateConversation(
 	addr1: string,
 	addr2: string,
 	name1: string | null,
-	name2: string | null
+	name2: string | null,
 ): Promise<Conversation> {
 	const conversationId = await computeConversationId(addr1, addr2)
 	const key = `conv_data_${conversationId}`
@@ -334,10 +327,16 @@ async function updateConversationWithMessage(
 	recipient: string,
 	recipientName: string | null,
 	messagePreview: string,
-	timestamp: number
+	timestamp: number,
 ): Promise<string> {
 	const conversationId = await computeConversationId(sender, recipient)
-	const conversation = await getOrCreateConversation(env, sender, recipient, senderName, recipientName)
+	const conversation = await getOrCreateConversation(
+		env,
+		sender,
+		recipient,
+		senderName,
+		recipientName,
+	)
 
 	conversation.lastMessage = {
 		preview: messagePreview.slice(0, 100),
@@ -349,24 +348,22 @@ async function updateConversationWithMessage(
 	conversation.unreadCount += 1
 
 	// Update conversation data
-	await env.CACHE.put(
-		`conv_data_${conversationId}`,
-		JSON.stringify(conversation),
-		{ expirationTtl: 60 * 60 * 24 * 90 }
-	)
+	await env.CACHE.put(`conv_data_${conversationId}`, JSON.stringify(conversation), {
+		expirationTtl: 60 * 60 * 24 * 90,
+	})
 
 	// Add to recipient's conversation index
 	await env.CACHE.put(
 		`conv_index_${recipient}_${conversationId}`,
 		JSON.stringify({ conversationId, updatedAt: timestamp }),
-		{ expirationTtl: 60 * 60 * 24 * 90 }
+		{ expirationTtl: 60 * 60 * 24 * 90 },
 	)
 
 	// Add to sender's conversation index
 	await env.CACHE.put(
 		`conv_index_${sender}_${conversationId}`,
 		JSON.stringify({ conversationId, updatedAt: timestamp }),
-		{ expirationTtl: 60 * 60 * 24 * 90 }
+		{ expirationTtl: 60 * 60 * 24 * 90 },
 	)
 
 	// Update recipient's unread count
@@ -406,7 +403,7 @@ export async function handleAppRequest(request: Request, env: Env): Promise<Resp
  */
 async function storeOnWalrus(
 	encryptedData: string,
-	env: Env
+	env: Env,
 ): Promise<{ blobId: string | null; error?: string }> {
 	const publisherUrl = env.WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space'
 
@@ -554,7 +551,8 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				return jsonResponse({ error: 'Not a participant' }, 403)
 			}
 
-			const otherParticipant = conversation.participants.find(p => p !== address) || conversation.participants[0]
+			const otherParticipant =
+				conversation.participants.find((p) => p !== address) || conversation.participants[0]
 
 			const messages: StoredMessage[] = []
 			const inboxPrefix = `msg_inbox_${address}_`
@@ -590,7 +588,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 			}
 
 			const uniqueMessages = Array.from(
-				new Map(messages.map(m => [m.id || `${m.sender}_${m.timestamp}`, m])).values()
+				new Map(messages.map((m) => [m.id || `${m.sender}_${m.timestamp}`, m])).values(),
 			)
 			uniqueMessages.sort((a, b) => a.timestamp - b.timestamp)
 
@@ -608,7 +606,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 	// POST /api/app/conversations/read - Mark conversation as read
 	if (path === 'conversations/read' && request.method === 'POST') {
 		try {
-			const body = await request.json() as {
+			const body = (await request.json()) as {
 				conversationId?: string
 				address?: string
 			}
@@ -631,16 +629,17 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 			const previousUnread = conversation.unreadCount
 			conversation.unreadCount = 0
 
-			await env.CACHE.put(
-				`conv_data_${body.conversationId}`,
-				JSON.stringify(conversation),
-				{ expirationTtl: 60 * 60 * 24 * 90 }
-			)
+			await env.CACHE.put(`conv_data_${body.conversationId}`, JSON.stringify(conversation), {
+				expirationTtl: 60 * 60 * 24 * 90,
+			})
 
 			if (previousUnread > 0) {
 				const unreadKey = `unread_count_${body.address}`
 				const currentUnread = await env.CACHE.get(unreadKey)
-				const newCount = Math.max(0, (currentUnread ? Number.parseInt(currentUnread, 10) : 0) - previousUnread)
+				const newCount = Math.max(
+					0,
+					(currentUnread ? Number.parseInt(currentUnread, 10) : 0) - previousUnread,
+				)
 				await env.CACHE.put(unreadKey, String(newCount), { expirationTtl: 60 * 60 * 24 * 30 })
 			}
 
@@ -689,7 +688,11 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 	// POST /api/app/channels/create - Create channel (returns tx builder)
 	if (path === 'channels/create' && request.method === 'POST') {
 		try {
-			const body = await request.json() as { name?: string; isPublic?: boolean; tokenGate?: unknown }
+			const body = (await request.json()) as {
+				name?: string
+				isPublic?: boolean
+				tokenGate?: unknown
+			}
 			if (!body.name) {
 				return jsonResponse({ error: 'Channel name required' }, 400)
 			}
@@ -724,7 +727,9 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 	if (path === 'subscriptions/config' && request.method === 'GET') {
 		return jsonResponse({
 			seal: {
-				packageId: env.SEAL_PACKAGE_ID || '0x7f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d',
+				packageId:
+					env.SEAL_PACKAGE_ID ||
+					'0x7f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d',
 				network: env.SUI_NETWORK || 'mainnet',
 				supportedPolicies: [
 					{
@@ -772,7 +777,8 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 			},
 			walrus: {
 				publisherUrl: env.WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space',
-				aggregatorUrl: env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space',
+				aggregatorUrl:
+					env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space',
 				network: env.WALRUS_NETWORK || 'testnet',
 				encoding: 'Red Stuff 2D',
 				replication: '4-5x',
@@ -796,11 +802,11 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 	// POST /api/app/subscriptions/sync - Store encrypted subscription blob on Walrus
 	if (path === 'subscriptions/sync' && request.method === 'POST') {
 		try {
-			const body = await request.json() as {
-				encryptedBlob?: string  // Base64 encoded Seal-encrypted data
+			const body = (await request.json()) as {
+				encryptedBlob?: string // Base64 encoded Seal-encrypted data
 				subscriberAddress?: string
 				sealPolicyId?: string
-				signature?: string  // Wallet signature to verify ownership
+				signature?: string // Wallet signature to verify ownership
 			}
 
 			if (!body.encryptedBlob || !body.subscriberAddress) {
@@ -839,7 +845,8 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 
 		try {
 			// Fetch encrypted blob from Walrus
-			const aggregatorUrl = env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space'
+			const aggregatorUrl =
+				env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space'
 			const response = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`)
 
 			if (!response.ok) {
@@ -861,7 +868,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 	// POST /api/app/subscriptions - Create subscription (client encrypts, we store)
 	if (path === 'subscriptions' && request.method === 'POST') {
 		try {
-			const body = await request.json() as {
+			const body = (await request.json()) as {
 				targetName?: string
 				targetAddress?: string
 				notifications?: boolean
@@ -941,7 +948,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 	// POST /api/app/feed - Get feed for specific subscriptions
 	if (path === 'feed' && request.method === 'POST') {
 		try {
-			const body = await request.json() as {
+			const body = (await request.json()) as {
 				subscriptions?: string[] // Array of SuiNS names
 				limit?: number
 				cursor?: string
@@ -974,7 +981,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 	// POST /api/app/post - Create a post to your feed (for subscribers)
 	if (path === 'post' && request.method === 'POST') {
 		try {
-			const body = await request.json() as {
+			const body = (await request.json()) as {
 				content?: string
 				attachments?: string[]
 				type?: string
@@ -1074,35 +1081,48 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 
 				// Validate required fields with better error messages
 				if (!encryptedMessage) {
-					return jsonResponse({
-						error: 'Encrypted message required',
-						hint: 'Expected field: encryptedMessage (or encrypted/message)',
-						received: Object.keys(body),
-					}, 400)
+					return jsonResponse(
+						{
+							error: 'Encrypted message required',
+							hint: 'Expected field: encryptedMessage (or encrypted/message)',
+							received: Object.keys(body),
+						},
+						400,
+					)
 				}
 
 				if (!senderAddr || typeof senderAddr !== 'string' || senderAddr.trim().length === 0) {
-					return jsonResponse({
-						error: 'Valid sender address required',
-						hint: 'Expected field: sender (or senderAddress/from) with non-empty string value',
-						received: Object.keys(body),
-						debug: {
-							sender: senderAddr,
-							senderType: typeof senderAddr,
+					return jsonResponse(
+						{
+							error: 'Valid sender address required',
+							hint: 'Expected field: sender (or senderAddress/from) with non-empty string value',
+							received: Object.keys(body),
+							debug: {
+								sender: senderAddr,
+								senderType: typeof senderAddr,
+							},
 						},
-					}, 400)
+						400,
+					)
 				}
 
-				if (!recipientAddr || typeof recipientAddr !== 'string' || recipientAddr.trim().length === 0) {
-					return jsonResponse({
-						error: 'Valid recipient address required',
-						hint: 'Expected field: recipient (or recipientAddress/to) with non-empty string value',
-						received: Object.keys(body),
-						debug: {
-							recipient: recipientAddr,
-							recipientType: typeof recipientAddr,
+				if (
+					!recipientAddr ||
+					typeof recipientAddr !== 'string' ||
+					recipientAddr.trim().length === 0
+				) {
+					return jsonResponse(
+						{
+							error: 'Valid recipient address required',
+							hint: 'Expected field: recipient (or recipientAddress/to) with non-empty string value',
+							received: Object.keys(body),
+							debug: {
+								recipient: recipientAddr,
+								recipientType: typeof recipientAddr,
+							},
 						},
-					}, 400)
+						400,
+					)
 				}
 
 				// Signature is optional for legacy format to maintain compatibility
@@ -1129,7 +1149,9 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 					sealPolicyAddress = recipientAddr
 				}
 
-				const sealPackageId = env.SEAL_PACKAGE_ID || '0x0000000000000000000000000000000000000000000000000000000000000000'
+				const sealPackageId =
+					env.SEAL_PACKAGE_ID ||
+					'0x0000000000000000000000000000000000000000000000000000000000000000'
 				envelope = {
 					ciphertext,
 					identity: `${sealPackageId}*${sealPolicyAddress}`,
@@ -1192,7 +1214,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 					recipient,
 					timestamp,
 					integrity.contentHash,
-					nonce
+					nonce,
 				)
 				if (!authCheck.valid) {
 					return jsonResponse({ error: `Authentication failed: ${authCheck.reason}` }, 400)
@@ -1252,7 +1274,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				recipient,
 				recipientName,
 				'[Encrypted message]',
-				timestamp
+				timestamp,
 			)
 
 			const indexKey = `msg_inbox_${recipient}_${timestamp}`
@@ -1272,11 +1294,9 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				contentHash: integrity.contentHash,
 			}
 
-			await env.CACHE.put(
-				indexKey,
-				JSON.stringify(storedMessage),
-				{ expirationTtl: 60 * 60 * 24 * 30 }
-			)
+			await env.CACHE.put(indexKey, JSON.stringify(storedMessage), {
+				expirationTtl: 60 * 60 * 24 * 30,
+			})
 
 			const response: MessageSendResponse = {
 				success: true,
@@ -1336,7 +1356,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 					recipient: body.recipient,
 					timestamp: Date.now(),
 				}),
-				{ expirationTtl: 60 * 60 * 24 * 30 } // 30 days
+				{ expirationTtl: 60 * 60 * 24 * 30 }, // 30 days
 			)
 
 			return jsonResponse({
@@ -1376,7 +1396,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 						}
 					}
 					return null
-				})
+				}),
 			)
 
 			const validMessages = messages.filter(Boolean)
@@ -1445,7 +1465,7 @@ async function handleAgencyApi(request: Request, _env: Env, url: URL): Promise<R
 	// POST /api/agents/register - Register new agency (returns tx builder)
 	if (path === 'register' && request.method === 'POST') {
 		try {
-			const body = await request.json() as { name?: string }
+			const body = (await request.json()) as { name?: string }
 			if (!body.name) {
 				return jsonResponse({ error: 'Agency name required' }, 400)
 			}
@@ -1464,11 +1484,14 @@ async function handleAgencyApi(request: Request, _env: Env, url: URL): Promise<R
 	if (agencyMatch && request.method === 'GET') {
 		const agencyId = agencyMatch[1]
 		// Placeholder - would fetch from chain
-		return jsonResponse({
-			error: 'Agency not found',
-			agencyId,
-			note: 'Agency registry not yet configured',
-		}, 404)
+		return jsonResponse(
+			{
+				error: 'Agency not found',
+				agencyId,
+				note: 'Agency registry not yet configured',
+			},
+			404,
+		)
 	}
 
 	// POST /api/agents/:id/delegate - Create delegation capability
@@ -1504,11 +1527,14 @@ async function handleIkaApi(request: Request, env: Env, url: URL): Promise<Respo
 
 	// Check if IKA is configured
 	if (!env.IKA_PACKAGE_ID) {
-		return jsonResponse({
-			error: 'IKA not configured',
-			note: 'Set IKA_PACKAGE_ID in environment variables',
-			docs: 'https://docs.ika.xyz',
-		}, 503)
+		return jsonResponse(
+			{
+				error: 'IKA not configured',
+				note: 'Set IKA_PACKAGE_ID in environment variables',
+				docs: 'https://docs.ika.xyz',
+			},
+			503,
+		)
 	}
 
 	// POST /api/ika/dwallet/create - Create dWallet (returns tx builder)
@@ -1569,10 +1595,13 @@ async function handleLlmApi(request: Request, env: Env, url: URL): Promise<Respo
 
 	// Check if LLM is configured
 	if (!env.LLM_API_KEY) {
-		return jsonResponse({
-			error: 'LLM not configured',
-			note: 'Set LLM_API_KEY in environment variables',
-		}, 503)
+		return jsonResponse(
+			{
+				error: 'LLM not configured',
+				note: 'Set LLM_API_KEY in environment variables',
+			},
+			503,
+		)
 	}
 
 	// Rate limiting check (simple implementation)
@@ -1581,11 +1610,15 @@ async function handleLlmApi(request: Request, env: Env, url: URL): Promise<Respo
 	const rateLimit = await env.CACHE.get(rateLimitKey)
 	const currentCount = rateLimit ? Number.parseInt(rateLimit, 10) : 0
 
-	if (currentCount >= 10) { // 10 requests per minute
-		return jsonResponse({
-			error: 'Rate limit exceeded',
-			retryAfter: 60,
-		}, 429)
+	if (currentCount >= 10) {
+		// 10 requests per minute
+		return jsonResponse(
+			{
+				error: 'Rate limit exceeded',
+				retryAfter: 60,
+			},
+			429,
+		)
 	}
 
 	// Increment rate limit counter
@@ -1594,7 +1627,11 @@ async function handleLlmApi(request: Request, env: Env, url: URL): Promise<Respo
 	// POST /api/llm/complete - Completion endpoint
 	if (path === 'complete' && request.method === 'POST') {
 		try {
-			const body = await request.json() as { prompt?: string; context?: string; maxTokens?: number }
+			const body = (await request.json()) as {
+				prompt?: string
+				context?: string
+				maxTokens?: number
+			}
 			if (!body.prompt) {
 				return jsonResponse({ error: 'Prompt required' }, 400)
 			}
@@ -1613,9 +1650,7 @@ async function handleLlmApi(request: Request, env: Env, url: URL): Promise<Respo
 					messages: [
 						{
 							role: 'user',
-							content: body.context
-								? `Context: ${body.context}\n\n${body.prompt}`
-								: body.prompt,
+							content: body.context ? `Context: ${body.context}\n\n${body.prompt}` : body.prompt,
 						},
 					],
 				}),
@@ -1637,7 +1672,7 @@ async function handleLlmApi(request: Request, env: Env, url: URL): Promise<Respo
 	// POST /api/llm/summarize - Summarize conversation
 	if (path === 'summarize' && request.method === 'POST') {
 		try {
-			const body = await request.json() as { messages?: string[] }
+			const body = (await request.json()) as { messages?: string[] }
 			if (!body.messages?.length) {
 				return jsonResponse({ error: 'Messages array required' }, 400)
 			}

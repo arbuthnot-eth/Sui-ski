@@ -20,8 +20,6 @@ export function ensureRpcEnv(env: Env): Env {
 	}
 
 	const fallback = getDefaultRpcUrl(env.SUI_NETWORK)
-	console.warn(
-		`[sui.ski] SUI_RPC_URL not configured. Falling back to public RPC ${fallback}`,
-	)
+	console.warn(`[sui.ski] SUI_RPC_URL not configured. Falling back to public RPC ${fallback}`)
 	return { ...env, SUI_RPC_URL: fallback }
 }

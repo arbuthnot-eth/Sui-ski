@@ -60,7 +60,8 @@ export async function handleMVRManagementRequest(request: Request, env: Env): Pr
 			// Note: This is read-only display. Actual configuration must be set via Cloudflare Workers env vars
 			return jsonResponse({
 				success: true,
-				message: 'Configuration display updated. To actually set this, configure BOUNTY_ESCROW_MVR_ALIAS in your Cloudflare Workers environment variables.',
+				message:
+					'Configuration display updated. To actually set this, configure BOUNTY_ESCROW_MVR_ALIAS in your Cloudflare Workers environment variables.',
 				alias: body.alias || null,
 			})
 		}

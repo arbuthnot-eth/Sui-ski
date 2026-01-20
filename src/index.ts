@@ -1,28 +1,29 @@
-import { handleLandingPage, handleLandingApiRequest } from './handlers/landing'
-import { handleMessagingRequest } from './handlers/messaging'
-import { generateProfilePage } from './handlers/profile'
-import { handlePWARequest } from './handlers/pwa'
-import { handlePrivateRequest } from './handlers/private'
-import { handleAppRequest } from './handlers/app'
 import { handleAgentsRequest } from './handlers/agents'
-import { handleRPCRequest } from './resolvers/rpc'
-import { resolveSuiNS } from './resolvers/suins'
-import { resolveContent, resolveDirectContent } from './resolvers/content'
+import { handleAppRequest } from './handlers/app'
 import { handleBidsRequest } from './handlers/bids'
 import { handleBountiesRequest } from './handlers/bounties'
+import { handleLandingApiRequest, handleLandingPage } from './handlers/landing'
+import { handleMessagingRequest } from './handlers/messaging'
+import { handlePrivateRequest } from './handlers/private'
+import { generateProfilePage } from './handlers/profile'
+import { handlePWARequest } from './handlers/pwa'
+import { resolveContent, resolveDirectContent } from './resolvers/content'
+import { handleRPCRequest } from './resolvers/rpc'
+import { resolveSuiNS } from './resolvers/suins'
 import type { Env, SuiNSRecord } from './types'
 import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils/response'
+import { ensureRpcEnv } from './utils/rpc'
 import { isTwitterPreviewBot } from './utils/social'
 import { parseSubdomain } from './utils/subdomain'
-import { ensureRpcEnv } from './utils/rpc'
 
 export default {
 	async fetch(request: Request, rawEnv: Env, _ctx: ExecutionContext): Promise<Response> {
 		const env = ensureRpcEnv(rawEnv)
-		
+
 		// Handle CORS preflight - reflect requested headers
 		if (request.method === 'OPTIONS') {
-			const requestedHeaders = request.headers.get('Access-Control-Request-Headers') || 'Content-Type'
+			const requestedHeaders =
+				request.headers.get('Access-Control-Request-Headers') || 'Content-Type'
 			return new Response(null, {
 				headers: {
 					'Access-Control-Allow-Origin': '*',
@@ -66,8 +67,12 @@ export default {
 				}
 
 				// Handle /api/app, /api/agents, /api/ika, /api/llm routes on root domain
-				if (url.pathname.startsWith('/api/app/') || url.pathname.startsWith('/api/agents/') ||
-					url.pathname.startsWith('/api/ika/') || url.pathname.startsWith('/api/llm/')) {
+				if (
+					url.pathname.startsWith('/api/app/') ||
+					url.pathname.startsWith('/api/agents/') ||
+					url.pathname.startsWith('/api/ika/') ||
+					url.pathname.startsWith('/api/llm/')
+				) {
 					return handleAppRequest(request, env)
 				}
 			}

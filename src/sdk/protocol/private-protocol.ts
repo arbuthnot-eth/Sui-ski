@@ -21,18 +21,18 @@
  * ```
  */
 
-import { LigetronProver, createLigetronProver } from '../ligetron/prover'
-import { Groth16Prover, createGroth16Prover } from '../groth16/prover'
+import { createGroth16Prover, type Groth16Prover } from '../groth16/prover'
+import { createLigetronProver, type LigetronProver } from '../ligetron/prover'
 import type {
-	PrivateProtocolConfig,
-	DepositParams,
-	WithdrawParams,
-	TransferParams,
-	Proof,
-	Note,
 	Commitment,
+	DepositParams,
 	ExtData,
 	MerkleProof,
+	Note,
+	PrivateProtocolConfig,
+	Proof,
+	TransferParams,
+	WithdrawParams,
 } from '../types'
 
 // Default configuration
@@ -167,7 +167,7 @@ export class PrivateProtocol {
 				inputNotes,
 				outputAmounts,
 				outputBlindings,
-				merkleProofs
+				merkleProofs,
 			)
 		} else {
 			// Fallback: compute witness directly (slower)
@@ -189,11 +189,11 @@ export class PrivateProtocol {
 		proof.encryptedOutputs = [
 			await this.encryptNote(
 				{ secret: 0n, blinding: outputBlindings[0], amount: outputAmounts[0] },
-				undefined
+				undefined,
 			),
 			await this.encryptNote(
 				{ secret: inputNotes[0].secret, blinding: outputBlindings[1], amount: outputAmounts[1] },
-				undefined
+				undefined,
 			),
 		]
 
@@ -222,7 +222,7 @@ export class PrivateProtocol {
 				inputNotes,
 				params.outputAmounts,
 				outputBlindings,
-				merkleProofs
+				merkleProofs,
 			)
 		} else {
 			witness = await this.computeWitnessDirectly(inputNotes, params.outputAmounts, outputBlindings)
@@ -303,7 +303,8 @@ export class PrivateProtocol {
 		const bytes = crypto.getRandomValues(new Uint8Array(32))
 		const value = this.bytesToBigInt(bytes)
 		// Reduce modulo BN254 field
-		const BN254_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n
+		const BN254_FIELD =
+			21888242871839275222246405745257275088548364400416034343698204186575808495617n
 		return value % BN254_FIELD
 	}
 
@@ -317,7 +318,7 @@ export class PrivateProtocol {
 
 	private async computeCommitment(note: Note): Promise<bigint> {
 		// Mock Poseidon hash - replace with actual implementation
-		return (note.amount * 31n + note.blinding * 17n + note.secret) % (2n ** 256n)
+		return (note.amount * 31n + note.blinding * 17n + note.secret) % 2n ** 256n
 	}
 
 	private async encryptNote(_note: Note, _pubKey?: string): Promise<Uint8Array> {
@@ -325,7 +326,10 @@ export class PrivateProtocol {
 		return crypto.getRandomValues(new Uint8Array(64))
 	}
 
-	private async buildDepositTransaction(_commitment: Commitment, _amount: bigint): Promise<Uint8Array> {
+	private async buildDepositTransaction(
+		_commitment: Commitment,
+		_amount: bigint,
+	): Promise<Uint8Array> {
 		// Build PTB for deposit
 		// In production, use @mysten/sui to build the transaction
 		return new Uint8Array(0)
@@ -334,7 +338,7 @@ export class PrivateProtocol {
 	private async computeWitnessDirectly(
 		inputNotes: Note[],
 		outputAmounts: [bigint, bigint],
-		outputBlindings: [bigint, bigint]
+		outputBlindings: [bigint, bigint],
 	): Promise<{
 		nullifiers: [bigint, bigint]
 		commitments: [bigint, bigint]
@@ -365,7 +369,7 @@ export class PrivateProtocol {
 
 	private async computeNullifier(note: Note): Promise<bigint> {
 		// Mock nullifier computation
-		return (note.secret * 31n + note.blinding) % (2n ** 256n)
+		return (note.secret * 31n + note.blinding) % 2n ** 256n
 	}
 }
 
@@ -373,7 +377,7 @@ export class PrivateProtocol {
  * Create a configured Private Protocol instance
  */
 export async function createPrivateProtocol(
-	config?: Partial<PrivateProtocolConfig>
+	config?: Partial<PrivateProtocolConfig>,
 ): Promise<PrivateProtocol> {
 	const protocol = new PrivateProtocol(config)
 	await protocol.initialize()

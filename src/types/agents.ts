@@ -24,16 +24,16 @@ export type MemberRole = 'owner' | 'admin' | 'operator'
  * Capability types that can be granted to members
  */
 export type Capability =
-	| 'send_messages'      // Can send messages on behalf of agency
-	| 'read_messages'      // Can read agency messages
-	| 'manage_channels'    // Can create/delete channels
-	| 'invite_members'     // Can invite new members
-	| 'remove_members'     // Can remove members (except owners)
-	| 'update_metadata'    // Can update agency profile
-	| 'manage_dwallet'     // Can manage IKA dWallet operations
-	| 'sign_transactions'  // Can sign cross-chain transactions
-	| 'broadcast_news'     // Can post to news channels
-	| 'moderate_content'   // Can delete/hide content
+	| 'send_messages' // Can send messages on behalf of agency
+	| 'read_messages' // Can read agency messages
+	| 'manage_channels' // Can create/delete channels
+	| 'invite_members' // Can invite new members
+	| 'remove_members' // Can remove members (except owners)
+	| 'update_metadata' // Can update agency profile
+	| 'manage_dwallet' // Can manage IKA dWallet operations
+	| 'sign_transactions' // Can sign cross-chain transactions
+	| 'broadcast_news' // Can post to news channels
+	| 'moderate_content' // Can delete/hide content
 
 /**
  * Permission level for dWallet operations
@@ -254,8 +254,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
 	twoPartyRequired: ['sign_transactions'],
 	spendingLimits: {
 		perTransaction: '1000000000', // 1 SUI
-		perDay: '10000000000',        // 10 SUI
-		perMonth: '100000000000',     // 100 SUI
+		perDay: '10000000000', // 10 SUI
+		perMonth: '100000000000', // 100 SUI
 	},
 }
 

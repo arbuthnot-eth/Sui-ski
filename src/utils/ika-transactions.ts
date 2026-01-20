@@ -65,11 +65,7 @@ export function buildCreateDWalletTx(params: CreateDWalletParams): {
 			packageId: params.packageId,
 			module: 'dwallet',
 			function: 'create',
-			arguments: [
-				params.chains,
-				params.agencyId || null,
-				params.metadata || {},
-			],
+			arguments: [params.chains, params.agencyId || null, params.metadata || {}],
 		},
 		note: 'Use @ika.xyz/sdk client-side to build and sign this transaction',
 	}
@@ -95,11 +91,7 @@ export function buildSigningRequestTx(request: SigningRequest): {
 			packageId: '', // Set from env
 			module: 'dwallet',
 			function: 'request_sign',
-			arguments: [
-				request.dWalletId,
-				request.chain,
-				request.txHash,
-			],
+			arguments: [request.dWalletId, request.chain, request.txHash],
 		},
 		requires2PC: request.requires2PC,
 		note: request.requires2PC
@@ -131,10 +123,7 @@ export function buildApprovalTx(params: {
 			packageId: '', // Set from env
 			module: 'dwallet',
 			function: 'approve',
-			arguments: [
-				params.requestId,
-				params.dWalletId,
-			],
+			arguments: [params.requestId, params.dWalletId],
 		},
 		note: `Approval from ${params.approverType}`,
 	}
@@ -143,10 +132,7 @@ export function buildApprovalTx(params: {
 /**
  * Build transaction to get foreign chain address from dWallet
  */
-export function buildGetAddressTx(params: {
-	dWalletId: string
-	chain: ForeignChain
-}): {
+export function buildGetAddressTx(params: { dWalletId: string; chain: ForeignChain }): {
 	action: 'get_address'
 	moveCall: {
 		packageId: string
@@ -162,10 +148,7 @@ export function buildGetAddressTx(params: {
 			packageId: '', // Set from env
 			module: 'dwallet',
 			function: 'get_foreign_address',
-			arguments: [
-				params.dWalletId,
-				params.chain,
-			],
+			arguments: [params.dWalletId, params.chain],
 		},
 		note: `Get ${params.chain} address for dWallet`,
 	}
@@ -214,7 +197,10 @@ export interface SolanaTxData {
 /**
  * Validate transaction data for a specific chain
  */
-export function validateTxData(chain: ForeignChain, data: unknown): { valid: boolean; error?: string } {
+export function validateTxData(
+	chain: ForeignChain,
+	data: unknown,
+): { valid: boolean; error?: string } {
 	switch (chain) {
 		case 'bitcoin': {
 			const btc = data as BitcoinTxData
@@ -231,7 +217,8 @@ export function validateTxData(chain: ForeignChain, data: unknown): { valid: boo
 		case 'solana': {
 			const sol = data as SolanaTxData
 			if (!sol.recentBlockhash) return { valid: false, error: 'Solana tx requires recentBlockhash' }
-			if (!sol.instructions?.length) return { valid: false, error: 'Solana tx requires instructions' }
+			if (!sol.instructions?.length)
+				return { valid: false, error: 'Solana tx requires instructions' }
 			return { valid: true }
 		}
 		default:

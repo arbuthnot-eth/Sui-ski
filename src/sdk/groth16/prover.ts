@@ -122,7 +122,7 @@ export class Groth16Prover {
 			publicValue: bigint
 			poolAddress: string
 			hashedSecret?: bigint
-		}
+		},
 	): Promise<Proof> {
 		// Combine Ligetron witness with public inputs
 		const circuitInputs = {
@@ -147,7 +147,7 @@ export class Groth16Prover {
 			const { proof } = await this.snarkjs.groth16.fullProve(
 				circuitInputs,
 				this.config.wasmPath!,
-				this.config.provingKeyPath!
+				this.config.provingKeyPath!,
 			)
 
 			// Serialize proof points for Sui
@@ -280,24 +280,12 @@ export class Groth16Prover {
 		pi_c: string[]
 	} {
 		return {
-			pi_a: [
-				this.readBigInt(bytes, 0).toString(),
-				this.readBigInt(bytes, 32).toString(),
-			],
+			pi_a: [this.readBigInt(bytes, 0).toString(), this.readBigInt(bytes, 32).toString()],
 			pi_b: [
-				[
-					this.readBigInt(bytes, 64).toString(),
-					this.readBigInt(bytes, 96).toString(),
-				],
-				[
-					this.readBigInt(bytes, 128).toString(),
-					this.readBigInt(bytes, 160).toString(),
-				],
+				[this.readBigInt(bytes, 64).toString(), this.readBigInt(bytes, 96).toString()],
+				[this.readBigInt(bytes, 128).toString(), this.readBigInt(bytes, 160).toString()],
 			],
-			pi_c: [
-				this.readBigInt(bytes, 192).toString(),
-				this.readBigInt(bytes, 224).toString(),
-			],
+			pi_c: [this.readBigInt(bytes, 192).toString(), this.readBigInt(bytes, 224).toString()],
 		}
 	}
 

@@ -80,7 +80,7 @@ export async function handleLandingApiRequest(
 		const suinsApiUrl = expParam
 			? `https://api-mainnet.suins.io/nfts/${encodeURIComponent(cleanName)}.sui/${expParam}`
 			: `https://api-mainnet.suins.io/nfts/${encodeURIComponent(cleanName)}.sui`
-		
+
 		return proxyImageRequest(suinsApiUrl)
 	}
 
@@ -198,7 +198,7 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 		const client = new SuiClient({ url: env.SUI_RPC_URL })
 
 		const allNames: NameInfo[] = []
-		let cursor: string | null | undefined = undefined
+		let cursor: string | null | undefined
 
 		// Step 1: Get all SuiNS NFTs owned by this address
 		do {
@@ -211,10 +211,15 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 
 			for (const item of response.data) {
 				const objType = item.data?.type || ''
-				if (objType.includes('suins_registration::SuinsRegistration') && item.data?.content?.dataType === 'moveObject') {
+				if (
+					objType.includes('suins_registration::SuinsRegistration') &&
+					item.data?.content?.dataType === 'moveObject'
+				) {
 					const fields = (item.data.content as any).fields
 					const name = fields?.domain_name || fields?.name
-					const expirationMs = fields?.expiration_timestamp_ms ? Number(fields.expiration_timestamp_ms) : null
+					const expirationMs = fields?.expiration_timestamp_ms
+						? Number(fields.expiration_timestamp_ms)
+						: null
 
 					if (name) {
 						allNames.push({
@@ -241,36 +246,44 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 		const BATCH_SIZE = 10
 		for (let i = 0; i < allNames.length; i += BATCH_SIZE) {
 			const batch = allNames.slice(i, i + BATCH_SIZE)
-			await Promise.all(batch.map(async (nameInfo) => {
-				try {
-					// Ensure name has .sui suffix for SuinsClient
-					const suinsName = nameInfo.name.endsWith('.sui') ? nameInfo.name : `${nameInfo.name}.sui`
-					const nameRecord = await suinsClient.getNameRecord(suinsName)
-					nameInfo.targetAddress = nameRecord?.targetAddress || null
-				} catch {
-					// Name may not have a target address set or record may not exist
-				}
-			}))
+			await Promise.all(
+				batch.map(async (nameInfo) => {
+					try {
+						// Ensure name has .sui suffix for SuinsClient
+						const suinsName = nameInfo.name.endsWith('.sui')
+							? nameInfo.name
+							: `${nameInfo.name}.sui`
+						const nameRecord = await suinsClient.getNameRecord(suinsName)
+						nameInfo.targetAddress = nameRecord?.targetAddress || null
+					} catch {
+						// Name may not have a target address set or record may not exist
+					}
+				}),
+			)
 		}
 
 		// Step 3: Get unique target addresses and fetch their default names (reverse resolution)
-		const uniqueAddresses = [...new Set(allNames.map(n => n.targetAddress).filter(Boolean))] as string[]
+		const uniqueAddresses = [
+			...new Set(allNames.map((n) => n.targetAddress).filter(Boolean)),
+		] as string[]
 		const addressDefaultName = new Map<string, string>()
 
 		for (let i = 0; i < uniqueAddresses.length; i += BATCH_SIZE) {
 			const batch = uniqueAddresses.slice(i, i + BATCH_SIZE)
-			await Promise.all(batch.map(async (addr) => {
-				try {
-					// Use native suix_resolveNameServiceNames RPC method
-					const result = await client.resolveNameServiceNames({ address: addr })
-					if (result.data && result.data.length > 0) {
-						// First name in the list is the primary/default name
-						addressDefaultName.set(addr, result.data[0])
+			await Promise.all(
+				batch.map(async (addr) => {
+					try {
+						// Use native suix_resolveNameServiceNames RPC method
+						const result = await client.resolveNameServiceNames({ address: addr })
+						if (result.data && result.data.length > 0) {
+							// First name in the list is the primary/default name
+							addressDefaultName.set(addr, result.data[0])
+						}
+					} catch {
+						// Address may not have a default name set
 					}
-				} catch {
-					// Address may not have a default name set
-				}
-			}))
+				}),
+			)
 		}
 
 		// Step 4: Mark primary names based on reverse resolution
@@ -346,7 +359,7 @@ async function handleTradeportProxy(request: Request, url: URL): Promise<Respons
 			headers: {
 				'Content-Type': 'application/json',
 				'User-Agent': 'sui.ski-gateway/1.0',
-				'Accept': 'application/json',
+				Accept: 'application/json',
 			},
 			body: request.method !== 'GET' ? await request.text() : undefined,
 			signal: controller.signal,
@@ -373,10 +386,13 @@ async function handleTradeportProxy(request: Request, url: URL): Promise<Respons
 				contentType = 'application/json'
 			} catch {
 				// Not JSON, return as error
-				return new Response(JSON.stringify({ error: 'Invalid response format', status: response.status }), {
-					status: response.status >= 400 ? response.status : 502,
-					headers: corsHeaders,
-				})
+				return new Response(
+					JSON.stringify({ error: 'Invalid response format', status: response.status }),
+					{
+						status: response.status >= 400 ? response.status : 502,
+						headers: corsHeaders,
+					},
+				)
 			}
 		}
 
@@ -389,7 +405,8 @@ async function handleTradeportProxy(request: Request, url: URL): Promise<Respons
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to proxy Tradeport request'
-		const isTimeout = error instanceof Error && (error.name === 'AbortError' || message.includes('timeout'))
+		const isTimeout =
+			error instanceof Error && (error.name === 'AbortError' || message.includes('timeout'))
 		return new Response(JSON.stringify({ error: message, timeout: isTimeout }), {
 			status: isTimeout ? 504 : 502,
 			headers: corsHeaders,
@@ -468,7 +485,7 @@ export async function getSUIPrice(env?: { CACHE?: KVNamespace }): Promise<number
 	const CACHE_KEY = 'sui_price_cache'
 	const CACHE_TTL = 60 // Cache for 60 seconds
 	const DEFAULT_PRICE = 1.0 // Fallback price
-	
+
 	try {
 		// Check cache first
 		if (env?.CACHE) {
@@ -519,9 +536,9 @@ export async function getSUIPrice(env?: { CACHE?: KVNamespace }): Promise<number
 			if (!data.sui?.usd || typeof data.sui.usd !== 'number' || !Number.isFinite(data.sui.usd)) {
 				throw new Error('Invalid price data from CoinGecko')
 			}
-			
+
 			const price = data.sui.usd
-			
+
 			// Cache the result
 			if (env?.CACHE) {
 				await env.CACHE.put(
@@ -530,7 +547,7 @@ export async function getSUIPrice(env?: { CACHE?: KVNamespace }): Promise<number
 					{ expirationTtl: CACHE_TTL * 2 }, // Cache for 2x TTL to handle rate limits
 				)
 			}
-			
+
 			return price
 		} catch (fetchError) {
 			clearTimeout(timeoutId)
@@ -551,7 +568,10 @@ export async function getSUIPrice(env?: { CACHE?: KVNamespace }): Promise<number
 				const cached = await env.CACHE.get(CACHE_KEY)
 				if (cached) {
 					const cachedData = JSON.parse(cached) as { price: number }
-					console.warn('Using cached price due to error:', fetchError instanceof Error ? fetchError.message : String(fetchError))
+					console.warn(
+						'Using cached price due to error:',
+						fetchError instanceof Error ? fetchError.message : String(fetchError),
+					)
 					return cachedData.price
 				}
 			}

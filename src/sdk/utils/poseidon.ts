@@ -111,10 +111,6 @@ export function computeNullifier(secret: bigint, index: bigint): bigint {
 /**
  * Compute note commitment
  */
-export function computeNoteCommitment(
-	amount: bigint,
-	pubKey: bigint,
-	blinding: bigint
-): bigint {
+export function computeNoteCommitment(amount: bigint, pubKey: bigint, blinding: bigint): bigint {
 	return poseidonHash([amount, pubKey, blinding])
 }

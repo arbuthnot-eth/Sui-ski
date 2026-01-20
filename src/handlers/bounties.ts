@@ -1,7 +1,11 @@
 import type { Transaction } from '@mysten/sui/transactions'
-import type { Env, Bounty, PublicBounty } from '../types'
+import type { Bounty, Env, PublicBounty } from '../types'
+import {
+	buildExecuteBountyTx,
+	buildExecuteGiftBountyTx,
+	serializeTransaction,
+} from '../utils/bounty-transactions'
 import { relaySignedTransaction } from '../utils/transactions'
-import { buildExecuteBountyTx, buildExecuteGiftBountyTx, serializeTransaction } from '../utils/bounty-transactions'
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -113,10 +117,19 @@ async function handleCreateBounty(request: Request, env: Env): Promise<Response>
 	} = body
 
 	// Validate required fields
-	if (!name || !beneficiary || !creator || !escrowObjectId || !totalAmountMist || !executorRewardMist || !availableAt) {
+	if (
+		!name ||
+		!beneficiary ||
+		!creator ||
+		!escrowObjectId ||
+		!totalAmountMist ||
+		!executorRewardMist ||
+		!availableAt
+	) {
 		return jsonResponse(
 			{
-				error: 'Missing required fields: name, beneficiary, creator, escrowObjectId, totalAmountMist, executorRewardMist, availableAt',
+				error:
+					'Missing required fields: name, beneficiary, creator, escrowObjectId, totalAmountMist, executorRewardMist, availableAt',
 			},
 			400,
 		)
@@ -127,11 +140,17 @@ async function handleCreateBounty(request: Request, env: Env): Promise<Response>
 
 	// Validate executor reward minimum
 	if (executorReward < BigInt(MIN_EXECUTOR_REWARD_MIST)) {
-		return jsonResponse({ error: `Executor reward must be at least 1 SUI (${MIN_EXECUTOR_REWARD_MIST} MIST)` }, 400)
+		return jsonResponse(
+			{ error: `Executor reward must be at least 1 SUI (${MIN_EXECUTOR_REWARD_MIST} MIST)` },
+			400,
+		)
 	}
 
 	if (totalAmount < executorReward) {
-		return jsonResponse({ error: 'Total amount must be greater than or equal to executor reward' }, 400)
+		return jsonResponse(
+			{ error: 'Total amount must be greater than or equal to executor reward' },
+			400,
+		)
 	}
 
 	const escrowId = escrowObjectId.trim()
@@ -205,7 +224,11 @@ async function handleCreateBounty(request: Request, env: Env): Promise<Response>
 /**
  * Get all bounties for a name
  */
-async function handleGetBounties(name: string, env: Env, searchParams?: URLSearchParams): Promise<Response> {
+async function handleGetBounties(
+	name: string,
+	env: Env,
+	searchParams?: URLSearchParams,
+): Promise<Response> {
 	const indexKey = `bounties:name:${name}`
 	const indexData = await env.CACHE.get(indexKey)
 
@@ -256,7 +279,12 @@ async function handleGetBounty(name: string, bountyId: string, env: Env): Promis
 /**
  * Cancel a bounty
  */
-async function handleCancelBounty(name: string, bountyId: string, request: Request, env: Env): Promise<Response> {
+async function handleCancelBounty(
+	name: string,
+	bountyId: string,
+	request: Request,
+	env: Env,
+): Promise<Response> {
 	const body = (await request.json().catch(() => ({}))) as { creator?: string }
 
 	const bountyData = await env.CACHE.get(`bounty:${bountyId}`)
@@ -281,7 +309,10 @@ async function handleCancelBounty(name: string, bountyId: string, request: Reque
 	}
 
 	if (bounty.txBytes) {
-		return jsonResponse({ error: 'Cannot cancel bounty with attached transaction. Use on-chain cancellation.' }, 400)
+		return jsonResponse(
+			{ error: 'Cannot cancel bounty with attached transaction. Use on-chain cancellation.' },
+			400,
+		)
 	}
 
 	// Update status
@@ -439,18 +470,24 @@ async function handleExecuteBounty(bountyId: string, env: Env): Promise<Response
 
 	// Check if bounty is ready
 	if (bounty.status !== 'ready') {
-		return jsonResponse({ error: `Bounty is not ready for execution (status: ${bounty.status})` }, 400)
+		return jsonResponse(
+			{ error: `Bounty is not ready for execution (status: ${bounty.status})` },
+			400,
+		)
 	}
 
 	// Check if grace period has ended
 	const now = Date.now()
 	if (now < bounty.availableAt) {
 		const waitMs = bounty.availableAt - now
-		return jsonResponse({
-			error: 'Grace period has not ended yet',
-			availableAt: bounty.availableAt,
-			waitMs,
-		}, 400)
+		return jsonResponse(
+			{
+				error: 'Grace period has not ended yet',
+				availableAt: bounty.availableAt,
+				waitMs,
+			},
+			400,
+		)
 	}
 
 	// Check if we have the pre-signed transaction
@@ -518,7 +555,9 @@ export async function getReadyBounties(env: Env): Promise<Bounty[]> {
 /**
  * Execute all ready bounties (called from scheduled handler)
  */
-export async function executeReadyBounties(env: Env): Promise<{ executed: number; failed: number }> {
+export async function executeReadyBounties(
+	env: Env,
+): Promise<{ executed: number; failed: number }> {
 	const bounties = await getReadyBounties(env)
 	let executed = 0
 	let failed = 0

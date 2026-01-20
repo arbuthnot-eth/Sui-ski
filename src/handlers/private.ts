@@ -155,7 +155,7 @@ async function handleGetPools(env: Env): Promise<Response> {
 		return errorResponse(
 			`Failed to fetch pools: ${error instanceof Error ? error.message : 'Unknown error'}`,
 			'FETCH_ERROR',
-			500
+			500,
 		)
 	}
 }
@@ -172,7 +172,9 @@ async function handleGetRegistry(env: Env): Promise<Response> {
 			network,
 			packageId: PRIVATE_PACKAGE_ID[network],
 			registryId: PRIVATE_REGISTRY_ID[network],
-			deployed: PRIVATE_REGISTRY_ID[network] !== '0x0000000000000000000000000000000000000000000000000000000000000000',
+			deployed:
+				PRIVATE_REGISTRY_ID[network] !==
+				'0x0000000000000000000000000000000000000000000000000000000000000000',
 		},
 	})
 }
@@ -337,7 +339,8 @@ function generatePrivatePage(env: Env): string {
 	const network = env.SUI_NETWORK as 'mainnet' | 'testnet'
 	const packageId = PRIVATE_PACKAGE_ID[network]
 	const registryId = PRIVATE_REGISTRY_ID[network]
-	const isDeployed = registryId !== '0x0000000000000000000000000000000000000000000000000000000000000000'
+	const isDeployed =
+		registryId !== '0x0000000000000000000000000000000000000000000000000000000000000000'
 
 	return `<!DOCTYPE html>
 <html lang="en">
