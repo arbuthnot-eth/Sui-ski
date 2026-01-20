@@ -7096,11 +7096,6 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				nftOwnerAddress = await fetchNftOwner();
 			}
 
-			// Re-check edit permission to ensure canEdit is up to date
-			if (connectedAddress) {
-				await checkEditPermission();
-			}
-
 			// Check if connected wallet can use UpgradeCap (either owns NFT, is target address, or owns UpgradeCap)
 			let canUseMvr = false;
 			if (connectedAddress) {
