@@ -7283,6 +7283,21 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			};
 		}
 
+		// Resolve SuiNS name to address
+		async function resolveSuiNSName(name) {
+			const cleanName = name.replace('@', '').replace(/\.sui$/i, '');
+			try {
+				const response = await fetch('/api/resolve/' + encodeURIComponent(cleanName + '.sui'));
+				if (response.ok) {
+					const data = await response.json();
+					return data.address || data.targetAddress || null;
+				}
+			} catch (e) {
+				console.warn('Failed to resolve name:', cleanName, e);
+			}
+			return null;
+		}
+
 		// Send message to recipient via Walrus + signature verification
 		async function sendMessage(recipientName, content) {
 			if (!connectedAddress || !connectedWallet) {
@@ -7293,12 +7308,18 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				throw new Error('Message content is required');
 			}
 
-			const recipientAddr = recipientName.includes('0x')
-				? recipientName
-				: MESSAGING_RECIPIENT_ADDRESS;
+			let recipientAddr;
+			if (recipientName.includes('0x')) {
+				recipientAddr = recipientName;
+			} else if (MESSAGING_RECIPIENT_ADDRESS && MESSAGING_RECIPIENT_ADDRESS.length > 0) {
+				recipientAddr = MESSAGING_RECIPIENT_ADDRESS;
+			} else {
+				showMsgStatus('Resolving recipient address...', 'info');
+				recipientAddr = await resolveSuiNSName(recipientName);
+			}
 
 			if (!recipientAddr || recipientAddr.trim().length === 0) {
-				throw new Error('Recipient address is required');
+				throw new Error('Could not resolve recipient address for ' + recipientName);
 			}
 
 			if (!connectedAddress || connectedAddress.trim().length === 0) {
