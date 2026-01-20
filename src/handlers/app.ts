@@ -1059,16 +1059,35 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				const sig = body.signature || body.sig
 				const sigPayload = body.signaturePayload || body.payload || body.message
 
-				if (!encryptedMessage || !senderAddr || !recipientAddr) {
+				// Validate required fields with better error messages
+				if (!encryptedMessage) {
 					return jsonResponse({
-						error: 'Encrypted message, sender, and recipient required',
-						hint: 'Expected fields: encryptedMessage (or encrypted/message), sender (or from), recipient (or to)',
+						error: 'Encrypted message required',
+						hint: 'Expected field: encryptedMessage (or encrypted/message)',
+						received: Object.keys(body),
+					}, 400)
+				}
+
+				if (!senderAddr || typeof senderAddr !== 'string' || senderAddr.trim().length === 0) {
+					return jsonResponse({
+						error: 'Valid sender address required',
+						hint: 'Expected field: sender (or senderAddress/from) with non-empty string value',
 						received: Object.keys(body),
 						debug: {
-							hasEncryptedMessage: !!encryptedMessage,
-							encryptedMessageType: typeof encryptedMessage,
-							hasSender: !!senderAddr,
-							hasRecipient: !!recipientAddr,
+							sender: senderAddr,
+							senderType: typeof senderAddr,
+						},
+					}, 400)
+				}
+
+				if (!recipientAddr || typeof recipientAddr !== 'string' || recipientAddr.trim().length === 0) {
+					return jsonResponse({
+						error: 'Valid recipient address required',
+						hint: 'Expected field: recipient (or recipientAddress/to) with non-empty string value',
+						received: Object.keys(body),
+						debug: {
+							recipient: recipientAddr,
+							recipientType: typeof recipientAddr,
 						},
 					}, 400)
 				}

@@ -346,22 +346,52 @@ async function handleTradeportProxy(request: Request, url: URL): Promise<Respons
 			headers: {
 				'Content-Type': 'application/json',
 				'User-Agent': 'sui.ski-gateway/1.0',
+				'Accept': 'application/json',
 			},
 			body: request.method !== 'GET' ? await request.text() : undefined,
 			signal: controller.signal,
 		})
 		clearTimeout(timeoutId)
 
+		// For 404s, return proper JSON error instead of HTML
+		if (response.status === 404) {
+			return new Response(JSON.stringify({ error: 'Not found', status: 404 }), {
+				status: 404,
+				headers: corsHeaders,
+			})
+		}
+
 		const data = await response.text()
+
+		// Ensure we return JSON for all responses
+		let contentType = response.headers.get('content-type') || ''
+		if (!contentType.includes('application/json')) {
+			// If response is not JSON, wrap it or return error
+			try {
+				// Try to parse as JSON anyway (some APIs don't set content-type correctly)
+				JSON.parse(data)
+				contentType = 'application/json'
+			} catch {
+				// Not JSON, return as error
+				return new Response(JSON.stringify({ error: 'Invalid response format', status: response.status }), {
+					status: response.status >= 400 ? response.status : 502,
+					headers: corsHeaders,
+				})
+			}
+		}
 
 		return new Response(data, {
 			status: response.status,
-			headers: corsHeaders,
+			headers: {
+				...corsHeaders,
+				'Content-Type': contentType,
+			},
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to proxy Tradeport request'
-		return new Response(JSON.stringify({ error: message }), {
-			status: 502,
+		const isTimeout = error instanceof Error && (error.name === 'AbortError' || message.includes('timeout'))
+		return new Response(JSON.stringify({ error: message, timeout: isTimeout }), {
+			status: isTimeout ? 504 : 502,
 			headers: corsHeaders,
 		})
 	}

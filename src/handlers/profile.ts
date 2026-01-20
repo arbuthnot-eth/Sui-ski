@@ -3099,13 +3099,38 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			marketplaceError.style.display = 'none';
 
 			try {
-				const res = await fetch(\`/api/tradeport/v1/sui/suins/name/\${FULL_NAME}\`);
+				// Tradeport API expects name without .sui suffix
+				const nameForApi = FULL_NAME.replace(/\.sui$/i, '');
+				const res = await fetch(\`/api/tradeport/v1/sui/suins/name/\${encodeURIComponent(nameForApi)}\`);
+				
+				// Handle 404 as "not listed" rather than an error
+				if (res.status === 404) {
+					listingValue.textContent = 'Not Listed';
+					listingValue.classList.remove('for-sale');
+					bidsCount.textContent = '0';
+					bidsList.innerHTML = '<div class="no-bids">No bids yet</div>';
+					updatePlaceBidButton();
+					marketplaceLoading.style.display = 'none';
+					marketplaceContent.style.display = 'flex';
+					return;
+				}
+
 				if (!res.ok) {
 					// Handle 502 and other errors gracefully
 					if (res.status === 502 || res.status >= 500) {
 						throw new Error('Tradeport service temporarily unavailable');
 					}
-					throw new Error(\`API error: \${res.status}\`);
+					// For other errors, try to get error message from response
+					let errorMsg = \`API error: \${res.status}\`;
+					try {
+						const errorData = await res.json();
+						if (errorData.error || errorData.message) {
+							errorMsg = errorData.error || errorData.message;
+						}
+					} catch {
+						// Ignore JSON parse errors
+					}
+					throw new Error(errorMsg);
 				}
 
 				// Check content-type before parsing JSON
@@ -3114,7 +3139,15 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 					// If we got HTML or other non-JSON, it's likely a 404 page
 					const text = await res.text();
 					console.error('Non-JSON response from Tradeport API:', text.substring(0, 200));
-					throw new Error('Invalid response format from API');
+					// Treat as not listed
+					listingValue.textContent = 'Not Listed';
+					listingValue.classList.remove('for-sale');
+					bidsCount.textContent = '0';
+					bidsList.innerHTML = '<div class="no-bids">No bids yet</div>';
+					updatePlaceBidButton();
+					marketplaceLoading.style.display = 'none';
+					marketplaceContent.style.display = 'flex';
+					return;
 				}
 
 				const data = await res.json();
@@ -7256,9 +7289,21 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				throw new Error('Wallet not connected');
 			}
 
+			if (!content || typeof content !== 'string' || content.trim().length === 0) {
+				throw new Error('Message content is required');
+			}
+
 			const recipientAddr = recipientName.includes('0x')
 				? recipientName
 				: MESSAGING_RECIPIENT_ADDRESS;
+
+			if (!recipientAddr || recipientAddr.trim().length === 0) {
+				throw new Error('Recipient address is required');
+			}
+
+			if (!connectedAddress || connectedAddress.trim().length === 0) {
+				throw new Error('Sender address is required');
+			}
 
 			const timestamp = Date.now();
 			const nonce = crypto.randomUUID();
@@ -7335,11 +7380,15 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			// Encrypt message (only recipient can decrypt)
 			const encrypted = await encryptForRecipient(messageData, recipientAddr);
 
+			if (!encrypted || !encrypted.encrypted) {
+				throw new Error('Failed to encrypt message');
+			}
+
 			// Debug: log what we're sending
 			const requestBody = {
 				encryptedMessage: encrypted,
 				sender: connectedAddress,
-				senderName: connectedPrimaryName,
+				senderName: connectedPrimaryName || null,
 				recipient: recipientAddr,
 				recipientName: messageData.toName,
 				signature: signature,
@@ -7348,6 +7397,11 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				nonce: nonce,
 				contentHash: contentHash,
 			};
+
+			// Validate request body before sending
+			if (!requestBody.encryptedMessage || !requestBody.sender || !requestBody.recipient) {
+				throw new Error('Invalid message data: missing required fields');
+			}
 			console.log('Sending message request:', {
 				hasEncryptedMessage: !!requestBody.encryptedMessage,
 				hasSender: !!requestBody.sender,
@@ -7366,7 +7420,11 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 			if (!response.ok) {
 				const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-				throw new Error(error.error || 'Failed to send message');
+				console.error('Server error response:', error);
+				const debugInfo = error.debug
+					? \` [encrypted: \${error.debug.hasEncryptedMessage}, sender: \${error.debug.hasSender}, recipient: \${error.debug.hasRecipient}]\`
+					: '';
+				throw new Error((error.error || 'Failed to send message') + debugInfo);
 			}
 
 			const result = await response.json();
