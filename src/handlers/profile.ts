@@ -1859,7 +1859,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		import { SuiClient } from 'https://esm.sh/@mysten/sui@1.45.2/client';
 		import { Transaction } from 'https://esm.sh/@mysten/sui@1.45.2/transactions';
 		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.9.13';
-		import { SealClient, SessionKey, getAllowlistedKeyServers } from 'https://esm.sh/@mysten/seal@0.4.0';
+		import { SealClient, SessionKey } from 'https://esm.sh/@mysten/seal@0.9.6';
 		import { fromHex, toHex } from 'https://esm.sh/@mysten/bcs@1.3.0';
 
 		const NAME = ${serializeJson(cleanName)};
@@ -8438,6 +8438,12 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// Initial button state (will show connect prompt since no wallet)
 		updateSendButtonState();
 
+		// Hardcoded testnet key server IDs (from Seal SDK source)
+		const TESTNET_KEY_SERVERS = [
+			'0xb35a7228d8cf224ad1e828c0217c95a5153bafc2906d6f9c178197dce26fbcf8',
+			'0x2d6cde8a9d9a65bde3b0a346566945a63b4bfb70e9a06c41bdb70807e2502b06',
+		];
+
 		// Initialize Seal SDK with config from server
 		async function initSealClient() {
 			if (sealClient) return sealClient;
@@ -8452,25 +8458,23 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				sealConfig = await response.json();
 				console.log('Seal config loaded:', sealConfig.seal?.packageId);
 
-				const keyServerObjectIds = sealConfig.seal?.keyServers?.objectIds || [];
+				let keyServerObjectIds = sealConfig.seal?.keyServers?.objectIds || [];
+
+				// Use hardcoded testnet servers if none configured
 				if (keyServerObjectIds.length === 0 && NETWORK === 'testnet') {
-					try {
-						const allowlisted = await getAllowlistedKeyServers(NETWORK);
-						keyServerObjectIds.push(...allowlisted);
-					} catch (e) {
-						console.warn('getAllowlistedKeyServers failed:', e.message);
-					}
+					keyServerObjectIds = TESTNET_KEY_SERVERS;
+					console.log('Using hardcoded testnet key servers');
 				}
 
 				if (keyServerObjectIds.length === 0) {
-					console.warn('No Seal key servers configured for', NETWORK, '- encryption will use base64 fallback');
+					console.warn('No Seal key servers configured for', NETWORK);
 					return null;
 				}
 
 				const suiClient = getSuiClient();
 				sealClient = new SealClient({
 					suiClient,
-					serverObjectIds: keyServerObjectIds,
+					serverConfigs: keyServerObjectIds.map(id => ({ objectId: id, weight: 1 })),
 					verifyKeyServers: true,
 				});
 
@@ -8502,21 +8506,28 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 				const suiClient = getSuiClient();
 				const packageId = sealConfig.seal.packageId;
 
-				currentSessionKey = new SessionKey({
-					address: connectedAddress,
-					packageId,
-					ttlMin: 60,
-				});
-
-				const signPersonalMessage = async (message) => {
-					const result = await connectedWallet.features['sui:signPersonalMessage'].signPersonalMessage({
-						account: connectedAccount,
-						message,
-					});
-					return { signature: result.signature };
+				// Create a custom signer that uses the wallet
+				const walletSigner = {
+					getPublicKey: async () => {
+						return { toSuiBytes: () => new Uint8Array(32) };
+					},
+					signPersonalMessage: async (message) => {
+						const result = await connectedWallet.features['sui:signPersonalMessage'].signPersonalMessage({
+							account: connectedAccount,
+							message,
+						});
+						return { signature: result.signature };
+					},
 				};
 
-				await currentSessionKey.setPersonalMessageSignCallback(signPersonalMessage);
+				currentSessionKey = await SessionKey.create({
+					address: connectedAddress,
+					packageId,
+					ttlMin: 30,
+					suiClient,
+					signer: walletSigner,
+				});
+
 				console.log('Session key created for address:', connectedAddress);
 				return currentSessionKey;
 			} catch (error) {
@@ -9371,6 +9382,268 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 
 		// Initialize Seal on page load
 		initSealSdk();
+
+		// ============================================
+		// MVR Dashboard JavaScript
+		// ============================================
+
+		const MVR_API_BASE = NETWORK === 'mainnet'
+			? 'https://mainnet.mvr.mystenlabs.com'
+			: 'https://testnet.mvr.mystenlabs.com';
+
+		// MVR Sub-tabs
+		const mvrTabs = document.querySelectorAll('.mvr-tab');
+		const mvrTabContents = document.querySelectorAll('.mvr-tab-content');
+
+		function switchMvrTab(tabId) {
+			mvrTabs.forEach(tab => {
+				tab.classList.toggle('active', tab.dataset.mvrTab === tabId);
+			});
+			mvrTabContents.forEach(content => {
+				content.classList.toggle('active', content.dataset.mvrContent === tabId);
+			});
+		}
+
+		mvrTabs.forEach(tab => {
+			tab.addEventListener('click', () => switchMvrTab(tab.dataset.mvrTab));
+		});
+
+		// Go to register from empty state
+		const mvrGoRegister = document.getElementById('mvr-go-register');
+		if (mvrGoRegister) {
+			mvrGoRegister.addEventListener('click', () => switchMvrTab('register'));
+		}
+
+		// Load packages for this SuiNS name
+		async function loadMvrPackages() {
+			const list = document.getElementById('mvr-packages-list');
+			const empty = document.getElementById('mvr-packages-empty');
+			const pkgCount = document.getElementById('mvr-pkg-count');
+			const verCount = document.getElementById('mvr-version-count');
+
+			if (!list) return;
+
+			list.innerHTML = '<div class="mvr-loading"><span class="loading"></span><span>Loading packages...</span></div>';
+			empty?.classList.add('hidden');
+
+			try {
+				const response = await fetch('/api/mvr/packages/' + encodeURIComponent(NAME));
+				if (!response.ok) throw new Error('Failed to load packages');
+
+				const data = await response.json();
+				const packages = data.packages || [];
+
+				if (pkgCount) pkgCount.textContent = packages.length.toString();
+
+				let totalVersions = 0;
+				packages.forEach(pkg => {
+					totalVersions += pkg.versions?.length || 1;
+				});
+				if (verCount) verCount.textContent = totalVersions.toString();
+
+				if (packages.length === 0) {
+					list.innerHTML = '';
+					empty?.classList.remove('hidden');
+					populatePackageSelects([]);
+					return;
+				}
+
+				list.innerHTML = packages.map(pkg => {
+					const latestVersion = pkg.versions?.[pkg.versions.length - 1] || { version: 1 };
+					return '<div class="mvr-package-card">' +
+						'<div class="mvr-package-header">' +
+							'<span class="mvr-package-name">@' + NAME + '/' + escapeHtmlJs(pkg.name) + '</span>' +
+							'<span class="mvr-package-version">v' + latestVersion.version + '</span>' +
+						'</div>' +
+						'<div class="mvr-package-addr">' + escapeHtmlJs(pkg.address || 'Unknown') + '</div>' +
+						'<div class="mvr-package-meta">' +
+							(pkg.description ? '<span>' + escapeHtmlJs(pkg.description) + '</span>' : '') +
+							(pkg.repoUrl ? '<a href="' + escapeHtmlJs(pkg.repoUrl) + '" target="_blank">Repository</a>' : '') +
+						'</div>' +
+					'</div>';
+				}).join('');
+
+				populatePackageSelects(packages);
+			} catch (err) {
+				console.error('Failed to load MVR packages:', err);
+				list.innerHTML = '<div class="mvr-status error">Failed to load packages</div>';
+				if (pkgCount) pkgCount.textContent = '0';
+				if (verCount) verCount.textContent = '0';
+			}
+		}
+
+		function escapeHtmlJs(str) {
+			if (!str) return '';
+			return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+		}
+
+		function populatePackageSelects(packages) {
+			const selects = [
+				document.getElementById('mvr-ver-package'),
+				document.getElementById('mvr-meta-package')
+			];
+			selects.forEach(select => {
+				if (!select) return;
+				select.innerHTML = '<option value="">Select a package...</option>' +
+					packages.map(pkg => '<option value="' + escapeHtmlJs(pkg.name) + '">@' + NAME + '/' + escapeHtmlJs(pkg.name) + '</option>').join('');
+			});
+		}
+
+		// Refresh packages button
+		const mvrRefreshBtn = document.getElementById('mvr-refresh-packages');
+		if (mvrRefreshBtn) {
+			mvrRefreshBtn.addEventListener('click', loadMvrPackages);
+		}
+
+		// Copy buttons
+		document.querySelectorAll('.mvr-copy-btn').forEach(btn => {
+			btn.addEventListener('click', async () => {
+				const text = btn.dataset.copy;
+				if (text) {
+					try {
+						await navigator.clipboard.writeText(text);
+						const orig = btn.textContent;
+						btn.textContent = 'Copied!';
+						setTimeout(() => btn.textContent = orig, 1500);
+					} catch (e) {
+						console.error('Copy failed:', e);
+					}
+				}
+			});
+		});
+
+		// Quick fill parsing
+		const mvrQuickFillInput = document.getElementById('mvr-quick-fill-input');
+		const mvrParseBtn = document.getElementById('mvr-parse-quick-fill');
+		const mvrParseFeedback = document.getElementById('mvr-parse-feedback');
+
+		if (mvrParseBtn && mvrQuickFillInput) {
+			mvrParseBtn.addEventListener('click', () => {
+				const text = mvrQuickFillInput.value.trim();
+				if (!text) return;
+
+				// Parse package ID
+				const pkgMatch = text.match(/0x[a-fA-F0-9]{64}/);
+				if (pkgMatch) {
+					const pkgAddrInput = document.getElementById('mvr-reg-pkgaddr');
+					if (pkgAddrInput) pkgAddrInput.value = pkgMatch[0];
+				}
+
+				// Parse UpgradeCap (often appears after "UpgradeCap" in output)
+				const upgradeCapMatch = text.match(/UpgradeCap[^0x]*(0x[a-fA-F0-9]{64})/i) ||
+					text.match(/upgrade_cap[^0x]*(0x[a-fA-F0-9]{64})/i);
+				if (upgradeCapMatch) {
+					const ucInput = document.getElementById('mvr-reg-upgradecap');
+					if (ucInput) ucInput.value = upgradeCapMatch[1];
+				}
+
+				// Parse MVR name format (@name/package)
+				const mvrNameMatch = text.match(/@([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/);
+				if (mvrNameMatch) {
+					const pkgNameInput = document.getElementById('mvr-reg-pkgname');
+					if (pkgNameInput) pkgNameInput.value = mvrNameMatch[2];
+				}
+
+				if (mvrParseFeedback) {
+					mvrParseFeedback.textContent = 'Parsed!';
+					setTimeout(() => mvrParseFeedback.textContent = '', 2000);
+				}
+			});
+		}
+
+		// Reverse resolution lookup
+		const mvrLookupForm = document.getElementById('mvr-lookup-form');
+		if (mvrLookupForm) {
+			mvrLookupForm.addEventListener('submit', async (e) => {
+				e.preventDefault();
+				const textarea = document.getElementById('mvr-lookup-addrs');
+				const resultsDiv = document.getElementById('mvr-lookup-results');
+				const listDiv = document.getElementById('mvr-lookup-list');
+
+				if (!textarea || !resultsDiv || !listDiv) return;
+
+				const text = textarea.value.trim();
+				const addresses = text.split(/[,\\n]/).map(s => s.trim()).filter(s => s.startsWith('0x'));
+
+				if (addresses.length === 0) return;
+
+				resultsDiv.classList.remove('hidden');
+				listDiv.innerHTML = '<div class="mvr-loading"><span class="loading"></span></div>';
+
+				try {
+					const response = await fetch(MVR_API_BASE + '/v1/reverse-resolution/bulk', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ package_ids: addresses })
+					});
+
+					if (!response.ok) throw new Error('Lookup failed');
+
+					const data = await response.json();
+					const resolution = data.resolution || {};
+
+					listDiv.innerHTML = addresses.map(addr => {
+						const name = resolution[addr]?.name;
+						return '<div class="mvr-lookup-item">' +
+							'<span class="addr">' + escapeHtmlJs(addr) + '</span>' +
+							(name
+								? '<span class="name">' + escapeHtmlJs(name) + '</span>'
+								: '<span class="not-found">Not registered</span>') +
+						'</div>';
+					}).join('');
+				} catch (err) {
+					listDiv.innerHTML = '<div class="mvr-status error">Lookup failed: ' + escapeHtmlJs(err.message) + '</div>';
+				}
+			});
+		}
+
+		// Name resolution
+		const mvrResolveForm = document.getElementById('mvr-resolve-form');
+		if (mvrResolveForm) {
+			mvrResolveForm.addEventListener('submit', async (e) => {
+				e.preventDefault();
+				const input = document.getElementById('mvr-resolve-name');
+				const resultDiv = document.getElementById('mvr-resolve-result');
+
+				if (!input || !resultDiv) return;
+
+				const name = input.value.trim();
+				if (!name) return;
+
+				resultDiv.classList.remove('hidden');
+				resultDiv.innerHTML = '<div class="mvr-loading"><span class="loading"></span></div>';
+
+				try {
+					const response = await fetch(MVR_API_BASE + '/v1/names/' + encodeURIComponent(name));
+					if (!response.ok) throw new Error('Resolution failed');
+
+					const data = await response.json();
+					resultDiv.innerHTML = '<div class="label">Package Address</div>' +
+						'<div class="value">' + escapeHtmlJs(data.address || data.package_id || 'Not found') + '</div>';
+				} catch (err) {
+					resultDiv.innerHTML = '<div class="mvr-status error">Resolution failed</div>';
+				}
+			});
+		}
+
+		// Update wallet warning in register tab
+		function updateMvrWalletWarning() {
+			const warning = document.getElementById('mvr-register-wallet-warning');
+			if (warning) {
+				warning.classList.toggle('hidden', !!connectedAddress);
+			}
+		}
+
+		// Initialize MVR dashboard
+		loadMvrPackages();
+		updateMvrWalletWarning();
+
+		// Re-check wallet warning when wallet connects
+		const origUpdateEditButton = updateEditButton;
+		updateEditButton = function() {
+			origUpdateEditButton();
+			updateMvrWalletWarning();
+		};
 
 		// Initialize subscribe button
 		const subscribeBtn = document.getElementById('subscribe-btn');

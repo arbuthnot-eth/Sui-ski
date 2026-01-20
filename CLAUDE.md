@@ -931,6 +931,22 @@ Solves the problem of TEEs losing secrets on restart/migration:
 | Recovery bandwidth | Proportional to sliver size (not blob size) |
 | Token | WAL (delegated proof-of-stake) |
 
+### Components
+
+**Sui Layer (metadata):**
+- **System Object**: Shared object tracking current storage node committee (ID in `client_config.yaml`)
+- **Storage Resources**: Objects representing available storage capacity
+- **Blob Resources**: Objects for blobs undergoing registration/certification
+- **Events**: Emitted when Walrus objects change state
+
+**Walrus Services:**
+- **Client Binary**: CLI, JSON API, and HTTP API interfaces
+- **Aggregator**: HTTP-based blob retrieval service
+- **Publisher**: Blob storage operations service
+- **Storage Nodes**: Decentralized infrastructure layer
+
+**Typical Integration:** End users interact via aggregators/publishers (HTTP), avoiding local binary deployment.
+
 ---
 
 ## Cloudflare DNS Setup

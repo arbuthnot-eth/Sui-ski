@@ -7970,4 +7970,794 @@ export const profileStyles = `
 			background: rgba(34, 197, 94, 0.15);
 			color: #22c55e;
 		}
+
+		/* ============================================
+		   MVR Dashboard Styles
+		   ============================================ */
+
+		.mvr-dashboard {
+			padding: 4px;
+		}
+
+		.mvr-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 20px;
+			flex-wrap: wrap;
+			gap: 16px;
+		}
+
+		.mvr-header-title {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+		}
+
+		.mvr-header-title svg {
+			width: 32px;
+			height: 32px;
+			color: var(--accent);
+		}
+
+		.mvr-header-title h2 {
+			font-size: 1.5rem;
+			margin: 0;
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+		}
+
+		.mvr-namespace {
+			font-size: 0.9rem;
+			color: var(--text-muted);
+			font-family: ui-monospace, monospace;
+		}
+
+		.mvr-external-link {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 8px 14px;
+			background: rgba(96, 165, 250, 0.1);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 8px;
+			color: var(--accent);
+			text-decoration: none;
+			font-size: 0.85rem;
+			font-weight: 500;
+			transition: all 0.2s;
+		}
+
+		.mvr-external-link:hover {
+			background: rgba(96, 165, 250, 0.2);
+			border-color: var(--accent);
+		}
+
+		.mvr-external-link svg {
+			width: 14px;
+			height: 14px;
+		}
+
+		.mvr-stats {
+			display: flex;
+			gap: 16px;
+			margin-bottom: 24px;
+			flex-wrap: wrap;
+		}
+
+		.mvr-stat {
+			flex: 1;
+			min-width: 100px;
+			padding: 16px 20px;
+			background: linear-gradient(135deg, rgba(30, 30, 40, 0.6), rgba(20, 20, 30, 0.7));
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			text-align: center;
+		}
+
+		.mvr-stat-value {
+			display: block;
+			font-size: 1.75rem;
+			font-weight: 700;
+			color: var(--text);
+			margin-bottom: 4px;
+		}
+
+		.mvr-stat-value.mvr-stat-network {
+			font-size: 1rem;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: var(--accent);
+		}
+
+		.mvr-stat-label {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.03em;
+		}
+
+		.mvr-tabs {
+			display: flex;
+			gap: 4px;
+			margin-bottom: 20px;
+			padding: 4px;
+			background: rgba(15, 15, 20, 0.5);
+			border-radius: 12px;
+			overflow-x: auto;
+		}
+
+		.mvr-tab {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			padding: 10px 14px;
+			background: transparent;
+			border: none;
+			border-radius: 8px;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+			font-weight: 500;
+			cursor: pointer;
+			transition: all 0.2s;
+			white-space: nowrap;
+		}
+
+		.mvr-tab svg {
+			width: 16px;
+			height: 16px;
+		}
+
+		.mvr-tab:hover {
+			background: rgba(96, 165, 250, 0.1);
+			color: var(--text);
+		}
+
+		.mvr-tab.active {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.2), rgba(139, 92, 246, 0.2));
+			color: var(--accent);
+		}
+
+		.mvr-tab-content {
+			display: none;
+		}
+
+		.mvr-tab-content.active {
+			display: block;
+			animation: mvrFadeIn 0.2s ease;
+		}
+
+		@keyframes mvrFadeIn {
+			from { opacity: 0; transform: translateY(8px); }
+			to { opacity: 1; transform: translateY(0); }
+		}
+
+		.mvr-packages-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 16px;
+		}
+
+		.mvr-packages-header h3 {
+			font-size: 1.1rem;
+			margin: 0;
+		}
+
+		.mvr-refresh-btn {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			padding: 8px 12px;
+			background: rgba(96, 165, 250, 0.1);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 8px;
+			color: var(--accent);
+			font-size: 0.8rem;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+
+		.mvr-refresh-btn svg {
+			width: 14px;
+			height: 14px;
+		}
+
+		.mvr-refresh-btn:hover {
+			background: rgba(96, 165, 250, 0.2);
+		}
+
+		.mvr-packages-list {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+
+		.mvr-loading {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 12px;
+			padding: 40px;
+			color: var(--text-muted);
+		}
+
+		.mvr-packages-empty {
+			text-align: center;
+			padding: 48px 24px;
+			color: var(--text-muted);
+		}
+
+		.mvr-packages-empty svg {
+			width: 48px;
+			height: 48px;
+			margin-bottom: 16px;
+			opacity: 0.4;
+		}
+
+		.mvr-packages-empty p {
+			font-size: 1.1rem;
+			margin-bottom: 8px;
+			color: var(--text);
+		}
+
+		.mvr-empty-action {
+			margin-top: 20px;
+			padding: 12px 24px;
+			background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+			border: none;
+			border-radius: 10px;
+			color: white;
+			font-weight: 600;
+			cursor: pointer;
+			transition: transform 0.2s;
+		}
+
+		.mvr-empty-action:hover {
+			transform: translateY(-2px);
+		}
+
+		.mvr-package-card {
+			padding: 16px;
+			background: linear-gradient(135deg, rgba(30, 30, 40, 0.6), rgba(20, 20, 30, 0.7));
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			transition: all 0.2s;
+		}
+
+		.mvr-package-card:hover {
+			border-color: rgba(96, 165, 250, 0.3);
+		}
+
+		.mvr-package-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 12px;
+		}
+
+		.mvr-package-name {
+			font-size: 1rem;
+			font-weight: 600;
+			color: var(--accent);
+		}
+
+		.mvr-package-version {
+			font-size: 0.75rem;
+			padding: 4px 10px;
+			background: rgba(52, 211, 153, 0.15);
+			color: var(--success);
+			border-radius: 6px;
+			font-weight: 600;
+		}
+
+		.mvr-package-addr {
+			font-family: ui-monospace, monospace;
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			margin-bottom: 8px;
+			word-break: break-all;
+		}
+
+		.mvr-package-meta {
+			display: flex;
+			gap: 16px;
+			font-size: 0.8rem;
+			color: var(--text-muted);
+		}
+
+		.mvr-package-meta a {
+			color: var(--accent);
+			text-decoration: none;
+		}
+
+		.mvr-form-section {
+			padding: 20px;
+			background: linear-gradient(135deg, rgba(30, 30, 40, 0.5), rgba(20, 20, 30, 0.6));
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			margin-bottom: 20px;
+		}
+
+		.mvr-form-section h3 {
+			font-size: 1.15rem;
+			margin: 0 0 8px 0;
+		}
+
+		.mvr-form-desc {
+			font-size: 0.9rem;
+			color: var(--text-muted);
+			margin-bottom: 20px;
+			line-height: 1.5;
+		}
+
+		.mvr-form-desc code {
+			background: rgba(96, 165, 250, 0.1);
+			padding: 2px 6px;
+			border-radius: 4px;
+			font-size: 0.85em;
+		}
+
+		.mvr-form {
+			display: flex;
+			flex-direction: column;
+			gap: 16px;
+		}
+
+		.mvr-form-grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 16px;
+		}
+
+		@media (max-width: 600px) {
+			.mvr-form-grid {
+				grid-template-columns: 1fr;
+			}
+		}
+
+		.mvr-form-group {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+
+		.mvr-form-group label {
+			font-size: 0.85rem;
+			font-weight: 600;
+			color: var(--text-muted);
+		}
+
+		.mvr-form-group label .optional {
+			font-weight: 400;
+			opacity: 0.6;
+		}
+
+		.mvr-form-group input,
+		.mvr-form-group textarea,
+		.mvr-form-group select {
+			padding: 12px 14px;
+			background: rgba(15, 18, 32, 0.8);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			color: var(--text);
+			font-size: 0.95rem;
+			font-family: inherit;
+			transition: border-color 0.2s;
+		}
+
+		.mvr-form-group input.mono,
+		.mvr-form-group textarea.mono {
+			font-family: ui-monospace, monospace;
+			font-size: 0.85rem;
+		}
+
+		.mvr-form-group input:focus,
+		.mvr-form-group textarea:focus,
+		.mvr-form-group select:focus {
+			outline: none;
+			border-color: var(--accent);
+		}
+
+		.mvr-form-group input[readonly] {
+			opacity: 0.6;
+			cursor: not-allowed;
+		}
+
+		.mvr-form-group textarea {
+			resize: vertical;
+			min-height: 60px;
+		}
+
+		.mvr-hint {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			opacity: 0.7;
+		}
+
+		.mvr-form-actions {
+			display: flex;
+			gap: 12px;
+			margin-top: 8px;
+		}
+
+		.mvr-btn-primary {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			padding: 12px 24px;
+			background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+			border: none;
+			border-radius: 10px;
+			color: white;
+			font-size: 0.95rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+			box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+		}
+
+		.mvr-btn-primary:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+		}
+
+		.mvr-btn-primary:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+			transform: none;
+		}
+
+		.mvr-btn-primary svg {
+			width: 18px;
+			height: 18px;
+		}
+
+		.mvr-btn-secondary {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 10px 18px;
+			background: rgba(96, 165, 250, 0.1);
+			border: 1px solid rgba(96, 165, 250, 0.3);
+			border-radius: 8px;
+			color: var(--accent);
+			font-size: 0.9rem;
+			font-weight: 500;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+
+		.mvr-btn-secondary:hover {
+			background: rgba(96, 165, 250, 0.2);
+		}
+
+		.mvr-quick-fill {
+			padding: 16px;
+			background: rgba(96, 165, 250, 0.08);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 10px;
+		}
+
+		.mvr-quick-fill label {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			font-size: 0.9rem;
+			font-weight: 600;
+			color: var(--accent);
+			margin-bottom: 10px;
+		}
+
+		.mvr-quick-fill label svg {
+			width: 16px;
+			height: 16px;
+		}
+
+		.mvr-quick-fill textarea {
+			width: 100%;
+			padding: 12px;
+			background: rgba(15, 18, 32, 0.8);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			color: var(--text);
+			font-size: 0.85rem;
+			font-family: ui-monospace, monospace;
+			min-height: 80px;
+			resize: vertical;
+		}
+
+		.mvr-quick-fill-actions {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			margin-top: 10px;
+		}
+
+		#mvr-parse-feedback {
+			font-size: 0.8rem;
+			color: var(--success);
+		}
+
+		.mvr-status {
+			padding: 12px 16px;
+			border-radius: 10px;
+			font-size: 0.9rem;
+		}
+
+		.mvr-status.success {
+			background: rgba(52, 211, 153, 0.15);
+			border: 1px solid rgba(52, 211, 153, 0.3);
+			color: var(--success);
+		}
+
+		.mvr-status.error {
+			background: rgba(248, 113, 113, 0.15);
+			border: 1px solid rgba(248, 113, 113, 0.3);
+			color: var(--error);
+		}
+
+		.mvr-status.info {
+			background: rgba(96, 165, 250, 0.15);
+			border: 1px solid rgba(96, 165, 250, 0.3);
+			color: var(--accent);
+		}
+
+		.mvr-warning {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 14px 16px;
+			background: rgba(251, 191, 36, 0.1);
+			border: 1px solid rgba(251, 191, 36, 0.3);
+			border-radius: 10px;
+			color: var(--warning);
+			margin-bottom: 16px;
+		}
+
+		.mvr-warning svg {
+			width: 20px;
+			height: 20px;
+			flex-shrink: 0;
+		}
+
+		.mvr-lookup-results {
+			margin-top: 20px;
+			padding: 16px;
+			background: rgba(15, 18, 32, 0.6);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+		}
+
+		.mvr-lookup-results h4 {
+			font-size: 1rem;
+			margin: 0 0 12px 0;
+		}
+
+		#mvr-lookup-list {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+
+		.mvr-lookup-item {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 12px;
+			background: rgba(30, 30, 40, 0.5);
+			border-radius: 8px;
+			gap: 12px;
+		}
+
+		.mvr-lookup-item .addr {
+			font-family: ui-monospace, monospace;
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			word-break: break-all;
+			flex: 1;
+		}
+
+		.mvr-lookup-item .name {
+			font-weight: 600;
+			color: var(--accent);
+			white-space: nowrap;
+		}
+
+		.mvr-lookup-item .not-found {
+			color: var(--text-muted);
+			font-style: italic;
+		}
+
+		.mvr-resolve-result {
+			margin-top: 16px;
+			padding: 16px;
+			background: rgba(52, 211, 153, 0.1);
+			border: 1px solid rgba(52, 211, 153, 0.2);
+			border-radius: 10px;
+		}
+
+		.mvr-resolve-result .label {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			margin-bottom: 4px;
+		}
+
+		.mvr-resolve-result .value {
+			font-family: ui-monospace, monospace;
+			font-size: 0.9rem;
+			word-break: break-all;
+		}
+
+		.mvr-sdk-section {
+			margin-bottom: 24px;
+		}
+
+		.mvr-sdk-section h3 {
+			font-size: 1.15rem;
+			margin: 0 0 8px 0;
+		}
+
+		.mvr-code-block {
+			margin: 12px 0;
+			background: rgba(10, 10, 15, 0.8);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			overflow: hidden;
+		}
+
+		.mvr-code-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 10px 14px;
+			background: rgba(30, 30, 40, 0.5);
+			border-bottom: 1px solid var(--border);
+		}
+
+		.mvr-code-header span {
+			font-size: 0.8rem;
+			font-weight: 600;
+			color: var(--text-muted);
+		}
+
+		.mvr-copy-btn {
+			padding: 4px 10px;
+			background: rgba(96, 165, 250, 0.1);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 6px;
+			color: var(--accent);
+			font-size: 0.75rem;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+
+		.mvr-copy-btn:hover {
+			background: rgba(96, 165, 250, 0.2);
+		}
+
+		.mvr-code-block pre {
+			margin: 0;
+			padding: 14px;
+			overflow-x: auto;
+		}
+
+		.mvr-code-block code {
+			font-family: 'Fira Code', ui-monospace, monospace;
+			font-size: 0.8rem;
+			line-height: 1.5;
+			color: var(--text);
+		}
+
+		.mvr-api-list {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+
+		.mvr-api-item {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			padding: 12px 14px;
+			background: rgba(30, 30, 40, 0.5);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+		}
+
+		.mvr-api-method {
+			padding: 4px 10px;
+			background: rgba(52, 211, 153, 0.15);
+			color: var(--success);
+			border-radius: 6px;
+			font-size: 0.7rem;
+			font-weight: 700;
+			text-transform: uppercase;
+		}
+
+		.mvr-api-method.post {
+			background: rgba(96, 165, 250, 0.15);
+			color: var(--accent);
+		}
+
+		.mvr-api-item code {
+			font-family: ui-monospace, monospace;
+			font-size: 0.85rem;
+			color: var(--text);
+		}
+
+		.mvr-api-desc {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			margin-left: auto;
+		}
+
+		.mvr-info-box {
+			padding: 16px;
+			background: rgba(96, 165, 250, 0.08);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			border-radius: 12px;
+			margin-top: 20px;
+		}
+
+		.mvr-info-box h4 {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			font-size: 1rem;
+			margin: 0 0 12px 0;
+			color: var(--accent);
+		}
+
+		.mvr-info-box h4 svg {
+			width: 18px;
+			height: 18px;
+		}
+
+		.mvr-info-box p {
+			font-size: 0.9rem;
+			color: var(--text-muted);
+			margin-bottom: 12px;
+			line-height: 1.5;
+		}
+
+		.mvr-info-box pre {
+			margin: 0;
+			padding: 12px;
+			background: rgba(10, 10, 15, 0.6);
+			border-radius: 8px;
+			overflow-x: auto;
+		}
+
+		.mvr-info-box code {
+			font-family: 'Fira Code', ui-monospace, monospace;
+			font-size: 0.8rem;
+			line-height: 1.5;
+		}
+
+		.mvr-practices ul {
+			margin: 0;
+			padding-left: 20px;
+		}
+
+		.mvr-practices li {
+			font-size: 0.85rem;
+			color: var(--text-muted);
+			margin-bottom: 10px;
+			line-height: 1.5;
+		}
+
+		.mvr-practices li strong {
+			color: var(--text);
+		}
+
+		.mvr-practices code {
+			background: rgba(96, 165, 250, 0.1);
+			padding: 2px 6px;
+			border-radius: 4px;
+			font-size: 0.8em;
+		}
 `
