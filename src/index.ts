@@ -170,7 +170,7 @@ async function handleSuiNSRequest(
 	const result = await resolveSuiNS(name, env, skipCache)
 
 	if (!result.found) {
-		return notFoundPage(name, env)
+		return notFoundPage(name, env, result.available)
 	}
 
 	const record = result.data as SuiNSRecord

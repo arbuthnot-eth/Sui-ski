@@ -36,6 +36,7 @@ export async function resolveSuiNS(
 						found: false,
 						error: `Name "${suinsName}" has expired and is available`,
 						expired: true,
+						available: true,
 					}
 				}
 				if (now >= expirationTime) {
@@ -63,7 +64,8 @@ export async function resolveSuiNS(
 		// Get the name record
 		const nameRecord = await suinsClient.getNameRecord(suinsName)
 		if (!nameRecord) {
-			return { found: false, error: `Name "${suinsName}" not found` }
+			// Name genuinely not found - available for registration
+			return { found: false, error: `Name "${suinsName}" not found`, available: true }
 		}
 
 		// Get the NFT owner (different from target address)
@@ -155,7 +157,9 @@ export async function resolveSuiNS(
 		return { found: true, data: record, cacheTtl: CACHE_TTL, expired, inGracePeriod }
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error'
-		return { found: false, error: message }
+		// Resolution error - do NOT mark as available, this could be a registered name
+		// that we failed to resolve due to network/RPC issues
+		return { found: false, error: message, available: false }
 	}
 }
 

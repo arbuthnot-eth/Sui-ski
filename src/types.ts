@@ -83,6 +83,8 @@ export interface ResolverResult {
 	expired?: boolean
 	/** Whether the name is in the grace period (expired but not yet available for registration) */
 	inGracePeriod?: boolean
+	/** Whether the name is confirmed available for registration (only true when we verified it's unregistered) */
+	available?: boolean
 }
 
 /** Standard gateway error response */
