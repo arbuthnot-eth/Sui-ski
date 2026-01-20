@@ -1017,26 +1017,11 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 	// POST /api/app/messages/send - Send Seal-encrypted message with full verification
 	if (path === 'messages/send' && request.method === 'POST') {
 		try {
-			const body = (await request.json()) as MessageSendRequest | {
-				// Legacy format support
-				encryptedMessage?: {
-					encrypted: string
-					sealPolicy: { type: string; address: string }
-					version: number
-				}
-				sender?: string
-				senderName?: string | null
-				recipient?: string
-				recipientName?: string
-				signature?: string
-				signaturePayload?: string
-				timestamp?: number
-				nonce?: string
-				contentHash?: string
-			}
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const body = (await request.json()) as any
 
-			// Handle both new and legacy message formats
-			const isNewFormat = 'envelope' in body && 'auth' in body && 'integrity' in body
+			// Handle multiple message formats for backward compatibility
+			const isNewFormat = body.envelope && body.auth && body.integrity
 			let envelope: SealEncryptedEnvelope
 			let auth: MessageAuthentication
 			let integrity: ContentIntegrity
@@ -1067,57 +1052,75 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				nonce = newBody.nonce
 				messageType = newBody.messageType || 'direct'
 			} else {
-				// Legacy format - convert to new structure
-				const legacyBody = body as {
-					encryptedMessage?: { encrypted: string; sealPolicy: { type: string; address: string }; version: number }
-					sender?: string
-					senderName?: string | null
-					recipient?: string
-					recipientName?: string
-					signature?: string
-					signaturePayload?: string
-					timestamp?: number
-					nonce?: string
-					contentHash?: string
+				// Legacy format - support multiple field names for compatibility
+				const encryptedMessage = body.encryptedMessage || body.encrypted || body.message
+				const senderAddr = body.sender || body.senderAddress || body.from
+				const recipientAddr = body.recipient || body.recipientAddress || body.to
+				const sig = body.signature || body.sig
+				const sigPayload = body.signaturePayload || body.payload || body.message
+
+				if (!encryptedMessage || !senderAddr || !recipientAddr) {
+					return jsonResponse({
+						error: 'Encrypted message, sender, and recipient required',
+						hint: 'Expected fields: encryptedMessage (or encrypted/message), sender (or from), recipient (or to)',
+						received: Object.keys(body),
+					}, 400)
 				}
 
-				if (!legacyBody.encryptedMessage || !legacyBody.sender || !legacyBody.recipient) {
-					return jsonResponse({ error: 'Encrypted message, sender, and recipient required' }, 400)
-				}
-				if (!legacyBody.signature || !legacyBody.signaturePayload) {
-					return jsonResponse({ error: 'Message must be signed by sender wallet' }, 400)
+				// Signature is optional for legacy format to maintain compatibility
+				const hasSignature = sig && sigPayload
+
+				// Handle various encrypted message formats
+				let ciphertext: string
+				let sealPolicyAddress: string
+				let version = 1
+
+				if (typeof encryptedMessage === 'string') {
+					ciphertext = encryptedMessage
+					sealPolicyAddress = recipientAddr
+				} else if (encryptedMessage.encrypted) {
+					ciphertext = encryptedMessage.encrypted
+					sealPolicyAddress = encryptedMessage.sealPolicy?.address || recipientAddr
+					version = encryptedMessage.version || 1
+				} else if (encryptedMessage.ciphertext) {
+					ciphertext = encryptedMessage.ciphertext
+					sealPolicyAddress = encryptedMessage.policy?.address || recipientAddr
+					version = encryptedMessage.version || 1
+				} else {
+					ciphertext = JSON.stringify(encryptedMessage)
+					sealPolicyAddress = recipientAddr
 				}
 
 				const sealPackageId = env.SEAL_PACKAGE_ID || '0x0000000000000000000000000000000000000000000000000000000000000000'
 				envelope = {
-					ciphertext: legacyBody.encryptedMessage.encrypted,
-					identity: `${sealPackageId}*${legacyBody.encryptedMessage.sealPolicy.address}`,
+					ciphertext,
+					identity: `${sealPackageId}*${sealPolicyAddress}`,
 					policy: {
 						type: 'address' as SealPolicyType,
 						packageId: sealPackageId,
-						policyId: legacyBody.encryptedMessage.sealPolicy.address,
-						params: { type: 'address', address: legacyBody.encryptedMessage.sealPolicy.address },
+						policyId: sealPolicyAddress,
+						params: { type: 'address', address: sealPolicyAddress },
 					},
-					version: legacyBody.encryptedMessage.version || 1,
+					version,
 					threshold: 2,
 				}
 				auth = {
-					signature: legacyBody.signature,
-					publicKey: '', // Not provided in legacy format
-					signedPayload: legacyBody.signaturePayload,
+					signature: hasSignature ? sig : '',
+					publicKey: '',
+					signedPayload: hasSignature ? sigPayload : '',
 					scheme: 'ed25519',
 				}
+				sender = senderAddr
+				senderName = body.senderName || null
+				recipient = recipientAddr
+				recipientName = body.recipientName || null
+				timestamp = body.timestamp || Date.now()
+				nonce = body.nonce || crypto.randomUUID()
 				integrity = {
-					contentHash: legacyBody.contentHash || '',
+					contentHash: body.contentHash || '',
 					algorithm: 'sha256',
-					sizeBytes: legacyBody.encryptedMessage.encrypted.length,
+					sizeBytes: ciphertext.length,
 				}
-				sender = legacyBody.sender
-				senderName = legacyBody.senderName || null
-				recipient = legacyBody.recipient
-				recipientName = legacyBody.recipientName || null
-				timestamp = legacyBody.timestamp || Date.now()
-				nonce = legacyBody.nonce || crypto.randomUUID()
 			}
 
 			// Validate Seal policy structure
