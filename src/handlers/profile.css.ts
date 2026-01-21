@@ -3,39 +3,39 @@
 
 export const profileStyles = `
 		:root {
-			/* Hive Aesthetic - Dark, atmospheric, dramatic lighting */
+			/* Deep dark background with vibrant accents */
 			--bg-void: #020204;
 			--bg-dark: #050507;
 			--bg-subtle: #0a0a0e;
-			--card-bg: rgba(8, 10, 14, 0.95);
-			--card-bg-solid: #08090d;
-			--card-bg-elevated: rgba(12, 14, 20, 0.98);
-			--glass-border: rgba(120, 140, 170, 0.08);
-			--text: #b8bcc8;
-			--text-bright: #d4d8e4;
-			--text-muted: #5a6070;
-			--text-dim: #3d424f;
-			--accent: #6889b0;
-			--accent-bright: #8ba8cc;
-			--accent-light: rgba(104, 137, 176, 0.1);
-			--accent-hover: #7d9bc2;
-			--accent-glow: rgba(104, 137, 176, 0.25);
-			--accent-dim: #4a6080;
-			--purple: #7868a8;
-			--purple-glow: rgba(120, 104, 168, 0.2);
-			--success: #4a9080;
-			--success-light: rgba(74, 144, 128, 0.1);
-			--warning: #a89060;
-			--warning-light: rgba(168, 144, 96, 0.1);
-			--error: #a86068;
-			--error-light: rgba(168, 96, 104, 0.1);
-			--border: rgba(100, 120, 150, 0.06);
-			--border-strong: rgba(100, 120, 150, 0.12);
-			--border-glow: rgba(104, 137, 176, 0.15);
+			--card-bg: rgba(12, 12, 18, 0.95);
+			--card-bg-solid: #0c0c12;
+			--card-bg-elevated: rgba(16, 16, 24, 0.98);
+			--glass-border: rgba(255, 255, 255, 0.08);
+			--text: #e4e4e7;
+			--text-bright: #f4f4f5;
+			--text-muted: #71717a;
+			--text-dim: #52525b;
+			--accent: #60a5fa;
+			--accent-bright: #93c5fd;
+			--accent-light: rgba(96, 165, 250, 0.12);
+			--accent-hover: #93c5fd;
+			--accent-glow: rgba(96, 165, 250, 0.3);
+			--accent-dim: #60a5fa;
+			--purple: #a78bfa;
+			--purple-glow: rgba(167, 139, 250, 0.2);
+			--success: #34d399;
+			--success-light: rgba(52, 211, 153, 0.12);
+			--warning: #fbbf24;
+			--warning-light: rgba(251, 191, 36, 0.12);
+			--error: #f87171;
+			--error-light: rgba(248, 113, 113, 0.12);
+			--border: rgba(255, 255, 255, 0.06);
+			--border-strong: rgba(255, 255, 255, 0.12);
+			--border-glow: rgba(96, 165, 250, 0.25);
 			--shadow: 0 4px 24px rgba(0, 0, 0, 0.6), 0 1px 4px rgba(0, 0, 0, 0.4);
 			--shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.7), 0 4px 12px rgba(0, 0, 0, 0.5);
-			--shadow-glow: 0 0 40px rgba(104, 137, 176, 0.08);
-			--spotlight-color: rgba(180, 200, 230, 0.03);
+			--shadow-glow: 0 0 40px rgba(96, 165, 250, 0.08);
+			--spotlight-color: rgba(96, 165, 250, 0.02);
 		}
 		* { margin: 0; padding: 0; box-sizing: border-box; }
 		body {
@@ -119,8 +119,8 @@ export const profileStyles = `
 			color: var(--accent);
 		}
 		.global-wallet-btn.connected {
-			background: linear-gradient(135deg, rgba(104, 137, 176, 0.08), rgba(120, 104, 168, 0.06));
-			border-color: var(--border-glow);
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(139, 92, 246, 0.15));
+			border-color: rgba(96, 165, 250, 0.3);
 		}
 		.global-wallet-btn.connected #global-wallet-text {
 			color: var(--accent);
@@ -350,10 +350,10 @@ export const profileStyles = `
 			color: var(--text);
 		}
 		.conv-avatar {
-			width: 40px;
-			height: 40px;
+			width: 44px;
+			height: 44px;
 			border-radius: 50%;
-			background: linear-gradient(135deg, var(--accent-dim), var(--purple));
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
 			display: flex;
 			align-items: center;
 			justify-content: center;
@@ -458,15 +458,14 @@ export const profileStyles = `
 		}
 		.conv-message.sent {
 			align-self: flex-end;
-			background: linear-gradient(135deg, var(--accent-dim), var(--purple));
-			color: var(--text-bright);
-			border-bottom-right-radius: 3px;
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
+			color: white;
+			border-bottom-right-radius: 4px;
 		}
 		.conv-message.received {
 			align-self: flex-start;
-			background: rgba(104, 137, 176, 0.06);
-			border: 1px solid var(--border);
-			border-bottom-left-radius: 3px;
+			background: rgba(255, 255, 255, 0.08);
+			border-bottom-left-radius: 4px;
 		}
 		.conv-message-time {
 			font-size: 0.7rem;
@@ -851,38 +850,38 @@ export const profileStyles = `
 			transition: all 0.25s ease;
 		}
 		.badge.network {
-			background: rgba(104, 137, 176, 0.08);
-			color: var(--accent-dim);
-			border: 1px solid var(--border);
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(139, 92, 246, 0.15));
+			color: var(--accent);
+			border: 1px solid rgba(96, 165, 250, 0.25);
 		}
 		.badge.expiry {
-			background: rgba(74, 144, 128, 0.08);
-			color: var(--success);
-			border: 1px solid rgba(74, 144, 128, 0.15);
+			background: rgba(34, 197, 94, 0.12);
+			color: #22c55e;
+			border: 1px solid rgba(34, 197, 94, 0.25);
 		}
 		.badge.expiry.warning {
-			background: rgba(168, 144, 96, 0.08);
-			color: var(--warning);
-			border: 1px solid rgba(168, 144, 96, 0.15);
-			animation: pulse-warning 3s ease-in-out infinite;
+			background: rgba(251, 191, 36, 0.12);
+			color: #fbbf24;
+			border: 1px solid rgba(251, 191, 36, 0.25);
+			animation: pulse-warning 2s infinite;
 		}
 		@keyframes pulse-warning {
-			0%, 100% { box-shadow: 0 0 0 0 rgba(168, 144, 96, 0.2); }
-			50% { box-shadow: 0 0 20px 0 rgba(168, 144, 96, 0.1); }
+			0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.3); }
+			50% { box-shadow: 0 0 12px 2px rgba(251, 191, 36, 0.2); }
 		}
 		.badge.expiry.danger {
-			background: rgba(168, 96, 104, 0.08);
-			color: var(--error);
-			border: 1px solid rgba(168, 96, 104, 0.15);
-			animation: pulse-danger 2s ease-in-out infinite;
+			background: rgba(248, 113, 113, 0.12);
+			color: #f87171;
+			border: 1px solid rgba(248, 113, 113, 0.25);
+			animation: pulse-danger 1.5s infinite;
 		}
 		@keyframes pulse-danger {
-			0%, 100% { box-shadow: 0 0 0 0 rgba(168, 96, 104, 0.2); }
-			50% { box-shadow: 0 0 20px 0 rgba(168, 96, 104, 0.15); }
+			0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.3); }
+			50% { box-shadow: 0 0 12px 2px rgba(248, 113, 113, 0.25); }
 		}
 		.badge.expiry.premium {
-			background: linear-gradient(135deg, rgba(104, 137, 176, 0.08), rgba(120, 104, 168, 0.08));
-			color: var(--accent);
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(167, 139, 250, 0.15));
+			color: #60a5fa;
 			border: 1px solid rgba(96, 165, 250, 0.3);
 		}
 		.header-meta {
@@ -2579,10 +2578,10 @@ export const profileStyles = `
 			gap: 16px;
 			margin-top: 24px;
 			padding: 20px;
-			background: linear-gradient(135deg, rgba(168, 96, 104, 0.06) 0%, rgba(168, 144, 96, 0.04) 100%);
-			border: 1px solid rgba(168, 96, 104, 0.15);
+			background: linear-gradient(135deg, rgba(248, 113, 113, 0.08) 0%, rgba(251, 191, 36, 0.06) 100%);
+			border: 1px solid rgba(248, 113, 113, 0.25);
 			border-radius: 12px;
-			animation: pulse-danger 3s ease-in-out infinite;
+			animation: pulse-danger 2s infinite;
 		}
 		.grace-period-icon {
 			flex-shrink: 0;
