@@ -3392,6 +3392,25 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 						disconnectWallet();
 					});
 				}
+
+				// Copy address on click
+				const addrEl = globalWalletDropdown.querySelector('.global-wallet-dropdown-addr');
+				if (addrEl) {
+					addrEl.addEventListener('click', async () => {
+						try {
+							await navigator.clipboard.writeText(connectedAddress);
+							addrEl.classList.add('copied');
+							const originalText = addrEl.textContent;
+							addrEl.textContent = 'Copied!';
+							setTimeout(() => {
+								addrEl.classList.remove('copied');
+								addrEl.textContent = originalText;
+							}, 1500);
+						} catch (err) {
+							console.error('Failed to copy:', err);
+						}
+					});
+				}
 			}
 		}
 

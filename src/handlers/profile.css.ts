@@ -105,9 +105,9 @@ export const profileStyles = `
 			box-shadow: var(--shadow), var(--shadow-glow);
 		}
 		.global-wallet-btn:hover {
-			border-color: var(--border-glow);
+			border-color: rgba(96, 165, 250, 0.4);
 			color: var(--text);
-			box-shadow: var(--shadow-lg), 0 0 30px rgba(104, 137, 176, 0.1);
+			box-shadow: var(--shadow-lg), 0 0 25px rgba(96, 165, 250, 0.15);
 		}
 		.global-wallet-btn svg:first-child {
 			width: 16px;
@@ -201,14 +201,24 @@ export const profileStyles = `
 			border-bottom: 1px solid var(--border);
 			font-family: ui-monospace, monospace;
 			font-size: 0.72rem;
-			color: var(--text-dim);
+			color: var(--text-muted);
 			word-break: break-all;
+			cursor: pointer;
+			transition: all 0.2s ease;
+		}
+		.global-wallet-dropdown-addr:hover {
+			background: rgba(96, 165, 250, 0.08);
+			color: #60a5fa;
+		}
+		.global-wallet-dropdown-addr.copied {
+			background: rgba(52, 211, 153, 0.1);
+			color: #34d399;
 		}
 
-		/* Custom Scrollbar - Minimal dark aesthetic */
+		/* Custom Scrollbar - Vibrant accent */
 		* {
 			scrollbar-width: thin;
-			scrollbar-color: var(--accent-dim) var(--bg-void);
+			scrollbar-color: #60a5fa var(--bg-void);
 		}
 		*::-webkit-scrollbar {
 			width: 5px;
@@ -218,11 +228,11 @@ export const profileStyles = `
 			background: var(--bg-void);
 		}
 		*::-webkit-scrollbar-thumb {
-			background: linear-gradient(180deg, var(--accent-dim), var(--purple));
+			background: linear-gradient(180deg, #60a5fa, #a78bfa);
 			border-radius: 3px;
 		}
 		*::-webkit-scrollbar-thumb:hover {
-			background: linear-gradient(180deg, var(--accent), var(--purple));
+			background: linear-gradient(180deg, #7ab8ff, #b99cff);
 		}
 
 		.container { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
@@ -267,9 +277,9 @@ export const profileStyles = `
 			color: var(--text-muted);
 		}
 		.sidebar-tab.active {
-			background: rgba(104, 137, 176, 0.08);
-			color: var(--accent);
-			box-shadow: inset 0 0 0 1px var(--border-glow);
+			background: rgba(96, 165, 250, 0.1);
+			color: #60a5fa;
+			box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.25), 0 0 20px rgba(96, 165, 250, 0.08);
 		}
 		.sidebar-tab svg {
 			width: 15px;
@@ -572,8 +582,8 @@ export const profileStyles = `
 			transform: translateY(-3px);
 			box-shadow:
 				0 32px 70px rgba(0, 0, 0, 0.6),
-				0 0 0 1px var(--border-glow),
-				0 0 60px rgba(104, 137, 176, 0.05),
+				0 0 0 1px rgba(96, 165, 250, 0.25),
+				0 0 40px rgba(96, 165, 250, 0.08),
 				inset 0 1px 0 rgba(180, 200, 230, 0.05);
 		}
 		.identity-visual {
@@ -744,8 +754,9 @@ export const profileStyles = `
 			letter-spacing: 0.02em;
 		}
 		.identity-name:hover {
-			background: rgba(104, 137, 176, 0.1);
-			color: var(--accent);
+			background: rgba(96, 165, 250, 0.15);
+			color: #60a5fa;
+			box-shadow: 0 0 15px rgba(96, 165, 250, 0.1);
 		}
 		.identity-name.copied {
 			background: rgba(74, 144, 128, 0.12);
@@ -988,8 +999,8 @@ export const profileStyles = `
 			border-radius: 6px;
 		}
 		.owner-actions .copy-btn:hover {
-			color: var(--accent);
-			background: rgba(104, 137, 176, 0.06);
+			color: #60a5fa;
+			background: rgba(96, 165, 250, 0.1);
 		}
 		.owner-actions .edit-btn {
 			background: transparent;
@@ -1003,9 +1014,10 @@ export const profileStyles = `
 			transition: all 0.25s ease;
 		}
 		.owner-actions .edit-btn:hover:not(:disabled) {
-			background: rgba(104, 137, 176, 0.08);
-			color: var(--text);
-			border-color: var(--border-glow);
+			background: rgba(96, 165, 250, 0.1);
+			color: #60a5fa;
+			border-color: rgba(96, 165, 250, 0.35);
+			box-shadow: 0 0 20px rgba(96, 165, 250, 0.1);
 		}
 		.owner-actions .edit-btn:disabled {
 			opacity: 0.4;
@@ -1018,19 +1030,20 @@ export const profileStyles = `
 			display: flex;
 			align-items: center;
 			gap: 6px;
-			background: linear-gradient(135deg, var(--accent-dim), var(--purple));
+			background: linear-gradient(135deg, #60a5fa, #a78bfa);
 			border: none;
-			color: var(--text-bright);
+			color: white;
 			padding: 7px 12px;
 			border-radius: 8px;
 			font-size: 0.72rem;
 			font-weight: 500;
 			cursor: pointer;
-			transition: all 0.2s;
+			transition: all 0.25s ease;
+			box-shadow: 0 2px 10px rgba(96, 165, 250, 0.2);
 		}
 		.owner-actions .message-btn:hover {
 			transform: translateY(-1px);
-			box-shadow: 0 6px 20px rgba(104, 137, 176, 0.15);
+			box-shadow: 0 6px 25px rgba(96, 165, 250, 0.35);
 		}
 		.owner-actions .message-btn svg {
 			width: 13px;
@@ -4532,9 +4545,10 @@ export const profileStyles = `
 			margin-right: 10px;
 		}
 		.search-btn:hover {
-			border-color: var(--border-glow);
-			background: rgba(104, 137, 176, 0.04);
-			color: var(--text-muted);
+			border-color: rgba(96, 165, 250, 0.35);
+			background: rgba(96, 165, 250, 0.06);
+			color: #60a5fa;
+			box-shadow: 0 0 20px rgba(96, 165, 250, 0.08);
 		}
 		.search-btn svg {
 			width: 14px;
