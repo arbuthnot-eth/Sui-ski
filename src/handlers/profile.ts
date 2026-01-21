@@ -3419,6 +3419,12 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		// Global function to update UI when wallet connects/disconnects
 		// This can be extended by other features (messaging, etc.)
 		var updateUIForWallet = function() {
+			// Expose wallet state to window for cross-script access
+			window.connectedAddress = connectedAddress;
+			window.connectedWallet = connectedWallet;
+			window.connectedAccount = connectedAccount;
+			window.updateEditButton = updateEditButton;
+
 			renderWalletBar();
 			updateGlobalWalletWidget();
 			checkEditPermission();
@@ -9665,6 +9671,15 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 	</footer>
 
 	<script>
+		// Config (duplicated from module script for this non-module context)
+		const NETWORK = ${serializeJson(network)};
+		const NAME = ${serializeJson(cleanName)};
+
+		// Getters for wallet state from module script (via window)
+		const getConnectedAddress = () => window.connectedAddress;
+		const getConnectedWallet = () => window.connectedWallet;
+		const getConnectedAccount = () => window.connectedAccount;
+
 		// Update SUI price
 		const suiPriceEl = document.getElementById('sui-price');
 		async function updateSUIPrice() {
@@ -9762,7 +9777,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		if (chatSendBtn && chatInput) {
 			chatSendBtn.addEventListener('click', () => {
 				const content = chatInput.value.trim();
-				if (!content || !connectedAddress) return;
+				if (!content || !window.connectedAddress) return;
 
 				const name = document.getElementById('fullscreen-chat-name').textContent.replace('@', '').replace('.sui', '');
 				const messages = JSON.parse(localStorage.getItem('sui_ski_messages_' + name) || '[]');
@@ -10292,7 +10307,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		function updateMvrWalletWarning() {
 			const warning = document.getElementById('mvr-register-wallet-warning');
 			if (warning) {
-				warning.classList.toggle('hidden', !!connectedAddress);
+				warning.classList.toggle('hidden', !!window.connectedAddress);
 			}
 		}
 
@@ -10301,11 +10316,13 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		updateMvrWalletWarning();
 
 		// Re-check wallet warning when wallet connects
-		const origUpdateEditButton = updateEditButton;
-		updateEditButton = function() {
-			origUpdateEditButton();
-			updateMvrWalletWarning();
-		};
+		if (typeof window.updateEditButton === 'function') {
+			const origUpdateEditButton = window.updateEditButton;
+			window.updateEditButton = function() {
+				origUpdateEditButton();
+				updateMvrWalletWarning();
+			};
+		}
 
 		// MVR Full Registration Form Handler
 		const mvrRegisterFormFull = document.getElementById('mvr-register-form-full');
