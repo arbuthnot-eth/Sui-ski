@@ -800,12 +800,12 @@ export const profileStyles = `
 			line-height: 1.2;
 		}
 		h1 .suffix {
-			background: linear-gradient(135deg, var(--accent) 0%, var(--purple) 50%, var(--accent) 100%);
+			background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #60a5fa 100%);
 			background-size: 200% auto;
 			-webkit-background-clip: text;
 			-webkit-text-fill-color: transparent;
 			background-clip: text;
-			animation: gradient-shift 4s ease infinite;
+			animation: gradient-shift 3s ease infinite;
 		}
 		@keyframes gradient-shift {
 			0%, 100% { background-position: 0% center; }
