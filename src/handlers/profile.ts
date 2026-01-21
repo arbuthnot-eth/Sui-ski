@@ -120,7 +120,7 @@ export function generateProfilePage(
 
 	<!-- PWA Meta Tags -->
 	<link rel="manifest" href="/manifest.json">
-	<meta name="theme-color" content="#60a5fa">
+	<meta name="theme-color" content="#020204">
 	<meta name="mobile-web-app-capable" content="yes">
 	<meta name="apple-mobile-web-app-capable" content="yes">
 	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
