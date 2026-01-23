@@ -630,6 +630,7 @@ function landingPageHTML(network: string, options: LandingPageOptions = {}): str
 ${socialMeta}
 	<style>
 		* { box-sizing: border-box; margin: 0; padding: 0; }
+		.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 		body {
 			font-family: 'Inter', system-ui, -apple-system, sans-serif;
 			background: linear-gradient(145deg, #0a0a0f 0%, #12121a 50%, #0d0d14 100%);
@@ -840,6 +841,7 @@ ${socialMeta}
 			<h2>Registration Workflow</h2>
 			<p>Queue bids, attach offline-signed registrations, and let sui.ski relay them the moment a name becomes available.</p>
 			<form id="registration-check" class="quick-form">
+				<label for="registration-name" class="visually-hidden">Name to register</label>
 				<input id="registration-name" type="text" placeholder="example" autocomplete="off" spellcheck="false" />
 				<button type="submit">Open name</button>
 			</form>

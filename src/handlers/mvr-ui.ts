@@ -42,6 +42,7 @@ function generateMVRManagementHTML(env: Env): string {
 	${socialMeta}
 	<style>
 		* { box-sizing: border-box; margin: 0; padding: 0; }
+		.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 		body {
 			font-family: 'Inter', system-ui, -apple-system, sans-serif;
 			background: linear-gradient(145deg, #0a0a0f 0%, #12121a 50%, #0d0d14 100%);
@@ -318,36 +319,36 @@ function generateMVRManagementHTML(env: Env): string {
 
 				<form id="register-form">
 					<div class="form-group">
-						<label>SuiNS Name</label>
+						<label for="register-suins">SuiNS Name</label>
 						<input type="text" id="register-suins" placeholder="myname" required />
 						<div class="hint">Your SuiNS name without the .sui suffix</div>
 					</div>
 
 					<div class="form-group">
-						<label>Package Name</label>
+						<label for="register-package">Package Name</label>
 						<input type="text" id="register-package" placeholder="core" required />
 						<div class="hint">Short identifier for your package (e.g., "core", "nft", "utils")</div>
 					</div>
 
 					<div class="form-group">
-						<label>Package Address</label>
+						<label for="register-address">Package Address</label>
 						<input type="text" id="register-address" placeholder="0x..." required />
 						<div class="hint">The on-chain address of your published Move package</div>
 					</div>
 
 					<div class="form-group">
-						<label>Description (Optional)</label>
+						<label for="register-description">Description (Optional)</label>
 						<textarea id="register-description" placeholder="A brief description of your package"></textarea>
 					</div>
 
 					<div class="grid-2">
 						<div class="form-group">
-							<label>Repository URL (Optional)</label>
+							<label for="register-repository">Repository URL (Optional)</label>
 							<input type="url" id="register-repository" placeholder="https://github.com/user/repo" />
 						</div>
 
 						<div class="form-group">
-							<label>Documentation URL (Optional)</label>
+							<label for="register-docs">Documentation URL (Optional)</label>
 							<input type="url" id="register-docs" placeholder="https://docs.example.com" />
 						</div>
 					</div>
@@ -367,24 +368,24 @@ function generateMVRManagementHTML(env: Env): string {
 
 				<form id="version-form">
 					<div class="form-group">
-						<label>SuiNS Name</label>
+						<label for="version-suins">SuiNS Name</label>
 						<input type="text" id="version-suins" placeholder="myname" required />
 					</div>
 
 					<div class="form-group">
-						<label>Package Name</label>
+						<label for="version-package">Package Name</label>
 						<input type="text" id="version-package" placeholder="core" required />
 					</div>
 
 					<div class="grid-2">
 						<div class="form-group">
-							<label>Version Number</label>
+							<label for="version-number">Version Number</label>
 							<input type="number" id="version-number" min="1" placeholder="2" required />
 							<div class="hint">Must be sequential (current version + 1)</div>
 						</div>
 
 						<div class="form-group">
-							<label>Package Address</label>
+							<label for="version-address">Package Address</label>
 							<input type="text" id="version-address" placeholder="0x..." required />
 							<div class="hint">Address of the new package version</div>
 						</div>
@@ -406,29 +407,29 @@ function generateMVRManagementHTML(env: Env): string {
 				<form id="metadata-form">
 					<div class="grid-2">
 						<div class="form-group">
-							<label>SuiNS Name</label>
+							<label for="metadata-suins">SuiNS Name</label>
 							<input type="text" id="metadata-suins" placeholder="myname" required />
 						</div>
 
 						<div class="form-group">
-							<label>Package Name</label>
+							<label for="metadata-package">Package Name</label>
 							<input type="text" id="metadata-package" placeholder="core" required />
 						</div>
 					</div>
 
 					<div class="form-group">
-						<label>Description</label>
+						<label for="metadata-description">Description</label>
 						<textarea id="metadata-description" placeholder="Updated description"></textarea>
 					</div>
 
 					<div class="grid-2">
 						<div class="form-group">
-							<label>Repository URL</label>
+							<label for="metadata-repository">Repository URL</label>
 							<input type="url" id="metadata-repository" placeholder="https://github.com/user/repo" />
 						</div>
 
 						<div class="form-group">
-							<label>Documentation URL</label>
+							<label for="metadata-docs">Documentation URL</label>
 							<input type="url" id="metadata-docs" placeholder="https://docs.example.com" />
 						</div>
 					</div>
@@ -449,18 +450,18 @@ function generateMVRManagementHTML(env: Env): string {
 				<form id="transfer-form">
 					<div class="grid-2">
 						<div class="form-group">
-							<label>SuiNS Name</label>
+							<label for="transfer-suins">SuiNS Name</label>
 							<input type="text" id="transfer-suins" placeholder="myname" required />
 						</div>
 
 						<div class="form-group">
-							<label>Package Name</label>
+							<label for="transfer-package">Package Name</label>
 							<input type="text" id="transfer-package" placeholder="core" required />
 						</div>
 					</div>
 
 					<div class="form-group">
-						<label>New Owner Address</label>
+						<label for="transfer-owner">New Owner Address</label>
 						<input type="text" id="transfer-owner" placeholder="0x..." required />
 						<div class="hint">The Sui address that will become the new owner</div>
 					</div>
@@ -479,13 +480,14 @@ function generateMVRManagementHTML(env: Env): string {
 				</p>
 
 				<div class="form-group">
-					<label>Search Packages</label>
+					<label for="search-query">Search Packages</label>
 					<input type="text" id="search-query" placeholder="Enter package name or SuiNS name" />
 				</div>
 				<button type="button" class="button" onclick="searchPackages()">Search</button>
 
 				<h3>List by SuiNS Name</h3>
 				<div class="form-group">
+					<label for="list-suins" class="visually-hidden">SuiNS Name</label>
 					<input type="text" id="list-suins" placeholder="myname" />
 				</div>
 				<button type="button" class="button button-secondary" onclick="listPackages()">List Packages</button>
@@ -502,7 +504,7 @@ function generateMVRManagementHTML(env: Env): string {
 
 				<form id="config-form">
 					<div class="form-group">
-						<label>MVR Alias</label>
+						<label for="config-alias">MVR Alias</label>
 						<input type="text" id="config-alias" placeholder="sui.ski/bounty-escrow" />
 						<div class="hint">Format: {suinsName}/{packageName} (e.g., "sui.ski/bounty-escrow")</div>
 					</div>

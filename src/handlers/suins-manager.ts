@@ -684,13 +684,13 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 				</p>
 
 				<div class="form-group">
-					<label class="form-label">Domain Name</label>
+					<label class="form-label" for="domain-input">Domain Name</label>
 					<input type="text" class="form-input" id="domain-input" placeholder="yourname" value="${escapeHtml(cleanName)}">
 					<p class="form-hint">Enter the name without .sui suffix</p>
 				</div>
 
 				<div class="form-group">
-					<label class="form-label">Registration Period</label>
+					<label class="form-label" for="years-select">Registration Period</label>
 					<select class="form-input" id="years-select">
 						<option value="1">1 Year</option>
 						<option value="2">2 Years</option>
@@ -777,14 +777,14 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 				</p>
 
 				<div class="form-group">
-					<label class="form-label">Parent Domain</label>
+					<label class="form-label" for="parent-domain-select">Parent Domain</label>
 					<select class="form-input" id="parent-domain-select">
 						<option value="">Connect wallet to see your names</option>
 					</select>
 				</div>
 
 				<div class="form-group">
-					<label class="form-label">Create New Subdomain</label>
+					<label class="form-label" for="subdomain-input">Create New Subdomain</label>
 					<div style="display: flex; gap: 12px;">
 						<input type="text" class="form-input" id="subdomain-input" placeholder="sub" style="flex: 1;">
 						<span style="display: flex; align-items: center; color: var(--text-muted);">.parent.sui</span>
@@ -806,7 +806,7 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 				</div>
 
 				<div class="form-group">
-					<label class="form-label">Target Address</label>
+					<label class="form-label" for="subdomain-target">Target Address</label>
 					<input type="text" class="form-input" id="subdomain-target" placeholder="0x...">
 					<p class="form-hint">The address this subdomain will resolve to</p>
 				</div>

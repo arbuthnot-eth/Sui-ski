@@ -623,24 +623,24 @@ export function generateProfilePage(
 							</div>
 
 							<div>
-								<label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">SuiNS Name</label>
+								<label for="mvr-suins-name" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">SuiNS Name</label>
 								<input type="text" id="mvr-suins-name" readonly style="width: 100%; padding: 12px; background: rgba(15, 18, 32, 0.6); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.95rem;" />
 							</div>
 
 							<div>
-								<label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Package Name</label>
+								<label for="mvr-package-name" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Package Name</label>
 								<input type="text" id="mvr-package-name" placeholder="e.g., bounty-escrow" style="width: 100%; padding: 12px; background: rgba(15, 18, 32, 0.8); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.95rem;" />
 								<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Short identifier (letters, numbers, hyphens)</div>
 							</div>
 
 							<div>
-								<label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Package Address</label>
+								<label for="mvr-package-address" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Package Address</label>
 								<input type="text" id="mvr-package-address" placeholder="0x..." style="width: 100%; padding: 12px; background: rgba(15, 18, 32, 0.8); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.95rem; font-family: monospace;" />
 								<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">The on-chain address of your published Move package</div>
 							</div>
 
 							<div>
-								<label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">UpgradeCap Object ID</label>
+								<label for="mvr-upgrade-cap" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">UpgradeCap Object ID</label>
 								<input type="text" id="mvr-upgrade-cap" placeholder="0x..." style="width: 100%; padding: 12px; background: rgba(15, 18, 32, 0.8); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.95rem; font-family: monospace;" />
 								<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">The UpgradeCap from package deployment (required for mainnet registration)</div>
 							</div>
@@ -826,6 +826,7 @@ export function generateProfilePage(
 				</div>
 			</div>
 			<div class="upload-dropzone" id="upload-dropzone">
+				<label for="file-input" class="visually-hidden">Choose file to upload</label>
 				<input type="file" id="file-input" hidden>
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -850,7 +851,7 @@ export function generateProfilePage(
 				</div>
 			</div>
 			<div class="upload-options">
-				<label>Save as:</label>
+				<label for="record-key">Save as:</label>
 				<select id="record-key">
 					<option value="content_hash">Content (media/files)</option>
 					<option value="avatar">Avatar (profile picture)</option>
@@ -1144,40 +1145,40 @@ export function generateProfilePage(
 
 									<div class="mvr-form-grid">
 										<div class="mvr-form-group">
-											<label>SuiNS Name</label>
+											<label for="mvr-reg-suins">SuiNS Name</label>
 											<input type="text" id="mvr-reg-suins" value="${escapeHtml(cleanName)}" readonly />
 										</div>
 										<div class="mvr-form-group">
-											<label>Package Name</label>
+											<label for="mvr-reg-pkgname">Package Name</label>
 											<input type="text" id="mvr-reg-pkgname" placeholder="e.g., core, nft, utils" />
 											<span class="mvr-hint">Letters, numbers, hyphens only</span>
 										</div>
 									</div>
 
 									<div class="mvr-form-group">
-										<label>Package Address</label>
+										<label for="mvr-reg-pkgaddr">Package Address</label>
 										<input type="text" id="mvr-reg-pkgaddr" placeholder="0x..." class="mono" />
 										<span class="mvr-hint">On-chain address of your published Move package</span>
 									</div>
 
 									<div class="mvr-form-group">
-										<label>UpgradeCap Object ID</label>
+										<label for="mvr-reg-upgradecap">UpgradeCap Object ID</label>
 										<input type="text" id="mvr-reg-upgradecap" placeholder="0x..." class="mono" />
 										<span class="mvr-hint">Required for mainnet registration - proves package ownership</span>
 									</div>
 
 									<div class="mvr-form-group">
-										<label>Description <span class="optional">(optional)</span></label>
+										<label for="mvr-reg-desc">Description <span class="optional">(optional)</span></label>
 										<textarea id="mvr-reg-desc" placeholder="Brief description of your package" rows="2"></textarea>
 									</div>
 
 									<div class="mvr-form-grid">
 										<div class="mvr-form-group">
-											<label>Repository URL <span class="optional">(optional)</span></label>
+											<label for="mvr-reg-repo">Repository URL <span class="optional">(optional)</span></label>
 											<input type="url" id="mvr-reg-repo" placeholder="https://github.com/..." />
 										</div>
 										<div class="mvr-form-group">
-											<label>Documentation URL <span class="optional">(optional)</span></label>
+											<label for="mvr-reg-docs">Documentation URL <span class="optional">(optional)</span></label>
 											<input type="url" id="mvr-reg-docs" placeholder="https://docs..." />
 										</div>
 									</div>
@@ -1202,20 +1203,20 @@ export function generateProfilePage(
 								<form id="mvr-version-form" class="mvr-form">
 									<div class="mvr-form-grid">
 										<div class="mvr-form-group">
-											<label>Package</label>
+											<label for="mvr-ver-package">Package</label>
 											<select id="mvr-ver-package">
 												<option value="">Select a package...</option>
 											</select>
 										</div>
 										<div class="mvr-form-group">
-											<label>Version Number</label>
+											<label for="mvr-ver-number">Version Number</label>
 											<input type="number" id="mvr-ver-number" min="1" placeholder="2" />
 											<span class="mvr-hint">Must be current version + 1</span>
 										</div>
 									</div>
 
 									<div class="mvr-form-group">
-										<label>New Package Address</label>
+										<label for="mvr-ver-addr">New Package Address</label>
 										<input type="text" id="mvr-ver-addr" placeholder="0x..." class="mono" />
 										<span class="mvr-hint">Address of the upgraded package</span>
 									</div>
@@ -1260,35 +1261,35 @@ tx.moveCall({
 
 								<form id="mvr-metadata-form" class="mvr-form">
 									<div class="mvr-form-group">
-										<label>Package</label>
+										<label for="mvr-meta-package">Package</label>
 										<select id="mvr-meta-package">
 											<option value="">Select a package...</option>
 										</select>
 									</div>
 
 									<div class="mvr-form-group">
-										<label>Description</label>
+										<label for="mvr-meta-desc">Description</label>
 										<textarea id="mvr-meta-desc" placeholder="Package description" rows="3"></textarea>
 									</div>
 
 									<div class="mvr-form-grid">
 										<div class="mvr-form-group">
-											<label>Icon URL</label>
+											<label for="mvr-meta-icon">Icon URL</label>
 											<input type="url" id="mvr-meta-icon" placeholder="https://..." />
 										</div>
 										<div class="mvr-form-group">
-											<label>Homepage URL</label>
+											<label for="mvr-meta-homepage">Homepage URL</label>
 											<input type="url" id="mvr-meta-homepage" placeholder="https://..." />
 										</div>
 									</div>
 
 									<div class="mvr-form-grid">
 										<div class="mvr-form-group">
-											<label>Documentation URL</label>
+											<label for="mvr-meta-docs">Documentation URL</label>
 											<input type="url" id="mvr-meta-docs" placeholder="https://docs..." />
 										</div>
 										<div class="mvr-form-group">
-											<label>Contact</label>
+											<label for="mvr-meta-contact">Contact</label>
 											<input type="text" id="mvr-meta-contact" placeholder="@username or email" />
 										</div>
 									</div>
@@ -1310,25 +1311,25 @@ tx.moveCall({
 
 								<form id="mvr-packageinfo-form" class="mvr-form">
 									<div class="mvr-form-group">
-										<label>UpgradeCap Object ID</label>
+										<label for="mvr-pkginfo-upgradecap">UpgradeCap Object ID</label>
 										<input type="text" id="mvr-pkginfo-upgradecap" placeholder="0x..." class="mono" />
 										<span class="mvr-hint">From your package deployment output</span>
 									</div>
 
 									<div class="mvr-form-group">
-										<label>Display Name</label>
+										<label for="mvr-pkginfo-display">Display Name</label>
 										<input type="text" id="mvr-pkginfo-display" placeholder="My Package" />
 										<span class="mvr-hint">Human-readable name for identification</span>
 									</div>
 
 									<div class="mvr-form-group">
-										<label>MVR Name (for reverse resolution)</label>
+										<label for="mvr-pkginfo-mvrname">MVR Name (for reverse resolution)</label>
 										<input type="text" id="mvr-pkginfo-mvrname" placeholder="@${escapeHtml(cleanName)}/package" />
 										<span class="mvr-hint">Enables lookup from package ID to name</span>
 									</div>
 
 									<div class="mvr-form-group">
-										<label>Transfer To Address</label>
+										<label for="mvr-pkginfo-transfer">Transfer To Address</label>
 										<input type="text" id="mvr-pkginfo-transfer" placeholder="0x... (defaults to your wallet)" class="mono" />
 									</div>
 
@@ -1376,7 +1377,7 @@ tx.moveCall({
 
 								<form id="mvr-resolve-form" class="mvr-form">
 									<div class="mvr-form-group">
-										<label>MVR Name</label>
+										<label for="mvr-resolve-name">MVR Name</label>
 										<input type="text" id="mvr-resolve-name" placeholder="@suins/core or @deepbook/core/2" />
 										<span class="mvr-hint">Format: @name/package or @name/package/version</span>
 									</div>
@@ -1696,7 +1697,7 @@ network = "${escapeHtml(network)}"</code></pre>
 
 								<div class="notes-compose">
 									<div class="notes-policy-selector">
-										<label>Access Policy</label>
+										<label for="notes-policy-type">Access Policy</label>
 										<select id="notes-policy-type">
 											<option value="owner">Only Me (Owner)</option>
 											<option value="address">Specific Address</option>
@@ -1706,8 +1707,10 @@ network = "${escapeHtml(network)}"</code></pre>
 										</select>
 									</div>
 									<div class="notes-policy-config hidden" id="notes-policy-config">
+										<label for="notes-policy-value" class="visually-hidden">Policy value</label>
 										<input type="text" id="notes-policy-value" placeholder="Enter address or policy parameters..." />
 									</div>
+									<label for="notes-content" class="visually-hidden">Note content</label>
 									<textarea id="notes-content" placeholder="Write your encrypted note..." rows="6"></textarea>
 									<div class="notes-actions">
 										<span class="notes-info">
@@ -1970,6 +1973,7 @@ network = "${escapeHtml(network)}"</code></pre>
 											<p>Drag & drop files here or <span class="dropzone-browse">browse</span></p>
 											<span class="dropzone-hint">Max file size: 10MB per file</span>
 										</div>
+										<label for="walrus-file-input" class="visually-hidden">Choose files to upload</label>
 										<input type="file" id="walrus-file-input" multiple hidden />
 									</div>
 									<div class="walrus-upload-options">
@@ -2005,6 +2009,7 @@ network = "${escapeHtml(network)}"</code></pre>
 									<div class="browse-header">
 										<h3>Your Stored Blobs</h3>
 										<div class="browse-actions">
+											<label for="walrus-blob-search" class="visually-hidden">Search blobs</label>
 											<input type="text" id="walrus-blob-search" placeholder="Search by blob ID..." />
 											<button class="browse-refresh-btn" id="walrus-refresh-btn">
 												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -2381,6 +2386,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 					<circle cx="11" cy="11" r="8"></circle>
 					<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
 				</svg>
+				<label for="search-input" class="visually-hidden">Search for a name</label>
 				<input type="text" class="search-input" id="search-input" placeholder="Search for a name..." autocomplete="off" spellcheck="false" />
 			</div>
 			<div class="search-results" id="search-results"></div>
@@ -2396,6 +2402,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 		<div class="edit-modal-content">
 			<h3>Set Target Address</h3>
 			<p>Enter a Sui address or SuiNS name. Only the NFT owner can change this.</p>
+			<label for="target-address" class="visually-hidden">Target address</label>
 			<input type="text" id="target-address" placeholder="0x... or name.sui" value="${escapeHtml(record.address)}" />
 			<div id="resolved-address" style="font-size: 0.75rem; color: var(--text-muted); min-height: 18px;"></div>
 			<div id="modal-status" class="status hidden"></div>
@@ -2431,7 +2438,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			</h3>
 			<p>Link your X (Twitter) profile to your SuiNS name. This will be visible on your profile page.</p>
 			<div class="social-input-group">
-				<label class="social-input-label">X Username</label>
+				<label class="social-input-label" for="x-username-input">X Username</label>
 				<div class="social-input-wrapper">
 					<span class="social-input-prefix">x.com/</span>
 					<input type="text" id="x-username-input" placeholder="username" autocomplete="off" spellcheck="false" />
@@ -10987,7 +10994,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			</button>
 		</div>
 		<div class="conversations-search">
-			<input type="text" placeholder="Search conversations..." />
+			<label for="search-conversations" class="visually-hidden">Search conversations</label>
+			<input type="text" id="search-conversations" placeholder="Search conversations..." />
 		</div>
 		<div class="conversations-list" id="conversations-list-items">
 			<div style="text-align: center; color: var(--text-muted); padding: 40px;">
@@ -11022,6 +11030,7 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			</div>
 		</div>
 		<div class="chat-input-bar">
+			<label for="fullscreen-chat-input" class="visually-hidden">Message</label>
 			<textarea class="chat-input" id="fullscreen-chat-input" placeholder="Type a message..." rows="1"></textarea>
 			<button class="chat-send-btn" id="fullscreen-chat-send">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -11044,7 +11053,8 @@ await client.sendMessage('@${escapeHtml(cleanName)}.sui', 'Hello!');</code></pre
 			</button>
 		</div>
 		<div class="conversations-search">
-			<input type="text" placeholder="Search channels..." />
+			<label for="search-channels" class="visually-hidden">Search channels</label>
+			<input type="text" id="search-channels" placeholder="Search channels..." />
 		</div>
 		<div class="conversations-list">
 			<div class="channel-item">

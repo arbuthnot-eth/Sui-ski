@@ -112,6 +112,7 @@ function generateUploadPage(env: Env): string {
 	<meta name="description" content="Upload files to Walrus decentralized storage with optional Seal encryption">
 	<style>
 		* { box-sizing: border-box; margin: 0; padding: 0; }
+		.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 		body {
 			font-family: 'Inter', system-ui, -apple-system, sans-serif;
 			background: linear-gradient(145deg, #0a0a0f 0%, #12121a 50%, #0d0d14 100%);
@@ -552,6 +553,7 @@ function generateUploadPage(env: Env): string {
 				<p>or click to browse</p>
 				<p class="hint">Max 10MB per file</p>
 			</div>
+			<label for="fileInput" class="visually-hidden">Choose file to upload</label>
 			<input type="file" id="fileInput" class="file-input">
 
 			<div class="options">
