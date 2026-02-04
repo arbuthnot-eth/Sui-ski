@@ -530,6 +530,134 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			color: var(--success);
 		}
 
+		/* Payment Toggle */
+		.payment-toggle {
+			display: flex;
+			gap: 8px;
+			margin-bottom: 16px;
+		}
+		.payment-toggle-btn {
+			flex: 1;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			padding: 12px 16px;
+			border-radius: 12px;
+			border: 2px solid var(--border);
+			background: rgba(255, 255, 255, 0.02);
+			color: var(--muted);
+			font-size: 0.9rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+			position: relative;
+		}
+		.payment-toggle-btn:hover {
+			border-color: rgba(255, 255, 255, 0.15);
+			background: rgba(255, 255, 255, 0.05);
+		}
+		.payment-toggle-btn.active {
+			border-color: var(--accent);
+			background: rgba(96, 165, 250, 0.1);
+			color: var(--text);
+		}
+		.payment-toggle-btn[data-payment="ns"].active {
+			border-color: #4DA2FF;
+			background: rgba(77, 162, 255, 0.1);
+		}
+		.payment-icon {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 28px;
+			height: 28px;
+			border-radius: 6px;
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.3), rgba(96, 165, 250, 0.1));
+			color: var(--accent);
+			font-size: 0.7rem;
+			font-weight: 800;
+		}
+		.payment-icon.ns {
+			background: linear-gradient(135deg, rgba(77, 162, 255, 0.3), rgba(77, 162, 255, 0.1));
+			color: #4DA2FF;
+		}
+		.discount-badge {
+			position: absolute;
+			top: -8px;
+			right: 8px;
+			padding: 2px 8px;
+			border-radius: 10px;
+			font-size: 0.65rem;
+			font-weight: 700;
+			background: rgba(52, 211, 153, 0.2);
+			color: var(--success);
+			border: 1px solid rgba(52, 211, 153, 0.3);
+		}
+
+		/* Price Breakdown */
+		.price-breakdown {
+			background: rgba(0, 0, 0, 0.2);
+			border-radius: 12px;
+			padding: 16px;
+			margin: 12px 0 16px;
+		}
+		.price-row {
+			display: flex;
+			justify-content: space-between;
+			padding: 6px 0;
+			font-size: 0.9rem;
+		}
+		.price-row .price-label {
+			color: var(--muted);
+		}
+		.price-row .price-value {
+			font-family: ui-monospace, monospace;
+			font-weight: 600;
+		}
+		.price-row.premium .price-value {
+			color: var(--warning);
+		}
+		.price-row.discount .price-value {
+			color: var(--success);
+		}
+		.price-row.total {
+			border-top: 1px solid var(--border);
+			margin-top: 8px;
+			padding-top: 12px;
+			font-weight: 700;
+			font-size: 1rem;
+		}
+		.price-row.total .price-value {
+			font-size: 1.1rem;
+		}
+
+		/* NS Rate Info */
+		.ns-rate-info {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			padding: 8px 12px;
+			background: rgba(77, 162, 255, 0.08);
+			border: 1px solid rgba(77, 162, 255, 0.15);
+			border-radius: 8px;
+			margin-bottom: 16px;
+			font-size: 0.8rem;
+		}
+		.ns-rate-label {
+			color: var(--muted);
+		}
+		.ns-rate-value {
+			color: #4DA2FF;
+			font-weight: 600;
+			font-family: ui-monospace, monospace;
+		}
+		.ns-rate-source {
+			color: var(--muted);
+			font-size: 0.75rem;
+		}
+
 		/* Collapsible Sections */
 		.collapsible-header {
 			display: flex;
@@ -629,10 +757,52 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
 				Quick Registration
 			</div>
+
+			<!-- Payment Toggle -->
+			<div class="payment-toggle" id="payment-toggle">
+				<button class="payment-toggle-btn active" data-payment="sui">
+					<span class="payment-icon">SUI</span>
+					Pay with SUI
+				</button>
+				<button class="payment-toggle-btn" data-payment="ns">
+					<span class="payment-icon ns">NS</span>
+					Pay with NS
+					<span class="discount-badge">Save ~10%</span>
+				</button>
+			</div>
+
 			<div class="register-hero">
 				<div class="register-price" id="register-price"><span class="loading"></span></div>
 				<div class="register-price-label">1 year registration</div>
 			</div>
+
+			<!-- Price Breakdown -->
+			<div class="price-breakdown" id="price-breakdown">
+				<div class="price-row">
+					<span class="price-label">Base Price</span>
+					<span class="price-value" id="base-price">-- SUI</span>
+				</div>
+				<div class="price-row premium" id="premium-row" style="display: none;">
+					<span class="price-label">Grace Period Premium</span>
+					<span class="price-value" id="premium-price">-- SUI</span>
+				</div>
+				<div class="price-row discount" id="discount-row" style="display: none;">
+					<span class="price-label">NS Discount</span>
+					<span class="price-value" id="discount-amount">-0 SUI</span>
+				</div>
+				<div class="price-row total">
+					<span class="price-label">Total</span>
+					<span class="price-value" id="total-price">-- SUI</span>
+				</div>
+			</div>
+
+			<!-- NS Rate Info -->
+			<div class="ns-rate-info" id="ns-rate-info" style="display: none;">
+				<span class="ns-rate-label">Current rate:</span>
+				<span class="ns-rate-value" id="ns-rate-value">1 SUI = -- NS</span>
+				<span class="ns-rate-source" id="ns-rate-source">(DeepBook)</span>
+			</div>
+
 			<button class="register-btn" id="register-btn">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -781,71 +951,127 @@ export function generateRegistrationPage(name: string, env: Env): string {
 
 		// ========== PRICING ==========
 		let pricingData = null;
-		let currentPrice = 0;
+		let nsRateData = null;
+		let currentPaymentMethod = 'sui';
 		const registerPriceEl = document.getElementById('register-price');
+		const basePriceEl = document.getElementById('base-price');
+		const premiumPriceEl = document.getElementById('premium-price');
+		const premiumRowEl = document.getElementById('premium-row');
+		const discountAmountEl = document.getElementById('discount-amount');
+		const discountRowEl = document.getElementById('discount-row');
+		const totalPriceEl = document.getElementById('total-price');
+		const nsRateInfoEl = document.getElementById('ns-rate-info');
+		const nsRateValueEl = document.getElementById('ns-rate-value');
+		const nsRateSourceEl = document.getElementById('ns-rate-source');
 
-		// Use SuiNS SDK to get accurate pricing
-		async function fetchPricingFromSDK() {
+		async function fetchEnhancedPricing() {
+			try {
+				const [pricingRes, nsRateRes] = await Promise.all([
+					fetch('/api/pricing?domain=' + encodeURIComponent(NAME) + '&years=1'),
+					fetch('/api/ns-price')
+				]);
+
+				pricingData = await pricingRes.json();
+				nsRateData = await nsRateRes.json();
+
+				console.log('Enhanced pricing:', pricingData);
+				console.log('NS rate:', nsRateData);
+
+				updatePriceDisplay();
+				updateRegisterButton();
+			} catch (e) {
+				console.error('Failed to fetch enhanced pricing:', e);
+				fallbackToSDKPricing();
+			}
+		}
+
+		async function fallbackToSDKPricing() {
 			try {
 				const client = new SuiClient({ url: RPC_URL });
 				const suinsClient = new SuinsClient({ client, network: NETWORK });
 				const domain = NAME + '.sui';
 
-				// Get price for 1 year registration using the SDK
-				const priceInMist = await suinsClient.calculatePrice({
-					domain,
-					years: 1
-				});
+				const priceInMist = await suinsClient.calculatePrice({ domain, years: 1 });
 
-				currentPrice = Number(priceInMist) / 1e9;
-				console.log('SuiNS SDK price for', domain, ':', currentPrice, 'SUI');
+				pricingData = {
+					basePriceMist: String(priceInMist),
+					premiumMist: '0',
+					totalSuiMist: String(priceInMist),
+					totalNsMist: String(BigInt(priceInMist) * 10n),
+					nsPerSui: 10,
+					isGracePeriod: false,
+					breakdown: {
+						basePriceUsd: 0,
+						premiumUsd: 0,
+						totalSuiUsd: 0,
+						totalNsUsd: 0,
+						discountPercent: 10
+					}
+				};
 
-				if (registerPriceEl) {
-					registerPriceEl.textContent = currentPrice.toFixed(2) + ' SUI';
-				}
+				nsRateData = { nsPerSui: 10, suiPerNs: 0.1, source: 'fallback' };
+
+				updatePriceDisplay();
 				updateRegisterButton();
-			} catch (e) {
-				console.error('Failed to fetch pricing from SDK:', e);
-				// Fallback to API
-				try {
-					const res = await fetch('/api/pricing');
-					pricingData = await res.json();
-					console.log('Pricing API response:', pricingData);
-					currentPrice = getPriceForLength(NAME_LENGTH);
-					if (registerPriceEl) {
-						registerPriceEl.textContent = currentPrice.toFixed(2) + ' SUI';
-					}
+			} catch (e2) {
+				console.error('SDK pricing also failed:', e2);
+				if (registerPriceEl) registerPriceEl.textContent = '-- SUI';
+			}
+		}
+
+		function updatePriceDisplay() {
+			if (!pricingData) return;
+
+			const basePriceSui = Number(pricingData.basePriceMist) / 1e9;
+			const premiumSui = Number(pricingData.premiumMist || 0) / 1e9;
+			const totalSui = Number(pricingData.totalSuiMist) / 1e9;
+			const totalNs = Number(pricingData.totalNsMist) / 1e9;
+			const nsPerSui = pricingData.nsPerSui || nsRateData?.nsPerSui || 10;
+			const discountPercent = pricingData.breakdown?.discountPercent || 10;
+
+			if (basePriceEl) basePriceEl.textContent = basePriceSui.toFixed(2) + ' SUI';
+
+			if (premiumSui > 0 && premiumRowEl && premiumPriceEl) {
+				premiumRowEl.style.display = 'flex';
+				premiumPriceEl.textContent = '+' + premiumSui.toFixed(2) + ' SUI';
+			} else if (premiumRowEl) {
+				premiumRowEl.style.display = 'none';
+			}
+
+			if (currentPaymentMethod === 'ns') {
+				const nsSavings = totalSui - (totalNs / nsPerSui);
+				if (discountRowEl && discountAmountEl && nsSavings > 0) {
+					discountRowEl.style.display = 'flex';
+					discountAmountEl.textContent = '-' + nsSavings.toFixed(4) + ' SUI';
+				}
+				if (totalPriceEl) totalPriceEl.textContent = totalNs.toFixed(2) + ' NS';
+				if (registerPriceEl) registerPriceEl.textContent = totalNs.toFixed(2) + ' NS';
+				if (nsRateInfoEl) nsRateInfoEl.style.display = 'flex';
+				if (nsRateValueEl) nsRateValueEl.textContent = '1 SUI = ' + nsPerSui.toFixed(2) + ' NS';
+				if (nsRateSourceEl) nsRateSourceEl.textContent = '(' + (nsRateData?.source || 'fallback') + ')';
+			} else {
+				if (discountRowEl) discountRowEl.style.display = 'none';
+				if (totalPriceEl) totalPriceEl.textContent = totalSui.toFixed(2) + ' SUI';
+				if (registerPriceEl) registerPriceEl.textContent = totalSui.toFixed(2) + ' SUI';
+				if (nsRateInfoEl) nsRateInfoEl.style.display = 'none';
+			}
+		}
+
+		function setupPaymentToggle() {
+			const toggleBtns = document.querySelectorAll('.payment-toggle-btn');
+			toggleBtns.forEach(btn => {
+				btn.addEventListener('click', () => {
+					toggleBtns.forEach(b => b.classList.remove('active'));
+					btn.classList.add('active');
+					currentPaymentMethod = btn.dataset.payment;
+					updatePriceDisplay();
 					updateRegisterButton();
-				} catch (e2) {
-					console.error('Fallback pricing also failed:', e2);
-					if (registerPriceEl) {
-						registerPriceEl.textContent = '-- SUI';
-					}
-				}
-			}
+				});
+			});
 		}
 
-		function getPriceForLength(length) {
-			if (!pricingData) return 0;
-			// Check exact length first
-			if (pricingData[String(length)]) {
-				return Number(pricingData[String(length)]) / 1e9;
-			}
-			// Check ranges
-			for (const [key, value] of Object.entries(pricingData)) {
-				if (key.includes('-')) {
-					const [min, max] = key.split('-').map(Number);
-					if (length >= min && length <= max) {
-						return Number(value) / 1e9;
-					}
-				}
-			}
-			// Default for 5+ char names: 2 SUI (2e9 MIST)
-			return 2;
-		}
-
-		// Fetch pricing immediately
-		fetchPricingFromSDK();
+		fetchEnhancedPricing();
+		setupPaymentToggle();
 
 		// ========== WALLET CONNECTION ==========
 		const globalWalletWidget = document.getElementById('global-wallet-widget');
@@ -1045,7 +1271,16 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		function updateRegisterButton() {
 			if (!registerBtn || !registerBtnText) return;
 			if (connectedAddress) {
-				const priceText = currentPrice > 0 ? currentPrice + ' SUI' : '...';
+				let priceText = '...';
+				if (pricingData) {
+					if (currentPaymentMethod === 'ns') {
+						const nsPrice = Number(pricingData.totalNsMist) / 1e9;
+						priceText = nsPrice.toFixed(2) + ' NS';
+					} else {
+						const suiPrice = Number(pricingData.totalSuiMist) / 1e9;
+						priceText = suiPrice.toFixed(2) + ' SUI';
+					}
+				}
 				registerBtnText.textContent = 'Register ' + NAME + '.sui for ' + priceText;
 				registerBtn.querySelector('svg').innerHTML = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>';
 			} else {
@@ -1077,10 +1312,10 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				return;
 			}
 
-			if (currentPrice <= 0) {
+			if (!pricingData) {
 				showRegisterStatus('Loading pricing...', 'info');
-				await fetchPricingFromSDK();
-				if (currentPrice <= 0) {
+				await fetchEnhancedPricing();
+				if (!pricingData) {
 					showRegisterStatus('Failed to load pricing. Please refresh.', 'error');
 					return;
 				}
@@ -1089,6 +1324,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			registerBtn.disabled = true;
 			registerBtnText.textContent = 'Building transaction...';
 			hideRegisterStatus();
+
+			const isNsPayment = currentPaymentMethod === 'ns';
 
 			try {
 				showRegisterStatus('Connecting to Sui network...', 'info');
@@ -1099,24 +1336,58 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				const tx = new Transaction();
 				const suinsTx = new SuinsTransaction(suinsClient, tx);
 
-				const coinConfig = suinsClient.config.coins.SUI;
-				if (!coinConfig) throw new Error('SuiNS coin config not found');
+				const coinConfigKey = isNsPayment ? 'NS' : 'SUI';
+				const coinConfig = suinsClient.config.coins[coinConfigKey];
+				if (!coinConfig) throw new Error('SuiNS ' + coinConfigKey + ' coin config not found');
 
 				const domain = NAME + '.sui';
-				// Add a small buffer (1%) for any rounding or fee changes
-				const priceWithBuffer = Math.ceil(currentPrice * 1.01 * 1000000000);
+
+				let paymentAmount;
+				if (isNsPayment) {
+					paymentAmount = BigInt(pricingData.totalNsMist);
+					paymentAmount = paymentAmount + (paymentAmount * 1n) / 100n;
+				} else {
+					paymentAmount = BigInt(pricingData.totalSuiMist);
+					paymentAmount = paymentAmount + (paymentAmount * 1n) / 100n;
+				}
 
 				showRegisterStatus('Building registration transaction...', 'info');
 
-				// Get price info object ID (required for SUI/NS coin types)
 				const priceInfoObjectId = coinConfig.feed
 					? (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0]
 					: undefined;
 
-				// Split coin for payment (SDK will use exact amount needed)
-				const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(priceWithBuffer)]);
+				let paymentCoin;
+				if (isNsPayment) {
+					showRegisterStatus('NS payment requires NS tokens in your wallet...', 'info');
+					const nsCoins = await suiClient.getCoins({
+						owner: connectedAddress,
+						coinType: '0x5145494a5f5100e645e4b797a6eeafa55fc0e089d400be81a68c0e8f952f9a39::ns::NS'
+					});
 
-				// Register the name - SDK handles exact pricing
+					if (!nsCoins.data || nsCoins.data.length === 0) {
+						throw new Error('No NS tokens found in wallet. Please acquire NS tokens first or switch to SUI payment.');
+					}
+
+					const totalNsBalance = nsCoins.data.reduce((sum, c) => sum + BigInt(c.balance), 0n);
+					if (totalNsBalance < paymentAmount) {
+						const needed = Number(paymentAmount) / 1e9;
+						const have = Number(totalNsBalance) / 1e9;
+						throw new Error('Insufficient NS balance. Need ' + needed.toFixed(2) + ' NS, have ' + have.toFixed(2) + ' NS');
+					}
+
+					const nsCoinIds = nsCoins.data.map(c => c.coinObjectId);
+					if (nsCoinIds.length === 1) {
+						[paymentCoin] = tx.splitCoins(tx.object(nsCoinIds[0]), [tx.pure.u64(paymentAmount)]);
+					} else {
+						const [primaryCoin, ...restCoins] = nsCoinIds;
+						tx.mergeCoins(tx.object(primaryCoin), restCoins.map(id => tx.object(id)));
+						[paymentCoin] = tx.splitCoins(tx.object(primaryCoin), [tx.pure.u64(paymentAmount)]);
+					}
+				} else {
+					[paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(paymentAmount)]);
+				}
+
 				const nft = suinsTx.register({
 					domain: domain,
 					years: 1,

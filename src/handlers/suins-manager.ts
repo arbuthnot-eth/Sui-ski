@@ -8,6 +8,7 @@
  * - Discount eligibility checking
  */
 import type { Env } from '../types'
+import { getNSSuiPrice } from '../utils/ns-price'
 import { errorResponse, jsonResponse } from '../utils/response'
 
 // SuiNS Contract addresses (mainnet)
@@ -69,14 +70,16 @@ export async function handleSuinsManagerRequest(request: Request, env: Env): Pro
 	// Get NS token price (relative to SUI)
 	if (path === '/ns-price') {
 		try {
-			// TODO: Fetch actual NS/SUI price from DEX or price feed
-			// For now, return a placeholder
+			const nsPrice = await getNSSuiPrice(env)
 			return jsonResponse({
-				nsPerSui: 10, // 10 NS = 1 SUI (placeholder)
-				discountPercent: 10, // 10% discount for NS payments
-				source: 'placeholder',
+				nsPerSui: nsPrice.nsPerSui,
+				suiPerNs: nsPrice.suiPerNs,
+				discountPercent: 10,
+				source: nsPrice.source,
+				poolAddress: nsPrice.poolAddress,
+				timestamp: nsPrice.timestamp,
 			})
-		} catch (error) {
+		} catch (_error) {
 			return errorResponse('Failed to fetch NS price', 'NS_PRICE_ERROR', 500)
 		}
 	}
@@ -94,7 +97,7 @@ export async function handleSuinsManagerRequest(request: Request, env: Env): Pro
 				eligible: [],
 				discounts: [],
 			})
-		} catch (error) {
+		} catch (_error) {
 			return errorResponse('Failed to check discounts', 'DISCOUNT_CHECK_ERROR', 500)
 		}
 	}
@@ -121,7 +124,7 @@ export async function handleSuinsManagerRequest(request: Request, env: Env): Pro
 				message: 'Gas sponsorship not yet configured. Contact admin to enable.',
 				sponsorAddress: null,
 			})
-		} catch (error) {
+		} catch (_error) {
 			return errorResponse('Failed to sponsor transaction', 'SPONSOR_ERROR', 500)
 		}
 	}
@@ -1012,7 +1015,7 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 
 		// State
 		let suiPrice = null;
-		let nsPrice = null;
+		let nsRateData = null;
 		let pricingData = null;
 		let connectedAddress = null;
 
@@ -1029,6 +1032,19 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 				updatePriceDisplay();
 			} catch (e) {
 				console.error('Failed to fetch SUI price:', e);
+			}
+		}
+
+		// Fetch NS/SUI rate from DeepBook
+		async function fetchNsRate() {
+			try {
+				const res = await fetch('/api/ns-price');
+				nsRateData = await res.json();
+				console.log('NS rate from', nsRateData.source + ':', nsRateData.nsPerSui, 'NS per SUI');
+				updatePriceDisplay();
+			} catch (e) {
+				console.error('Failed to fetch NS rate:', e);
+				nsRateData = { nsPerSui: 10, suiPerNs: 0.1, source: 'fallback' };
 			}
 		}
 
@@ -1083,14 +1099,17 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 			const nsDiscount = 0.1; // 10% discount for NS (3-day equivalent)
 			const nsBasePrice = basePrice * (1 - nsDiscount);
 
+			// Get NS rate from DeepBook (or fallback)
+			const nsRate = nsRateData?.nsPerSui || 10;
+			const rateSource = nsRateData?.source || 'fallback';
+
 			// Update SUI payment
 			document.getElementById('sui-price').textContent = suiFormatter.format(basePrice);
 			if (suiPrice) {
 				document.getElementById('sui-usd').textContent = usdFormatter.format(basePrice * suiPrice);
 			}
 
-			// Update NS payment (assuming 1 NS = 0.1 SUI for display)
-			const nsRate = 10; // 10 NS per SUI
+			// Update NS payment using real rate
 			const nsAmount = nsBasePrice * nsRate;
 			document.getElementById('ns-price').textContent = suiFormatter.format(nsAmount);
 			if (suiPrice) {
@@ -1111,6 +1130,12 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 
 			document.getElementById('discount-amount').textContent = '-' + suiFormatter.format(discount) + ' SUI';
 			document.getElementById('total-price').textContent = suiFormatter.format(total) + ' SUI';
+
+			// Show NS rate source indicator
+			const nsSavingsEl = document.getElementById('ns-savings');
+			if (nsSavingsEl) {
+				nsSavingsEl.innerHTML = 'Save <span id="savings-amount">' + suiFormatter.format(savings) + '</span> SUI · Rate: ' + nsRate.toFixed(2) + ' NS/SUI <span style="opacity:0.7;">(' + rateSource + ')</span>';
+			}
 		}
 
 		// Event listeners
@@ -1119,8 +1144,10 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 
 		// Initialize
 		fetchSuiPrice();
+		fetchNsRate();
 		fetchPricing();
 		setInterval(fetchSuiPrice, 60000);
+		setInterval(fetchNsRate, 30000);
 
 		// Gas sponsorship status
 		async function fetchSponsorStatus() {

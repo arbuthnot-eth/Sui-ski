@@ -2,6 +2,8 @@ import { SuiClient } from '@mysten/sui/client'
 import { SuinsClient } from '@mysten/suins'
 import type { Env } from '../types'
 import { cacheKey, getCached, setCache } from '../utils/cache'
+import { getNSSuiPrice } from '../utils/ns-price'
+import { calculateRegistrationPrice, formatPricingResponse, getBasePricing } from '../utils/pricing'
 import { htmlResponse, jsonResponse } from '../utils/response'
 import { renderSocialMeta } from '../utils/social'
 import { getGatewayStatus } from '../utils/status'
@@ -49,11 +51,39 @@ export async function handleLandingApiRequest(
 
 	if (url.pathname === '/api/pricing') {
 		try {
-			const pricing = await getSuiNSPricing(env)
+			const domain = url.searchParams.get('domain')
+			const yearsParam = url.searchParams.get('years')
+			const expParam = url.searchParams.get('expirationMs')
+
+			if (domain) {
+				const years = yearsParam ? parseInt(yearsParam, 10) : 1
+				const expirationMs = expParam ? parseInt(expParam, 10) : undefined
+
+				const pricing = await calculateRegistrationPrice({
+					domain,
+					years,
+					expirationMs,
+					env,
+				})
+
+				return jsonResponse(formatPricingResponse(pricing))
+			}
+
+			const pricing = await getBasePricing(env)
 			return jsonResponse(pricing)
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Failed to fetch pricing'
 			return jsonResponse({ error: message }, 500)
+		}
+	}
+
+	if (url.pathname === '/api/ns-price') {
+		try {
+			const nsPrice = await getNSSuiPrice(env)
+			return jsonResponse(nsPrice)
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Failed to fetch NS price'
+			return jsonResponse({ error: message, source: 'fallback', nsPerSui: 10, suiPerNs: 0.1 }, 500)
 		}
 	}
 
@@ -450,32 +480,6 @@ async function proxyImageRequest(targetUrl: string): Promise<Response> {
 		console.error('Image proxy error:', error)
 		return new Response(null, { status: 502 })
 	}
-}
-
-/**
- * Fetch SuiNS pricing from on-chain config
- */
-async function getSuiNSPricing(env: Env): Promise<Record<string, number>> {
-	const client = new SuiClient({ url: env.SUI_RPC_URL })
-	const network = env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
-	const suinsClient = new SuinsClient({ client: client as never, network })
-
-	const priceList = await suinsClient.getPriceList()
-
-	// Convert Map to object with human-readable keys
-	// Format: { "3": price, "4": price, "5+": price } (price per year in MIST)
-	const pricing: Record<string, number> = {}
-
-	for (const [key, value] of priceList.entries()) {
-		const [minLen, maxLen] = key
-		if (minLen === maxLen) {
-			pricing[String(minLen)] = value
-		} else {
-			pricing[`${minLen}-${maxLen}`] = value
-		}
-	}
-
-	return pricing
 }
 
 /**
