@@ -95,10 +95,7 @@ export class LigetronProver {
 				// Mock witness generation
 				// In production, this runs the actual Ligetron zkVM
 				const witness: LigetronWitness = {
-					nullifiers: [
-						this.mockPoseidon(data.secret, 0n),
-						this.mockPoseidon(data.secret, 1n),
-					],
+					nullifiers: [this.mockPoseidon(data.secret, 0n), this.mockPoseidon(data.secret, 1n)],
 					commitments: [
 						this.mockPoseidon(data.outputAmount1, data.outputBlinding1),
 						this.mockPoseidon(data.outputAmount2, data.outputBlinding2),
@@ -123,7 +120,7 @@ export class LigetronProver {
 	private mockPoseidon(a: bigint, b: bigint): bigint {
 		// Simple mock - NOT cryptographically secure
 		// Replace with actual Poseidon hash in production
-		const combined = (a * 31n + b) % (2n ** 256n)
+		const combined = (a * 31n + b) % 2n ** 256n
 		return combined
 	}
 
@@ -140,7 +137,7 @@ export class LigetronProver {
 		inputNotes: Note[],
 		outputAmounts: [bigint, bigint],
 		outputBlindings: [bigint, bigint],
-		merkleProofs: MerkleProof[]
+		merkleProofs: MerkleProof[],
 	): Promise<LigetronWitness> {
 		if (!this.module) {
 			throw new Error('Ligetron prover not initialized. Call initialize() first.')
@@ -170,7 +167,7 @@ export class LigetronProver {
 
 		// Run Ligetron zkVM
 		const resultJson = this.module.generateWitness(
-			JSON.stringify(input, (_, v) => (typeof v === 'bigint' ? v.toString() : v))
+			JSON.stringify(input, (_, v) => (typeof v === 'bigint' ? v.toString() : v)),
 		)
 
 		// Parse result
@@ -193,7 +190,7 @@ export class LigetronProver {
 		}
 
 		return this.module.verify(
-			JSON.stringify(witness, (_, v) => (typeof v === 'bigint' ? v.toString() : v))
+			JSON.stringify(witness, (_, v) => (typeof v === 'bigint' ? v.toString() : v)),
 		)
 	}
 

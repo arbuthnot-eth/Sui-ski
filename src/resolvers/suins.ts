@@ -1,60 +1,108 @@
-import { SuiClient } from '@mysten/sui/client'
+import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import { SuinsClient } from '@mysten/suins'
 import type { Env, ResolverResult, SuiNSRecord } from '../types'
-import { cacheKey, getCached, setCache } from '../utils/cache'
+import { cacheKey } from '../utils/cache'
+import { getDefaultRpcUrl } from '../utils/rpc'
 import { toSuiNSName } from '../utils/subdomain'
+import { lookupName as surfluxLookupName } from '../utils/surflux-grpc'
 
-const CACHE_TTL = 300 // 5 minutes
-const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
+const CACHE_TTL = 600
+const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000
 
-/**
- * Resolve a SuiNS name to its on-chain records
- * Returns data even for expired names that are still in grace period
- */
+const suinsMemCache = new Map<
+	string,
+	{ data: SuiNSRecord & { expirationTimestampMs?: string }; exp: number }
+>()
+
 export async function resolveSuiNS(
 	name: string,
 	env: Env,
 	skipCache = false,
 ): Promise<ResolverResult> {
 	const suinsName = toSuiNSName(name)
-	const key = cacheKey('suins', env.SUI_NETWORK, suinsName)
+	const key = cacheKey('suins-v2', env.SUI_NETWORK, suinsName)
 
-	// Check cache first, but also verify expiration status
+	// KV caching disabled - use in-memory only to reduce KV operations
 	if (!skipCache) {
-		const cached = await getCached<SuiNSRecord & { expirationTimestampMs?: string }>(env, key)
-		if (cached) {
-			// Check expiration status
-			if (cached.expirationTimestampMs) {
-				const expirationTime = Number(cached.expirationTimestampMs)
-				const now = Date.now()
-				const gracePeriodEnd = expirationTime + GRACE_PERIOD_MS
-
-				if (now >= gracePeriodEnd) {
-					// Past grace period - name is available for registration
-					await env.CACHE.delete(key)
-					return {
-						found: false,
-						error: `Name "${suinsName}" has expired and is available`,
-						expired: true,
-					}
-				}
-				if (now >= expirationTime) {
-					// In grace period - return data but mark as expired
-					return {
-						found: true,
-						data: cached,
-						cacheTtl: CACHE_TTL,
-						expired: true,
-						inGracePeriod: true,
-					}
-				}
-			}
-			return { found: true, data: cached, cacheTtl: CACHE_TTL }
+		const mem = suinsMemCache.get(key)
+		if (mem && mem.exp > Date.now()) {
+			return processRecord(mem.data, suinsName)
 		}
 	}
 
+	function processRecord(
+		record: SuiNSRecord & { expirationTimestampMs?: string },
+		name: string,
+	): ResolverResult {
+		if (record.expirationTimestampMs) {
+			const expirationTime = Number(record.expirationTimestampMs)
+			const now = Date.now()
+			const gracePeriodEnd = expirationTime + GRACE_PERIOD_MS
+
+			if (now >= gracePeriodEnd) {
+				return {
+					found: false,
+					error: `Name "${name}" has expired and is available`,
+					expired: true,
+					available: true,
+				}
+			}
+			if (now >= expirationTime) {
+				return {
+					found: true,
+					data: record,
+					cacheTtl: CACHE_TTL,
+					expired: true,
+					inGracePeriod: true,
+				}
+			}
+		}
+		return { found: true, data: record, cacheTtl: CACHE_TTL }
+	}
+
 	try {
-		const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
+		// Surflux gRPC-Web (faster, with proper protobuf encoding)
+		if (env.SURFLUX_API_KEY) {
+			const surfluxRecord = await surfluxLookupName(suinsName, env)
+			if (surfluxRecord) {
+				// Fetch NFT owner if we have the NFT ID (Surflux doesn't return owner)
+				if (surfluxRecord.nftId && !surfluxRecord.ownerAddress) {
+					try {
+						const suiClient = new SuiClient({
+							url: getDefaultRpcUrl(env.SUI_NETWORK),
+							network: env.SUI_NETWORK,
+						})
+						const nftObject = await suiClient.getObject({
+							id: surfluxRecord.nftId,
+							options: { showOwner: true },
+						})
+						if (nftObject.data?.owner) {
+							const owner = nftObject.data.owner
+							if (typeof owner === 'string') {
+								surfluxRecord.ownerAddress = owner
+							} else if ('AddressOwner' in owner) {
+								surfluxRecord.ownerAddress = owner.AddressOwner
+							} else if ('ObjectOwner' in owner) {
+								surfluxRecord.ownerAddress = owner.ObjectOwner
+							}
+						}
+					} catch (e) {
+						console.log('Could not fetch NFT owner for Surflux record:', e)
+					}
+				}
+				const result = processRecord(surfluxRecord, suinsName)
+				if (result.found && !result.expired) {
+					suinsMemCache.set(key, { data: surfluxRecord, exp: Date.now() + 60000 })
+				}
+				return result
+			}
+		}
+
+		// Fallback: SuiNS SDK (JSON-RPC)
+		const suiClient = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
 		const suinsClient = new SuinsClient({
 			client: suiClient as never,
 			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
@@ -63,7 +111,8 @@ export async function resolveSuiNS(
 		// Get the name record
 		const nameRecord = await suinsClient.getNameRecord(suinsName)
 		if (!nameRecord) {
-			return { found: false, error: `Name "${suinsName}" not found` }
+			// Name genuinely not found - available for registration
+			return { found: false, error: `Name "${suinsName}" not found`, available: true }
 		}
 
 		// Get the NFT owner (different from target address)
@@ -100,6 +149,7 @@ export async function resolveSuiNS(
 					found: false,
 					error: `Name "${suinsName}" has expired and is available`,
 					expired: true,
+					available: true,
 				}
 			}
 			if (now >= expirationTime) {
@@ -147,15 +197,24 @@ export async function resolveSuiNS(
 			}
 		}
 
-		// Cache the result (only cache non-expired names)
 		if (!expired) {
-			await setCache(env, key, record, CACHE_TTL)
+			if (suinsMemCache.size > 100) {
+				const first = suinsMemCache.keys().next().value
+				if (first) suinsMemCache.delete(first)
+			}
+			suinsMemCache.set(key, { data: record, exp: Date.now() + 60000 })
 		}
 
 		return { found: true, data: record, cacheTtl: CACHE_TTL, expired, inGracePeriod }
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error'
-		return { found: false, error: message }
+		// SuinsClient throws ObjectError with "does not exist" for genuinely non-existent names
+		if (message.includes('does not exist')) {
+			return { found: false, error: `Name "${suinsName}" not found`, available: true }
+		}
+		// Other resolution errors - do NOT mark as available, this could be a registered name
+		// that we failed to resolve due to network/RPC issues
+		return { found: false, error: message, available: false }
 	}
 }
 
@@ -187,7 +246,10 @@ function parseContentHash(hash: string): SuiNSRecord['content'] {
  */
 export async function getSuiNSOwner(name: string, env: Env): Promise<string | null> {
 	try {
-		const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
+		const suiClient = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
 		const suinsClient = new SuinsClient({
 			client: suiClient as never,
 			network: env.SUI_NETWORK as 'mainnet' | 'testnet',

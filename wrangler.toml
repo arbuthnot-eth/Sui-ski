@@ -2,18 +2,30 @@ name = "sui-ski-gateway"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
+account_id = "6a10ee79fe9d21b5e2c3155ce8690742"
 
 # Wildcard route for *.sui.ski
 routes = [
   { pattern = "*.sui.ski/*", zone_name = "sui.ski" },
-  { pattern = "sui.ski/*", zone_name = "sui.ski" }
+  { pattern = "sui.ski/*", zone_name = "sui.ski" },
+  { pattern = "*.t.sui.ski/*", zone_name = "sui.ski" },
+  { pattern = "t.sui.ski/*", zone_name = "sui.ski" },
+  { pattern = "*.d.sui.ski/*", zone_name = "sui.ski" },
+  { pattern = "d.sui.ski/*", zone_name = "sui.ski" }
 ]
 
 # Environment variables (non-sensitive)
 [vars]
 SUI_NETWORK = "mainnet"
-SUI_RPC_URL = "https://sui-rpc.publicnode.com"
+# SUI_RPC_URL set via `wrangler secret put SUI_RPC_URL` (Triton token URL)
 WALRUS_NETWORK = "mainnet"
+# Seal configuration for encrypted messaging (using TESTNET for open mode key servers)
+# Main app uses mainnet, but Seal uses testnet because mainnet key servers require registration
+SEAL_NETWORK = "testnet"
+SEAL_PACKAGE_ID = "0x8afa5d31dbaa0a8fb07082692940ca3d56b5e856c5126cb5a3693f0a4de63b82"
+# Testnet open mode key servers (no registration required)
+# Mysten Labs #1, Mysten Labs #2, Triton One - using 3 for threshold encryption
+SEAL_KEY_SERVERS = "0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8,0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46"
 # IKA dWallet package ID for cross-chain control (set when deploying IKA integration)
 # IKA_PACKAGE_ID = ""
 # Agency registry object ID (set after deploying agency registry contract)
@@ -21,8 +33,23 @@ WALRUS_NETWORK = "mainnet"
 # LLM API URL (defaults to Anthropic if not set)
 # LLM_API_URL = "https://api.anthropic.com/v1/messages"
 
+# SuiNS name to receive leftover NS tokens from registrations (for LP accumulation)
+SERVICE_FEE_NAME = "brando.sui"
+
 # Secrets (set via `wrangler secret put <NAME>`)
 # LLM_API_KEY - API key for LLM provider (Anthropic/OpenAI)
+
+SUBNAMECAP_RPC_URL = "https://fullnode.testnet.sui.io:443"
+SUBNAMECAP_SUINS_PACKAGE_ID = "0xcb63193327801b8a90aa3778a6c50def5d2be3aac0630393d3329346cee58eaf"
+SUBNAMECAP_SUBDOMAINS_PACKAGE_ID = "0xd96a273f5f7ac23c7f4c2ce3d52138aae0e9a8f783cfb9f4c62fb4bfa2f9341c"
+SUBNAMECAP_SUINS_OBJECT_ID = "0x2abb88c1cdecdd3e8a33043e73bb12a7d1f2b35b787f33a26e851c1c43f9958d"
+JACKET_SINGLE_USE_PACKAGE_ID = "0x61248137952b4ae1657fcc5e88464eba79315633eae9b01ff4d7331fa3706d50"
+JACKET_FEE_PACKAGE_ID = "0xc91aafec24a289ffff75a1e325137b8aec8a4708d19383df821c3418b59758ef"
+JACKET_ALLOWLIST_PACKAGE_ID = "0x41fa2f2453c5416091ee5d7d704cd8bf2755f092ba8d9486a405890d4b37b288"
+JACKET_RATE_LIMIT_PACKAGE_ID = "0x82126c5ed40f5daf4f3f74a6c9ccefa73193efcc622e1019147d355bc46b532c"
+JACKET_FEE_OBJECT_ID = "0x3961518f5fd71ff6ac3d221ed20e13f8ce7159912a4b00b0d6bbbe33fb706f37"
+# JACKET_ALLOWLIST_OBJECT_ID = ""
+# JACKET_RATE_LIMIT_OBJECT_ID = ""
 
 # KV namespace for caching resolved names
 [[kv_namespaces]]

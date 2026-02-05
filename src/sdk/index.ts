@@ -19,19 +19,42 @@
  * ```
  */
 
-export { PrivateProtocol } from './protocol/private-protocol'
-export { LigetronProver } from './ligetron/prover'
 export { Groth16Prover } from './groth16/prover'
+export { LigetronProver } from './ligetron/prover'
+export type {
+	EncryptedMessage,
+	MessageData,
+	MessagingClientConfig,
+	SealConfig,
+	SendMessageResult,
+	SuiNSResolver,
+	WalletSigner,
+} from './messaging-client'
+// Messaging SDK
+export {
+	createDefaultSuiNSResolver,
+	DEFAULT_SEAL_TESTNET_CONFIG,
+	MessagingClient,
+} from './messaging-client'
+export { createBrowserMessagingClient, createBrowserWalletSigner } from './messaging-client-browser'
+export type {
+	ParsedPackageName,
+	ResolutionOptions,
+	ResolutionResult,
+	VersionSpec,
+} from './mvr-resolver'
+// MVR Compatibility Layer
+export { createMVRResolver, MVRResolver } from './mvr-resolver'
+export { PrivateProtocol } from './protocol/private-protocol'
+export type {
+	Commitment,
+	DepositParams,
+	Note,
+	PrivateProtocolConfig,
+	Proof,
+	TransferParams,
+	WithdrawParams,
+} from './types'
+export { decryptNote, encryptNote } from './utils/encryption'
 export { MerkleTree } from './utils/merkle'
 export { poseidon2, poseidonHash } from './utils/poseidon'
-export { encryptNote, decryptNote } from './utils/encryption'
-
-export type {
-	PrivateProtocolConfig,
-	DepositParams,
-	WithdrawParams,
-	TransferParams,
-	Proof,
-	Note,
-	Commitment,
-} from './types'

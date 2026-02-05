@@ -1,6 +1,7 @@
-import { SuiClient } from '@mysten/sui/client'
+import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import type { Env, MVRPackageInfo, ResolverResult } from '../types'
 import { cacheKey, getCached, setCache } from '../utils/cache'
+import { getDefaultRpcUrl } from '../utils/rpc'
 
 const CACHE_TTL = 300 // 5 minutes
 
@@ -36,7 +37,11 @@ export async function resolveMVRPackage(
 ): Promise<ResolverResult> {
 	const cleanSuinsName = suinsName.toLowerCase().replace(/\.sui$/i, '')
 	const cleanPackageName = packageName.toLowerCase()
-	const key = cacheKey('mvr', env.SUI_NETWORK, `${cleanSuinsName}/${cleanPackageName}${version ? `@${version}` : ''}`)
+	const key = cacheKey(
+		'mvr',
+		env.SUI_NETWORK,
+		`${cleanSuinsName}/${cleanPackageName}${version ? `@${version}` : ''}`,
+	)
 
 	// Check cache first
 	const cached = await getCached<MVRPackageInfo>(env, key)
@@ -50,7 +55,10 @@ export async function resolveMVRPackage(
 	}
 
 	try {
-		const client = new SuiClient({ url: env.SUI_RPC_URL })
+		const client = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
 
 		// The MVR stores packages as dynamic fields on the registry object
 		// Field name format: "{suinsName}/{packageName}"

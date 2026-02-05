@@ -126,7 +126,7 @@ async function proxyRequest(
 			throw new Error(`Backend returned ${response.status}: ${response.statusText}`)
 		}
 
-		const data = await response.json() as JsonRpcResponse
+		const data = (await response.json()) as JsonRpcResponse
 		return data
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') {
@@ -185,11 +185,11 @@ async function proxyBatchRequest(
 			throw new Error(`Backend returned ${response.status}: ${response.statusText}`)
 		}
 
-		const data = await response.json() as JsonRpcResponse[]
+		const data = (await response.json()) as JsonRpcResponse[]
 		return data
 	} catch (error) {
 		// Return error responses for all requests in batch
-		return requests.map(req => ({
+		return requests.map((req) => ({
 			jsonrpc: '2.0' as const,
 			id: req.id,
 			error: {
@@ -296,7 +296,7 @@ export async function handleGrpcProxyRequest(request: Request, env: Env): Promis
 	// Multi-get objects endpoint (convenience wrapper)
 	if (path === '/objects' && request.method === 'POST') {
 		try {
-			const body = await request.json() as { ids: string[]; options?: Record<string, boolean> }
+			const body = (await request.json()) as { ids: string[]; options?: Record<string, boolean> }
 			const { ids, options } = body
 
 			if (!ids || !Array.isArray(ids)) {
@@ -324,7 +324,7 @@ export async function handleGrpcProxyRequest(request: Request, env: Env): Promis
 	// Query events endpoint (convenience wrapper)
 	if (path === '/events' && request.method === 'POST') {
 		try {
-			const body = await request.json() as {
+			const body = (await request.json()) as {
 				filter: Record<string, unknown>
 				cursor?: string
 				limit?: number
@@ -352,7 +352,7 @@ export async function handleGrpcProxyRequest(request: Request, env: Env): Promis
 	// Get owned objects endpoint (convenience wrapper)
 	if (path === '/owned-objects' && request.method === 'POST') {
 		try {
-			const body = await request.json() as {
+			const body = (await request.json()) as {
 				address: string
 				filter?: Record<string, unknown>
 				options?: Record<string, boolean>
@@ -386,7 +386,7 @@ export async function handleGrpcProxyRequest(request: Request, env: Env): Promis
 	// Dynamic fields endpoint (convenience wrapper)
 	if (path === '/dynamic-fields' && request.method === 'POST') {
 		try {
-			const body = await request.json() as {
+			const body = (await request.json()) as {
 				parentId: string
 				cursor?: string
 				limit?: number
@@ -439,7 +439,7 @@ export async function handleGrpcProxyRequest(request: Request, env: Env): Promis
 	// Execute transaction endpoint
 	if (path === '/execute' && request.method === 'POST') {
 		try {
-			const body = await request.json() as {
+			const body = (await request.json()) as {
 				txBytes: string
 				signatures: string[]
 				options?: Record<string, boolean>
@@ -471,7 +471,7 @@ export async function handleGrpcProxyRequest(request: Request, env: Env): Promis
 	// Dry run transaction endpoint
 	if (path === '/dry-run' && request.method === 'POST') {
 		try {
-			const body = await request.json() as { txBytes: string }
+			const body = (await request.json()) as { txBytes: string }
 
 			const rpcRequest: JsonRpcRequest = {
 				jsonrpc: '2.0',

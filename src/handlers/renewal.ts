@@ -8,13 +8,14 @@
  * - Nautilus TEE: Secure off-chain renewal execution
  */
 
-import { SuiClient } from '@mysten/sui/client'
+import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import { SuinsClient } from '@mysten/suins'
 // Note: @mysten/seal and @mysten/walrus are used in production with Nautilus TEE
 // Imports commented out until Nautilus integration is complete:
 // import { SealClient } from '@mysten/seal'
 // import { WalrusClient } from '@mysten/walrus'
 import type { Env } from '../types'
+import { getDefaultRpcUrl } from '../utils/rpc'
 
 // Constants
 const RENEWAL_COST_SUI = 10
@@ -54,7 +55,10 @@ interface QueueItem {
  */
 async function getRelayAddress(env: Env): Promise<string | null> {
 	try {
-		const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
+		const suiClient = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
 		const suinsClient = new SuinsClient({
 			client: suiClient as never,
 			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
@@ -77,7 +81,10 @@ async function verifyPayment(
 	expectedAmount: bigint,
 ): Promise<{ valid: boolean; error?: string }> {
 	try {
-		const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
+		const suiClient = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
 
 		const txResponse = await suiClient.getTransactionBlock({
 			digest: txDigest,
@@ -129,7 +136,10 @@ async function verifyPayment(
  */
 async function getNftId(env: Env, name: string): Promise<string | null> {
 	try {
-		const suiClient = new SuiClient({ url: env.SUI_RPC_URL })
+		const suiClient = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
 		const suinsClient = new SuinsClient({
 			client: suiClient as never,
 			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
@@ -149,7 +159,7 @@ async function getNftId(env: Env, name: string): Promise<string | null> {
  * Production implementation would use:
  * ```
  * const sealClient = new SealClient({
- *   suiClient: new SuiClient({ url: env.SUI_RPC_URL }),
+ *   suiClient: new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK }),
  *   keyServerObjectId: 'NAUTILUS_KEY_SERVER_OBJECT_ID',
  * })
  * return await sealClient.encrypt({

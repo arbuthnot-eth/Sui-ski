@@ -1,0 +1,21 @@
+{
+  "name": "surflux-grpc-proxy",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-strip-types index.ts",
+    "dev:local": "node --experimental-strip-types --watch index.ts",
+    "dev": "vercel dev",
+    "deploy": "vercel --prod",
+    "deploy:cf": "wrangler deploy"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.0",
+    "@grpc/proto-loader": "^0.7.13"
+  },
+  "devDependencies": {
+    "@cloudflare/containers": "^0.1.0",
+    "@vercel/node": "^3.2.29",
+    "wrangler": "^4.62.0"
+  }
+}

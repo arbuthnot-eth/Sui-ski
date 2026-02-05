@@ -20,7 +20,7 @@ export async function encryptNote(
 		blinding: bigint
 		secret?: bigint
 	},
-	recipientPubKey?: string
+	recipientPubKey?: string,
 ): Promise<Uint8Array> {
 	// Serialize note data
 	const noteData = serializeNote(note)
@@ -52,7 +52,7 @@ export async function encryptNote(
  */
 export async function decryptNote(
 	encryptedData: Uint8Array,
-	privateKey?: string
+	privateKey?: string,
 ): Promise<{
 	amount: bigint
 	blinding: bigint
@@ -80,11 +80,7 @@ export async function decryptNote(
 /**
  * Serialize note to bytes
  */
-function serializeNote(note: {
-	amount: bigint
-	blinding: bigint
-	secret?: bigint
-}): Uint8Array {
+function serializeNote(note: { amount: bigint; blinding: bigint; secret?: bigint }): Uint8Array {
 	const buffer = new Uint8Array(96) // 3 * 32 bytes
 
 	// Amount (32 bytes, big-endian)

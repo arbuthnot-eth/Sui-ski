@@ -5,8 +5,8 @@
  * Height 26 (supports ~67M leaves) with Poseidon hash.
  */
 
-import { poseidon2 } from './poseidon'
 import type { MerkleProof } from '../types'
+import { poseidon2 } from './poseidon'
 
 // Tree configuration
 const TREE_HEIGHT = 26
@@ -221,10 +221,7 @@ export class MerkleTree {
 	/**
 	 * Deserialize tree state
 	 */
-	static fromJSON(data: {
-		nextIndex: number
-		leaves: [number, string][]
-	}): MerkleTree {
+	static fromJSON(data: { nextIndex: number; leaves: [number, string][] }): MerkleTree {
 		const tree = new MerkleTree()
 		tree.nextIndex = data.nextIndex
 
@@ -244,11 +241,7 @@ export class MerkleTree {
 /**
  * Compute root from leaves using proof path
  */
-export function computeRootFromPath(
-	leaf: bigint,
-	path: bigint[],
-	indices: number[]
-): bigint {
+export function computeRootFromPath(leaf: bigint, path: bigint[], indices: number[]): bigint {
 	let current = leaf
 
 	for (let i = 0; i < path.length; i++) {

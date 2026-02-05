@@ -1,0 +1,59 @@
+project:
+  name: "Sui.ski"
+  language: "Move"
+  framework: "Sui Blockchain"
+
+commands:
+  test: "sui move test"
+  build: "sui move build"
+  # Optional: add publish if you frequently deploy
+  # publish: "sui client publish --gas-budget 1000000000"
+
+rules:
+  - "You are an expert Sui Move developer specializing in the latest Sui framework (as of early 2026), including native ZK support and multi-chain primitives."
+  - "Prioritize Sui's parallel execution advantages: prefer single-owner objects whenever possible to maximize throughput and avoid contention hotspots on shared objects."
+  - "Use shared objects only when truly needed for multi-user access; design shared objects carefully with indexes or dynamic fields to minimize contention."
+  - "Leverage cutting-edge Sui primitives: use dynamic object fields (sui::dynamic_object_field) for flexible, tree-like object compositions and extensible storage."
+  - "For collections, prefer sui::table::Table or sui::bag::Bag over Vec for better flexibility and performance."
+  - "Always integrate SuiNS (Sui Name Service) for resolving .sui domains to addresses/object IDs whenever handling user-facing addresses, identifiers, payments, profiles, or any public interaction — this is a core UX requirement for modern Sui dApps and should be the default for human-readable names."
+  - "For native multi-chain interoperability and cross-chain signing (Bitcoin, Ethereum, Solana, etc.) without bridges: prioritize the Ika dWallet primitive for secure, decentralized MPC signing."
+  - "When implementing Ika dWallet features: primarily use the official @ika.xyz/sdk TypeScript SDK to build programmable transaction blocks, generate presigns, prepare signing payloads, and handle the full MPC flow — this is the recommended and most robust integration path for 99% of use cases."
+  - "On-chain in Move code: handle DWalletCap objects (the core capability linking Sui contracts to Ika dWallets) for creation, transfer, or revocation. Add the official Ika packages as dependencies in Move.toml using the latest mainnet addresses from https://github.com/dwallet-labs/ika/tree/main/deployed_contracts (check JSON/deployment files) or the Ika docs."
+  - "Typical imports (once dependencies are added): use <ika_package_address>::ika_dwallet_2pc_mpc::* or similar for DWalletCap and related types/functions — confirm exact module structure from the latest source."
+  - "For DeFi trading, liquidity, swaps, limit orders, perpetuals, or margin trading: integrate with DeepBook (deepbook::pool and related modules) as the native on-chain CLOB for deep liquidity, low fees, composability, and emerging leveraged trading capabilities."
+  - "For sensitive data, private user info, time-locked secrets, or encrypted blobs: use Seal for programmable encryption and decentralized access control policies (especially in combination with Walrus storage); this positions your code well for upcoming native private transaction support in 2026."
+  - "For advanced on-chain privacy (confidential transactions, anonymity sets, unlinkable transfers): leverage Sui's native Groth16 verifier (sui::groth16) with custom circuits to implement ZK-based patterns like a 2-input/2-output UTXO note model, encrypted notes for client-side management, nullifiers for double-spend prevention, and Merkle inclusion proofs."
+  - "In privacy systems, implement a shared EncryptionKeyRegistry (using dynamic fields or Table) for users to register public encryption keys, enabling direct private note transfers via re-encryption without on-chain spending."
+  - "Support private transfers by allowing note re-encryption to registered recipient public keys, keeping note data fully off-chain and client-managed."
+  - "Design transactions around a fixed 2-in-2-out UTXO model (consume up to 2 input notes, create 2 output notes: one for recipient, one for change) to improve mixing and anonymity set strength."
+  - "Include support for a public amount delta in transactions to handle fees, partial public withdrawals, or integrations with public DeFi."
+  - "For scalability in large anonymity sets, avoid full on-chain Merkle tree storage; instead, emit richly indexed commitment insertion events (including leaf index/hash if needed) for off-chain indexers to reconstruct the tree, while the ZK circuit verifies Merkle paths directly."
+  - "When building private transaction systems, use encrypted notes (recipient public key encryption), nullifier sets in shared objects, and commitment Merkle trees (built with dynamic fields or tables) to hide sender-recipient links and amounts."
+  - "Heavily emit events for commitments, nullifiers, deposits, withdrawals, and key registrations to support off-chain indexing, Merkle tree maintenance, and front-end transparency."
+  - "For privacy-sensitive, compute-intensive, or off-chain logic requiring verifiability, use Nautilus for secure TEE-based off-chain computation with on-chain attestation."
+  - "For decentralized storage of large blobs (media, files, etc.), reference Walrus blob IDs in on-chain objects."
+  - "Utilize sui::random::Random for on-chain randomness in games, lotteries, or probabilistic logic."
+  - "For tradable assets and NFTs, consider the Kiosk primitive (sui::kiosk) with TransferPolicy and royalty enforcement if standardized, royalty-enforced trading is needed (note: adoption varies; evaluate per marketplace compatibility)."
+  - "Implement the Display<T> standard (sui::display) for rich, updatable metadata on custom types."
+  - "Use the Publisher object and UpgradeCap pattern for safe, capability-based package upgrades."
+  - "Follow the one-time witness (OTW) drop pattern for secure module initialization."
+  - "Use the Clock object (sui::clock::Clock) for any time-dependent logic."
+  - "Always emit detailed events using sui::event::emit for significant state changes and user actions to enable efficient indexing, notifications, and front-end reactivity."
+  - "Define custom error constants (e.g., const E_INVALID_AMOUNT: u64 = 1;) for all abort conditions to improve debugging, client-side handling, and user experience."
+  - "Leverage Move 2024 language features (e.g., generics, inline functions) for more expressive, reusable, and type-safe code where applicable."
+  - "Test thoroughly with sui move test, covering edge cases, parallelism scenarios, storage rebates, and (where applicable) off-chain verification scenarios."
+  - "Follow the object model strictly: use transfer::public_transfer, transfer::share_object, and transfer::freeze_object appropriately."
+  # === New rules for dynamic updates, testing, and documentation using MCP tools ===
+  - "Before implementing or updating any feature, ALWAYS use available MCP tools (Brave Search, Context7, Playwright) to verify the latest Sui best practices, package addresses, module APIs, and any recent changes (e.g., new primitives, deprecations, or SIPs)."
+  - "If a pattern or dependency might be outdated, explicitly search/browse official sources (docs.sui.io, GitHub repos, or Ika/DeepBook docs) and update code accordingly."
+  - "After every code change, run 'sui move test' automatically and iterate until ALL tests pass with 100% success."
+  - "Write comprehensive unit tests in the tests/ folder using sui::test_scenario, covering happy paths, edge cases, failure modes, parallelism, and gas/rebase scenarios."
+  - "Generate and maintain high-quality documentation: update README.md with clear usage examples, deployment instructions, architecture overview, and design decisions."
+  - "Create a docs/ folder (if missing) with detailed Markdown files, Mermaid diagrams for flows/object models, and code walkthroughs."
+  - "At the end of every task, confirm: all tests pass, documentation is updated, and any tool-sourced improvements are cited in comments or CHANGELOG.md."
+
+boundaries:
+  never_touch:
+    - "Move.toml"
+    - "sources/Move.lock"   # Protect lockfile unless explicitly needed
+    - ".git"                # Avoid touching git files

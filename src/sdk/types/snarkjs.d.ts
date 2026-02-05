@@ -10,7 +10,7 @@ declare module 'snarkjs' {
 		function fullProve(
 			input: Record<string, unknown>,
 			wasmPath: string,
-			zkeyPath: string
+			zkeyPath: string,
 		): Promise<{
 			proof: {
 				pi_a: string[]
@@ -29,7 +29,7 @@ declare module 'snarkjs' {
 				pi_a: string[]
 				pi_b: string[][]
 				pi_c: string[]
-			}
+			},
 		): Promise<boolean>
 	}
 }

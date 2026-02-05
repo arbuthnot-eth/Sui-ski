@@ -18,6 +18,9 @@ export interface SocialMetaOptions {
 	siteName?: string
 	image?: string
 	imageAlt?: string
+	imageWidth?: number
+	imageHeight?: number
+	twitterImage?: string
 	/** @default 'website' */
 	type?: string
 	/** @default summary (summary_large_image when image present) */
@@ -103,6 +106,12 @@ export function renderSocialMeta(options: SocialMetaOptions): string {
 		if (options.imageAlt) {
 			lines.push(`<meta property="og:image:alt" content="${escapeHtml(options.imageAlt)}">`)
 		}
+		if (options.imageWidth) {
+			lines.push(`<meta property="og:image:width" content="${options.imageWidth}">`)
+		}
+		if (options.imageHeight) {
+			lines.push(`<meta property="og:image:height" content="${options.imageHeight}">`)
+		}
 	}
 	lines.push(`<meta name="twitter:card" content="${escapeHtml(cardType)}">`)
 	lines.push(`<meta name="twitter:title" content="${escapeHtml(options.title)}">`)
@@ -110,8 +119,9 @@ export function renderSocialMeta(options: SocialMetaOptions): string {
 	if (options.url) {
 		lines.push(`<meta name="twitter:url" content="${escapeHtml(options.url)}">`)
 	}
-	if (options.image) {
-		lines.push(`<meta name="twitter:image" content="${escapeHtml(options.image)}">`)
+	const twitterImg = options.twitterImage || options.image
+	if (twitterImg) {
+		lines.push(`<meta name="twitter:image" content="${escapeHtml(twitterImg)}">`)
 		if (options.imageAlt) {
 			lines.push(`<meta name="twitter:image:alt" content="${escapeHtml(options.imageAlt)}">`)
 		}

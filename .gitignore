@@ -24,3 +24,6 @@ Thumbs.db
 # Test/dev assets
 pilled-site/
 ragtag-images/
+marge_simpson/
+.marge/
+.claude/
