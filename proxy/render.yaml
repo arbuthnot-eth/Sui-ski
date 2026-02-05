@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: surflux-grpc-proxy
+    runtime: docker
+    region: oregon
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: NODE_ENV
+        value: production
+      - key: SURFLUX_API_KEY
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: false

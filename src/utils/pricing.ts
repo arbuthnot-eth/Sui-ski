@@ -1,29 +1,37 @@
-import { SuiClient } from '@mysten/sui/client'
-import { SuinsClient } from '@mysten/suins'
+import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
+import { mainPackage, SuinsClient } from '@mysten/suins'
+import { getSUIPrice } from '../handlers/landing'
 import type { Env } from '../types'
-import { calculatePremium, fetchSuiPrice } from './bounty-transactions'
+import { calculatePremium } from './premium'
 import { cacheKey, getCached, setCache } from './cache'
-import { getNSSuiPrice } from './ns-price'
+import { getNSSuiPrice, NS_SCALE } from './ns-price'
+import { getPythPriceInfoObjectId } from './pyth-price-info'
+import { getDefaultRpcUrl } from './rpc'
 
 const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000
-const PRICING_CACHE_TTL = 60
+const PRICING_CACHE_TTL = 300
+const NS_DISCOUNT_PERCENT = 25
+const SWAP_SLIPPAGE_BPS = 100
 
 export interface PricingResult {
-	basePriceMist: bigint
-	premiumMist: bigint
-	totalSuiMist: bigint
-	totalNsMist: bigint
-	nsDiscount: bigint
+	directSuiMist: bigint
+	discountedSuiMist: bigint
+	nsNeededMist: bigint
+	savingsMist: bigint
+	savingsPercent: number
+	nsPerSui: number
+	suiPerNs: number
 	isGracePeriod: boolean
+	priceInfoObjectId?: string
 	expirationMs?: number
 	gracePeriodEndMs?: number
-	nsPerSui: number
 	breakdown: {
 		basePriceUsd: number
+		discountedPriceUsd: number
 		premiumUsd: number
-		totalSuiUsd: number
-		totalNsUsd: number
-		discountPercent: number
+		suiPriceUsd: number
+		nsDiscountPercent: number
+		swapSlippageBps: number
 	}
 }
 
@@ -40,26 +48,28 @@ export async function calculateRegistrationPrice(
 	const { domain, years, expirationMs, env } = params
 	const cleanDomain = `${domain.toLowerCase().replace(/\.sui$/i, '')}.sui`
 
-	const key = cacheKey('reg-price', cleanDomain, String(years), String(expirationMs || 0))
-	const cached = await getCached<PricingResult>(env, key)
+	const key = cacheKey('reg-price-v3', cleanDomain, String(years), String(expirationMs || 0))
+	const cached = await getCached<Record<string, unknown>>(env, key)
 	if (cached) {
-		return cached
+		return deserializePricingResult(cached)
 	}
 
-	const client = new SuiClient({ url: env.SUI_RPC_URL })
+	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
 	const network = env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
 	const suinsClient = new SuinsClient({ client: client as never, network })
 
-	const [basePriceNumber, suiPriceUsd, nsPriceResult] = await Promise.all([
+	const nsFeedId =
+		network === 'mainnet' ? mainPackage.mainnet.coins.NS.feed : mainPackage.testnet.coins.NS.feed
+	const [basePriceUnits, suiPriceUsd, nsPriceResult, priceInfoObjectId] = await Promise.all([
 		suinsClient.calculatePrice({ name: cleanDomain, years }),
-		fetchSuiPrice(),
+		getSUIPrice({ CACHE: env.CACHE }),
 		getNSSuiPrice(env),
+		nsFeedId ? getPythPriceInfoObjectId(client, network, nsFeedId) : Promise.resolve(undefined),
 	])
 
-	const basePriceMist = BigInt(basePriceNumber)
+	const basePriceUsd = Number(basePriceUnits) / 1e6
 
-	let premiumMist = 0n
-	let premiumNsMist = 0n
+	let premiumUsd = 0
 	let isGracePeriod = false
 	let gracePeriodEndMs: number | undefined
 
@@ -69,44 +79,47 @@ export async function calculateRegistrationPrice(
 
 		if (now < gracePeriodEndMs) {
 			isGracePeriod = true
-
 			const premiumResult = calculatePremium(expirationMs, now, suiPriceUsd)
-
-			premiumMist = BigInt(Math.round(premiumResult.suiPremium * 1e9))
-			premiumNsMist = BigInt(Math.round(premiumResult.nsPremium * 1e9))
+			premiumUsd = premiumResult.suiPremium * suiPriceUsd
 		}
 	}
 
-	const totalSuiMist = basePriceMist + premiumMist
-	const totalNsEquivalentSui = basePriceMist + premiumNsMist
+	const totalPriceUsd = basePriceUsd + premiumUsd
+	const discountedPriceUsd = totalPriceUsd * (1 - NS_DISCOUNT_PERCENT / 100)
 
-	const totalNsMist = BigInt(Math.ceil(Number(totalNsEquivalentSui) * nsPriceResult.nsPerSui))
+	const directSuiAmount = totalPriceUsd / suiPriceUsd
+	const directSuiMist = BigInt(Math.ceil(directSuiAmount * 1e9))
 
-	const nsDiscountSui = totalSuiMist - totalNsEquivalentSui
-	const discountPercent =
-		totalSuiMist > 0n ? Number((nsDiscountSui * 10000n) / totalSuiMist) / 100 : 0
+	const discountedSuiAmount = discountedPriceUsd / suiPriceUsd
+	const nsNeeded = discountedSuiAmount * nsPriceResult.nsPerSui
+	const nsNeededMist = BigInt(Math.ceil(nsNeeded * NS_SCALE))
 
-	const basePriceUsd = (Number(basePriceMist) / 1e9) * suiPriceUsd
-	const premiumUsd = (Number(premiumMist) / 1e9) * suiPriceUsd
-	const totalSuiUsd = (Number(totalSuiMist) / 1e9) * suiPriceUsd
-	const totalNsUsd = (Number(totalNsEquivalentSui) / 1e9) * suiPriceUsd
+	const suiForSwap = nsNeeded * nsPriceResult.suiPerNs
+	const suiWithSlippage = suiForSwap * (1 + SWAP_SLIPPAGE_BPS / 10000)
+	const discountedSuiMist = BigInt(Math.ceil(suiWithSlippage * 1e9))
+
+	const savingsMist = directSuiMist - discountedSuiMist
+	const savingsPercent = Number((savingsMist * 10000n) / directSuiMist) / 100
 
 	const result: PricingResult = {
-		basePriceMist,
-		premiumMist,
-		totalSuiMist,
-		totalNsMist,
-		nsDiscount: nsDiscountSui,
+		directSuiMist,
+		discountedSuiMist,
+		nsNeededMist,
+		savingsMist,
+		savingsPercent,
+		nsPerSui: nsPriceResult.nsPerSui,
+		suiPerNs: nsPriceResult.suiPerNs,
 		isGracePeriod,
+		priceInfoObjectId,
 		expirationMs,
 		gracePeriodEndMs,
-		nsPerSui: nsPriceResult.nsPerSui,
 		breakdown: {
 			basePriceUsd,
+			discountedPriceUsd,
 			premiumUsd,
-			totalSuiUsd,
-			totalNsUsd,
-			discountPercent,
+			suiPriceUsd,
+			nsDiscountPercent: NS_DISCOUNT_PERCENT,
+			swapSlippageBps: SWAP_SLIPPAGE_BPS,
 		},
 	}
 
@@ -118,43 +131,144 @@ export async function calculateRegistrationPrice(
 function serializablePricingResult(result: PricingResult): Record<string, unknown> {
 	return {
 		...result,
-		basePriceMist: String(result.basePriceMist),
-		premiumMist: String(result.premiumMist),
-		totalSuiMist: String(result.totalSuiMist),
-		totalNsMist: String(result.totalNsMist),
-		nsDiscount: String(result.nsDiscount),
+		directSuiMist: String(result.directSuiMist),
+		discountedSuiMist: String(result.discountedSuiMist),
+		nsNeededMist: String(result.nsNeededMist),
+		savingsMist: String(result.savingsMist),
+		priceInfoObjectId: result.priceInfoObjectId,
 	}
+}
+
+function deserializePricingResult(cached: Record<string, unknown>): PricingResult {
+	return {
+		...cached,
+		directSuiMist: BigInt(cached.directSuiMist as string),
+		discountedSuiMist: BigInt(cached.discountedSuiMist as string),
+		nsNeededMist: BigInt(cached.nsNeededMist as string),
+		savingsMist: BigInt(cached.savingsMist as string),
+	} as PricingResult
 }
 
 export function formatPricingResponse(result: PricingResult): Record<string, unknown> {
 	return {
-		basePriceMist: String(result.basePriceMist),
-		premiumMist: String(result.premiumMist),
-		totalSuiMist: String(result.totalSuiMist),
-		totalNsMist: String(result.totalNsMist),
+		directSuiMist: String(result.directSuiMist),
+		discountedSuiMist: String(result.discountedSuiMist),
+		nsNeededMist: String(result.nsNeededMist),
+		savingsMist: String(result.savingsMist),
+		savingsPercent: result.savingsPercent,
 		nsPerSui: result.nsPerSui,
+		suiPerNs: result.suiPerNs,
 		isGracePeriod: result.isGracePeriod,
+		priceInfoObjectId: result.priceInfoObjectId,
 		expirationMs: result.expirationMs,
 		gracePeriodEndMs: result.gracePeriodEndMs,
 		breakdown: result.breakdown,
 	}
 }
 
-export async function getBasePricing(env: Env): Promise<Record<string, number>> {
-	const client = new SuiClient({ url: env.SUI_RPC_URL })
+export async function calculateRenewalPrice(params: CalculatePriceParams): Promise<PricingResult> {
+	const { domain, years, env } = params
+	const cleanDomain = `${domain.toLowerCase().replace(/\.sui$/i, '')}.sui`
+
+	const key = cacheKey('renew-price-v1', cleanDomain, String(years))
+	const cached = await getCached<Record<string, unknown>>(env, key)
+	if (cached) {
+		return deserializePricingResult(cached)
+	}
+
+	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
 	const network = env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
 	const suinsClient = new SuinsClient({ client: client as never, network })
 
-	const priceList = await suinsClient.getPriceList()
+	const nsFeedId =
+		network === 'mainnet' ? mainPackage.mainnet.coins.NS.feed : mainPackage.testnet.coins.NS.feed
+	const [basePriceUnits, suiPriceUsd, nsPriceResult, priceInfoObjectId] = await Promise.all([
+		suinsClient.calculatePrice({ name: cleanDomain, years, isRegistration: false }),
+		getSUIPrice({ CACHE: env.CACHE }),
+		getNSSuiPrice(env),
+		nsFeedId ? getPythPriceInfoObjectId(client, network, nsFeedId) : Promise.resolve(undefined),
+	])
 
-	const pricing: Record<string, number> = {}
+	const basePriceUsd = Number(basePriceUnits) / 1e6
+	const discountedPriceUsd = basePriceUsd * (1 - NS_DISCOUNT_PERCENT / 100)
+
+	const directSuiAmount = basePriceUsd / suiPriceUsd
+	const directSuiMist = BigInt(Math.ceil(directSuiAmount * 1e9))
+
+	const discountedSuiAmount = discountedPriceUsd / suiPriceUsd
+	const nsNeeded = discountedSuiAmount * nsPriceResult.nsPerSui
+	const nsNeededMist = BigInt(Math.ceil(nsNeeded * NS_SCALE))
+
+	const suiForSwap = nsNeeded * nsPriceResult.suiPerNs
+	const suiWithSlippage = suiForSwap * (1 + SWAP_SLIPPAGE_BPS / 10000)
+	const discountedSuiMist = BigInt(Math.ceil(suiWithSlippage * 1e9))
+
+	const savingsMist = directSuiMist - discountedSuiMist
+	const savingsPercent = Number((savingsMist * 10000n) / directSuiMist) / 100
+
+	const result: PricingResult = {
+		directSuiMist,
+		discountedSuiMist,
+		nsNeededMist,
+		savingsMist,
+		savingsPercent,
+		nsPerSui: nsPriceResult.nsPerSui,
+		suiPerNs: nsPriceResult.suiPerNs,
+		isGracePeriod: false,
+		priceInfoObjectId,
+		breakdown: {
+			basePriceUsd,
+			discountedPriceUsd,
+			premiumUsd: 0,
+			suiPriceUsd,
+			nsDiscountPercent: NS_DISCOUNT_PERCENT,
+			swapSlippageBps: SWAP_SLIPPAGE_BPS,
+		},
+	}
+
+	await setCache(env, key, serializablePricingResult(result), PRICING_CACHE_TTL)
+
+	return result
+}
+
+export async function getBasePricing(env: Env): Promise<Record<string, unknown>> {
+	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
+	const network = env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+	const suinsClient = new SuinsClient({ client: client as never, network })
+
+	const [priceList, suiPriceUsd, nsPriceResult] = await Promise.all([
+		suinsClient.getPriceList(),
+		getSUIPrice({ CACHE: env.CACHE }),
+		getNSSuiPrice(env),
+	])
+
+	const pricing: Record<string, unknown> = {
+		suiPriceUsd,
+		nsPerSui: nsPriceResult.nsPerSui,
+		suiPerNs: nsPriceResult.suiPerNs,
+		nsDiscountPercent: NS_DISCOUNT_PERCENT,
+		swapSlippageBps: SWAP_SLIPPAGE_BPS,
+		tiers: {} as Record<string, unknown>,
+	}
+
+	const tiers = pricing.tiers as Record<string, unknown>
 
 	for (const [key, value] of priceList.entries()) {
 		const [minLen, maxLen] = key
-		if (minLen === maxLen) {
-			pricing[String(minLen)] = value
-		} else {
-			pricing[`${minLen}-${maxLen}`] = value
+		const keyStr = minLen === maxLen ? String(minLen) : `${minLen}-${maxLen}`
+		const usdAmount = value / 1e6
+		const discountedUsd = usdAmount * (1 - NS_DISCOUNT_PERCENT / 100)
+
+		const directSui = usdAmount / suiPriceUsd
+		const nsNeeded = (discountedUsd / suiPriceUsd) * nsPriceResult.nsPerSui
+		const suiForSwap = nsNeeded * nsPriceResult.suiPerNs * (1 + SWAP_SLIPPAGE_BPS / 10000)
+
+		tiers[keyStr] = {
+			usd: usdAmount,
+			discountedUsd,
+			directSuiMist: Math.ceil(directSui * 1e9),
+			discountedSuiMist: Math.ceil(suiForSwap * 1e9),
+			savingsPercent: Math.round((1 - suiForSwap / directSui) * 10000) / 100,
 		}
 	}
 

@@ -6,6 +6,26 @@ const DEFAULT_RPC_URLS: Record<Env['SUI_NETWORK'], string> = {
 	devnet: 'https://fullnode.devnet.sui.io:443',
 }
 
+const GRAPHQL_URLS: Record<Env['SUI_NETWORK'], string> = {
+	mainnet: 'https://sui-mainnet.mystenlabs.com/graphql',
+	testnet: 'https://sui-testnet.mystenlabs.com/graphql',
+	devnet: 'https://sui-devnet.mystenlabs.com/graphql',
+}
+
+const GRPC_URLS: Record<Env['SUI_NETWORK'], string> = {
+	mainnet: 'https://grpc.surflux.dev:443',
+	testnet: 'https://fullnode.testnet.sui.io:443',
+	devnet: 'https://fullnode.devnet.sui.io:443',
+}
+
+export function getGraphQLUrl(network: Env['SUI_NETWORK']): string {
+	return GRAPHQL_URLS[network] || GRAPHQL_URLS.mainnet
+}
+
+export function getGrpcUrl(network: Env['SUI_NETWORK']): string {
+	return GRPC_URLS[network] || GRPC_URLS.mainnet
+}
+
 export function getDefaultRpcUrl(network: Env['SUI_NETWORK']): string {
 	return DEFAULT_RPC_URLS[network] || DEFAULT_RPC_URLS.mainnet
 }

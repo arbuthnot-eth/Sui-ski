@@ -33,7 +33,6 @@ import type {
 	StoredMessage,
 } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
-import { getPWAMetaTags } from './pwa'
 
 const NONCE_EXPIRY_MS = 5 * 60 * 1000
 const MAX_MESSAGE_SIZE_BYTES = 1024 * 1024
@@ -1728,7 +1727,7 @@ function generateAppShell(env: Env, currentPath: string): string {
 	<title>${title} | sui.ski</title>
 	<meta name="description" content="Secure, decentralized communications on Sui blockchain">
 	<meta name="theme-color" content="#0a0a0f">
-	${getPWAMetaTags()}
+	
 	<style>
 		${getAppStyles()}
 	</style>

@@ -5,32 +5,20 @@ export interface Env {
 	SUI_RPC_URL: string
 	WALRUS_NETWORK: 'mainnet' | 'testnet'
 	CACHE: KVNamespace
-	// Optional: Messaging contract address
+	SERVICE_FEE_NAME?: string
 	MESSAGING_CONTRACT_ADDRESS?: string
-	// Optional: Bounty escrow package addresses
-	BOUNTY_ESCROW_PACKAGE_MAINNET?: string
-	BOUNTY_ESCROW_PACKAGE_TESTNET?: string
-	BOUNTY_ESCROW_MVR_ALIAS?: string
-	// Optional: Move Registry parent ID
 	MOVE_REGISTRY_PARENT_ID?: string
-	// Optional: IKA dWallet package ID for cross-chain control
 	IKA_PACKAGE_ID?: string
-	// Optional: LLM API key for AI copilot features
 	LLM_API_KEY?: string
-	// Optional: LLM API endpoint (defaults to Anthropic)
 	LLM_API_URL?: string
-	// Optional: Agency registry object ID
 	AGENCY_REGISTRY_ID?: string
-	// Optional: Seal package ID for encrypted subscriptions
 	SEAL_PACKAGE_ID?: string
-	// Optional: Seal key server object IDs (comma-separated)
 	SEAL_KEY_SERVERS?: string
-	// Optional: Seal approval Move target (e.g., "0x...::messaging::seal_approve")
 	SEAL_APPROVE_TARGET?: string
-	// Optional: Walrus publisher URL for storing encrypted blobs
 	WALRUS_PUBLISHER_URL?: string
-	// Optional: Walrus aggregator URL for retrieving blobs
 	WALRUS_AGGREGATOR_URL?: string
+	BOUNTY_ESCROW_MVR_ALIAS?: string
+	SURFLUX_API_KEY?: string
 }
 
 export type RouteType =
@@ -41,7 +29,6 @@ export type RouteType =
 	| 'mvr'
 	| 'messaging'
 	| 'app'
-	| 'agents'
 
 export interface MVRInfo {
 	/** Package name (e.g., "private" from "private--iousd.sui.ski") */
@@ -100,70 +87,6 @@ export interface GatewayError {
 	error: string
 	code: string
 	details?: unknown
-}
-
-/** Bounty status */
-export type BountyStatus = 'pending' | 'ready' | 'executing' | 'completed' | 'failed' | 'cancelled'
-
-/** Bounty for SuiNS name registration */
-export interface Bounty {
-	id: string
-	name: string
-	beneficiary: string
-	creator: string
-	escrowObjectId: string
-	totalAmountMist: string
-	executorRewardMist: string
-	registrationCostMist: string
-	paymentCurrency: 'sui' | 'ns'
-	availableAt: number
-	years: number
-	status: BountyStatus
-	createdAt: number
-	updatedAt: number
-	attempts: number
-	txBytes?: string
-	signatures?: string[]
-	resultDigest?: string
-	lastError?: string
-	/** Type of bounty: 'standard' (creator pays all) or 'gift' (creator pays reward only) */
-	type?: 'standard' | 'gift'
-}
-
-/** Public bounty data (without sensitive tx data) */
-export interface PublicBounty extends Omit<Bounty, 'txBytes' | 'signatures'> {
-	hasSignedTx: boolean
-}
-
-/** Scheduled claim status */
-export type ScheduledClaimStatus =
-	| 'pending'
-	| 'ready'
-	| 'processing'
-	| 'completed'
-	| 'failed'
-	| 'cancelled'
-
-/** Scheduled claim for SuiNS name */
-export interface ScheduledClaim {
-	id: string
-	name: string
-	targetAddress: string
-	expirationMs: number
-	availableAt: number
-	scheduledAt: number
-	paymentDigest: string
-	paymentAmount: string
-	paidBy: string
-	years: number
-	status: ScheduledClaimStatus
-	attempts: number
-	createdAt: number
-	resultDigest?: string
-	lastError?: string
-	registrationTxDigest?: string
-	nftObjectId?: string
-	lastAttemptAt?: number
 }
 
 /** MVR Package Info */
@@ -378,4 +301,24 @@ export interface MessageSendResponse {
 	conversationId: string
 	signatureVerified: boolean
 	timestamp: number
+}
+
+/** Scheduled claim for grace period name registration */
+export interface ScheduledClaim {
+	id: string
+	name: string
+	targetAddress: string
+	expirationMs: number
+	availableAt: number
+	scheduledAt: number
+	paymentDigest: string
+	paymentAmount: string
+	paidBy: string
+	years: number
+	status: 'pending' | 'processing' | 'completed' | 'failed'
+	attempts: number
+	createdAt: number
+	lastAttemptAt?: number
+	resultDigest?: string
+	error?: string
 }

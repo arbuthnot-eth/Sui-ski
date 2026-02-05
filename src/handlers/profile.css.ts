@@ -242,60 +242,6 @@ export const profileStyles = `
 			display: flex;
 			gap: 20px;
 		}
-		.sidebar {
-			width: 170px;
-			flex-shrink: 0;
-			position: sticky;
-			top: 24px;
-			align-self: flex-start;
-		}
-		.sidebar-nav {
-			background: var(--card-bg);
-			border-radius: 12px;
-			padding: 6px;
-			border: 1px solid var(--border);
-			backdrop-filter: blur(20px);
-			box-shadow: var(--shadow), var(--shadow-glow);
-		}
-		.sidebar-tab {
-			display: flex;
-			align-items: center;
-			gap: 10px;
-			width: 100%;
-			padding: 10px 12px;
-			border: none;
-			background: transparent;
-			color: var(--text-dim);
-			font-size: 0.78rem;
-			font-weight: 500;
-			cursor: pointer;
-			border-radius: 8px;
-			transition: all 0.25s ease;
-			text-align: left;
-		}
-		.sidebar-tab:hover {
-			background: rgba(104, 137, 176, 0.05);
-			color: var(--text-muted);
-		}
-		.sidebar-tab.active {
-			background: rgba(96, 165, 250, 0.1);
-			color: #60a5fa;
-			box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.25), 0 0 20px rgba(96, 165, 250, 0.08);
-		}
-		.sidebar-tab svg {
-			width: 15px;
-			height: 15px;
-			flex-shrink: 0;
-			opacity: 0.6;
-			transition: opacity 0.25s ease;
-		}
-		.sidebar-tab:hover svg,
-		.sidebar-tab.active svg {
-			opacity: 1;
-		}
-		.sidebar-tab {
-			position: relative;
-		}
 		.notification-badge {
 			position: absolute;
 			top: 4px;
@@ -537,9 +483,6 @@ export const profileStyles = `
 			min-width: 0;
 		}
 		.tab-panel {
-			display: none;
-		}
-		.tab-panel.active {
 			display: block;
 		}
 
@@ -2056,173 +1999,540 @@ export const profileStyles = `
 			}
 		}
 
-		/* Queue Bid Section (legacy) */
-		.queue-bid-section {
-			background: var(--card-bg);
-			backdrop-filter: blur(20px);
-			-webkit-backdrop-filter: blur(20px);
-			border: 1px solid var(--glass-border);
-			border-radius: 20px;
-			padding: 24px;
-			margin-bottom: 20px;
-			box-shadow: var(--shadow);
+		/* Renewal Section */
+		.renewal-section {
+			margin-top: 24px;
+			padding-top: 20px;
+			border-top: 1px solid rgba(251, 191, 36, 0.2);
 		}
-		.queue-bid-section h3 {
-			color: var(--text);
+		.renewal-header {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			color: var(--accent);
+			font-size: 0.75rem;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			margin-bottom: 16px;
+		}
+		.renewal-header svg {
+			width: 16px;
+			height: 16px;
+		}
+
+		/* Renewal + Linked Names Side-by-Side Container */
+		.renewal-linked-container {
+			display: flex;
+			gap: 20px;
+			margin-top: 20px;
+			align-items: flex-start;
+		}
+		.renewal-linked-container > .renewal-card {
+			flex: 0 0 auto;
+			width: 340px;
+			min-width: 280px;
+			margin-top: 0;
+		}
+		.renewal-linked-container > .linked-names-section {
+			flex: 1 1 auto;
+			min-width: 0;
+			margin-bottom: 0;
+			max-height: calc(100vh - 300px);
+			overflow-y: auto;
+		}
+		/* Stack on narrow screens - renewal on top */
+		@media (max-width: 768px) {
+			.renewal-linked-container {
+				flex-direction: column;
+			}
+			.renewal-linked-container > .renewal-card {
+				width: 100%;
+				min-width: unset;
+			}
+			.renewal-linked-container > .linked-names-section {
+				max-height: none;
+			}
+		}
+
+		/* Marketplace Card */
+		.marketplace-card {
+			background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(124, 58, 237, 0.05));
+			border: 1px solid rgba(139, 92, 246, 0.25);
+			padding: 16px;
+			border-radius: 12px;
+			margin-bottom: 16px;
+		}
+		.marketplace-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 12px;
+			flex-wrap: wrap;
+			gap: 8px;
+		}
+		.marketplace-title {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			color: var(--accent-secondary, #8b5cf6);
 			font-size: 0.9rem;
+			font-weight: 600;
+		}
+		.marketplace-title svg {
+			width: 18px;
+			height: 18px;
+		}
+		.marketplace-link {
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			text-decoration: none;
+			padding: 4px 8px;
+			border-radius: 6px;
+			background: rgba(255,255,255,0.05);
+			transition: all 0.15s ease;
+		}
+		.marketplace-link:hover {
+			background: rgba(255,255,255,0.1);
+			color: var(--text);
+		}
+		.marketplace-body {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.marketplace-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 8px 12px;
+			background: rgba(0, 0, 0, 0.2);
+			border-radius: 8px;
+		}
+		.marketplace-label {
+			color: var(--text-muted);
+			font-size: 0.8rem;
+		}
+		.marketplace-value {
+			font-weight: 600;
+			font-family: var(--font-mono, monospace);
+		}
+		.marketplace-value.listing-price {
+			color: var(--accent-secondary, #8b5cf6);
+			font-size: 1rem;
+		}
+		.marketplace-value.bid-price {
+			color: var(--accent);
+			font-size: 0.9rem;
+		}
+		.marketplace-buy-btn {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			width: 100%;
+			padding: 12px;
+			background: linear-gradient(135deg, var(--accent-secondary, #8b5cf6), #7c3aed);
+			border: none;
+			border-radius: 10px;
+			color: white;
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s ease;
+		}
+		.marketplace-buy-btn:hover:not(:disabled) {
+			transform: translateY(-1px);
+			box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+		}
+		.marketplace-buy-btn:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+		}
+		.marketplace-status {
+			text-align: center;
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			min-height: 16px;
+		}
+		.marketplace-status.success { color: var(--success); }
+		.marketplace-status.error { color: var(--danger); }
+
+		/* Renewal Card (Overview Tab) */
+		.renewal-card {
+			background: linear-gradient(135deg, rgba(74, 222, 128, 0.08), rgba(34, 197, 94, 0.05));
+			border: 1px solid rgba(74, 222, 128, 0.2);
+			margin-top: 20px;
+		}
+		.renewal-card-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-start;
+			margin-bottom: 10px;
+			flex-wrap: wrap;
+			gap: 8px;
+		}
+		.renewal-card-title {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			color: var(--accent);
+			font-size: 0.9rem;
+			font-weight: 600;
+		}
+		.renewal-card-title svg {
+			width: 18px;
+			height: 18px;
+		}
+		.renewal-expiry-info {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 0.8rem;
+		}
+		.renewal-expiry-label {
+			color: var(--text-muted);
+		}
+		.renewal-expiry-date {
+			color: var(--warning);
+			font-weight: 600;
+		}
+		.renewal-countdown {
+			color: var(--text-muted);
+			font-size: 0.75rem;
+			font-weight: 500;
+		}
+		.renewal-countdown.warning {
+			color: var(--warning);
+		}
+		.renewal-countdown.urgent {
+			color: var(--danger);
+			font-weight: 600;
+		}
+		.renewal-card-body {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.renewal-compact-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			padding: 10px 12px;
+			background: rgba(0, 0, 0, 0.2);
+			border-radius: 10px;
+		}
+		.renewal-info-stack {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+			flex: 1;
+			min-width: 0;
+		}
+		.renewal-expiry-compact {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 0.8rem;
+			flex-wrap: wrap;
+		}
+		.renewal-expiry-compact .renewal-expiry-label {
+			color: var(--text-muted);
+		}
+		.renewal-expiry-compact .renewal-expiry-date {
+			color: var(--text);
+			font-weight: 500;
+		}
+		.renewal-price-compact {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+		.renewal-price-compact .renewal-price-value {
+			color: var(--accent);
+			font-size: 1rem;
 			font-weight: 700;
-			margin-bottom: 14px;
+			font-family: var(--font-mono, ui-monospace, monospace);
+		}
+		.renewal-savings-inline {
+			display: inline-flex;
+			align-items: center;
+			gap: 3px;
+			background: linear-gradient(135deg, rgba(74, 222, 128, 0.15), rgba(34, 197, 94, 0.1));
+			border: 1px solid rgba(74, 222, 128, 0.3);
+			border-radius: 12px;
+			padding: 2px 8px;
+			font-size: 0.65rem;
+			font-weight: 600;
+			color: var(--success);
+		}
+		.renewal-duration-stepper {
+			display: flex;
+			align-items: center;
+			gap: 0;
+			background: rgba(0, 0, 0, 0.3);
+			border: 1px solid var(--glass-border);
+			border-radius: 8px;
+			overflow: hidden;
+			flex-shrink: 0;
+		}
+		.stepper-btn {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 32px;
+			height: 32px;
+			background: transparent;
+			border: none;
+			color: var(--accent);
+			font-size: 1.1rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.15s ease;
+		}
+		.stepper-btn:hover:not(:disabled) {
+			background: rgba(74, 222, 128, 0.15);
+		}
+		.stepper-btn:active:not(:disabled) {
+			background: rgba(74, 222, 128, 0.25);
+		}
+		.stepper-btn:disabled {
+			color: var(--text-muted);
+			opacity: 0.4;
+			cursor: not-allowed;
+		}
+		.stepper-value {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			min-width: 48px;
+			padding: 0 4px;
+			color: var(--text);
+			font-size: 0.85rem;
+			font-weight: 600;
+			border-left: 1px solid var(--glass-border);
+			border-right: 1px solid var(--glass-border);
+		}
+		.renewal-form-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 16px;
+			flex-wrap: wrap;
+		}
+		.renewal-years-control {
 			display: flex;
 			align-items: center;
 			gap: 10px;
 		}
-		.queue-bid-section h3 svg {
-			width: 18px;
-			height: 18px;
-			color: var(--warning);
-		}
-		.queue-bid-info {
-			display: grid;
-			grid-template-columns: repeat(2, 1fr);
-			gap: 14px;
-			margin-bottom: 18px;
-		}
-		@media (max-width: 480px) {
-			.queue-bid-info { grid-template-columns: 1fr; }
-		}
-		.queue-bid-stat {
-			background: linear-gradient(135deg, rgba(14, 165, 233, 0.03), rgba(6, 182, 212, 0.03));
-			border: 1px solid var(--border);
-			border-radius: 14px;
-			padding: 14px;
-		}
-		.queue-bid-stat-label {
-			font-size: 0.65rem;
-			font-weight: 600;
+		.renewal-years-control label {
 			color: var(--text-muted);
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
-			margin-bottom: 6px;
+			font-size: 0.85rem;
 		}
-		.queue-bid-stat-value {
-			font-size: 0.95rem;
-			font-weight: 700;
-			color: var(--text);
-		}
-		.queue-bid-stat-value.warning {
-			color: var(--warning);
-		}
-		.queue-bid-stat-value.countdown {
-			color: var(--accent);
-			font-family: ui-monospace, SFMono-Regular, monospace;
-		}
-		.queue-bid-form {
+		.renewal-price-display {
 			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+		.renewal-form {
+			display: flex;
+			flex-direction: column;
 			gap: 12px;
-			align-items: flex-end;
 		}
-		.queue-bid-input-group {
-			flex: 1;
-		}
-		.queue-bid-input-group label {
-			display: block;
-			font-size: 0.75rem;
-			font-weight: 600;
-			color: var(--text-muted);
-			margin-bottom: 8px;
-		}
-		.queue-bid-input-group input {
-			width: 100%;
-			padding: 12px 14px;
-			border: 2px solid var(--border);
-			border-radius: 12px;
-			background: var(--card-bg-solid);
-			color: var(--text);
-			font-size: 0.9rem;
-			font-weight: 600;
-		}
-		.queue-bid-input-group input:focus {
-			outline: none;
-			border-color: var(--accent);
-			box-shadow: 0 0 0 4px var(--accent-glow);
-		}
-		.queue-bid-btn {
-			padding: 12px 24px;
-			background: linear-gradient(135deg, var(--warning), #f97316);
-			color: white;
-			border: none;
-			border-radius: 12px;
-			font-size: 0.85rem;
-			font-weight: 600;
-			cursor: pointer;
-			transition: all 0.2s;
-			white-space: nowrap;
-			box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-		}
-		.queue-bid-btn:hover:not(:disabled) {
-			filter: brightness(1.1);
-			transform: translateY(-1px);
-		}
-		.queue-bid-btn:disabled {
-			opacity: 0.5;
-			cursor: not-allowed;
-			transform: none;
-		}
-		.queue-bid-status {
-			margin-top: 14px;
-			padding: 12px 16px;
-			border-radius: 12px;
-			font-size: 0.85rem;
-			font-weight: 500;
-		}
-		.queue-bid-existing {
-			background: var(--accent-light);
-			border: 1px solid var(--border-strong);
-			border-radius: 14px;
-			padding: 14px;
-			margin-bottom: 18px;
+		.renewal-years-row {
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			gap: 14px;
+			gap: 12px;
 		}
-		.queue-bid-existing-info {
-			flex: 1;
-		}
-		.queue-bid-existing-label {
-			font-size: 0.7rem;
-			color: var(--accent);
-			text-transform: uppercase;
-			font-weight: 600;
-			margin-bottom: 4px;
-		}
-		.queue-bid-existing-value {
-			font-size: 1rem;
-			font-weight: 700;
-			color: var(--text);
-		}
-		.queue-bid-cancel {
-			padding: 8px 14px;
-			background: transparent;
-			border: 2px solid var(--error);
-			color: var(--error);
-			border-radius: 10px;
-			font-size: 0.75rem;
-			font-weight: 600;
-			cursor: pointer;
-			transition: all 0.2s;
-		}
-		.queue-bid-cancel:hover {
-			background: var(--error);
-			color: white;
-		}
-		.queue-bid-note {
-			font-size: 0.75rem;
+		.renewal-years-row label {
 			color: var(--text-muted);
-			margin-top: 14px;
-			line-height: 1.6;
+			font-size: 0.85rem;
+		}
+		.renewal-years-select {
+			background: rgba(0, 0, 0, 0.3);
+			border: 1px solid var(--glass-border);
+			border-radius: 8px;
+			color: var(--text);
+			padding: 8px 12px;
+			font-size: 0.85rem;
+			cursor: pointer;
+			min-width: 100px;
+		}
+		.renewal-years-select:focus {
+			outline: none;
+			border-color: var(--accent);
+		}
+		.renewal-price-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 12px;
+			background: rgba(0, 0, 0, 0.2);
+			border-radius: 10px;
+		}
+		.renewal-price-label {
+			color: var(--text-muted);
+			font-size: 0.85rem;
+		}
+		.renewal-price-value {
+			color: var(--accent);
+			font-size: 1.1rem;
+			font-weight: 700;
+			font-family: var(--font-mono, ui-monospace, monospace);
+		}
+		.renewal-savings-row {
+			display: flex;
+			justify-content: center;
+		}
+		.renewal-savings-badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			background: linear-gradient(135deg, rgba(74, 222, 128, 0.15), rgba(34, 197, 94, 0.1));
+			border: 1px solid rgba(74, 222, 128, 0.3);
+			border-radius: 20px;
+			padding: 4px 12px;
+			font-size: 0.7rem;
+			font-weight: 600;
+			color: var(--success);
+		}
+		.renewal-btn {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			width: 100%;
+			padding: 14px;
+			background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+			border: none;
+			border-radius: 12px;
+			color: var(--bg);
+			font-size: 0.9rem;
+			font-weight: 700;
+			cursor: pointer;
+			transition: all 0.2s ease;
+			margin-top: 4px;
+		}
+		.renewal-btn:hover:not(:disabled) {
+			transform: translateY(-2px);
+			box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
+		}
+		.renewal-btn:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+		}
+		.renewal-btn-loading {
+			display: flex;
+			align-items: center;
+		}
+		.renewal-status {
+			text-align: center;
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			min-height: 20px;
+		}
+		.renewal-status.success {
+			color: var(--success);
+		}
+		.renewal-status.error {
+			color: var(--danger);
 		}
 
+		/* Transaction Success Summary */
+		.tx-success-summary {
+			background: rgba(34, 197, 94, 0.1);
+			border: 1px solid rgba(34, 197, 94, 0.3);
+			border-radius: 12px;
+			padding: 16px;
+			text-align: left;
+		}
+		.tx-success-header {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			font-weight: 600;
+			font-size: 1rem;
+			color: var(--success);
+			margin-bottom: 12px;
+		}
+		.tx-success-header svg {
+			flex-shrink: 0;
+		}
+		.tx-details-loading {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			color: var(--text-muted);
+			font-size: 0.85rem;
+		}
+		.tx-details {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+			margin-bottom: 12px;
+		}
+		.tx-detail-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-start;
+			font-size: 0.85rem;
+		}
+		.tx-label {
+			color: var(--text-muted);
+		}
+		.tx-value {
+			color: var(--text);
+			text-align: right;
+		}
+		.tx-value.mono {
+			font-family: monospace;
+			font-size: 0.8rem;
+		}
+		.tx-value.status-success {
+			color: var(--success);
+			font-weight: 600;
+		}
+		.tx-value.status-failure {
+			color: var(--danger);
+		}
+		.tx-balance-changes {
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+			text-align: right;
+		}
+		.tx-balance-change {
+			font-family: monospace;
+			font-size: 0.8rem;
+		}
+		.tx-balance-change.positive {
+			color: var(--success);
+		}
+		.tx-balance-change.negative {
+			color: var(--danger);
+		}
+		.tx-explorer-links {
+			display: flex;
+			gap: 12px;
+			justify-content: center;
+			padding-top: 12px;
+			border-top: 1px solid rgba(34, 197, 94, 0.2);
+		}
+		.tx-explorer-links a {
+			color: var(--accent);
+			text-decoration: none;
+			font-size: 0.85rem;
+			display: flex;
+			align-items: center;
+			gap: 4px;
+		}
+		.tx-explorer-links a:hover {
+			text-decoration: underline;
+		}
 
 		/* Quick Message Section (Overview Tab) */
 		.quick-message-section {
@@ -3239,240 +3549,6 @@ export const profileStyles = `
 				padding: 12px 24px;
 			}
 		}
-
-		/* NFT Details Section */
-		.nft-details-section {
-			margin-top: 32px;
-			padding: 24px;
-			background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.6) 100%);
-			border-radius: 16px;
-			border: 1px solid rgba(96, 165, 250, 0.1);
-			backdrop-filter: blur(10px);
-		}
-		.nft-details-header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			margin-bottom: 24px;
-			padding-bottom: 16px;
-			border-bottom: 1px solid rgba(96, 165, 250, 0.1);
-		}
-		.nft-details-header-actions {
-			display: flex;
-			align-items: center;
-			gap: 12px;
-		}
-		.nft-details-title {
-			display: flex;
-			align-items: center;
-			gap: 12px;
-			font-size: 1.5rem;
-			font-weight: 700;
-			color: var(--text);
-		}
-		.nft-details-title svg {
-			width: 28px;
-			height: 28px;
-			color: var(--accent);
-		}
-		.nft-details-refresh {
-			padding: 8px 16px;
-			background: rgba(96, 165, 250, 0.1);
-			border: 1px solid rgba(96, 165, 250, 0.2);
-			border-radius: 8px;
-			color: var(--accent);
-			cursor: pointer;
-			font-size: 0.875rem;
-			font-weight: 600;
-			transition: all 0.2s;
-			display: flex;
-			align-items: center;
-			gap: 8px;
-		}
-		.nft-details-refresh:hover {
-			background: rgba(96, 165, 250, 0.2);
-			border-color: rgba(96, 165, 250, 0.4);
-		}
-		.nft-details-refresh:disabled {
-			opacity: 0.5;
-			cursor: not-allowed;
-		}
-		.nft-details-refresh svg {
-			width: 16px;
-			height: 16px;
-		}
-		.nft-details-toggle {
-			padding: 8px 16px;
-			background: rgba(96, 165, 250, 0.1);
-			border: 1px solid rgba(96, 165, 250, 0.2);
-			border-radius: 8px;
-			color: var(--accent);
-			cursor: pointer;
-			font-size: 0.875rem;
-			font-weight: 600;
-			transition: all 0.2s;
-			display: flex;
-			align-items: center;
-			gap: 8px;
-		}
-		.nft-details-toggle:hover {
-			background: rgba(96, 165, 250, 0.2);
-			border-color: rgba(96, 165, 250, 0.4);
-		}
-		.nft-details-toggle svg {
-			width: 16px;
-			height: 16px;
-			transition: transform 0.2s;
-		}
-		.nft-details-toggle.expanded svg {
-			transform: rotate(180deg);
-		}
-		.nft-details-content {
-			display: none;
-		}
-		.nft-details-content.expanded {
-			display: block;
-		}
-		.nft-details-grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-			gap: 20px;
-			margin-bottom: 24px;
-		}
-		.nft-detail-card {
-			background: rgba(15, 23, 42, 0.6);
-			border: 1px solid rgba(96, 165, 250, 0.1);
-			border-radius: 12px;
-			padding: 20px;
-			transition: all 0.3s;
-		}
-		.nft-detail-card:hover {
-			border-color: rgba(96, 165, 250, 0.3);
-			background: rgba(15, 23, 42, 0.8);
-			transform: translateY(-2px);
-			box-shadow: 0 8px 24px rgba(96, 165, 250, 0.1);
-		}
-		.nft-detail-label {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			font-size: 0.75rem;
-			font-weight: 600;
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
-			color: var(--text-muted);
-			margin-bottom: 8px;
-		}
-		.nft-detail-label svg {
-			width: 14px;
-			height: 14px;
-			color: var(--accent);
-		}
-		.nft-detail-value {
-			font-size: 1rem;
-			font-weight: 600;
-			color: var(--text);
-			word-break: break-all;
-			line-height: 1.5;
-		}
-		.nft-detail-value.mono {
-			font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
-			font-size: 0.875rem;
-		}
-		.nft-detail-value.link {
-			color: var(--accent);
-			text-decoration: none;
-			cursor: pointer;
-			transition: color 0.2s;
-		}
-		.nft-detail-value.link:hover {
-			color: var(--accent-light);
-			text-decoration: underline;
-		}
-		.nft-detail-value.badge {
-			display: inline-block;
-			padding: 4px 12px;
-			background: rgba(96, 165, 250, 0.15);
-			color: var(--accent);
-			border-radius: 6px;
-			font-size: 0.875rem;
-			font-weight: 600;
-		}
-		.nft-details-loading {
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			justify-content: center;
-			padding: 48px 24px;
-			color: var(--text-muted);
-		}
-		.nft-details-loading .loading {
-			margin-bottom: 16px;
-		}
-		.nft-details-error {
-			padding: 24px;
-			background: rgba(239, 68, 68, 0.1);
-			border: 1px solid rgba(239, 68, 68, 0.2);
-			border-radius: 12px;
-			color: #fca5a5;
-			text-align: center;
-		}
-		.nft-details-raw {
-			margin-top: 24px;
-			padding: 20px;
-			background: rgba(0, 0, 0, 0.3);
-			border: 1px solid rgba(96, 165, 250, 0.1);
-			border-radius: 12px;
-		}
-		.nft-details-raw-header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			margin-bottom: 16px;
-		}
-		.nft-details-raw-title {
-			font-size: 0.875rem;
-			font-weight: 600;
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
-			color: var(--text-muted);
-		}
-		.nft-details-raw-toggle {
-			padding: 4px 12px;
-			background: rgba(96, 165, 250, 0.1);
-			border: 1px solid rgba(96, 165, 250, 0.2);
-			border-radius: 6px;
-			color: var(--accent);
-			cursor: pointer;
-			font-size: 0.75rem;
-			font-weight: 600;
-			transition: all 0.2s;
-		}
-		.nft-details-raw-toggle:hover {
-			background: rgba(96, 165, 250, 0.2);
-		}
-		.nft-details-raw-content {
-			display: none;
-			font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
-			font-size: 0.75rem;
-			line-height: 1.6;
-			color: var(--text-muted);
-			background: rgba(0, 0, 0, 0.4);
-			padding: 16px;
-			border-radius: 8px;
-			overflow-x: auto;
-			max-height: 400px;
-			overflow-y: auto;
-		}
-		.nft-details-raw-content.active {
-			display: block;
-		}
-		.nft-details-raw-content pre {
-			margin: 0;
-			white-space: pre-wrap;
-			word-wrap: break-word;
-		}
-
 		/* Messaging Section (Separate Tab - Legacy) */
 		.messaging-section {
 			padding: 8px;
@@ -4505,6 +4581,10 @@ export const profileStyles = `
 			background: rgba(251, 191, 36, 0.15);
 			color: #fbbf24;
 		}
+		.search-result-badge.listed {
+			background: rgba(139, 92, 246, 0.15);
+			color: #a78bfa;
+		}
 		.search-result-arrow {
 			color: var(--text-muted);
 			transition: all 0.15s;
@@ -4757,89 +4837,6 @@ export const profileStyles = `
 			align-items: center;
 			gap: 8px;
 		}
-
-		/* Registration Queue Enhancements */
-		.queue-bid-grid {
-			display: flex;
-			flex-direction: column;
-			gap: 16px;
-		}
-		.queue-offline-fields {
-			display: none;
-			flex-direction: column;
-			gap: 10px;
-			margin-top: 10px;
-			padding: 12px;
-			border-radius: 12px;
-			border: 1px dashed var(--border);
-			background: rgba(15, 18, 32, 0.65);
-		}
-		.queue-offline-fields textarea {
-			width: 100%;
-			min-height: 70px;
-			font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-			font-size: 0.8rem;
-			padding: 10px;
-			border-radius: 10px;
-			border: 1px solid var(--border);
-			background: rgba(0,0,0,0.25);
-			color: var(--text);
-		}
-		.queue-offline-fields textarea:focus {
-			outline: none;
-			border-color: var(--accent);
-			box-shadow: 0 0 0 3px var(--accent-glow);
-		}
-		.queue-bid-list {
-			border: 1px solid var(--border);
-			border-radius: 16px;
-			overflow: hidden;
-		}
-		.queue-bid-row {
-			display: grid;
-			grid-template-columns: 2fr 1fr 1fr 1fr;
-			gap: 10px;
-			padding: 12px 16px;
-			border-bottom: 1px solid rgba(255,255,255,0.04);
-			font-size: 0.8rem;
-			align-items: center;
-		}
-		.queue-bid-row:last-child {
-			border-bottom: none;
-		}
-		.queue-bid-row strong {
-			font-size: 0.9rem;
-			color: var(--text);
-		}
-		.queue-bid-chip {
-			display: inline-flex;
-			align-items: center;
-			gap: 4px;
-			padding: 4px 10px;
-			border-radius: 999px;
-			font-size: 0.65rem;
-			background: rgba(96, 165, 250, 0.12);
-			color: var(--accent);
-		}
-		.queue-bid-chip.auto {
-			background: rgba(34, 197, 94, 0.15);
-			color: #34d399;
-		}
-		.queue-bid-chip.failed {
-			background: rgba(248, 113, 113, 0.18);
-			color: #f87171;
-		}
-		.queue-bid-chip.pending {
-			background: rgba(251, 191, 36, 0.18);
-			color: #fbbf24;
-		}
-		.queue-bid-empty {
-			text-align: center;
-			padding: 20px;
-			color: var(--text-muted);
-			font-size: 0.85rem;
-		}
-
 		/* ===== OWNED NAMES SECTION ===== */
 		.names-section {
 			background: var(--card-bg);
@@ -5515,6 +5512,8 @@ export const profileStyles = `
 			border-radius: 10px;
 			padding: 12px;
 			margin-bottom: 16px;
+			display: flex;
+			flex-direction: column;
 		}
 		.linked-names-header {
 			display: flex;
@@ -5548,6 +5547,9 @@ export const profileStyles = `
 			display: flex;
 			flex-direction: column;
 			gap: 10px;
+			flex: 1 1 auto;
+			overflow-y: auto;
+			min-height: 100px;
 		}
 		.linked-names-loading {
 			display: flex;
@@ -5566,10 +5568,42 @@ export const profileStyles = `
 		.linked-group-header {
 			display: flex;
 			align-items: center;
-			justify-content: space-between;
-			margin-bottom: 6px;
-			padding-bottom: 6px;
-			border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+			gap: 8px;
+			width: 100%;
+			padding: 8px;
+			margin: -8px -8px 6px -8px;
+			background: rgba(139, 92, 246, 0.1);
+			border: none;
+			border-radius: 6px 6px 0 0;
+			cursor: pointer;
+			font-family: inherit;
+			color: var(--text);
+			transition: background 0.15s ease;
+		}
+		.linked-group-header:hover {
+			background: rgba(139, 92, 246, 0.2);
+		}
+		.linked-group-chevron {
+			width: 16px;
+			height: 16px;
+			color: var(--text-muted);
+			transition: transform 0.2s ease;
+			flex-shrink: 0;
+		}
+		.linked-group.collapsed .linked-group-chevron {
+			transform: rotate(-90deg);
+		}
+		.linked-group-names {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 5px;
+		}
+		.linked-group.collapsed .linked-group-names {
+			display: none;
+		}
+		.linked-group.collapsed .linked-group-header {
+			margin-bottom: -8px;
+			border-radius: 6px;
 		}
 		.linked-group-addr {
 			font-size: 0.65rem;
@@ -5582,22 +5616,19 @@ export const profileStyles = `
 			color: var(--text-muted);
 			background: rgba(139, 92, 246, 0.15);
 			padding: 1px 6px;
+			margin-left: auto;
 			border-radius: 8px;
-		}
-		.linked-group-names {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 5px;
 		}
 		.linked-name-chip {
 			display: inline-flex;
 			align-items: center;
 			gap: 4px;
-			padding: 4px 10px;
+			padding: 4px 6px 4px 10px;
 			background: rgba(139, 92, 246, 0.15);
 			border: 1px solid rgba(139, 92, 246, 0.25);
 			border-radius: 16px;
 			font-size: 0.75rem;
+			font-family: inherit;
 			color: var(--accent);
 			text-decoration: none;
 			transition: all 0.15s ease;
@@ -5605,7 +5636,6 @@ export const profileStyles = `
 		.linked-name-chip:hover {
 			background: rgba(139, 92, 246, 0.25);
 			border-color: rgba(139, 92, 246, 0.4);
-			transform: translateY(-1px);
 		}
 		.linked-name-chip.current {
 			background: rgba(139, 92, 246, 0.3);
@@ -5633,6 +5663,41 @@ export const profileStyles = `
 		}
 		.linked-name-text {
 			color: var(--text);
+			text-decoration: none;
+			cursor: pointer;
+			transition: color 0.15s ease;
+		}
+		.linked-name-text:hover {
+			color: var(--accent);
+			text-decoration: underline;
+		}
+		.linked-name-chip .linked-name-text {
+			flex: 1;
+		}
+		.linked-name-extend {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 18px;
+			height: 18px;
+			padding: 0;
+			margin-left: auto;
+			background: rgba(139, 92, 246, 0.2);
+			border: 1px solid rgba(139, 92, 246, 0.3);
+			border-radius: 4px;
+			color: var(--accent);
+			cursor: pointer;
+			transition: all 0.15s ease;
+			flex-shrink: 0;
+		}
+		.linked-name-extend:hover {
+			background: rgba(139, 92, 246, 0.4);
+			border-color: var(--accent);
+			transform: scale(1.1);
+		}
+		.linked-name-extend svg {
+			width: 12px;
+			height: 12px;
 		}
 		.linked-name-tag {
 			font-size: 0.6rem;
@@ -5667,6 +5732,48 @@ export const profileStyles = `
 			font-size: 0.75rem;
 			font-style: italic;
 			padding: 8px 0;
+		}
+		.linked-names-hint {
+			font-size: 0.65rem;
+			color: var(--text-dim);
+			text-align: center;
+			margin-top: 8px;
+			padding-top: 8px;
+			border-top: 1px solid rgba(139, 92, 246, 0.1);
+		}
+		.linked-name-chip.selected {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.3), rgba(139, 92, 246, 0.3));
+			border-color: var(--accent);
+			box-shadow: 0 0 12px rgba(96, 165, 250, 0.3);
+		}
+		.linked-name-chip.selected .linked-name-text {
+			color: var(--accent);
+			font-weight: 600;
+		}
+		/* Renewal card standalone */
+		.renewal-card {
+			margin-bottom: 16px;
+		}
+		.renewal-selected-name {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 0.8rem;
+			margin-top: 4px;
+		}
+		.renewal-name-label {
+			color: var(--text-muted);
+		}
+		.renewal-name-value {
+			color: var(--accent);
+			font-weight: 600;
+			font-family: var(--font-mono, monospace);
+		}
+		.renewal-card-body .renewal-expiry-info {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			font-size: 0.75rem;
 		}
 		.bounty-create-btn {
 			display: inline-flex;
@@ -6724,25 +6831,6 @@ export const profileStyles = `
 		/* ===== MOBILE RESPONSIVE ===== */
 		@media (max-width: 768px) {
 			.page-layout { flex-direction: column; }
-			.sidebar {
-				width: 100%;
-				position: static;
-				margin-bottom: 20px;
-			}
-			.sidebar-nav {
-				display: flex;
-				gap: 4px;
-				overflow-x: auto;
-				padding: 6px;
-				-webkit-overflow-scrolling: touch;
-			}
-			.sidebar-tab {
-				padding: 8px 12px;
-				white-space: nowrap;
-				font-size: 0.75rem;
-			}
-			.sidebar-tab span { display: none; }
-			.sidebar-tab svg { margin: 0; }
 		}
 
 		@media (max-width: 600px) {
@@ -6801,12 +6889,6 @@ export const profileStyles = `
 			.qr-expanded-content canvas { width: 180px; height: 180px; }
 			.qr-expanded-actions { flex-direction: column; width: 100%; }
 			.qr-expanded-actions button { width: 100%; justify-content: center; }
-
-
-			.queue-bid-section { padding: 18px; }
-			.queue-bid-form { flex-direction: column; }
-			.queue-bid-btn { width: 100%; }
-
 			.edit-modal-content { margin: 12px; padding: 18px; }
 		}
 

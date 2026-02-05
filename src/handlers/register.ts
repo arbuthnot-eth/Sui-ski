@@ -12,7 +12,6 @@ export function generateRegistrationPage(name: string, env: Env): string {
 	const cleanName = name.replace(/\.sui$/i, '').toLowerCase()
 	const network = env.SUI_NETWORK || 'mainnet'
 	const isRegisterable = cleanName.length >= 3
-	const defaultExec = new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16)
 	const serializeJson = (value: unknown) =>
 		JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
 
@@ -487,8 +486,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 		.register-status {
 			margin-top: 16px;
-			padding: 12px 16px;
-			border-radius: 10px;
+			padding: 16px;
+			border-radius: 12px;
 			font-size: 0.9rem;
 			display: none;
 		}
@@ -501,15 +500,159 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			color: var(--accent);
 		}
 		.register-status.success {
-			background: rgba(52, 211, 153, 0.1);
-			border: 1px solid rgba(52, 211, 153, 0.2);
-			color: var(--success);
+			background: rgba(52, 211, 153, 0.08);
+			border: 1px solid rgba(52, 211, 153, 0.25);
+			color: var(--text);
 		}
 		.register-status.error {
 			background: rgba(248, 113, 113, 0.1);
 			border: 1px solid rgba(248, 113, 113, 0.2);
 			color: var(--error);
 		}
+
+		/* Transaction Preview Modal */
+		.tx-preview-modal {
+			display: none;
+			position: fixed;
+			inset: 0;
+			background: rgba(0, 0, 0, 0.8);
+			backdrop-filter: blur(8px);
+			z-index: 10001;
+			align-items: center;
+			justify-content: center;
+			padding: 20px;
+		}
+		.tx-preview-modal.open { display: flex; }
+		.tx-preview-content {
+			background: var(--card);
+			border: 1px solid var(--border);
+			border-radius: 20px;
+			max-width: 420px;
+			width: 100%;
+			overflow: hidden;
+		}
+		.tx-preview-header {
+			padding: 20px;
+			border-bottom: 1px solid var(--border);
+			text-align: center;
+		}
+		.tx-preview-header h3 {
+			font-size: 1.2rem;
+			margin-bottom: 4px;
+		}
+		.tx-preview-header p {
+			color: var(--muted);
+			font-size: 0.85rem;
+		}
+		.tx-preview-body {
+			padding: 20px;
+		}
+		.tx-action {
+			display: flex;
+			align-items: flex-start;
+			gap: 12px;
+			padding: 12px;
+			background: rgba(255, 255, 255, 0.03);
+			border-radius: 12px;
+			margin-bottom: 12px;
+		}
+		.tx-action-icon {
+			width: 36px;
+			height: 36px;
+			border-radius: 10px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+		}
+		.tx-action-icon.swap { background: rgba(96, 165, 250, 0.15); color: var(--accent); }
+		.tx-action-icon.register { background: rgba(52, 211, 153, 0.15); color: var(--success); }
+		.tx-action-icon.receive { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+		.tx-action-icon svg { width: 18px; height: 18px; }
+		.tx-action-details h4 {
+			font-size: 0.95rem;
+			font-weight: 600;
+			margin-bottom: 2px;
+		}
+		.tx-action-details p {
+			font-size: 0.8rem;
+			color: var(--muted);
+		}
+		.tx-action-details code {
+			background: rgba(255, 255, 255, 0.08);
+			padding: 2px 6px;
+			border-radius: 4px;
+			font-size: 0.75rem;
+		}
+		.tx-summary {
+			background: rgba(0, 0, 0, 0.3);
+			border-radius: 12px;
+			padding: 14px;
+			margin-top: 16px;
+		}
+		.tx-summary-row {
+			display: flex;
+			justify-content: space-between;
+			padding: 6px 0;
+			font-size: 0.85rem;
+		}
+		.tx-summary-row .label { color: var(--muted); }
+		.tx-summary-row .value { font-family: ui-monospace, monospace; font-weight: 600; }
+		.tx-summary-row.total { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 10px; }
+		.tx-summary-row.total .value { color: var(--success); font-size: 1rem; }
+		.tx-preview-footer {
+			padding: 16px 20px;
+			border-top: 1px solid var(--border);
+			display: flex;
+			gap: 12px;
+		}
+		.tx-preview-footer button {
+			flex: 1;
+			padding: 14px;
+			border-radius: 12px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.tx-cancel-btn {
+			background: transparent;
+			border: 1px solid var(--border);
+			color: var(--muted);
+		}
+		.tx-cancel-btn:hover { border-color: var(--text); color: var(--text); }
+		.tx-confirm-btn {
+			background: linear-gradient(135deg, #10b981, #3b82f6);
+			border: none;
+			color: white;
+		}
+		.tx-confirm-btn:hover { transform: translateY(-1px); }
+		.tx-confirm-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+		.tx-error {
+			background: rgba(248, 113, 113, 0.1);
+			border: 1px solid rgba(248, 113, 113, 0.2);
+			border-radius: 10px;
+			padding: 12px;
+			color: var(--error);
+			font-size: 0.85rem;
+			margin-top: 12px;
+		}
+		.tx-error code {
+			display: block;
+			margin-top: 8px;
+			font-size: 0.75rem;
+			opacity: 0.8;
+			word-break: break-all;
+		}
+		.tx-gas-estimate {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 0.8rem;
+			color: var(--muted);
+			margin-top: 8px;
+		}
+		.tx-gas-estimate svg { width: 14px; height: 14px; }
+
 		.register-features {
 			display: flex;
 			justify-content: center;
@@ -530,69 +673,30 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			color: var(--success);
 		}
 
-		/* Payment Toggle */
-		.payment-toggle {
-			display: flex;
-			gap: 8px;
-			margin-bottom: 16px;
-		}
-		.payment-toggle-btn {
-			flex: 1;
+		/* Savings Banner */
+		.savings-banner {
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			gap: 8px;
+			gap: 10px;
 			padding: 12px 16px;
+			background: linear-gradient(135deg, rgba(52, 211, 153, 0.12), rgba(96, 165, 250, 0.08));
+			border: 1px solid rgba(52, 211, 153, 0.25);
 			border-radius: 12px;
-			border: 2px solid var(--border);
-			background: rgba(255, 255, 255, 0.02);
-			color: var(--muted);
+			margin-bottom: 16px;
 			font-size: 0.9rem;
-			font-weight: 600;
-			cursor: pointer;
-			transition: all 0.2s;
-			position: relative;
-		}
-		.payment-toggle-btn:hover {
-			border-color: rgba(255, 255, 255, 0.15);
-			background: rgba(255, 255, 255, 0.05);
-		}
-		.payment-toggle-btn.active {
-			border-color: var(--accent);
-			background: rgba(96, 165, 250, 0.1);
 			color: var(--text);
 		}
-		.payment-toggle-btn[data-payment="ns"].active {
-			border-color: #4DA2FF;
-			background: rgba(77, 162, 255, 0.1);
-		}
-		.payment-icon {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			width: 28px;
-			height: 28px;
-			border-radius: 6px;
-			background: linear-gradient(135deg, rgba(96, 165, 250, 0.3), rgba(96, 165, 250, 0.1));
-			color: var(--accent);
-			font-size: 0.7rem;
-			font-weight: 800;
-		}
-		.payment-icon.ns {
-			background: linear-gradient(135deg, rgba(77, 162, 255, 0.3), rgba(77, 162, 255, 0.1));
-			color: #4DA2FF;
-		}
-		.discount-badge {
-			position: absolute;
-			top: -8px;
-			right: 8px;
-			padding: 2px 8px;
-			border-radius: 10px;
-			font-size: 0.65rem;
-			font-weight: 700;
-			background: rgba(52, 211, 153, 0.2);
+		.savings-banner svg {
 			color: var(--success);
-			border: 1px solid rgba(52, 211, 153, 0.3);
+			flex-shrink: 0;
+		}
+		.savings-banner strong {
+			color: var(--success);
+		}
+		.strikethrough {
+			text-decoration: line-through;
+			opacity: 0.6;
 		}
 
 		/* Price Breakdown */
@@ -739,6 +843,68 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		</div>
 	</div>
 
+	<!-- Transaction Preview Modal -->
+	<div class="tx-preview-modal" id="tx-preview-modal">
+		<div class="tx-preview-content">
+			<div class="tx-preview-header">
+				<h3>Confirm Transaction</h3>
+				<p id="tx-preview-subtitle">Review before signing</p>
+			</div>
+			<div class="tx-preview-body">
+				<div class="tx-action" id="tx-swap-row" style="display: none;">
+					<div class="tx-action-icon swap">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l4-4M17 20l-4-4"/></svg>
+					</div>
+					<div class="tx-action-details">
+						<h4>Swap SUI → NS</h4>
+						<p>Via DeepBook DEX • <span id="tx-swap-amount">-- SUI</span> → <span id="tx-ns-amount">-- NS</span></p>
+					</div>
+				</div>
+				<div class="tx-action" id="tx-pay-row">
+					<div class="tx-action-icon register">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+					</div>
+					<div class="tx-action-details">
+						<h4>Register <span id="tx-domain-name">name</span>.sui</h4>
+						<p>Pay <span id="tx-payment-amount">-- SUI</span> • 1 year via SuiNS</p>
+					</div>
+				</div>
+				<div class="tx-action">
+					<div class="tx-action-icon receive">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+					</div>
+					<div class="tx-action-details">
+						<h4>Receive SuiNS NFT</h4>
+						<p>Sent to <code id="tx-recipient">0x...</code></p>
+					</div>
+				</div>
+				<div class="tx-summary">
+					<div class="tx-summary-row">
+						<span class="label">You Pay</span>
+						<span class="value" id="tx-total-sui">-- SUI</span>
+					</div>
+					<div class="tx-summary-row">
+						<span class="label">Network Fee (est.)</span>
+						<span class="value" id="tx-gas-fee">~0.01 SUI</span>
+					</div>
+					<div class="tx-summary-row total">
+						<span class="label">You Receive</span>
+						<span class="value" id="tx-receive-nft">name.sui NFT</span>
+					</div>
+				</div>
+				<div class="tx-gas-estimate" id="tx-simulation-status">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+					<span>Simulating transaction...</span>
+				</div>
+				<div class="tx-error" id="tx-error" style="display: none;"></div>
+			</div>
+			<div class="tx-preview-footer">
+				<button class="tx-cancel-btn" id="tx-cancel-btn">Cancel</button>
+				<button class="tx-confirm-btn" id="tx-confirm-btn" disabled>Confirm</button>
+			</div>
+		</div>
+	</div>
+
 	<div class="container">
 		<div class="card">
 			<div class="header">
@@ -758,49 +924,37 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				Quick Registration
 			</div>
 
-			<!-- Payment Toggle -->
-			<div class="payment-toggle" id="payment-toggle">
-				<button class="payment-toggle-btn active" data-payment="sui">
-					<span class="payment-icon">SUI</span>
-					Pay with SUI
-				</button>
-				<button class="payment-toggle-btn" data-payment="ns">
-					<span class="payment-icon ns">NS</span>
-					Pay with NS
-					<span class="discount-badge">Save ~10%</span>
-				</button>
-			</div>
-
 			<div class="register-hero">
-				<div class="register-price" id="register-price"><span class="loading"></span></div>
-				<div class="register-price-label">1 year registration</div>
+				<div class="register-price" id="register-price">-- SUI</div>
+				<div class="register-price-label">1 year with NS discount</div>
 			</div>
 
-			<!-- Price Breakdown -->
+			<!-- Savings Banner -->
+			<div class="savings-banner" id="savings-banner" style="display: none;">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px;">
+					<path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path>
+				</svg>
+				<span>Save <strong id="savings-percent">~25%</strong> with DeepBook NS swap</span>
+			</div>
+
+			<!-- Price Info -->
 			<div class="price-breakdown" id="price-breakdown">
 				<div class="price-row">
-					<span class="price-label">Base Price</span>
-					<span class="price-value" id="base-price">-- SUI</span>
+					<span class="price-label">Standard Price</span>
+					<span class="price-value strikethrough" id="direct-price">-- SUI</span>
+				</div>
+				<div class="price-row discount">
+					<span class="price-label">Your Price (NS Discount)</span>
+					<span class="price-value" id="discounted-price">-- SUI</span>
 				</div>
 				<div class="price-row premium" id="premium-row" style="display: none;">
 					<span class="price-label">Grace Period Premium</span>
-					<span class="price-value" id="premium-price">-- SUI</span>
-				</div>
-				<div class="price-row discount" id="discount-row" style="display: none;">
-					<span class="price-label">NS Discount</span>
-					<span class="price-value" id="discount-amount">-0 SUI</span>
+					<span class="price-value" id="premium-price">+0 SUI</span>
 				</div>
 				<div class="price-row total">
-					<span class="price-label">Total</span>
+					<span class="price-label">You Pay</span>
 					<span class="price-value" id="total-price">-- SUI</span>
 				</div>
-			</div>
-
-			<!-- NS Rate Info -->
-			<div class="ns-rate-info" id="ns-rate-info" style="display: none;">
-				<span class="ns-rate-label">Current rate:</span>
-				<span class="ns-rate-value" id="ns-rate-value">1 SUI = -- NS</span>
-				<span class="ns-rate-source" id="ns-rate-source">(DeepBook)</span>
 			</div>
 
 			<button class="register-btn" id="register-btn">
@@ -829,78 +983,6 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		`
 				: ''
 		}
-
-		<div class="card" id="queue-card">
-			<div class="collapsible-header" id="queue-header">
-				<div class="section-title">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-					Registration Queue
-				</div>
-				<div class="collapsible-toggle" id="queue-toggle">
-					<span>Advanced</span>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-				</div>
-			</div>
-			<div class="collapsible-content" id="queue-content">
-			<p class="instructions" style="margin-top: 12px; margin-bottom: 16px;">Queue a bid or attach offline-signed registrations for automatic relay when the name becomes available.</p>
-			<div class="stat-grid" id="queue-stats">
-				<div class="stat">
-					<div class="stat-label">Active Bids</div>
-					<div class="stat-value" id="stat-count">0</div>
-				</div>
-				<div class="stat">
-					<div class="stat-label">Highest Bid (SUI)</div>
-					<div class="stat-value" id="stat-high">0</div>
-				</div>
-				<div class="stat">
-					<div class="stat-label">Earliest Execute</div>
-					<div class="stat-value" id="stat-soon">—</div>
-				</div>
-				<div class="stat">
-					<div class="stat-label">Auto Relays</div>
-					<div class="stat-value" id="stat-auto">0</div>
-				</div>
-			</div>
-			<div class="bid-list" id="bid-list">
-				<ul>
-					<li style="text-align:center;color:var(--muted);">No queued bids yet.</li>
-				</ul>
-			</div>
-			<div class="form" id="queue-form">
-				<div>
-					<label for="bidder-input">Bidder Address</label>
-					<input id="bidder-input" type="text" placeholder="0x..." autocomplete="off" spellcheck="false" />
-				</div>
-				<div style="display:flex; gap:12px; flex-wrap:wrap;">
-					<div style="flex:1; min-width:160px;">
-						<label for="amount-input">Bid Amount (SUI)</label>
-						<input id="amount-input" type="number" min="0.1" step="0.1" value="1.0" />
-					</div>
-					<div style="flex:1; min-width:160px;">
-						<label for="execute-input">Execute On</label>
-						<input id="execute-input" type="datetime-local" value="${defaultExec}" />
-					</div>
-				</div>
-				<label class="attach-toggle">
-					<input type="checkbox" id="attach-offline-toggle" />
-					<span>Attach offline-signed registration transaction for automatic relay</span>
-				</label>
-				<div class="offline-attachment" id="offline-attachment">
-					<div>
-						<label for="offline-tx-bytes">Transaction Bytes (base64)</label>
-						<textarea id="offline-tx-bytes" placeholder="AAACAA..."></textarea>
-					</div>
-					<div>
-						<label for="offline-tx-signatures">Signatures (newline or comma separated)</label>
-						<textarea id="offline-tx-signatures" placeholder="AAQw..."></textarea>
-					</div>
-					<p class="instructions" style="margin-bottom:0;">Encrypted at rest and relayed automatically once the execution window opens.</p>
-				</div>
-				<button class="primary-btn" id="queue-submit">Queue Bid</button>
-				<div class="status-line" id="queue-status"></div>
-			</div>
-			</div><!-- end collapsible-content -->
-		</div>
 
 		<div class="card">
 			<div class="collapsible-header" id="relay-header">
@@ -938,78 +1020,65 @@ export function generateRegistrationPage(name: string, env: Env): string {
 	</div>
 
 	<script type="module">
-		import { getWallets } from 'https://esm.sh/@mysten/wallet-standard@0.19.9';
-		import { SuiClient } from 'https://esm.sh/@mysten/sui@1.45.2/client';
-		import { Transaction } from 'https://esm.sh/@mysten/sui@1.45.2/transactions';
-		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@0.9.13';
+		import { getWallets } from 'https://esm.sh/@wallet-standard/app@1.1.0';
+		import { getJsonRpcFullnodeUrl, SuiJsonRpcClient } from 'https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle';
+		import { Transaction } from 'https://esm.sh/@mysten/sui@2.2.0/transactions?bundle';
+		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@1.0.0?bundle';
 
 		const NAME = ${serializeJson(cleanName)};
 		const NETWORK = ${serializeJson(network)};
 		const CAN_REGISTER = ${isRegisterable ? 'true' : 'false'};
-		const RPC_URL = ${serializeJson(env.SUI_RPC_URL)};
+		const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
+		const RPC_URL = RPC_URLS[NETWORK] || RPC_URLS.mainnet;
+		const SERVICE_FEE_NAME = ${serializeJson(env.SERVICE_FEE_NAME || null)};
 		const NAME_LENGTH = NAME.length;
 
 		// ========== PRICING ==========
 		let pricingData = null;
-		let nsRateData = null;
-		let currentPaymentMethod = 'sui';
 		const registerPriceEl = document.getElementById('register-price');
-		const basePriceEl = document.getElementById('base-price');
+		const directPriceEl = document.getElementById('direct-price');
 		const premiumPriceEl = document.getElementById('premium-price');
 		const premiumRowEl = document.getElementById('premium-row');
-		const discountAmountEl = document.getElementById('discount-amount');
-		const discountRowEl = document.getElementById('discount-row');
 		const totalPriceEl = document.getElementById('total-price');
-		const nsRateInfoEl = document.getElementById('ns-rate-info');
-		const nsRateValueEl = document.getElementById('ns-rate-value');
-		const nsRateSourceEl = document.getElementById('ns-rate-source');
 
 		async function fetchEnhancedPricing() {
 			try {
-				const [pricingRes, nsRateRes] = await Promise.all([
-					fetch('/api/pricing?domain=' + encodeURIComponent(NAME) + '&years=1'),
-					fetch('/api/ns-price')
-				]);
-
+				const pricingRes = await fetch('/api/pricing?domain=' + encodeURIComponent(NAME) + '&years=1');
 				pricingData = await pricingRes.json();
-				nsRateData = await nsRateRes.json();
-
-				console.log('Enhanced pricing:', pricingData);
-				console.log('NS rate:', nsRateData);
-
+				console.log('Pricing data:', pricingData);
 				updatePriceDisplay();
 				updateRegisterButton();
 			} catch (e) {
-				console.error('Failed to fetch enhanced pricing:', e);
+				console.error('Failed to fetch pricing:', e);
 				fallbackToSDKPricing();
 			}
 		}
 
 		async function fallbackToSDKPricing() {
 			try {
-				const client = new SuiClient({ url: RPC_URL });
+				const client = new SuiJsonRpcClient({ url: RPC_URL });
 				const suinsClient = new SuinsClient({ client, network: NETWORK });
 				const domain = NAME + '.sui';
-
 				const priceInMist = await suinsClient.calculatePrice({ domain, years: 1 });
 
 				pricingData = {
-					basePriceMist: String(priceInMist),
-					premiumMist: '0',
-					totalSuiMist: String(priceInMist),
-					totalNsMist: String(BigInt(priceInMist) * 10n),
-					nsPerSui: 10,
+					directSuiMist: String(priceInMist),
+					discountedSuiMist: String(BigInt(priceInMist) * 80n / 100n),
+					nsNeededMist: String(BigInt(priceInMist) * 75n * 50n / 1000n),
+					savingsMist: String(BigInt(priceInMist) * 20n / 100n),
+					savingsPercent: 20,
+					nsPerSui: 50,
+					suiPerNs: 0.02,
 					isGracePeriod: false,
 					breakdown: {
 						basePriceUsd: 0,
+						discountedPriceUsd: 0,
 						premiumUsd: 0,
-						totalSuiUsd: 0,
-						totalNsUsd: 0,
-						discountPercent: 10
+						suiPriceUsd: 1,
+						nsDiscountPercent: 25,
+						swapSlippageBps: 100
 					}
 				};
-
-				nsRateData = { nsPerSui: 10, suiPerNs: 0.1, source: 'fallback' };
 
 				updatePriceDisplay();
 				updateRegisterButton();
@@ -1022,56 +1091,39 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		function updatePriceDisplay() {
 			if (!pricingData) return;
 
-			const basePriceSui = Number(pricingData.basePriceMist) / 1e9;
-			const premiumSui = Number(pricingData.premiumMist || 0) / 1e9;
-			const totalSui = Number(pricingData.totalSuiMist) / 1e9;
-			const totalNs = Number(pricingData.totalNsMist) / 1e9;
-			const nsPerSui = pricingData.nsPerSui || nsRateData?.nsPerSui || 10;
-			const discountPercent = pricingData.breakdown?.discountPercent || 10;
+			const directSui = Number(pricingData.directSuiMist) / 1e9;
+			const discountedSui = Number(pricingData.discountedSuiMist) / 1e9;
+			const savingsPercent = pricingData.savingsPercent || 25;
+			const premiumUsd = pricingData.breakdown?.premiumUsd || 0;
 
-			if (basePriceEl) basePriceEl.textContent = basePriceSui.toFixed(2) + ' SUI';
+			const savingsBanner = document.getElementById('savings-banner');
+			const savingsPercentEl = document.getElementById('savings-percent');
+			const discountedPriceEl = document.getElementById('discounted-price');
+			const discountRow = discountedPriceEl?.parentElement;
 
-			if (premiumSui > 0 && premiumRowEl && premiumPriceEl) {
+			if (directPriceEl) {
+				directPriceEl.textContent = directSui.toFixed(2) + ' SUI';
+				directPriceEl.classList.add('strikethrough');
+			}
+
+			if (savingsBanner) savingsBanner.style.display = 'flex';
+			if (savingsPercentEl) savingsPercentEl.textContent = '~' + Math.round(savingsPercent) + '%';
+			if (discountRow) discountRow.style.display = 'flex';
+			if (discountedPriceEl) discountedPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
+
+			if (premiumUsd > 0 && premiumRowEl && premiumPriceEl) {
+				const premiumSui = premiumUsd / (pricingData.breakdown?.suiPriceUsd || 1);
 				premiumRowEl.style.display = 'flex';
 				premiumPriceEl.textContent = '+' + premiumSui.toFixed(2) + ' SUI';
 			} else if (premiumRowEl) {
 				premiumRowEl.style.display = 'none';
 			}
 
-			if (currentPaymentMethod === 'ns') {
-				const nsSavings = totalSui - (totalNs / nsPerSui);
-				if (discountRowEl && discountAmountEl && nsSavings > 0) {
-					discountRowEl.style.display = 'flex';
-					discountAmountEl.textContent = '-' + nsSavings.toFixed(4) + ' SUI';
-				}
-				if (totalPriceEl) totalPriceEl.textContent = totalNs.toFixed(2) + ' NS';
-				if (registerPriceEl) registerPriceEl.textContent = totalNs.toFixed(2) + ' NS';
-				if (nsRateInfoEl) nsRateInfoEl.style.display = 'flex';
-				if (nsRateValueEl) nsRateValueEl.textContent = '1 SUI = ' + nsPerSui.toFixed(2) + ' NS';
-				if (nsRateSourceEl) nsRateSourceEl.textContent = '(' + (nsRateData?.source || 'fallback') + ')';
-			} else {
-				if (discountRowEl) discountRowEl.style.display = 'none';
-				if (totalPriceEl) totalPriceEl.textContent = totalSui.toFixed(2) + ' SUI';
-				if (registerPriceEl) registerPriceEl.textContent = totalSui.toFixed(2) + ' SUI';
-				if (nsRateInfoEl) nsRateInfoEl.style.display = 'none';
-			}
-		}
-
-		function setupPaymentToggle() {
-			const toggleBtns = document.querySelectorAll('.payment-toggle-btn');
-			toggleBtns.forEach(btn => {
-				btn.addEventListener('click', () => {
-					toggleBtns.forEach(b => b.classList.remove('active'));
-					btn.classList.add('active');
-					currentPaymentMethod = btn.dataset.payment;
-					updatePriceDisplay();
-					updateRegisterButton();
-				});
-			});
+			if (totalPriceEl) totalPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
+			if (registerPriceEl) registerPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
 		}
 
 		fetchEnhancedPricing();
-		setupPaymentToggle();
 
 		// ========== WALLET CONNECTION ==========
 		const globalWalletWidget = document.getElementById('global-wallet-widget');
@@ -1095,6 +1147,16 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			walletsApi = getWallets();
 		} catch (e) {
 			console.error('Failed to init wallet API:', e);
+		}
+
+		function escapeHtml(str) {
+			if (!str) return '';
+			return String(str)
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;')
+				.replace(/"/g, '&quot;')
+				.replace(/'/g, '&#39;');
 		}
 
 		function getSuiWallets() {
@@ -1135,6 +1197,12 @@ export function generateRegistrationPage(name: string, env: Env): string {
 								'standard:connect': wallet.connect ? { connect: wallet.connect.bind(wallet) } : undefined,
 								'sui:signAndExecuteTransaction': wallet.signAndExecuteTransaction
 									? { signAndExecuteTransaction: wallet.signAndExecuteTransaction.bind(wallet) }
+									: undefined,
+								'sui:signAndExecuteTransactionBlock': wallet.signAndExecuteTransactionBlock
+									? { signAndExecuteTransactionBlock: wallet.signAndExecuteTransactionBlock.bind(wallet) }
+									: undefined,
+								'sui:signTransaction': wallet.signTransaction
+									? { signTransaction: wallet.signTransaction.bind(wallet) }
 									: undefined,
 							},
 							accounts: wallet.accounts || [],
@@ -1236,6 +1304,23 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			updateRegisterButton();
 		}
 
+		const nameCache = new Map();
+
+		async function fetchPrimaryName(address) {
+			if (!address) return null;
+			if (nameCache.has(address)) return nameCache.get(address);
+			try {
+				const suiClient = new SuiJsonRpcClient({ url: RPC_URL });
+				const result = await suiClient.resolveNameServiceNames({ address, limit: 1 });
+				const name = result?.data?.[0] || null;
+				nameCache.set(address, name);
+				return name;
+			} catch (e) {
+				console.error('Failed to fetch primary name:', e);
+				return null;
+			}
+		}
+
 		function updateWalletUI() {
 			if (!connectedAddress) {
 				globalWalletBtn.classList.remove('connected');
@@ -1245,6 +1330,13 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				const shortAddr = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
 				globalWalletBtn.classList.add('connected');
 				globalWalletText.textContent = shortAddr;
+
+				fetchPrimaryName(connectedAddress).then(name => {
+					if (name && connectedAddress) {
+						globalWalletText.textContent = '@' + name.replace(/\\.sui$/, '');
+					}
+				});
+
 				globalWalletDropdown.innerHTML =
 					'<div class="global-wallet-dropdown-addr">' + connectedAddress + '</div>' +
 					'<button class="global-wallet-dropdown-item" id="gw-switch">' +
@@ -1273,13 +1365,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			if (connectedAddress) {
 				let priceText = '...';
 				if (pricingData) {
-					if (currentPaymentMethod === 'ns') {
-						const nsPrice = Number(pricingData.totalNsMist) / 1e9;
-						priceText = nsPrice.toFixed(2) + ' NS';
-					} else {
-						const suiPrice = Number(pricingData.totalSuiMist) / 1e9;
-						priceText = suiPrice.toFixed(2) + ' SUI';
-					}
+					const discountedSui = Number(pricingData.discountedSuiMist) / 1e9;
+					priceText = discountedSui.toFixed(2) + ' SUI (25% off)';
 				}
 				registerBtnText.textContent = 'Register ' + NAME + '.sui for ' + priceText;
 				registerBtn.querySelector('svg').innerHTML = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>';
@@ -1295,9 +1382,13 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			detectWallets().then(renderWalletList);
 		}
 
-		function showRegisterStatus(message, type = 'info') {
+		function showRegisterStatus(message, type = 'info', isHtml = false) {
 			if (!registerStatus) return;
-			registerStatus.textContent = message;
+			if (isHtml) {
+				registerStatus.innerHTML = message;
+			} else {
+				registerStatus.textContent = message;
+			}
 			registerStatus.className = 'register-status show ' + type;
 		}
 
@@ -1306,6 +1397,137 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 
 		// ========== REGISTRATION ==========
+		// DeepBook v3 constants (mainnet only) - direct SUI→NS swap with deep_amount=0
+		const NETWORK_NAME = NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
+		const DEEPBOOK_PACKAGE = NETWORK_NAME === 'mainnet'
+			? '0x337f4f4f6567fcd778d5454f27c16c70e2f274cc6377ea6249ddf491482ef497'
+			: null;
+		const DEEPBOOK_NS_SUI_POOL = NETWORK_NAME === 'mainnet'
+			? '0x27c4fdb3b846aa3ae4a65ef5127a309aa3c1f466671471a806d8912a18b253e8'
+			: null;
+		const NS_TYPE = '0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS';
+		const SUI_TYPE = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
+		const DEEP_TYPE = '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP';
+		const USDC_TYPE = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
+		const DEEPBOOK_DEEP_SUI_POOL = NETWORK_NAME === 'mainnet'
+			? '0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22'
+			: null;
+		const DEEPBOOK_SUI_USDC_POOL = NETWORK_NAME === 'mainnet'
+			? '0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407'
+			: null;
+		const CLOCK_OBJECT = '0x6';
+		const SLIPPAGE_BPS = 100n;
+		const SUI_FOR_DEEP_SWAP = 10_000_000n;
+		const MIN_DEEP_OUT = 500_000n;
+
+		// Transaction preview modal elements
+		const txPreviewModal = document.getElementById('tx-preview-modal');
+		const txSwapAmount = document.getElementById('tx-swap-amount');
+		const txNsAmount = document.getElementById('tx-ns-amount');
+		const txDomainName = document.getElementById('tx-domain-name');
+		const txRecipient = document.getElementById('tx-recipient');
+		const txTotalSui = document.getElementById('tx-total-sui');
+		const txGasFee = document.getElementById('tx-gas-fee');
+		const txReceiveNft = document.getElementById('tx-receive-nft');
+		const txSimulationStatus = document.getElementById('tx-simulation-status');
+		const txError = document.getElementById('tx-error');
+		const txCancelBtn = document.getElementById('tx-cancel-btn');
+		const txConfirmBtn = document.getElementById('tx-confirm-btn');
+
+		let pendingTransaction = null;
+		let pendingTxBytes = null;
+		let pendingSuiClient = null;
+
+		function showTxPreview() {
+			if (txPreviewModal) txPreviewModal.classList.add('open');
+		}
+
+		function hideTxPreview() {
+			if (txPreviewModal) txPreviewModal.classList.remove('open');
+			pendingTransaction = null;
+			pendingTxBytes = null;
+		}
+		function wrapTxBytes(bytes) {
+			return {
+				serialize() {
+					return bytes;
+				},
+				toJSON() {
+					return btoa(String.fromCharCode.apply(null, Array.from(bytes)));
+				}
+			};
+		}
+		function bytesToBase64(bytes) {
+			return btoa(String.fromCharCode.apply(null, Array.from(bytes)));
+		}
+		function getPhantomProvider() {
+			const provider = window.phantom?.sui;
+			return provider?.isPhantom ? provider : null;
+		}
+
+		function updateTxPreviewUI({ suiAmount, nsAmount, domain, recipient, gasFee, simulationOk, error }) {
+			const txSwapRow = document.getElementById('tx-swap-row');
+			const txPaymentAmount = document.getElementById('tx-payment-amount');
+			if (nsAmount && txSwapAmount && txNsAmount && txSwapRow) {
+				txSwapAmount.textContent = suiAmount;
+				txNsAmount.textContent = nsAmount;
+				txSwapRow.style.display = 'flex';
+			} else if (txSwapRow) {
+				txSwapRow.style.display = 'none';
+			}
+			if (txPaymentAmount) txPaymentAmount.textContent = suiAmount;
+			if (txDomainName) txDomainName.textContent = domain;
+			if (txRecipient) txRecipient.textContent = recipient.slice(0, 8) + '...' + recipient.slice(-6);
+			if (txTotalSui) txTotalSui.textContent = suiAmount;
+			if (txGasFee) txGasFee.textContent = gasFee;
+			if (txReceiveNft) txReceiveNft.textContent = domain + '.sui NFT';
+
+			if (simulationOk) {
+				if (txSimulationStatus) {
+					txSimulationStatus.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span style="color: var(--success);">Transaction verified</span>';
+				}
+				if (txError) txError.style.display = 'none';
+				if (txConfirmBtn) txConfirmBtn.disabled = false;
+			} else {
+				if (txSimulationStatus) {
+					txSimulationStatus.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span style="color: var(--error);">Simulation failed</span>';
+				}
+				if (txError && error) {
+					txError.innerHTML = parseSimulationError(error);
+					txError.style.display = 'block';
+				}
+				if (txConfirmBtn) txConfirmBtn.disabled = true;
+			}
+		}
+
+		function parseSimulationError(error) {
+			const msg = error?.message || String(error);
+
+			if (msg.includes('InsufficientCoinBalance') || msg.includes('Insufficient')) {
+				const suiNeeded = Number(pricingData?.discountedSuiMist || 0) / 1e9;
+				return '<strong>Insufficient SUI balance</strong><br>You need ~' + suiNeeded.toFixed(2) + ' SUI plus gas fees.';
+			}
+			if (msg.includes('min_out') || msg.includes('slippage') || msg.includes('MinQuantityOut')) {
+				return '<strong>DeepBook liquidity issue</strong><br>The NS/SUI pool doesn\\'t have enough liquidity. Try again later or use a smaller amount.';
+			}
+			if (msg.includes('ObjectNotFound') || msg.includes('deleted') || msg.includes('not found')) {
+				return '<strong>Object not found</strong><br>A required on-chain object could not be found.<code>' + escapeHtml(msg.slice(0, 100)) + '</code>';
+			}
+			if (msg.includes('MoveAbort') || msg.includes('abort')) {
+				const match = msg.match(/MoveAbort.*?(d+)/);
+				const code = match ? match[1] : 'unknown';
+				return '<strong>Contract error (code ' + code + ')</strong><br>The Move contract rejected this transaction.<code>' + escapeHtml(msg.slice(0, 150)) + '</code>';
+			}
+			if (msg.includes('GasBudgetTooLow') || msg.includes('gas budget')) {
+				return '<strong>Gas budget too low</strong><br>This transaction needs more gas than expected. Please try again.';
+			}
+			if (msg.includes('already registered') || msg.includes('NameAlreadyRegistered')) {
+				return '<strong>Name already registered</strong><br>This name has already been registered by someone else.';
+			}
+
+			return '<strong>Transaction cannot be completed</strong><br>' + escapeHtml(msg.slice(0, 200));
+		}
+
 		async function registerName() {
 			if (!connectedAddress || !connectedWallet) {
 				openWalletModal();
@@ -1325,133 +1547,354 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			registerBtnText.textContent = 'Building transaction...';
 			hideRegisterStatus();
 
-			const isNsPayment = currentPaymentMethod === 'ns';
-
 			try {
-				showRegisterStatus('Connecting to Sui network...', 'info');
-
-				const suiClient = new SuiClient({ url: RPC_URL });
+				const suiClient = new SuiJsonRpcClient({ url: RPC_URL });
+				pendingSuiClient = suiClient;
 				const suinsClient = new SuinsClient({ client: suiClient, network: NETWORK });
 
 				const tx = new Transaction();
-				const suinsTx = new SuinsTransaction(suinsClient, tx);
+				tx.setSender(connectedAddress);
 
-				const coinConfigKey = isNsPayment ? 'NS' : 'SUI';
-				const coinConfig = suinsClient.config.coins[coinConfigKey];
-				if (!coinConfig) throw new Error('SuiNS ' + coinConfigKey + ' coin config not found');
+				const nsCoinConfig = suinsClient.config.coins['NS'];
+				if (!nsCoinConfig) throw new Error('SuiNS NS coin config not found');
 
 				const domain = NAME + '.sui';
 
-				let paymentAmount;
-				if (isNsPayment) {
-					paymentAmount = BigInt(pricingData.totalNsMist);
-					paymentAmount = paymentAmount + (paymentAmount * 1n) / 100n;
-				} else {
-					paymentAmount = BigInt(pricingData.totalSuiMist);
-					paymentAmount = paymentAmount + (paymentAmount * 1n) / 100n;
+				if (!DEEPBOOK_PACKAGE || !DEEPBOOK_NS_SUI_POOL || !DEEPBOOK_DEEP_SUI_POOL) {
+					throw new Error('DeepBook pools not available on ' + NETWORK_NAME);
 				}
 
-				showRegisterStatus('Building registration transaction...', 'info');
+				const nsNeeded = BigInt(pricingData.nsNeededMist);
+				const nsWithSlippage = nsNeeded + (nsNeeded * SLIPPAGE_BPS) / 10000n;
+				const nsTokens = Number(nsWithSlippage) / 1e6;
+				const suiForNsSwap = BigInt(Math.ceil(nsTokens * pricingData.suiPerNs * 1e9));
 
-				const priceInfoObjectId = coinConfig.feed
-					? (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0]
-					: undefined;
-
-				let paymentCoin;
-				if (isNsPayment) {
-					showRegisterStatus('NS payment requires NS tokens in your wallet...', 'info');
-					const nsCoins = await suiClient.getCoins({
-						owner: connectedAddress,
-						coinType: '0x5145494a5f5100e645e4b797a6eeafa55fc0e089d400be81a68c0e8f952f9a39::ns::NS'
-					});
-
-					if (!nsCoins.data || nsCoins.data.length === 0) {
-						throw new Error('No NS tokens found in wallet. Please acquire NS tokens first or switch to SUI payment.');
-					}
-
-					const totalNsBalance = nsCoins.data.reduce((sum, c) => sum + BigInt(c.balance), 0n);
-					if (totalNsBalance < paymentAmount) {
-						const needed = Number(paymentAmount) / 1e9;
-						const have = Number(totalNsBalance) / 1e9;
-						throw new Error('Insufficient NS balance. Need ' + needed.toFixed(2) + ' NS, have ' + have.toFixed(2) + ' NS');
-					}
-
-					const nsCoinIds = nsCoins.data.map(c => c.coinObjectId);
-					if (nsCoinIds.length === 1) {
-						[paymentCoin] = tx.splitCoins(tx.object(nsCoinIds[0]), [tx.pure.u64(paymentAmount)]);
-					} else {
-						const [primaryCoin, ...restCoins] = nsCoinIds;
-						tx.mergeCoins(tx.object(primaryCoin), restCoins.map(id => tx.object(id)));
-						[paymentCoin] = tx.splitCoins(tx.object(primaryCoin), [tx.pure.u64(paymentAmount)]);
-					}
-				} else {
-					[paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(paymentAmount)]);
+				const priceInfoObjectId = pricingData.priceInfoObjectId || undefined;
+				if (nsCoinConfig.feed && !priceInfoObjectId) {
+					throw new Error('Price info object ID required for NS registration');
 				}
 
-				const nft = suinsTx.register({
-					domain: domain,
-					years: 1,
-					coinConfig: coinConfig,
-					coin: paymentCoin,
-					priceInfoObjectId: priceInfoObjectId,
+				// Check if user has enough SUI; if not, try USDC swap prepend
+				const totalSuiNeededForReg = suiForNsSwap + SUI_FOR_DEEP_SWAP + 50_000_000n;
+				const suiBalRes = await suiClient.getBalance({ owner: connectedAddress, coinType: SUI_TYPE });
+				const suiAvailableForReg = BigInt(suiBalRes.totalBalance);
+
+				if (suiAvailableForReg < totalSuiNeededForReg && DEEPBOOK_SUI_USDC_POOL) {
+					registerBtnText.textContent = 'Low SUI, checking USDC...';
+
+					const [usdcBalRes, usdcPriceData] = await Promise.all([
+						suiClient.getBalance({ owner: connectedAddress, coinType: USDC_TYPE }).catch(() => ({ totalBalance: '0' })),
+						fetch('/api/usdc-price').then(r => r.json()).catch(() => null),
+					]);
+
+					const usdcAvail = BigInt(usdcBalRes.totalBalance);
+					if (usdcAvail > 0n && usdcPriceData?.usdcPerSui > 0) {
+						const usdcShortfallMist = totalSuiNeededForReg - suiAvailableForReg;
+						const shortfallSui = Number(usdcShortfallMist) / 1e9;
+						const usdcTokensNeeded = shortfallSui * usdcPriceData.usdcPerSui;
+						const usdcMistNeeded = BigInt(Math.ceil(usdcTokensNeeded * 1e6));
+						const usdcMistWithBuffer = usdcMistNeeded + (usdcMistNeeded * 30n) / 100n;
+						const usdcToSell = usdcMistWithBuffer > usdcAvail ? usdcAvail : usdcMistWithBuffer;
+
+						const expectedSuiFromUsdc = Number(usdcToSell) / 1e6 / usdcPriceData.usdcPerSui;
+						const minSuiFromUsdc = BigInt(Math.floor(expectedSuiFromUsdc * 0.85 * 1e9));
+
+						if (minSuiFromUsdc > 0n) {
+							const usdcCoins = await suiClient.getCoins({ owner: connectedAddress, coinType: USDC_TYPE });
+							if (usdcCoins.data.length > 0) {
+								registerBtnText.textContent = 'Swapping USDC for SUI...';
+
+								let usdcCoin;
+								if (usdcCoins.data.length === 1) {
+									usdcCoin = tx.object(usdcCoins.data[0].coinObjectId);
+								} else {
+									usdcCoin = tx.object(usdcCoins.data[0].coinObjectId);
+									tx.mergeCoins(usdcCoin, usdcCoins.data.slice(1).map(c => tx.object(c.coinObjectId)));
+								}
+
+								const [usdcToSwap] = tx.splitCoins(usdcCoin, [tx.pure.u64(usdcToSell)]);
+								tx.transferObjects([usdcCoin], connectedAddress);
+
+								// Buy DEEP for USDC swap fee
+								const [suiForUsdcDeepFee] = tx.splitCoins(tx.gas, [tx.pure.u64(SUI_FOR_DEEP_SWAP)]);
+								const [zeroDeepForUsdc] = tx.moveCall({
+									target: '0x2::coin::zero',
+									typeArguments: [DEEP_TYPE],
+								});
+								const [deepForUsdc, usdcDeepSuiLeft, usdcDeepDeepLeft] = tx.moveCall({
+									target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
+									typeArguments: [DEEP_TYPE, SUI_TYPE],
+									arguments: [
+										tx.object(DEEPBOOK_DEEP_SUI_POOL),
+										suiForUsdcDeepFee,
+										zeroDeepForUsdc,
+										tx.pure.u64(MIN_DEEP_OUT),
+										tx.object(CLOCK_OBJECT),
+									],
+								});
+								tx.transferObjects([usdcDeepSuiLeft, usdcDeepDeepLeft], connectedAddress);
+
+								// Swap USDC → SUI (quote → base in SUI/USDC pool)
+								const [suiFromUsdc, usdcLeftover, deepFromUsdcSwap] = tx.moveCall({
+									target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
+									typeArguments: [SUI_TYPE, USDC_TYPE],
+									arguments: [
+										tx.object(DEEPBOOK_SUI_USDC_POOL),
+										usdcToSwap,
+										deepForUsdc,
+										tx.pure.u64(minSuiFromUsdc),
+										tx.object(CLOCK_OBJECT),
+									],
+								});
+								tx.transferObjects([usdcLeftover, deepFromUsdcSwap], connectedAddress);
+								tx.mergeCoins(tx.gas, [suiFromUsdc]);
+							}
+						}
+					}
+
+					registerBtnText.textContent = 'Building transaction...';
+				}
+
+				const [suiCoinForNs, suiCoinForDeep] = tx.splitCoins(tx.gas, [
+					tx.pure.u64(suiForNsSwap),
+					tx.pure.u64(SUI_FOR_DEEP_SWAP),
+				]);
+
+				const [zeroDeepCoin] = tx.moveCall({
+					target: '0x2::coin::zero',
+					typeArguments: [DEEP_TYPE],
 				});
 
-				// Set target address and transfer NFT to sender
+				const [deepCoin, deepLeftoverSui, deepLeftoverDeep] = tx.moveCall({
+					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
+					typeArguments: [DEEP_TYPE, SUI_TYPE],
+					arguments: [
+						tx.object(DEEPBOOK_DEEP_SUI_POOL),
+						suiCoinForDeep,
+						zeroDeepCoin,
+						tx.pure.u64(MIN_DEEP_OUT),
+						tx.object(CLOCK_OBJECT),
+					],
+				});
+
+				tx.transferObjects([deepLeftoverSui, deepLeftoverDeep], connectedAddress);
+
+				const [nsCoin, nsLeftoverSui, nsLeftoverDeep] = tx.moveCall({
+					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
+					typeArguments: [NS_TYPE, SUI_TYPE],
+					arguments: [
+						tx.object(DEEPBOOK_NS_SUI_POOL),
+						suiCoinForNs,
+						deepCoin,
+						tx.pure.u64(nsNeeded),
+						tx.object(CLOCK_OBJECT),
+					],
+				});
+
+				tx.transferObjects([nsLeftoverSui, nsLeftoverDeep], connectedAddress);
+
+				const suinsTx = new SuinsTransaction(suinsClient, tx);
+				const nft = suinsTx.register({
+					domain,
+					years: 1,
+					coinConfig: nsCoinConfig,
+					coin: nsCoin,
+					priceInfoObjectId,
+				});
 				suinsTx.setTargetAddress({
-					nft: nft,
+					nft,
 					address: connectedAddress,
-					isSubname: false,
+					isSubname: domain.replace(/\\.sui$/i, '').includes('.'),
 				});
 				tx.transferObjects([nft], connectedAddress);
 
-				tx.setGasBudget(100000000); // 0.1 SUI
+				let feeRecipient = connectedAddress;
+				if (SERVICE_FEE_NAME) {
+					try {
+						const feeRecord = await suinsClient.getNameRecord(SERVICE_FEE_NAME);
+						if (feeRecord?.targetAddress) feeRecipient = feeRecord.targetAddress;
+					} catch {}
+				}
+				tx.transferObjects([nsCoin], feeRecipient);
 
-				registerBtnText.textContent = 'Approve in wallet...';
-				showRegisterStatus('Please approve the transaction in your wallet', 'info');
+				tx.setGasBudget(100000000);
 
-				// Sign and execute
-				const signFeature = connectedWallet.features?.['sui:signAndExecuteTransaction']
-					|| connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
+				registerBtnText.textContent = 'Waiting for wallet...';
 
-				if (!signFeature) {
-					throw new Error('Wallet does not support transaction signing');
+				try {
+					const phantomProvider = getPhantomProvider();
+					let result;
+					const signExecFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction'];
+					const signExecBlockFeature = connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
+
+					// Wallet-standard features expect Transaction object directly (wallet handles serialization)
+					if (signExecFeature?.signAndExecuteTransaction) {
+						result = await signExecFeature.signAndExecuteTransaction({
+							transaction: tx,
+							account: connectedAccount,
+							chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+							options: { showEffects: true },
+						});
+					} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+						result = await signExecBlockFeature.signAndExecuteTransactionBlock({
+							transactionBlock: tx,
+							account: connectedAccount,
+							chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+							options: { showEffects: true },
+						});
+					} else {
+						// Legacy/direct wallet access needs pre-built bytes
+						const txBytes = await tx.build({ client: suiClient });
+						if (phantomProvider?.signAndExecuteTransactionBlock) {
+							try {
+								result = await phantomProvider.signAndExecuteTransactionBlock({
+									transactionBlock: txBytes,
+									options: { showEffects: true }
+								});
+							} catch (e) {}
+							if (!result) {
+								result = await phantomProvider.signAndExecuteTransactionBlock({
+									transactionBlock: bytesToBase64(txBytes),
+									options: { showEffects: true }
+								});
+							}
+						} else if (window.phantom?.sui?.signAndExecuteTransactionBlock) {
+							result = await window.phantom.sui.signAndExecuteTransactionBlock({
+								transactionBlock: txBytes,
+								options: { showEffects: true }
+							});
+						} else if (window.suiWallet?.signAndExecuteTransactionBlock) {
+							result = await window.suiWallet.signAndExecuteTransactionBlock({
+								transactionBlock: tx,
+							});
+						} else {
+							throw new Error('No compatible Sui wallet found');
+						}
+					}
+
+					console.log('Transaction result:', result);
+					const digest = result.digest || '';
+					const suiscanUrl = 'https://suiscan.xyz/' + NETWORK + '/tx/' + digest;
+					const txsenseUrl = 'https://txsense.netlify.app/?digest=' + digest;
+					showRegisterStatus(
+						'<div style="text-align: center; margin-bottom: 12px;">' +
+						'<strong style="font-size: 1.1rem;">🎉 ' + NAME + '.sui is yours!</strong>' +
+						'</div>' +
+						'<iframe src="' + txsenseUrl + '" style="width: 100%; height: 300px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); margin: 12px 0;"></iframe>' +
+						'<div style="display: flex; gap: 12px; justify-content: center; margin-top: 8px;">' +
+						'<a href="' + suiscanUrl + '" target="_blank" style="color: var(--accent); text-decoration: underline;">View on Suiscan</a>' +
+						'<a href="https://' + NAME + '.sui.ski" style="color: var(--success); text-decoration: underline; font-weight: 600;">Go to ' + NAME + '.sui →</a>' +
+						'</div>',
+						'success', true);
+					registerBtnText.textContent = 'Registered!';
+					registerBtn.disabled = true;
+
+				} catch (txError) {
+					console.error('Transaction failed:', txError);
+					showRegisterStatus('Transaction failed: ' + (txError.message || 'User rejected'), 'error');
+					registerBtn.disabled = false;
+					updateRegisterButton();
 				}
 
-				const result = await signFeature.signAndExecuteTransaction({
-					transaction: tx,
-					account: connectedAccount,
-					chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-				});
+			} catch (error) {
+				console.error('Failed to build transaction:', error);
+				showRegisterStatus('Failed to build transaction: ' + (error.message || 'Unknown error'), 'error');
+				registerBtn.disabled = false;
+				updateRegisterButton();
+			}
+		}
 
-				registerBtnText.textContent = 'Confirming...';
-				showRegisterStatus('Waiting for confirmation...', 'info');
+		async function confirmTransaction() {
+			if (!pendingTxBytes || !connectedWallet || !connectedAccount) {
+				hideTxPreview();
+				return;
+			}
+
+			if (txConfirmBtn) {
+				txConfirmBtn.disabled = true;
+				txConfirmBtn.textContent = 'Signing...';
+			}
+
+			try {
+				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
+
+				if (!signExecFeature && !signExecBlockFeature) {
+					const phantomProvider = getPhantomProvider();
+					if (!phantomProvider?.signAndExecuteTransactionBlock) {
+						throw new Error('Wallet does not support transaction signing');
+					}
+				}
+
+				const txWrapper = wrapTxBytes(pendingTxBytes);
+				const phantomProvider = getPhantomProvider();
+				let result;
+				if (signExecFeature?.signAndExecuteTransaction) {
+					result = await signExecFeature.signAndExecuteTransaction({
+						transaction: txWrapper,
+						account: connectedAccount,
+						chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+					});
+				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
+						transactionBlock: txWrapper,
+						account: connectedAccount,
+						chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+					});
+				} else if (phantomProvider?.signAndExecuteTransactionBlock) {
+					try {
+						result = await phantomProvider.signAndExecuteTransactionBlock({
+							transactionBlock: pendingTxBytes,
+							options: { showEffects: true }
+						});
+					} catch (e) {}
+					if (!result) {
+						result = await phantomProvider.signAndExecuteTransactionBlock({
+							transactionBlock: bytesToBase64(pendingTxBytes),
+							options: { showEffects: true }
+						});
+					}
+				}
+
+				hideTxPreview();
 
 				if (result.digest) {
-					await suiClient.waitForTransaction({ digest: result.digest });
+					showRegisterStatus('Transaction submitted! Waiting for confirmation...', 'info');
+
+					if (pendingSuiClient) {
+						await pendingSuiClient.waitForTransaction({ digest: result.digest });
+					}
 
 					showRegisterStatus('Success! ' + NAME + '.sui is now yours. Redirecting...', 'success');
-					registerBtnText.textContent = 'Registered!';
 
-					// Redirect to profile page
 					setTimeout(() => {
 						window.location.href = 'https://' + NAME + '.sui.ski';
 					}, 2000);
 				}
 
 			} catch (error) {
-				console.error('Registration failed:', error);
+				console.error('Transaction failed:', error);
+				hideTxPreview();
 
 				if (error.message?.includes('rejected') || error.message?.includes('cancelled')) {
 					showRegisterStatus('Transaction cancelled', 'error');
-				} else if (error.message?.includes('Insufficient')) {
-					showRegisterStatus('Insufficient SUI balance. You need ' + currentPrice + ' SUI plus gas.', 'error');
 				} else {
-					showRegisterStatus('Failed: ' + (error.message || 'Unknown error'), 'error');
+					showRegisterStatus('Transaction failed: ' + (error.message || 'Unknown error'), 'error');
 				}
-
-				registerBtn.disabled = false;
-				updateRegisterButton();
+			} finally {
+				if (txConfirmBtn) {
+					txConfirmBtn.disabled = false;
+					txConfirmBtn.textContent = 'Confirm';
+				}
 			}
+		}
+
+		if (txCancelBtn) txCancelBtn.addEventListener('click', hideTxPreview);
+		if (txConfirmBtn) txConfirmBtn.addEventListener('click', confirmTransaction);
+		if (txPreviewModal) {
+			txPreviewModal.addEventListener('click', (e) => {
+				if (e.target === txPreviewModal) hideTxPreview();
+			});
 		}
 
 		// Event listeners
@@ -1509,248 +1952,18 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			});
 		}
 
-		setupCollapsible('queue-header', 'queue-toggle', 'queue-content');
 		setupCollapsible('relay-header', 'relay-toggle', 'relay-content');
 
-		// ========== BID QUEUE ==========
-		const bidListEl = document.getElementById('bid-list');
-		const statCount = document.getElementById('stat-count');
-		const statHigh = document.getElementById('stat-high');
-		const statSoon = document.getElementById('stat-soon');
-		const statAuto = document.getElementById('stat-auto');
-		const queueStatus = document.getElementById('queue-status');
-		const queueSubmit = document.getElementById('queue-submit');
-		const bidderInput = document.getElementById('bidder-input');
-		const amountInput = document.getElementById('amount-input');
-		const executeInput = document.getElementById('execute-input');
-		const attachToggle = document.getElementById('attach-offline-toggle');
-		const offlineAttachment = document.getElementById('offline-attachment');
-		const offlineTxBytesInput = document.getElementById('offline-tx-bytes');
-		const offlineTxSignaturesInput = document.getElementById('offline-tx-signatures');
-
+		// ========== OFFLINE RELAY ==========
 		const txStatus = document.getElementById('tx-status');
 		const txResult = document.getElementById('tx-result');
 		const txSubmit = document.getElementById('tx-submit');
 		const txBytesInput = document.getElementById('tx-bytes');
 		const txSignaturesInput = document.getElementById('tx-signatures');
 
-		if (attachToggle && offlineAttachment) {
-			attachToggle.addEventListener('change', () => {
-				offlineAttachment.style.display = attachToggle.checked ? 'flex' : 'none';
-			});
-		}
-
-		function setQueueStatus(message, type = 'info') {
-			queueStatus.textContent = message || '';
-			queueStatus.className = 'status-line ' + type;
-		}
-
 		function setTxStatus(message, type = 'info') {
 			txStatus.textContent = message || '';
 			txStatus.className = 'status-line ' + type;
-		}
-
-		async function loadBids() {
-			try {
-				const res = await fetch('/api/bids/' + NAME);
-				if (!res.ok) throw new Error('Request failed');
-				const data = await res.json();
-				const bids = Array.isArray(data.bids) ? data.bids : [];
-				renderBidStats(bids);
-				renderBidList(bids);
-			} catch (error) {
-				console.error('Failed to load bids:', error);
-				setQueueStatus('Unable to load queued bids right now.', 'error');
-			}
-		}
-
-		function renderBidStats(bids) {
-			statCount.textContent = String(bids.length);
-			if (bids.length === 0) {
-				statHigh.textContent = '0';
-				statSoon.textContent = '—';
-				if (statAuto) statAuto.textContent = '0';
-				return;
-			}
-			const highest = bids.reduce((max, bid) => Math.max(max, Number(bid.amount) || 0), 0);
-			statHigh.textContent = highest.toFixed(2);
-			const soonest = bids.reduce((min, bid) => {
-				const when = Number(bid.executeAt);
-				return when && when < min ? when : min;
-			}, Number.MAX_SAFE_INTEGER);
-			statSoon.textContent = soonest === Number.MAX_SAFE_INTEGER ? '—' : formatDate(soonest);
-			if (statAuto) {
-				const autoCount = bids.filter(bid => bid.autoRelay).length;
-				statAuto.textContent = String(autoCount);
-			}
-		}
-
-		const HTML_ESCAPE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-
-		function escapeHtml(value) {
-			return String(value ?? '').replace(/[&<>"']/g, (char) => HTML_ESCAPE[char] || char);
-		}
-
-		function renderBidList(bids) {
-			if (bids.length === 0) {
-				bidListEl.innerHTML = '<ul><li style="text-align:center;color:var(--muted);">No queued bids yet.</li></ul>';
-				return;
-			}
-			const items = bids
-				.slice()
-				.sort((a, b) => Number(b.amount) - Number(a.amount))
-				.slice(0, 10)
-				.map((bid) => {
-					const shortAddr = formatBidder(bid.bidder);
-					const amt = Number(bid.amount).toFixed(2);
-					const eta = formatDate(Number(bid.executeAt));
-					const chips = [];
-					if (bid.autoRelay) {
-						chips.push('<span class="status-chip auto">Auto Relay</span>');
-					}
-					const statusLabel = formatBidStatusLabel(bid);
-					if (statusLabel) {
-						const statusClass = (bid.status || '').toLowerCase();
-						chips.push('<span class="status-chip ' + statusClass + '">' + escapeHtml(statusLabel) + '</span>');
-					}
-					if (bid.resultDigest) {
-						chips.push('<span class="digest-chip">' + escapeHtml(shortDigest(bid.resultDigest)) + '</span>');
-					}
-					if (bid.lastError && bid.status === 'failed') {
-						chips.push('<span class="status-chip failed">' + escapeHtml(limitText(bid.lastError, 40)) + '</span>');
-					}
-					const metaRow = chips.length ? '<div class="bid-meta">' + chips.join('') + '</div>' : '';
-					let row = '<li>';
-					row += '<div class="bid-main">';
-					row += '<span>' + escapeHtml(shortAddr) + '</span>';
-					row += '<span>' + escapeHtml(amt) + ' SUI</span>';
-					row += '<span>' + escapeHtml(eta) + '</span>';
-					row += '</div>';
-					row += metaRow;
-					row += '</li>';
-					return row;
-				})
-				.join('');
-			bidListEl.innerHTML = '<ul>' + items + '</ul>';
-		}
-
-		function formatDate(value) {
-			if (!value || Number.isNaN(value)) return '—';
-			try {
-				const date = new Date(Number(value));
-				return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-			} catch {
-				return '—';
-			}
-		}
-
-		function formatBidder(value) {
-			const str = String(value || '');
-			return str.length > 12 ? str.slice(0, 8) + '…' + str.slice(-4) : str;
-		}
-
-		function formatBidStatusLabel(bid) {
-			switch (bid.status) {
-				case 'submitting':
-					return 'Relaying…';
-				case 'submitted':
-					return 'Submitted';
-				case 'failed':
-					return 'Retry soon';
-				case 'queued':
-					return bid.autoRelay ? 'Auto-ready' : 'Queued';
-				default:
-					return bid.autoRelay ? 'Auto-ready' : '';
-			}
-		}
-
-		function shortDigest(value) {
-			const str = String(value || '');
-			return str.length > 12 ? str.slice(0, 6) + '…' + str.slice(-4) : str;
-		}
-
-		function limitText(value, max) {
-			const str = String(value || '');
-			return str.length <= max ? str : str.slice(0, max - 1) + '…';
-		}
-
-		function parseExecuteAt(inputValue) {
-			if (!inputValue) return Date.now() + 60 * 60 * 1000;
-			const parsed = Date.parse(inputValue);
-			return Number.isNaN(parsed) ? Date.now() + 60 * 60 * 1000 : parsed;
-		}
-
-		async function submitBid(event) {
-			event.preventDefault();
-			if (!CAN_REGISTER) {
-				setQueueStatus('Names shorter than 3 characters cannot be registered.', 'error');
-				return;
-			}
-			const bidder = bidderInput.value.trim();
-			const amount = Number(amountInput.value);
-			const executeAt = parseExecuteAt(executeInput.value);
-
-			if (!bidder || !bidder.startsWith('0x')) {
-				setQueueStatus('Enter a valid Sui address for the bidder.', 'error');
-				return;
-			}
-			if (!amount || amount <= 0) {
-				setQueueStatus('Enter a positive bid amount.', 'error');
-			 return;
-			}
-			if (executeAt <= Date.now()) {
-				setQueueStatus('Execution time must be in the future.', 'error');
-				return;
-			}
-
-			let txBytes = '';
-			let txSignatures = [];
-			if (attachToggle?.checked) {
-				txBytes = offlineTxBytesInput?.value.trim() || '';
-				txSignatures = (offlineTxSignaturesInput?.value || '')
-					.split(/[,\\n]+/)
-					.map((entry) => entry.trim())
-					.filter(Boolean);
-				if (!txBytes) {
-					setQueueStatus('Provide transaction bytes or disable the attachment toggle.', 'error');
-					return;
-				}
-				if (txSignatures.length === 0) {
-					setQueueStatus('Provide signatures for the offline attachment.', 'error');
-					return;
-				}
-			}
-
-			queueSubmit.disabled = true;
-			setQueueStatus('Submitting bid...', 'info');
-
-			try {
-				const payload = { name: NAME, bidder, amount, executeAt };
-				if (txBytes) payload.txBytes = txBytes;
-				if (txSignatures.length) payload.signatures = txSignatures;
-
-				const res = await fetch('/api/bids', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(payload),
-				});
-				if (!res.ok) {
-					const data = await res.json().catch(() => ({}));
-					throw new Error(data.error || 'Queue failed');
-				}
-				setQueueStatus('Bid queued successfully.', 'success');
-				if (attachToggle) {
-					attachToggle.checked = false;
-					if (offlineAttachment) offlineAttachment.style.display = 'none';
-				}
-				if (offlineTxBytesInput) offlineTxBytesInput.value = '';
-				if (offlineTxSignaturesInput) offlineTxSignaturesInput.value = '';
-				await loadBids();
-			} catch (error) {
-				setQueueStatus(error.message || 'Failed to queue bid.', 'error');
-			} finally {
-				queueSubmit.disabled = false;
-			}
 		}
 
 		async function relayTransaction(event) {
@@ -1797,9 +2010,6 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			}
 		}
 
-		loadBids();
-		setInterval(loadBids, 60000);
-		document.getElementById('queue-form').addEventListener('submit', submitBid);
 		document.getElementById('tx-form').addEventListener('submit', relayTransaction);
 	</script>
 </body>

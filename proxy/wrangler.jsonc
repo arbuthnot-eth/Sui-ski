@@ -1,0 +1,31 @@
+{
+	"name": "surflux-grpc-proxy",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-01-10",
+	"compatibility_flags": ["nodejs_compat"],
+	"containers": [
+		{
+			"class_name": "GrpcProxyContainer",
+			"image": "./Dockerfile",
+			"instance_type": "lite",
+			"max_instances": 3
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "GRPC_PROXY",
+				"class_name": "GrpcProxyContainer"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["GrpcProxyContainer"]
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}

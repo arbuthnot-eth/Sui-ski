@@ -12,9 +12,9 @@
  * - Framework-agnostic (no DOM dependencies)
  */
 
-import { fromHEX } from '@mysten/bcs'
+import { fromHex } from '@mysten/bcs'
 import { SealClient, SessionKey } from '@mysten/seal'
-import { SuiClient } from '@mysten/sui/client'
+import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import type { Signer } from '@mysten/sui/cryptography'
 import { Transaction } from '@mysten/sui/transactions'
 import { SuinsClient } from '@mysten/suins'
@@ -149,13 +149,14 @@ export class MessagingClient {
 		this.apiEndpoint = config.apiEndpoint || '/api/app/messages/send'
 
 		// Initialize Sui clients
+		const network = config.network || 'testnet'
 		if (config.suiRpcUrl) {
-			this.suiClient = new SuiClient({ url: config.suiRpcUrl })
+			this.suiClient = new SuiClient({ url: config.suiRpcUrl, network })
 		}
 
 		const sealRpcUrl = config.sealConfig.rpcUrl || DEFAULT_SEAL_TESTNET_CONFIG.rpcUrl
 		if (sealRpcUrl) {
-			this.sealSuiClient = new SuiClient({ url: sealRpcUrl })
+			this.sealSuiClient = new SuiClient({ url: sealRpcUrl, network })
 		}
 	}
 
@@ -318,11 +319,11 @@ export class MessagingClient {
 			const packageIdHex = packageId.startsWith('0x') ? packageId.slice(2) : packageId
 			const policyIdHex = policyId.startsWith('0x') ? policyId.slice(2) : policyId
 
-			// fromHEX returns Uint8Array, which is what encrypt expects
+			// fromHex returns Uint8Array, which is what encrypt expects
 			const { encryptedObject } = await sealClient.encrypt({
 				threshold,
-				packageId: fromHEX(packageIdHex) as unknown as string,
-				id: fromHEX(policyIdHex) as unknown as string,
+				packageId: fromHex(packageIdHex) as unknown as string,
+				id: fromHex(policyIdHex) as unknown as string,
 				data: plaintext,
 			})
 
@@ -384,7 +385,7 @@ export class MessagingClient {
 			tx.moveCall({
 				target: this.sealConfig.approveTarget,
 				arguments: [
-					tx.pure.vector('u8', fromHEX(policyId.startsWith('0x') ? policyId.slice(2) : policyId)),
+					tx.pure.vector('u8', fromHex(policyId.startsWith('0x') ? policyId.slice(2) : policyId)),
 				],
 			})
 
@@ -573,7 +574,7 @@ export function createDefaultSuiNSResolver(
 	suiRpcUrl: string,
 	network: 'mainnet' | 'testnet' = 'testnet',
 ): SuiNSResolver {
-	const suiClient = new SuiClient({ url: suiRpcUrl })
+	const suiClient = new SuiClient({ url: suiRpcUrl, network })
 	const suinsClient = new SuinsClient({
 		client: suiClient as never,
 		network,

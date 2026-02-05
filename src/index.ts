@@ -1,12 +1,6 @@
-import { handleAgentsRequest } from './handlers/agents'
 import { handleAppRequest } from './handlers/app'
-import { handleBidsRequest } from './handlers/bids'
-import { handleBountiesRequest } from './handlers/bounties'
 import { handleLandingApiRequest, handleLandingPage } from './handlers/landing'
-import { handleMessagingRequest } from './handlers/messaging'
-import { handlePrivateRequest } from './handlers/private'
 import { generateProfilePage } from './handlers/profile'
-import { handlePWARequest } from './handlers/pwa'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
@@ -36,12 +30,6 @@ export default {
 
 		const url = new URL(request.url)
 		const userAgent = request.headers.get('user-agent')
-
-		// PWA assets (manifest, service worker, icons)
-		const pwaResponse = handlePWARequest(url.pathname)
-		if (pwaResponse) {
-			return pwaResponse
-		}
 
 		// For local development: use ?host= query param or X-Host header to simulate subdomain
 		const testHost = url.searchParams.get('host') || request.headers.get('X-Host')
@@ -75,6 +63,7 @@ export default {
 				) {
 					return handleAppRequest(request, env)
 				}
+
 			}
 
 			switch (parsed.type) {
@@ -84,30 +73,13 @@ export default {
 				case 'rpc':
 					return handleRPCRequest(request, env)
 
-				case 'messaging':
-					return handleMessagingRequest(request, env)
 
 				case 'app':
 					return handleAppRequest(request, env)
 
-				case 'agents':
-					return handleAgentsRequest(request, env)
-
 				case 'suins': {
-					// Special handling for private.sui.ski -> Private Protocol
-					if (parsed.subdomain === 'private') {
-						return handlePrivateRequest(request, env)
-					}
-
 					// Handle API requests on suins subdomains
 					if (url.pathname.startsWith('/api/')) {
-						// Route to specific API handlers
-						if (url.pathname.startsWith('/api/bids')) {
-							return handleBidsRequest(request, env)
-						}
-						if (url.pathname.startsWith('/api/bounties')) {
-							return handleBountiesRequest(request, env)
-						}
 						// Handle /api/app/* routes (messaging, subscriptions, etc.)
 						if (url.pathname.startsWith('/api/app/')) {
 							return handleAppRequest(request, env)
@@ -133,11 +105,6 @@ export default {
 				case 'mvr': {
 					// Handle MVR package routes (pkg--name.sui.ski)
 					const { packageName, suinsName } = parsed.mvrInfo!
-
-					// Special handling for @iousd/private
-					if (suinsName === 'iousd' && packageName === 'private') {
-						return handlePrivateRequest(request, env)
-					}
 
 					// Generic MVR packages - resolve via MVR registry
 					return jsonResponse({
