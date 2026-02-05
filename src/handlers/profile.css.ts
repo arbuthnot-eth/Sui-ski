@@ -969,6 +969,11 @@ export const profileStyles = `
 		.owner-actions .edit-btn.hidden {
 			display: none;
 		}
+		.owner-actions .edit-btn.primary-active {
+			background: rgba(52, 211, 153, 0.1);
+			border-color: rgba(52, 211, 153, 0.35);
+			color: var(--success);
+		}
 		.owner-actions .message-btn {
 			display: flex;
 			align-items: center;
@@ -2022,46 +2027,13 @@ export const profileStyles = `
 			height: 16px;
 		}
 
-		/* Renewal + Linked Names Side-by-Side Container */
-		.renewal-linked-container {
-			display: flex;
-			gap: 20px;
-			margin-top: 20px;
-			align-items: flex-start;
-		}
-		.renewal-linked-container > .renewal-card {
-			flex: 0 0 auto;
-			width: 340px;
-			min-width: 280px;
-			margin-top: 0;
-		}
-		.renewal-linked-container > .linked-names-section {
-			flex: 1 1 auto;
-			min-width: 0;
-			margin-bottom: 0;
-			max-height: calc(100vh - 300px);
-			overflow-y: auto;
-		}
-		/* Stack on narrow screens - renewal on top */
-		@media (max-width: 768px) {
-			.renewal-linked-container {
-				flex-direction: column;
-			}
-			.renewal-linked-container > .renewal-card {
-				width: 100%;
-				min-width: unset;
-			}
-			.renewal-linked-container > .linked-names-section {
-				max-height: none;
-			}
-		}
-
-		/* Marketplace Card */
+		/* Marketplace Card (directly under owner card) */
 		.marketplace-card {
 			background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(124, 58, 237, 0.05));
 			border: 1px solid rgba(139, 92, 246, 0.25);
 			padding: 16px;
 			border-radius: 12px;
+			margin-top: 12px;
 			margin-bottom: 16px;
 		}
 		.marketplace-header {
@@ -2147,6 +2119,50 @@ export const profileStyles = `
 			box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 		}
 		.marketplace-buy-btn:disabled {
+			opacity: 0.6;
+			cursor: not-allowed;
+		}
+		.marketplace-bid-input {
+			display: flex;
+			gap: 8px;
+			margin-top: 8px;
+		}
+		.marketplace-bid-input input {
+			flex: 1;
+			background: rgba(0, 0, 0, 0.3);
+			border: 1px solid rgba(255, 255, 255, 0.1);
+			border-radius: 8px;
+			padding: 8px 12px;
+			color: var(--text);
+			font-family: 'JetBrains Mono', monospace;
+			font-size: 0.85rem;
+			outline: none;
+			transition: border-color 0.2s ease;
+		}
+		.marketplace-bid-input input:focus {
+			border-color: rgba(74, 222, 128, 0.5);
+		}
+		.marketplace-bid-input input::placeholder {
+			color: var(--text-muted);
+			opacity: 0.6;
+		}
+		.marketplace-bid-btn {
+			background: linear-gradient(135deg, #22c55e, #16a34a);
+			color: white;
+			border: none;
+			border-radius: 8px;
+			padding: 8px 16px;
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s ease;
+			white-space: nowrap;
+		}
+		.marketplace-bid-btn:hover:not(:disabled) {
+			transform: translateY(-1px);
+			box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+		}
+		.marketplace-bid-btn:disabled {
 			opacity: 0.6;
 			cursor: not-allowed;
 		}

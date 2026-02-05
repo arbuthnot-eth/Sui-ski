@@ -219,6 +219,7 @@ export function generateProfilePage(
 								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
 							</button>
 							<button class="edit-btn hidden" id="set-self-btn" title="Set to my address">Self</button>
+							<button class="edit-btn hidden" id="set-primary-btn" title="Set as your primary name">Primary</button>
 							<button class="edit-btn" id="edit-address-btn">Edit</button>
 						</div>
 					</div>
@@ -493,6 +494,7 @@ export function generateProfilePage(
 		const walletBar = document.getElementById('wallet-bar');
 		const editBtn = document.getElementById('edit-address-btn');
 		const setSelfBtn = document.getElementById('set-self-btn');
+		const setPrimaryBtn = document.getElementById('set-primary-btn');
 		const copyBtn = document.getElementById('copy-address-btn');
 
 		// Global Wallet Widget Elements
@@ -808,6 +810,27 @@ export function generateProfilePage(
 				setSelfBtn.classList.remove('hidden');
 			} else {
 				setSelfBtn.classList.add('hidden');
+			}
+
+			// Primary button - visible when connected wallet is the target address
+			if (setPrimaryBtn) {
+				if (isAlreadySelf) {
+					const isAlreadyPrimary = connectedPrimaryName && connectedPrimaryName.replace(/\\.sui$/i, '') === FULL_NAME.replace(/\\.sui$/i, '');
+					setPrimaryBtn.classList.remove('hidden');
+					if (isAlreadyPrimary) {
+						setPrimaryBtn.disabled = true;
+						setPrimaryBtn.textContent = 'Primary ✓';
+						setPrimaryBtn.title = 'This is already your primary name';
+						setPrimaryBtn.classList.add('primary-active');
+					} else {
+						setPrimaryBtn.disabled = false;
+						setPrimaryBtn.textContent = 'Primary';
+						setPrimaryBtn.title = 'Set as your primary name';
+						setPrimaryBtn.classList.remove('primary-active');
+					}
+				} else {
+					setPrimaryBtn.classList.add('hidden');
+				}
 			}
 
 			// Edit button
@@ -1814,6 +1837,98 @@ export function generateProfilePage(
 			}
 		}
 
+		// Set this name as the connected wallet's primary/default name
+		async function setPrimary() {
+			if (!connectedAddress) {
+				await connectWallet();
+				if (!connectedAddress) return;
+			}
+
+			if (connectedAddress !== CURRENT_ADDRESS) {
+				alert('Your wallet must be the target address of this name to set it as primary.');
+				return;
+			}
+
+			const isAlreadyPrimary = connectedPrimaryName && connectedPrimaryName.replace(/\\.sui$/i, '') === FULL_NAME.replace(/\\.sui$/i, '');
+			if (isAlreadyPrimary) {
+				alert('This is already your primary name.');
+				return;
+			}
+
+			try {
+				setPrimaryBtn.disabled = true;
+				setPrimaryBtn.textContent = '...';
+
+				const suiClient = getSuiClient();
+				const suinsClient = new SuinsClient({
+					client: suiClient,
+					network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+				});
+
+				const senderAddress = typeof connectedAccount.address === 'string'
+					? connectedAccount.address
+					: connectedAccount.address?.toString() || connectedAddress;
+
+				const tx = new Transaction();
+				const suinsTx = new SuinsTransaction(suinsClient, tx);
+
+				suinsTx.setDefault(FULL_NAME);
+
+				tx.setSender(senderAddress);
+				tx.setGasBudget(50000000);
+
+				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+
+				let result;
+				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
+
+				if (signExecFeature?.signAndExecuteTransaction) {
+					result = await signExecFeature.signAndExecuteTransaction({
+						transaction: tx,
+						account: connectedAccount,
+						chain,
+						options: { showEffects: true }
+					});
+				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
+						transactionBlock: tx,
+						account: connectedAccount,
+						chain,
+						options: { showEffects: true }
+					});
+				} else {
+					const txBytes = await tx.build({ client: suiClient });
+					const phantomProvider = window.phantom?.sui;
+					if (phantomProvider?.signAndExecuteTransactionBlock) {
+						result = await phantomProvider.signAndExecuteTransactionBlock({
+							transactionBlock: txBytes,
+							options: { showEffects: true }
+						});
+					} else {
+						throw new Error('Wallet does not support transaction signing');
+					}
+				}
+
+				connectedPrimaryName = FULL_NAME;
+				updateEditButton();
+				updateGlobalWalletWidget();
+				renderWalletBar();
+
+				const explorerTxUrl = (NETWORK === 'mainnet' ? 'https://suiscan.xyz/mainnet' : 'https://suiscan.xyz/' + NETWORK) + '/tx/' + result.digest;
+				alert('Primary name set! TX: ' + result.digest);
+
+			} catch (error) {
+				const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error');
+				console.error('Set primary error:', errorMsg, error);
+				alert('Failed: ' + errorMsg);
+			} finally {
+				setPrimaryBtn.disabled = false;
+				const isAlreadyPrimary = connectedPrimaryName && connectedPrimaryName.replace(/\\.sui$/i, '') === FULL_NAME.replace(/\\.sui$/i, '');
+				setPrimaryBtn.textContent = isAlreadyPrimary ? 'Primary ✓' : 'Primary';
+			}
+		}
+
 		// Open edit modal
 		function openEditModal() {
 			if (!connectedAddress) {
@@ -1987,6 +2102,7 @@ export function generateProfilePage(
 		// Event listeners
 		if (editBtn) editBtn.addEventListener('click', openEditModal);
 		if (setSelfBtn) setSelfBtn.addEventListener('click', setToSelf);
+		if (setPrimaryBtn) setPrimaryBtn.addEventListener('click', setPrimary);
 		if (copyBtn) copyBtn.addEventListener('click', copyAddress);
 		if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
 		if (saveBtn) saveBtn.addEventListener('click', saveTargetAddress);

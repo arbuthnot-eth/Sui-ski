@@ -56,8 +56,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			box-shadow: 0 25px 60px rgba(5,6,12,0.7);
 		}
 		.header {
-			text-align: center;
-			margin-bottom: 12px;
+			text-align: left;
+			margin-bottom: 0;
 		}
 		.header h1 {
 			font-size: clamp(1.8rem, 3vw, 2.8rem);
@@ -66,6 +66,68 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 		.header h1 span {
 			color: var(--accent);
+		}
+		.register-layout {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 32px;
+			align-items: start;
+		}
+		.register-left {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+			padding-top: 8px;
+		}
+		.register-right {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+		.gear-fab {
+			position: fixed;
+			bottom: 24px;
+			right: 24px;
+			width: 44px;
+			height: 44px;
+			border-radius: 50%;
+			background: rgba(15, 18, 32, 0.95);
+			backdrop-filter: blur(12px);
+			border: 1px solid var(--border);
+			color: var(--muted);
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: all 0.3s;
+			z-index: 9998;
+		}
+		.gear-fab:hover {
+			border-color: var(--accent);
+			color: var(--accent);
+			transform: rotate(90deg);
+		}
+		.gear-fab svg {
+			width: 20px;
+			height: 20px;
+		}
+		.gear-panel {
+			display: none;
+			position: fixed;
+			bottom: 80px;
+			right: 24px;
+			width: 420px;
+			max-height: 70vh;
+			overflow-y: auto;
+			background: var(--card);
+			border: 1px solid var(--border);
+			border-radius: 16px;
+			padding: 24px;
+			box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+			z-index: 9998;
+		}
+		.gear-panel.open {
+			display: block;
 		}
 		.badge {
 			display: inline-flex;
@@ -291,6 +353,23 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(139, 92, 246, 0.15));
 			border-color: rgba(96, 165, 250, 0.3);
 		}
+		.network-indicator {
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			position: absolute;
+			top: -2px;
+			left: -2px;
+			z-index: 1;
+		}
+		.network-indicator.mainnet {
+			background: var(--success);
+			box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+		}
+		.network-indicator.testnet {
+			background: var(--warning);
+			box-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
+		}
 		.global-wallet-dropdown {
 			position: absolute;
 			top: calc(100% + 8px);
@@ -439,11 +518,11 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			border: 1px solid rgba(52, 211, 153, 0.25);
 		}
 		.register-hero {
-			text-align: center;
-			padding: 12px 0 24px;
+			text-align: left;
+			padding: 0 0 8px;
 		}
 		.register-price {
-			font-size: 2.5rem;
+			font-size: 2rem;
 			font-weight: 800;
 			background: linear-gradient(135deg, #34d399, #60a5fa);
 			-webkit-background-clip: text;
@@ -452,8 +531,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 		.register-price-label {
 			color: var(--muted);
-			font-size: 0.9rem;
-			margin-top: 4px;
+			font-size: 0.85rem;
+			margin-top: 2px;
 		}
 		.register-btn {
 			width: 100%;
@@ -471,6 +550,14 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			gap: 10px;
 			transition: all 0.2s;
 			box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+		}
+		.register-btn.compact {
+			width: auto;
+			margin: 0 auto;
+			padding: 10px 32px;
+			font-size: 0.95rem;
+			border-radius: 10px;
+			box-shadow: 0 4px 16px rgba(16, 185, 129, 0.25);
 		}
 		.register-btn:hover:not(:disabled) {
 			transform: translateY(-2px);
@@ -655,9 +742,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 
 		.register-features {
 			display: flex;
-			justify-content: center;
-			gap: 24px;
-			margin-top: 20px;
+			gap: 16px;
+			margin-top: 12px;
 			flex-wrap: wrap;
 		}
 		.register-feature {
@@ -677,14 +763,13 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		.savings-banner {
 			display: flex;
 			align-items: center;
-			justify-content: center;
-			gap: 10px;
-			padding: 12px 16px;
+			gap: 8px;
+			padding: 8px 12px;
 			background: linear-gradient(135deg, rgba(52, 211, 153, 0.12), rgba(96, 165, 250, 0.08));
 			border: 1px solid rgba(52, 211, 153, 0.25);
-			border-radius: 12px;
-			margin-bottom: 16px;
-			font-size: 0.9rem;
+			border-radius: 10px;
+			margin-bottom: 8px;
+			font-size: 0.82rem;
 			color: var(--text);
 		}
 		.savings-banner svg {
@@ -762,61 +847,26 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			font-size: 0.75rem;
 		}
 
-		/* Collapsible Sections */
-		.collapsible-header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			cursor: pointer;
-			user-select: none;
-		}
-		.collapsible-header .section-title {
-			margin-bottom: 0;
-		}
-		.collapsible-toggle {
-			display: flex;
-			align-items: center;
-			gap: 6px;
-			font-size: 0.8rem;
-			color: var(--muted);
-			padding: 6px 12px;
-			background: rgba(255, 255, 255, 0.03);
-			border: 1px solid var(--border);
-			border-radius: 8px;
-			transition: all 0.2s;
-		}
-		.collapsible-header:hover .collapsible-toggle {
-			border-color: var(--accent);
-			color: var(--accent);
-		}
-		.collapsible-toggle svg {
-			width: 14px;
-			height: 14px;
-			transition: transform 0.2s;
-		}
-		.collapsible-content {
-			display: none;
-			margin-top: 16px;
-		}
-		.collapsible-content.open {
-			display: block;
-		}
-		.collapsible-toggle.open svg {
-			transform: rotate(180deg);
-		}
-
 		@media (max-width: 640px) {
 			.card { padding: 20px; }
+			.register-layout { grid-template-columns: 1fr; gap: 20px; }
+			.register-left { text-align: center; align-items: center; }
+			.header { text-align: center; }
+			.register-hero { text-align: center; }
+			.register-features { justify-content: center; }
 			.bid-main { grid-template-columns: 1fr; }
 			.bid-list li { font-size: 0.8rem; }
 			.global-wallet-widget { top: 12px; right: 12px; }
 			.global-wallet-btn { padding: 8px 12px; font-size: 0.85rem; }
+			.gear-panel { width: calc(100vw - 32px); right: 16px; bottom: 76px; }
+			.gear-fab { bottom: 16px; right: 16px; }
 		}
 	</style>
 </head>
 <body>
 	<!-- Global Wallet Widget -->
 	<div class="global-wallet-widget" id="global-wallet-widget">
+		<div class="network-indicator ${network === 'mainnet' ? 'mainnet' : 'testnet'}" title="${escapeHtml(network)}"></div>
 		<button class="global-wallet-btn" id="global-wallet-btn">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
 				<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -906,116 +956,109 @@ export function generateRegistrationPage(name: string, env: Env): string {
 	</div>
 
 	<div class="container">
-		<div class="card">
-			<div class="header">
-				<div class="badge ${isRegisterable ? 'success' : 'warning'}">${isRegisterable ? 'Name available for registration' : 'Minimum length is 3 characters'}</div>
-				<h1>${escapeHtml(cleanName)}<span>.sui</span></h1>
-				<p style="color: var(--muted); font-size: 0.95rem;">Network: ${escapeHtml(network)}</p>
-			</div>
-		</div>
-
 		${
 			isRegisterable
 				? `
-		<!-- Quick Registration Card -->
 		<div class="card register-card">
-			<div class="section-title">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-				Quick Registration
-			</div>
-
-			<div class="register-hero">
-				<div class="register-price" id="register-price">-- SUI</div>
-				<div class="register-price-label">1 year with NS discount</div>
-			</div>
-
-			<!-- Savings Banner -->
-			<div class="savings-banner" id="savings-banner" style="display: none;">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px;">
-					<path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path>
-				</svg>
-				<span>Save <strong id="savings-percent">~25%</strong> with DeepBook NS swap</span>
-			</div>
-
-			<!-- Price Info -->
-			<div class="price-breakdown" id="price-breakdown">
-				<div class="price-row">
-					<span class="price-label">Standard Price</span>
-					<span class="price-value strikethrough" id="direct-price">-- SUI</span>
+			<div class="register-layout">
+				<div class="register-left">
+					<div class="header">
+						<h1>${escapeHtml(cleanName)}<span>.sui</span></h1>
+						<div class="badge success">Available</div>
+					</div>
+					<div class="register-features">
+						<div class="register-feature">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+							Single PTB
+						</div>
+						<div class="register-feature">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+							Atomic ownership
+						</div>
+						<div class="register-feature">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+							Native DeFi
+						</div>
+					</div>
 				</div>
-				<div class="price-row discount">
-					<span class="price-label">Your Price (NS Discount)</span>
-					<span class="price-value" id="discounted-price">-- SUI</span>
-				</div>
-				<div class="price-row premium" id="premium-row" style="display: none;">
-					<span class="price-label">Grace Period Premium</span>
-					<span class="price-value" id="premium-price">+0 SUI</span>
-				</div>
-				<div class="price-row total">
-					<span class="price-label">You Pay</span>
-					<span class="price-value" id="total-price">-- SUI</span>
-				</div>
-			</div>
-
-			<button class="register-btn" id="register-btn">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-					<circle cx="12" cy="7" r="4"></circle>
-				</svg>
-				<span id="register-btn-text">Connect Wallet to Register</span>
-			</button>
-			<div class="register-status" id="register-status"></div>
-			<div class="register-features">
-				<div class="register-feature">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-					Instant ownership
-				</div>
-				<div class="register-feature">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-					Single transaction
-				</div>
-				<div class="register-feature">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-					No middleman
+				<div class="register-right">
+					<div class="register-hero">
+						<div class="register-price" id="register-price">-- SUI</div>
+						<div class="register-price-label" id="register-price-usd">1 year registration</div>
+					</div>
+					<div class="savings-banner" id="savings-banner" style="display: none;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+							<path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path>
+						</svg>
+						<span>Save <strong id="savings-percent">~25%</strong> via DeepBook</span>
+					</div>
+					<div class="price-breakdown" id="price-breakdown">
+						<div class="price-row">
+							<span class="price-label" id="standard-price-label">Standard SuiNS Price</span>
+							<span class="price-value strikethrough" id="direct-price">-- SUI</span>
+						</div>
+						<div class="price-row discount">
+							<span class="price-label">Sui.Ski Discount</span>
+							<span class="price-value" id="discounted-price">--.-- SUI</span>
+						</div>
+						<div class="price-row premium" id="premium-row" style="display: none;">
+							<span class="price-label">Grace Period Premium</span>
+							<span class="price-value" id="premium-price">+0 SUI</span>
+						</div>
+						<div class="price-row total">
+							<span class="price-label">Total</span>
+							<span class="price-value" id="total-price">-- SUI</span>
+						</div>
+					</div>
+					<button class="register-btn compact" id="register-btn">
+						<span id="register-btn-text">Connect Wallet</span>
+					</button>
+					<div class="register-status" id="register-status"></div>
 				</div>
 			</div>
 		</div>
 		`
-				: ''
-		}
-
+				: `
 		<div class="card">
-			<div class="collapsible-header" id="relay-header">
-				<div class="section-title">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"></path></svg>
-					Offline Transaction Relay
-				</div>
-				<div class="collapsible-toggle" id="relay-toggle">
-					<span>Advanced</span>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-				</div>
+			<div class="header" style="text-align: center;">
+				<h1>${escapeHtml(cleanName)}<span>.sui</span></h1>
+				<div class="badge warning">Minimum length is 3 characters</div>
 			</div>
-			<div class="collapsible-content" id="relay-content">
-			<p class="instructions" style="margin-top: 12px;">Bring your own signed Sui transaction block (for example, produced via <code>sui client</code> or an air-gapped wallet). sui.ski forwards the signed payload immediately.</p>
-			<ol class="instructions">
-				<li>Prepare a SuiNS registration transaction offline (choose package, calculate price, build tx bytes).</li>
-				<li>Sign the transaction bytes with every required signer.</li>
-				<li>Paste the base64-encoded transaction bytes and signatures below, then relay via sui.ski.</li>
-			</ol>
-			<div class="form" id="tx-form">
-				<div>
-					<label for="tx-bytes">Transaction Bytes (base64)</label>
-					<textarea id="tx-bytes" placeholder="AAACAA..."></textarea>
-				</div>
-				<div>
-					<label for="tx-signatures">Signatures (newline or comma separated)</label>
-					<textarea id="tx-signatures" placeholder="AAQw..."></textarea>
-				</div>
-				<button class="primary-btn" id="tx-submit">Relay Signed Transaction</button>
-				<div class="status-line" id="tx-status"></div>
-				<pre id="tx-result" style="display:none;"></pre>
+		</div>
+		`
+		}
+	</div>
+
+	<!-- Gear FAB for advanced relay -->
+	<button class="gear-fab" id="gear-fab" title="Advanced options">
+		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<circle cx="12" cy="12" r="3"></circle>
+			<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+		</svg>
+	</button>
+	<div class="gear-panel" id="gear-panel">
+		<div class="section-title" style="margin-bottom: 12px;">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><path d="M5 12l5 5L20 7"></path></svg>
+			Offline Transaction Relay
+		</div>
+		<p class="instructions" style="margin-top: 0;">Bring your own signed Sui transaction block (for example, produced via <code>sui client</code> or an air-gapped wallet). sui.ski forwards the signed payload immediately.</p>
+		<ol class="instructions">
+			<li>Prepare a SuiNS registration transaction offline.</li>
+			<li>Sign the transaction bytes with every required signer.</li>
+			<li>Paste the base64-encoded transaction bytes and signatures below, then relay.</li>
+		</ol>
+		<div class="form" id="tx-form">
+			<div>
+				<label for="tx-bytes">Transaction Bytes (base64)</label>
+				<textarea id="tx-bytes" placeholder="AAACAA..."></textarea>
 			</div>
-			</div><!-- end collapsible-content -->
+			<div>
+				<label for="tx-signatures">Signatures (newline or comma separated)</label>
+				<textarea id="tx-signatures" placeholder="AAQw..."></textarea>
+			</div>
+			<button class="primary-btn" id="tx-submit">Relay Signed Transaction</button>
+			<div class="status-line" id="tx-status"></div>
+			<pre id="tx-result" style="display:none;"></pre>
 		</div>
 	</div>
 
@@ -1095,11 +1138,18 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			const discountedSui = Number(pricingData.discountedSuiMist) / 1e9;
 			const savingsPercent = pricingData.savingsPercent || 25;
 			const premiumUsd = pricingData.breakdown?.premiumUsd || 0;
+			const suiPriceUsd = pricingData.breakdown?.suiPriceUsd || 1;
 
 			const savingsBanner = document.getElementById('savings-banner');
 			const savingsPercentEl = document.getElementById('savings-percent');
 			const discountedPriceEl = document.getElementById('discounted-price');
 			const discountRow = discountedPriceEl?.parentElement;
+			const priceUsdEl = document.getElementById('register-price-usd');
+			const standardLabelEl = document.getElementById('standard-price-label');
+
+			if (standardLabelEl) {
+				standardLabelEl.textContent = 'Standard ' + NAME_LENGTH + '-character SuiNS Price';
+			}
 
 			if (directPriceEl) {
 				directPriceEl.textContent = directSui.toFixed(2) + ' SUI';
@@ -1109,10 +1159,11 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			if (savingsBanner) savingsBanner.style.display = 'flex';
 			if (savingsPercentEl) savingsPercentEl.textContent = '~' + Math.round(savingsPercent) + '%';
 			if (discountRow) discountRow.style.display = 'flex';
-			if (discountedPriceEl) discountedPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
+			const savingsSui = directSui - discountedSui;
+			if (discountedPriceEl) discountedPriceEl.textContent = '-' + savingsSui.toFixed(2) + ' SUI';
 
 			if (premiumUsd > 0 && premiumRowEl && premiumPriceEl) {
-				const premiumSui = premiumUsd / (pricingData.breakdown?.suiPriceUsd || 1);
+				const premiumSui = premiumUsd / suiPriceUsd;
 				premiumRowEl.style.display = 'flex';
 				premiumPriceEl.textContent = '+' + premiumSui.toFixed(2) + ' SUI';
 			} else if (premiumRowEl) {
@@ -1121,6 +1172,9 @@ export function generateRegistrationPage(name: string, env: Env): string {
 
 			if (totalPriceEl) totalPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
 			if (registerPriceEl) registerPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
+
+			const discountedUsd = discountedSui * suiPriceUsd;
+			if (priceUsdEl) priceUsdEl.textContent = '~$' + discountedUsd.toFixed(2) + ' USD \u00b7 1 year';
 		}
 
 		fetchEnhancedPricing();
@@ -1366,13 +1420,13 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				let priceText = '...';
 				if (pricingData) {
 					const discountedSui = Number(pricingData.discountedSuiMist) / 1e9;
-					priceText = discountedSui.toFixed(2) + ' SUI (25% off)';
+					priceText = discountedSui.toFixed(2) + ' SUI';
 				}
 				registerBtnText.textContent = 'Register ' + NAME + '.sui for ' + priceText;
-				registerBtn.querySelector('svg').innerHTML = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>';
+				registerBtn.classList.remove('compact');
 			} else {
-				registerBtnText.textContent = 'Connect Wallet to Register';
-				registerBtn.querySelector('svg').innerHTML = '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>';
+				registerBtnText.textContent = 'Connect Wallet';
+				registerBtn.classList.add('compact');
 			}
 		}
 
@@ -1419,6 +1473,151 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		const SLIPPAGE_BPS = 100n;
 		const SUI_FOR_DEEP_SWAP = 10_000_000n;
 		const MIN_DEEP_OUT = 500_000n;
+
+		function prependSwapToTx(tx, swapInfo, sender) {
+			let tokenCoin;
+			if (swapInfo.coins.length === 1) {
+				tokenCoin = tx.object(swapInfo.coins[0].coinObjectId);
+			} else {
+				tokenCoin = tx.object(swapInfo.coins[0].coinObjectId);
+				tx.mergeCoins(tokenCoin, swapInfo.coins.slice(1).map(c => tx.object(c.coinObjectId)));
+			}
+
+			const [tokenToSell] = tx.splitCoins(tokenCoin, [tx.pure.u64(swapInfo.amountToSell)]);
+
+			const [suiForDeep] = tx.splitCoins(tx.gas, [tx.pure.u64(SUI_FOR_DEEP_SWAP)]);
+			const [zeroDeep] = tx.moveCall({
+				target: '0x2::coin::zero',
+				typeArguments: [DEEP_TYPE],
+			});
+			const [deepFeeCoin, dsSuiLeft, dsDeepLeft] = tx.moveCall({
+				target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
+				typeArguments: [DEEP_TYPE, SUI_TYPE],
+				arguments: [
+					tx.object(DEEPBOOK_DEEP_SUI_POOL),
+					suiForDeep,
+					zeroDeep,
+					tx.pure.u64(MIN_DEEP_OUT),
+					tx.object(CLOCK_OBJECT),
+				],
+			});
+			tx.transferObjects([dsSuiLeft, dsDeepLeft], sender);
+
+			let swappedSui;
+			if (!swapInfo.isDirect) {
+				const [tokenLeft1, usdcOut, deepLeft1] = tx.moveCall({
+					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_base_for_quote',
+					typeArguments: [swapInfo.type, USDC_TYPE],
+					arguments: [
+						tx.object(swapInfo.usdcPoolAddress),
+						tokenToSell,
+						deepFeeCoin,
+						tx.pure.u64(0n),
+						tx.object(CLOCK_OBJECT),
+					],
+				});
+				const [suiOut, usdcLeft, deepLeft2] = tx.moveCall({
+					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
+					typeArguments: [SUI_TYPE, USDC_TYPE],
+					arguments: [
+						tx.object(DEEPBOOK_SUI_USDC_POOL),
+						usdcOut,
+						deepLeft1,
+						tx.pure.u64(swapInfo.minSuiOut),
+						tx.object(CLOCK_OBJECT),
+					],
+				});
+				swappedSui = suiOut;
+				tx.transferObjects([tokenLeft1, usdcLeft, deepLeft2, tokenCoin], sender);
+			} else if (swapInfo.suiIsBase) {
+				const [suiOut, tokenLeft, deepLeft2] = tx.moveCall({
+					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
+					typeArguments: [SUI_TYPE, swapInfo.type],
+					arguments: [
+						tx.object(swapInfo.pool),
+						tokenToSell,
+						deepFeeCoin,
+						tx.pure.u64(swapInfo.minSuiOut),
+						tx.object(CLOCK_OBJECT),
+					],
+				});
+				swappedSui = suiOut;
+				tx.transferObjects([tokenLeft, deepLeft2, tokenCoin], sender);
+			} else {
+				const [tokenLeft, suiOut, deepLeft2] = tx.moveCall({
+					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_base_for_quote',
+					typeArguments: [swapInfo.type, SUI_TYPE],
+					arguments: [
+						tx.object(swapInfo.pool),
+						tokenToSell,
+						deepFeeCoin,
+						tx.pure.u64(swapInfo.minSuiOut),
+						tx.object(CLOCK_OBJECT),
+					],
+				});
+				swappedSui = suiOut;
+				tx.transferObjects([tokenLeft, deepLeft2, tokenCoin], sender);
+			}
+			tx.mergeCoins(tx.gas, [swappedSui]);
+		}
+
+		async function findBestSwapForSui(suiClient, shortfallMist, sender) {
+			const pools = await fetch('/api/deepbook-pools').then(r => r.json()).catch(() => []);
+			if (!pools.length) return null;
+
+			const balanceChecks = pools.map(p =>
+				suiClient.getBalance({ owner: sender, coinType: p.coinType })
+					.catch(() => ({ totalBalance: '0' }))
+			);
+			const balances = await Promise.all(balanceChecks);
+
+			const candidates = [];
+			for (let i = 0; i < pools.length; i++) {
+				const pool = pools[i];
+				const bal = BigInt(balances[i].totalBalance);
+				if (bal <= 0n) continue;
+				const tokenAmount = Number(bal) / Math.pow(10, pool.decimals);
+				const suiValue = tokenAmount * pool.suiPerToken;
+				candidates.push({ pool, balance: bal, suiValue });
+			}
+
+			candidates.sort((a, b) => {
+				if (a.pool.isDirect && !b.pool.isDirect) return -1;
+				if (!a.pool.isDirect && b.pool.isDirect) return 1;
+				return b.suiValue - a.suiValue;
+			});
+
+			for (const candidate of candidates) {
+				const pool = candidate.pool;
+				const shortfallSui = Number(shortfallMist) / 1e9;
+				const tokensNeeded = shortfallSui / pool.suiPerToken;
+				const tokenMistNeeded = BigInt(Math.ceil(tokensNeeded * Math.pow(10, pool.decimals)));
+				const tokenMistWithBuffer = tokenMistNeeded * 130n / 100n;
+				const amountToSell = tokenMistWithBuffer > candidate.balance ? candidate.balance : tokenMistWithBuffer;
+
+				const expectedSui = Number(amountToSell) / Math.pow(10, pool.decimals) * pool.suiPerToken;
+				const minSuiOut = BigInt(Math.floor(expectedSui * 0.80 * 1e9));
+
+				if (minSuiOut <= 0n) continue;
+
+				const coins = await suiClient.getCoins({ owner: sender, coinType: pool.coinType });
+				if (!coins.data.length) continue;
+
+				return {
+					type: pool.coinType,
+					pool: pool.poolAddress,
+					name: pool.name,
+					coins: coins.data,
+					amountToSell,
+					minSuiOut,
+					needsDeepFee: true,
+					isDirect: pool.isDirect,
+					suiIsBase: pool.suiIsBase,
+					usdcPoolAddress: pool.usdcPoolAddress,
+				};
+			}
+			return null;
+		}
 
 		// Transaction preview modal elements
 		const txPreviewModal = document.getElementById('tx-preview-modal');
@@ -1579,79 +1778,14 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				const suiBalRes = await suiClient.getBalance({ owner: connectedAddress, coinType: SUI_TYPE });
 				const suiAvailableForReg = BigInt(suiBalRes.totalBalance);
 
-				if (suiAvailableForReg < totalSuiNeededForReg && DEEPBOOK_SUI_USDC_POOL) {
-					registerBtnText.textContent = 'Low SUI, checking USDC...';
-
-					const [usdcBalRes, usdcPriceData] = await Promise.all([
-						suiClient.getBalance({ owner: connectedAddress, coinType: USDC_TYPE }).catch(() => ({ totalBalance: '0' })),
-						fetch('/api/usdc-price').then(r => r.json()).catch(() => null),
-					]);
-
-					const usdcAvail = BigInt(usdcBalRes.totalBalance);
-					if (usdcAvail > 0n && usdcPriceData?.usdcPerSui > 0) {
-						const usdcShortfallMist = totalSuiNeededForReg - suiAvailableForReg;
-						const shortfallSui = Number(usdcShortfallMist) / 1e9;
-						const usdcTokensNeeded = shortfallSui * usdcPriceData.usdcPerSui;
-						const usdcMistNeeded = BigInt(Math.ceil(usdcTokensNeeded * 1e6));
-						const usdcMistWithBuffer = usdcMistNeeded + (usdcMistNeeded * 30n) / 100n;
-						const usdcToSell = usdcMistWithBuffer > usdcAvail ? usdcAvail : usdcMistWithBuffer;
-
-						const expectedSuiFromUsdc = Number(usdcToSell) / 1e6 / usdcPriceData.usdcPerSui;
-						const minSuiFromUsdc = BigInt(Math.floor(expectedSuiFromUsdc * 0.85 * 1e9));
-
-						if (minSuiFromUsdc > 0n) {
-							const usdcCoins = await suiClient.getCoins({ owner: connectedAddress, coinType: USDC_TYPE });
-							if (usdcCoins.data.length > 0) {
-								registerBtnText.textContent = 'Swapping USDC for SUI...';
-
-								let usdcCoin;
-								if (usdcCoins.data.length === 1) {
-									usdcCoin = tx.object(usdcCoins.data[0].coinObjectId);
-								} else {
-									usdcCoin = tx.object(usdcCoins.data[0].coinObjectId);
-									tx.mergeCoins(usdcCoin, usdcCoins.data.slice(1).map(c => tx.object(c.coinObjectId)));
-								}
-
-								const [usdcToSwap] = tx.splitCoins(usdcCoin, [tx.pure.u64(usdcToSell)]);
-								tx.transferObjects([usdcCoin], connectedAddress);
-
-								// Buy DEEP for USDC swap fee
-								const [suiForUsdcDeepFee] = tx.splitCoins(tx.gas, [tx.pure.u64(SUI_FOR_DEEP_SWAP)]);
-								const [zeroDeepForUsdc] = tx.moveCall({
-									target: '0x2::coin::zero',
-									typeArguments: [DEEP_TYPE],
-								});
-								const [deepForUsdc, usdcDeepSuiLeft, usdcDeepDeepLeft] = tx.moveCall({
-									target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
-									typeArguments: [DEEP_TYPE, SUI_TYPE],
-									arguments: [
-										tx.object(DEEPBOOK_DEEP_SUI_POOL),
-										suiForUsdcDeepFee,
-										zeroDeepForUsdc,
-										tx.pure.u64(MIN_DEEP_OUT),
-										tx.object(CLOCK_OBJECT),
-									],
-								});
-								tx.transferObjects([usdcDeepSuiLeft, usdcDeepDeepLeft], connectedAddress);
-
-								// Swap USDC → SUI (quote → base in SUI/USDC pool)
-								const [suiFromUsdc, usdcLeftover, deepFromUsdcSwap] = tx.moveCall({
-									target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
-									typeArguments: [SUI_TYPE, USDC_TYPE],
-									arguments: [
-										tx.object(DEEPBOOK_SUI_USDC_POOL),
-										usdcToSwap,
-										deepForUsdc,
-										tx.pure.u64(minSuiFromUsdc),
-										tx.object(CLOCK_OBJECT),
-									],
-								});
-								tx.transferObjects([usdcLeftover, deepFromUsdcSwap], connectedAddress);
-								tx.mergeCoins(tx.gas, [suiFromUsdc]);
-							}
-						}
+				if (suiAvailableForReg < totalSuiNeededForReg) {
+					registerBtnText.textContent = 'Low SUI, checking other tokens...';
+					const shortfallMist = totalSuiNeededForReg - suiAvailableForReg;
+					const swapInfo = await findBestSwapForSui(suiClient, shortfallMist, connectedAddress);
+					if (swapInfo) {
+						registerBtnText.textContent = 'Swapping ' + swapInfo.name + ' for SUI...';
+						prependSwapToTx(tx, swapInfo, connectedAddress);
 					}
-
 					registerBtnText.textContent = 'Building transaction...';
 				}
 
@@ -1781,11 +1915,13 @@ export function generateRegistrationPage(name: string, env: Env): string {
 						'<strong style="font-size: 1.1rem;">🎉 ' + NAME + '.sui is yours!</strong>' +
 						'</div>' +
 						'<iframe src="' + txsenseUrl + '" style="width: 100%; height: 300px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); margin: 12px 0;"></iframe>' +
-						'<div style="display: flex; gap: 12px; justify-content: center; margin-top: 8px;">' +
+						'<div style="display: flex; gap: 12px; justify-content: center; align-items: center; margin-top: 8px;">' +
 						'<a href="' + suiscanUrl + '" target="_blank" style="color: var(--accent); text-decoration: underline;">View on Suiscan</a>' +
+						'<button id="set-primary-after-register" style="background: linear-gradient(135deg, #60a5fa, #a78bfa); border: none; color: white; padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">Set as Primary Name</button>' +
 						'<a href="https://' + NAME + '.sui.ski" style="color: var(--success); text-decoration: underline; font-weight: 600;">Go to ' + NAME + '.sui →</a>' +
 						'</div>',
 						'success', true);
+					attachSetPrimaryHandler();
 					registerBtnText.textContent = 'Registered!';
 					registerBtn.disabled = true;
 
@@ -1865,11 +2001,19 @@ export function generateRegistrationPage(name: string, env: Env): string {
 						await pendingSuiClient.waitForTransaction({ digest: result.digest });
 					}
 
-					showRegisterStatus('Success! ' + NAME + '.sui is now yours. Redirecting...', 'success');
-
-					setTimeout(() => {
-						window.location.href = 'https://' + NAME + '.sui.ski';
-					}, 2000);
+					const digest = result.digest;
+					const suiscanUrl = 'https://suiscan.xyz/' + NETWORK + '/tx/' + digest;
+					showRegisterStatus(
+						'<div style="text-align: center; margin-bottom: 12px;">' +
+						'<strong style="font-size: 1.1rem;">🎉 ' + NAME + '.sui is yours!</strong>' +
+						'</div>' +
+						'<div style="display: flex; gap: 12px; justify-content: center; align-items: center; margin-top: 8px;">' +
+						'<a href="' + suiscanUrl + '" target="_blank" style="color: var(--accent); text-decoration: underline;">View on Suiscan</a>' +
+						'<button id="set-primary-after-register" style="background: linear-gradient(135deg, #60a5fa, #a78bfa); border: none; color: white; padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">Set as Primary Name</button>' +
+						'<a href="https://' + NAME + '.sui.ski" style="color: var(--success); text-decoration: underline; font-weight: 600;">Go to ' + NAME + '.sui →</a>' +
+						'</div>',
+						'success', true);
+					attachSetPrimaryHandler();
 				}
 
 			} catch (error) {
@@ -1887,6 +2031,81 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					txConfirmBtn.textContent = 'Confirm';
 				}
 			}
+		}
+
+		async function setPrimaryName() {
+			if (!connectedAddress || !connectedWallet || !connectedAccount) return;
+
+			const btn = document.getElementById('set-primary-after-register');
+			if (!btn) return;
+
+			try {
+				btn.disabled = true;
+				btn.textContent = 'Setting primary...';
+
+				const suiClient = new SuiJsonRpcClient({ url: RPC_URL });
+				const suinsClient = new SuinsClient({ client: suiClient, network: NETWORK });
+				const fullName = NAME + '.sui';
+
+				const tx = new Transaction();
+				const suinsTx = new SuinsTransaction(suinsClient, tx);
+				suinsTx.setDefault(fullName);
+
+				tx.setSender(connectedAddress);
+				tx.setGasBudget(50000000);
+
+				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+
+				let result;
+				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
+
+				if (signExecFeature?.signAndExecuteTransaction) {
+					result = await signExecFeature.signAndExecuteTransaction({
+						transaction: tx,
+						account: connectedAccount,
+						chain,
+						options: { showEffects: true }
+					});
+				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
+						transactionBlock: tx,
+						account: connectedAccount,
+						chain,
+						options: { showEffects: true }
+					});
+				} else {
+					const txBytes = await tx.build({ client: suiClient });
+					const phantomProvider = getPhantomProvider();
+					if (phantomProvider?.signAndExecuteTransactionBlock) {
+						result = await phantomProvider.signAndExecuteTransactionBlock({
+							transactionBlock: txBytes,
+							options: { showEffects: true }
+						});
+					} else {
+						throw new Error('Wallet does not support transaction signing');
+					}
+				}
+
+				btn.textContent = 'Primary Set ✓';
+				btn.style.background = 'rgba(52, 211, 153, 0.15)';
+				btn.style.color = 'var(--success)';
+				btn.style.cursor = 'default';
+
+			} catch (error) {
+				console.error('Set primary failed:', error);
+				btn.disabled = false;
+				btn.textContent = 'Set as Primary Name';
+				const errorMsg = error?.message || 'Unknown error';
+				if (!errorMsg.includes('rejected') && !errorMsg.includes('cancelled')) {
+					showRegisterStatus('Failed to set primary: ' + errorMsg, 'error');
+				}
+			}
+		}
+
+		function attachSetPrimaryHandler() {
+			const btn = document.getElementById('set-primary-after-register');
+			if (btn) btn.addEventListener('click', setPrimaryName);
 		}
 
 		if (txCancelBtn) txCancelBtn.addEventListener('click', hideTxPreview);
@@ -1933,26 +2152,19 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		updateWalletUI();
 		updateRegisterButton();
 
-		// ========== COLLAPSIBLE SECTIONS ==========
-		function setupCollapsible(headerId, toggleId, contentId) {
-			const header = document.getElementById(headerId);
-			const toggle = document.getElementById(toggleId);
-			const content = document.getElementById(contentId);
-			if (!header || !toggle || !content) return;
-
-			header.addEventListener('click', () => {
-				const isOpen = content.classList.contains('open');
-				if (isOpen) {
-					content.classList.remove('open');
-					toggle.classList.remove('open');
-				} else {
-					content.classList.add('open');
-					toggle.classList.add('open');
+		// ========== GEAR FAB ==========
+		const gearFab = document.getElementById('gear-fab');
+		const gearPanel = document.getElementById('gear-panel');
+		if (gearFab && gearPanel) {
+			gearFab.addEventListener('click', () => {
+				gearPanel.classList.toggle('open');
+			});
+			document.addEventListener('click', (e) => {
+				if (!gearPanel.contains(e.target) && !gearFab.contains(e.target)) {
+					gearPanel.classList.remove('open');
 				}
 			});
 		}
-
-		setupCollapsible('relay-header', 'relay-toggle', 'relay-content');
 
 		// ========== OFFLINE RELAY ==========
 		const txStatus = document.getElementById('tx-status');
