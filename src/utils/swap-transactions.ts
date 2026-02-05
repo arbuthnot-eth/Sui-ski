@@ -2,7 +2,6 @@ import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import { Transaction } from '@mysten/sui/transactions'
 import { SuinsClient, SuinsTransaction } from '@mysten/suins'
 import type { Env } from '../types'
-import { getDefaultRpcUrl } from './rpc'
 import {
 	calculateSuiNeededForNs,
 	DEEP_TYPE,
@@ -17,6 +16,7 @@ import {
 	simulateBuyNsWithSui,
 } from './ns-price'
 import { calculateRegistrationPrice, calculateRenewalPrice } from './pricing'
+import { getDefaultRpcUrl } from './rpc'
 
 const CLOCK_OBJECT = '0x6'
 const DEEP_FEE_PERCENT = 15n

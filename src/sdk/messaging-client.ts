@@ -14,8 +14,8 @@
 
 import { fromHex } from '@mysten/bcs'
 import { SealClient, SessionKey } from '@mysten/seal'
-import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import type { Signer } from '@mysten/sui/cryptography'
+import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import { Transaction } from '@mysten/sui/transactions'
 import { SuinsClient } from '@mysten/suins'
 import type { SealEncryptedEnvelope } from '../types'

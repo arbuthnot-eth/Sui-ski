@@ -19,16 +19,20 @@ export interface Env {
 	WALRUS_AGGREGATOR_URL?: string
 	BOUNTY_ESCROW_MVR_ALIAS?: string
 	SURFLUX_API_KEY?: string
+	SUBNAMECAP_RPC_URL?: string
+	SUBNAMECAP_SUINS_PACKAGE_ID?: string
+	SUBNAMECAP_SUBDOMAINS_PACKAGE_ID?: string
+	SUBNAMECAP_SUINS_OBJECT_ID?: string
+	JACKET_FEE_PACKAGE_ID?: string
+	JACKET_ALLOWLIST_PACKAGE_ID?: string
+	JACKET_RATE_LIMIT_PACKAGE_ID?: string
+	JACKET_FEE_OBJECT_ID?: string
+	JACKET_ALLOWLIST_OBJECT_ID?: string
+	JACKET_RATE_LIMIT_OBJECT_ID?: string
+	JACKET_SINGLE_USE_PACKAGE_ID?: string
 }
 
-export type RouteType =
-	| 'suins'
-	| 'content'
-	| 'rpc'
-	| 'root'
-	| 'mvr'
-	| 'messaging'
-	| 'app'
+export type RouteType = 'suins' | 'content' | 'rpc' | 'root' | 'mvr' | 'messaging' | 'app'
 
 export interface MVRInfo {
 	/** Package name (e.g., "private" from "private--iousd.sui.ski") */
@@ -47,6 +51,8 @@ export interface ParsedSubdomain {
 	hostname: string
 	/** MVR package info (only present when type === 'mvr') */
 	mvrInfo?: MVRInfo
+	/** Network override from subdomain prefix (e.g., "t.sui.ski" → testnet) */
+	networkOverride?: 'testnet' | 'devnet'
 }
 
 export interface SuiNSRecord {

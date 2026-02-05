@@ -362,4 +362,203 @@ export async function convertNsToSui(nsAmount: bigint, env: Env): Promise<bigint
 	return BigInt(Math.ceil(Number(nsAmount) * price.suiPerNs))
 }
 
+export interface SwappablePool {
+	name: string
+	coinType: string
+	poolAddress: string
+	poolName: string
+	decimals: number
+	suiPerToken: number
+	isDirect: boolean
+	suiIsBase: boolean
+	usdcPoolAddress?: string
+}
+
+interface IndexerPool {
+	pool_id: string
+	pool_name: string
+	base_asset_id: string
+	base_asset_decimals: number
+	base_asset_symbol: string
+	quote_asset_id: string
+	quote_asset_decimals: number
+	quote_asset_symbol: string
+}
+
+const POOLS_CACHE_TTL = 300
+const POOLS_MEM_CACHE_TTL = 60000
+
+let poolsMemCache: { data: SwappablePool[]; exp: number } | null = null
+
+export async function getDeepBookSuiPools(env: Env): Promise<SwappablePool[]> {
+	const network = env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+	const indexerUrl = DEEPBOOK_INDEXER[network]
+
+	if (poolsMemCache && poolsMemCache.exp > Date.now()) {
+		return poolsMemCache.data
+	}
+
+	const key = cacheKey('deepbook-pools-v1', network)
+	const cached = await getCached<SwappablePool[]>(env, key)
+	if (cached) {
+		poolsMemCache = { data: cached, exp: Date.now() + POOLS_MEM_CACHE_TTL }
+		return cached
+	}
+
+	if (!indexerUrl) return []
+
+	try {
+		const poolsRes = await fetch(`${indexerUrl}/get_pools`)
+		if (!poolsRes.ok) {
+			console.error('DeepBook get_pools returned:', poolsRes.status)
+			return []
+		}
+
+		const allPools: IndexerPool[] = await poolsRes.json()
+
+		const suiPools: IndexerPool[] = []
+		const usdcPools: IndexerPool[] = []
+
+		for (const pool of allPools) {
+			const baseIsSui = pool.base_asset_symbol === 'SUI'
+			const quoteIsSui = pool.quote_asset_symbol === 'SUI'
+			const baseIsUsdc = pool.base_asset_symbol === 'USDC'
+			const quoteIsUsdc = pool.quote_asset_symbol === 'USDC'
+
+			if (baseIsSui || quoteIsSui) {
+				suiPools.push(pool)
+			} else if (baseIsUsdc || quoteIsUsdc) {
+				usdcPools.push(pool)
+			}
+		}
+
+		const suiUsdcPool = DEEPBOOK_SUI_USDC_POOL[network]
+		const usdcPrice = await getUSDCSuiPrice(env)
+		const suiPerUsdc = usdcPrice.suiPerUsdc
+
+		const orderbookFetches: Array<{ pool: IndexerPool; isDirect: boolean }> = []
+		for (const pool of suiPools) {
+			orderbookFetches.push({ pool, isDirect: true })
+		}
+		for (const pool of usdcPools) {
+			orderbookFetches.push({ pool, isDirect: false })
+		}
+
+		const results: SwappablePool[] = []
+
+		const directTokensWithSui = new Set<string>()
+		for (const pool of suiPools) {
+			const baseIsSui = pool.base_asset_symbol === 'SUI'
+			const tokenSymbol = baseIsSui ? pool.quote_asset_symbol : pool.base_asset_symbol
+			directTokensWithSui.add(tokenSymbol)
+		}
+
+		const orderbookPromises = orderbookFetches.map(async ({ pool, isDirect }) => {
+			const baseIsSui = pool.base_asset_symbol === 'SUI'
+			const tokenSymbol = isDirect
+				? baseIsSui
+					? pool.quote_asset_symbol
+					: pool.base_asset_symbol
+				: pool.base_asset_symbol === 'USDC'
+					? pool.quote_asset_symbol
+					: pool.base_asset_symbol
+			const tokenCoinType = isDirect
+				? baseIsSui
+					? pool.quote_asset_id
+					: pool.base_asset_id
+				: pool.base_asset_symbol === 'USDC'
+					? pool.quote_asset_id
+					: pool.base_asset_id
+			const tokenDecimals = isDirect
+				? baseIsSui
+					? pool.quote_asset_decimals
+					: pool.base_asset_decimals
+				: pool.base_asset_symbol === 'USDC'
+					? pool.quote_asset_decimals
+					: pool.base_asset_decimals
+
+			if (!isDirect && directTokensWithSui.has(tokenSymbol)) return null
+			if (tokenSymbol === 'SUI' || tokenSymbol === 'USDC') {
+				if (!isDirect) return null
+			}
+
+			try {
+				const obRes = await fetch(`${indexerUrl}/orderbook/${pool.pool_name}?depth=5`)
+				if (!obRes.ok) return null
+
+				const ob: OrderbookResponse = await obRes.json()
+				if (!ob.bids?.length || !ob.asks?.length) return null
+
+				const bestBid = parseFloat(ob.bids[0][0])
+				const bestAsk = parseFloat(ob.asks[0][0])
+				if (!Number.isFinite(bestBid) || !Number.isFinite(bestAsk) || bestBid <= 0 || bestAsk <= 0)
+					return null
+
+				const midPrice = (bestBid + bestAsk) / 2
+
+				let suiPerToken: number
+				if (isDirect) {
+					suiPerToken = baseIsSui ? 1 / midPrice : midPrice
+				} else {
+					const isBaseUsdc = pool.base_asset_symbol === 'USDC'
+					const tokenPriceInUsdc = isBaseUsdc ? 1 / midPrice : midPrice
+					suiPerToken = tokenPriceInUsdc * suiPerUsdc
+				}
+
+				if (!Number.isFinite(suiPerToken) || suiPerToken <= 0) return null
+
+				const entry: SwappablePool = {
+					name: tokenSymbol,
+					coinType: tokenCoinType,
+					poolAddress: pool.pool_id,
+					poolName: pool.pool_name,
+					decimals: tokenDecimals,
+					suiPerToken,
+					isDirect,
+					suiIsBase: isDirect && baseIsSui,
+				}
+
+				if (!isDirect && suiUsdcPool) {
+					entry.usdcPoolAddress = suiUsdcPool
+				}
+
+				return entry
+			} catch {
+				return null
+			}
+		})
+
+		const settled = await Promise.all(orderbookPromises)
+		for (const entry of settled) {
+			if (entry) results.push(entry)
+		}
+
+		if (suiUsdcPool) {
+			results.push({
+				name: 'USDC',
+				coinType: USDC_TYPE,
+				poolAddress: suiUsdcPool,
+				poolName: 'SUI_USDC',
+				decimals: 6,
+				suiPerToken: suiPerUsdc,
+				isDirect: true,
+				suiIsBase: true,
+			})
+		}
+
+		results.sort((a, b) => {
+			if (a.isDirect && !b.isDirect) return -1
+			if (!a.isDirect && b.isDirect) return 1
+			return 0
+		})
+
+		poolsMemCache = { data: results, exp: Date.now() + POOLS_MEM_CACHE_TTL }
+		await setCache(env, key, results, POOLS_CACHE_TTL)
+		return results
+	} catch (error) {
+		console.error('Failed to fetch DeepBook pools:', error)
+		return []
+	}
+}
+
 export { DEFAULT_SLIPPAGE_BPS, NS_DECIMALS, NS_SCALE }

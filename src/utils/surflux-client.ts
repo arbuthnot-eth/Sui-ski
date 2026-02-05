@@ -68,7 +68,10 @@ async function grpcWebRequest<T>(
 
 	const contentType = response.headers.get('content-type') || ''
 
-	if (contentType.includes('application/grpc-web+json') || contentType.includes('application/json')) {
+	if (
+		contentType.includes('application/grpc-web+json') ||
+		contentType.includes('application/json')
+	) {
 		return (await response.json()) as T
 	}
 

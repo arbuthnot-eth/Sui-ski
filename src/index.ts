@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import { handleAppRequest } from './handlers/app'
 import { apiRoutes, landingPageHTML } from './handlers/landing'
 import { generateProfilePage } from './handlers/profile'
+import { agentSubnameCapRoutes, subnameCapRoutes } from './handlers/subnamecap'
+import { generateSubnameCapPage } from './handlers/subnamecap-ui'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
@@ -39,12 +41,17 @@ app.use('*', async (c, next) => {
 })
 
 app.use('*', async (c, next) => {
-	const env = ensureRpcEnv(c.env)
-	c.set('env', env)
 	const url = new URL(c.req.url)
 	const testHost = url.searchParams.get('host') || c.req.header('X-Host')
 	const hostname = testHost || url.hostname
-	c.set('parsed', parseSubdomain(hostname))
+	const parsed = parseSubdomain(hostname)
+
+	let env = c.env
+	if (parsed.networkOverride) {
+		env = { ...env, SUI_NETWORK: parsed.networkOverride, SUI_RPC_URL: '' }
+	}
+	c.set('env', ensureRpcEnv(env))
+	c.set('parsed', parsed)
 	c.set('hostname', hostname)
 	await next()
 })
@@ -78,10 +85,16 @@ app.use('*', async (c, next) => {
 })
 
 app.all('/api/app/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
+app.use('/api/agents/subnamecap/*', async (c, next) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	await next()
+})
+app.route('/api/agents/subnamecap', agentSubnameCapRoutes)
 app.all('/api/agents/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
 app.all('/api/ika/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
 app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
 
+app.route('/api/subnamecap', subnameCapRoutes)
 app.route('/api', apiRoutes)
 
 const SVG_HEADERS = { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=604800' }
@@ -110,6 +123,11 @@ app.get('/ipfs/:id{.+}', async (c) => {
 	const result = await resolveDirectContent(subdomain, c.get('env'))
 	if (!result.found) return errorResponse(result.error || 'Content not found', 'NOT_FOUND', 404)
 	return result.data as Response
+})
+
+app.get('/subnamecap', async (c) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	return htmlResponse(generateSubnameCapPage(c.get('env')))
 })
 
 app.all('/app', async (c) => {

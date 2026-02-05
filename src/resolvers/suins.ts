@@ -9,7 +9,10 @@ import { lookupName as surfluxLookupName } from '../utils/surflux-grpc'
 const CACHE_TTL = 600
 const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000
 
-const suinsMemCache = new Map<string, { data: SuiNSRecord & { expirationTimestampMs?: string }; exp: number }>()
+const suinsMemCache = new Map<
+	string,
+	{ data: SuiNSRecord & { expirationTimestampMs?: string }; exp: number }
+>()
 
 export async function resolveSuiNS(
 	name: string,
@@ -27,17 +30,31 @@ export async function resolveSuiNS(
 		}
 	}
 
-	function processRecord(record: SuiNSRecord & { expirationTimestampMs?: string }, name: string): ResolverResult {
+	function processRecord(
+		record: SuiNSRecord & { expirationTimestampMs?: string },
+		name: string,
+	): ResolverResult {
 		if (record.expirationTimestampMs) {
 			const expirationTime = Number(record.expirationTimestampMs)
 			const now = Date.now()
 			const gracePeriodEnd = expirationTime + GRACE_PERIOD_MS
 
 			if (now >= gracePeriodEnd) {
-				return { found: false, error: `Name "${name}" has expired and is available`, expired: true, available: true }
+				return {
+					found: false,
+					error: `Name "${name}" has expired and is available`,
+					expired: true,
+					available: true,
+				}
 			}
 			if (now >= expirationTime) {
-				return { found: true, data: record, cacheTtl: CACHE_TTL, expired: true, inGracePeriod: true }
+				return {
+					found: true,
+					data: record,
+					cacheTtl: CACHE_TTL,
+					expired: true,
+					inGracePeriod: true,
+				}
 			}
 		}
 		return { found: true, data: record, cacheTtl: CACHE_TTL }
@@ -51,7 +68,10 @@ export async function resolveSuiNS(
 				// Fetch NFT owner if we have the NFT ID (Surflux doesn't return owner)
 				if (surfluxRecord.nftId && !surfluxRecord.ownerAddress) {
 					try {
-						const suiClient = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
+						const suiClient = new SuiClient({
+							url: getDefaultRpcUrl(env.SUI_NETWORK),
+							network: env.SUI_NETWORK,
+						})
 						const nftObject = await suiClient.getObject({
 							id: surfluxRecord.nftId,
 							options: { showOwner: true },
@@ -79,7 +99,10 @@ export async function resolveSuiNS(
 		}
 
 		// Fallback: SuiNS SDK (JSON-RPC)
-		const suiClient = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
+		const suiClient = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
 		const suinsClient = new SuinsClient({
 			client: suiClient as never,
 			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
@@ -223,7 +246,10 @@ function parseContentHash(hash: string): SuiNSRecord['content'] {
  */
 export async function getSuiNSOwner(name: string, env: Env): Promise<string | null> {
 	try {
-		const suiClient = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
+		const suiClient = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
 		const suinsClient = new SuinsClient({
 			client: suiClient as never,
 			network: env.SUI_NETWORK as 'mainnet' | 'testnet',

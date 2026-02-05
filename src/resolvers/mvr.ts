@@ -55,7 +55,10 @@ export async function resolveMVRPackage(
 	}
 
 	try {
-		const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
+		const client = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
 
 		// The MVR stores packages as dynamic fields on the registry object
 		// Field name format: "{suinsName}/{packageName}"
