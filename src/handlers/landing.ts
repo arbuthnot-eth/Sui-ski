@@ -1,260 +1,233 @@
 import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import { SuinsClient } from '@mysten/suins'
+import { Hono } from 'hono'
 import type { Env } from '../types'
 import { cacheKey, getCached, setCache } from '../utils/cache'
-import { getNSSuiPrice, getUSDCSuiPrice } from '../utils/ns-price'
+import { getDeepBookSuiPools, getNSSuiPrice, getUSDCSuiPrice } from '../utils/ns-price'
+import { getDefaultOgImageUrl, getTwitterFallbackImage } from '../utils/og-image'
 import { calculateRegistrationPrice, formatPricingResponse, getBasePricing } from '../utils/pricing'
-import { htmlResponse, jsonResponse } from '../utils/response'
+import { jsonResponse } from '../utils/response'
 import { getDefaultRpcUrl } from '../utils/rpc'
 import { renderSocialMeta } from '../utils/social'
 import { getGatewayStatus } from '../utils/status'
 
-interface LandingPageOptions {
+export interface LandingPageOptions {
 	canonicalUrl?: string
 	serviceFeeName?: string
 	rpcUrl?: string
 	network?: string
 }
 
-/**
- * Handle requests to the root domain (sui.ski)
- */
-export async function handleLandingPage(request: Request, env: Env): Promise<Response> {
-	const apiResponse = await handleLandingApiRequest(request, env)
-	if (apiResponse) {
-		return apiResponse
+type ApiEnv = {
+	Bindings: Env
+	Variables: {
+		env: Env
 	}
-
-	const url = new URL(request.url)
-	const canonicalUrl = `${url.protocol}//${url.hostname}${url.pathname || '/'}`
-
-	// Landing page HTML
-	return htmlResponse(landingPageHTML(env.SUI_NETWORK, {
-		canonicalUrl,
-		serviceFeeName: env.SERVICE_FEE_NAME,
-		rpcUrl: env.SUI_RPC_URL,
-		network: env.SUI_NETWORK,
-	}))
 }
 
-export async function handleLandingApiRequest(
-	restRequest: Request,
-	env: Env,
-): Promise<Response | null> {
-	const url = new URL(restRequest.url)
+export const apiRoutes = new Hono<ApiEnv>()
 
-	if (url.pathname === '/api/status') {
-		const status = await getGatewayStatus(env)
-		return jsonResponse(status)
-	}
+apiRoutes.get('/status', async (c) => {
+	const status = await getGatewayStatus(c.get('env'))
+	return jsonResponse(status)
+})
 
-	if (url.pathname === '/api/resolve') {
-		const name = url.searchParams.get('name')
-		if (!name) {
-			return jsonResponse({ error: 'Name parameter required' }, 400)
-		}
-		const { resolveSuiNS } = await import('../resolvers/suins')
-		const result = await resolveSuiNS(name, env)
-		return jsonResponse(result)
-	}
+apiRoutes.get('/resolve', async (c) => {
+	const name = c.req.query('name')
+	if (!name) return jsonResponse({ error: 'Name parameter required' }, 400)
+	const { resolveSuiNS } = await import('../resolvers/suins')
+	const result = await resolveSuiNS(name, c.get('env'))
+	return jsonResponse(result)
+})
 
-	if (url.pathname === '/api/pricing') {
-		try {
-			const domain = url.searchParams.get('domain')
-			const yearsParam = url.searchParams.get('years')
-			const expParam = url.searchParams.get('expirationMs')
+apiRoutes.get('/pricing', async (c) => {
+	try {
+		const env = c.get('env')
+		const domain = c.req.query('domain')
+		const yearsParam = c.req.query('years')
+		const expParam = c.req.query('expirationMs')
 
-			if (domain) {
-				const years = yearsParam ? parseInt(yearsParam, 10) : 1
-				const expirationMs = expParam ? parseInt(expParam, 10) : undefined
-
-				const pricing = await calculateRegistrationPrice({
-					domain,
-					years,
-					expirationMs,
-					env,
-				})
-
-				return jsonResponse(formatPricingResponse(pricing))
-			}
-
-			const pricing = await getBasePricing(env)
-			return jsonResponse(pricing)
-		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Failed to fetch pricing'
-			return jsonResponse({ error: message }, 500)
-		}
-	}
-
-	if (url.pathname === '/api/ns-price') {
-		try {
-			const nsPrice = await getNSSuiPrice(env)
-			return jsonResponse(nsPrice)
-		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Failed to fetch NS price'
-			return jsonResponse({ error: message, source: 'fallback', nsPerSui: 10, suiPerNs: 0.1 }, 500)
-		}
-	}
-
-	if (url.pathname === '/api/usdc-price') {
-		try {
-			const usdcPrice = await getUSDCSuiPrice(env)
-			return jsonResponse(usdcPrice)
-		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Failed to fetch USDC price'
-			return jsonResponse({ error: message, source: 'fallback', suiPerUsdc: 0.25, usdcPerSui: 4.0 }, 500)
-		}
-	}
-
-	if (url.pathname === '/api/renewal-pricing') {
-		try {
-			const domain = url.searchParams.get('domain')
-			const yearsParam = url.searchParams.get('years')
-
-			if (!domain) {
-				return jsonResponse({ error: 'Domain parameter required' }, 400)
-			}
-
+		if (domain) {
 			const years = yearsParam ? parseInt(yearsParam, 10) : 1
-			const { calculateRenewalPrice, formatPricingResponse } = await import('../utils/pricing')
-			const pricing = await calculateRenewalPrice({ domain, years, env })
+			const expirationMs = expParam ? parseInt(expParam, 10) : undefined
+			const pricing = await calculateRegistrationPrice({ domain, years, expirationMs, env })
 			return jsonResponse(formatPricingResponse(pricing))
-		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Failed to fetch renewal pricing'
-			return jsonResponse({ error: message }, 500)
 		}
+
+		const pricing = await getBasePricing(env)
+		return jsonResponse(pricing)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch pricing'
+		return jsonResponse({ error: message }, 500)
 	}
+})
 
-	if (url.pathname === '/api/renew-tx' && restRequest.method === 'POST') {
-		try {
-			const body = await restRequest.json()
-			const { domain, nftId, years, senderAddress, paymentMethod } = body as {
-				domain: string
-				nftId: string
-				years: number
-				senderAddress: string
-				paymentMethod?: 'ns' | 'sui'
-			}
+apiRoutes.get('/ns-price', async (c) => {
+	try {
+		const nsPrice = await getNSSuiPrice(c.get('env'))
+		return jsonResponse(nsPrice)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch NS price'
+		return jsonResponse({ error: message, source: 'fallback', nsPerSui: 10, suiPerNs: 0.1 }, 500)
+	}
+})
 
-			if (!domain || !nftId || !years || !senderAddress) {
-				return jsonResponse(
-					{ error: 'Missing required fields: domain, nftId, years, senderAddress' },
-					400,
-				)
-			}
+apiRoutes.get('/usdc-price', async (c) => {
+	try {
+		const usdcPrice = await getUSDCSuiPrice(c.get('env'))
+		return jsonResponse(usdcPrice)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch USDC price'
+		return jsonResponse(
+			{ error: message, source: 'fallback', suiPerUsdc: 0.25, usdcPerSui: 4.0 },
+			500,
+		)
+	}
+})
 
-			const { buildSwapAndRenewTx, buildSuiRenewTx } = await import('../utils/swap-transactions')
+apiRoutes.get('/deepbook-pools', async (c) => {
+	try {
+		const pools = await getDeepBookSuiPools(c.get('env'))
+		return jsonResponse(pools)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch pools'
+		return jsonResponse({ error: message }, 500)
+	}
+})
 
-			if (paymentMethod === 'sui') {
-				const tx = await buildSuiRenewTx({ domain, nftId, years, senderAddress }, env)
-				const txBytes = await tx.build({ client: new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK }) })
-				return jsonResponse({
-					txBytes: Buffer.from(txBytes).toString('base64'),
-					method: 'sui',
-				})
-			}
+apiRoutes.get('/renewal-pricing', async (c) => {
+	try {
+		const env = c.get('env')
+		const domain = c.req.query('domain')
+		const yearsParam = c.req.query('years')
 
-			const result = await buildSwapAndRenewTx({ domain, nftId, years, senderAddress }, env)
-			const txBytes = await result.tx.build({ client: new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK }) })
+		if (!domain) return jsonResponse({ error: 'Domain parameter required' }, 400)
+
+		const years = yearsParam ? parseInt(yearsParam, 10) : 1
+		const { calculateRenewalPrice, formatPricingResponse } = await import('../utils/pricing')
+		const pricing = await calculateRenewalPrice({ domain, years, env })
+		return jsonResponse(formatPricingResponse(pricing))
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch renewal pricing'
+		return jsonResponse({ error: message }, 500)
+	}
+})
+
+apiRoutes.post('/renew-tx', async (c) => {
+	try {
+		const env = c.get('env')
+		const body = await c.req.json()
+		const { domain, nftId, years, senderAddress, paymentMethod } = body as {
+			domain: string
+			nftId: string
+			years: number
+			senderAddress: string
+			paymentMethod?: 'ns' | 'sui'
+		}
+
+		if (!domain || !nftId || !years || !senderAddress) {
+			return jsonResponse(
+				{ error: 'Missing required fields: domain, nftId, years, senderAddress' },
+				400,
+			)
+		}
+
+		const { buildSwapAndRenewTx, buildSuiRenewTx } = await import('../utils/swap-transactions')
+		const client = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
+
+		if (paymentMethod === 'sui') {
+			const tx = await buildSuiRenewTx({ domain, nftId, years, senderAddress }, env)
+			const txBytes = await tx.build({ client })
 			return jsonResponse({
 				txBytes: Buffer.from(txBytes).toString('base64'),
-				breakdown: {
-					suiInputMist: String(result.breakdown.suiInputMist),
-					nsOutputEstimate: String(result.breakdown.nsOutputEstimate),
-					renewalCostNsMist: String(result.breakdown.registrationCostNsMist),
-					slippageBps: result.breakdown.slippageBps,
-					nsPerSui: result.breakdown.nsPerSui,
-					source: result.breakdown.source,
-					priceImpactBps: result.breakdown.priceImpactBps,
-				},
-				method: 'ns',
+				method: 'sui',
 			})
-		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Failed to build renewal transaction'
-			console.error('Renewal tx error:', error)
-			return jsonResponse({ error: message }, 500)
 		}
+
+		const result = await buildSwapAndRenewTx({ domain, nftId, years, senderAddress }, env)
+		const txBytes = await result.tx.build({ client })
+		return jsonResponse({
+			txBytes: Buffer.from(txBytes).toString('base64'),
+			breakdown: {
+				suiInputMist: String(result.breakdown.suiInputMist),
+				nsOutputEstimate: String(result.breakdown.nsOutputEstimate),
+				renewalCostNsMist: String(result.breakdown.registrationCostNsMist),
+				slippageBps: result.breakdown.slippageBps,
+				nsPerSui: result.breakdown.nsPerSui,
+				source: result.breakdown.source,
+				priceImpactBps: result.breakdown.priceImpactBps,
+			},
+			method: 'ns',
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to build renewal transaction'
+		console.error('Renewal tx error:', error)
+		return jsonResponse({ error: message }, 500)
 	}
+})
 
-	if (url.pathname === '/api/sui-price') {
-		try {
-			const price = await getSUIPrice(env)
-			return jsonResponse({ price })
-		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Failed to fetch SUI price'
-			console.error('SUI price API error:', message)
-			return jsonResponse({ price: 1.0, error: message, cached: true })
-		}
+apiRoutes.get('/sui-price', async (c) => {
+	try {
+		const price = await getSUIPrice(c.get('env'))
+		return jsonResponse({ price })
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch SUI price'
+		console.error('SUI price API error:', message)
+		return jsonResponse({ price: 1.0, error: message, cached: true })
 	}
+})
 
-	// SuiNS NFT image proxy - /api/suins-image/{name}.sui
-	if (url.pathname.startsWith('/api/suins-image/')) {
-		const namePart = url.pathname.replace('/api/suins-image/', '')
-		const cleanName = namePart.replace(/\.sui$/i, '')
-		if (!cleanName) {
-			return jsonResponse({ error: 'Name required' }, 400)
-		}
-		const expParam = url.searchParams.get('exp')
-		// Use api-mainnet.suins.io which is the working endpoint
-		const suinsApiUrl = expParam
-			? `https://api-mainnet.suins.io/nfts/${encodeURIComponent(cleanName)}.sui/${expParam}`
-			: `https://api-mainnet.suins.io/nfts/${encodeURIComponent(cleanName)}.sui`
+apiRoutes.get('/suins-image/:name', async (c) => {
+	const namePart = c.req.param('name')
+	const cleanName = namePart.replace(/\.sui$/i, '')
+	if (!cleanName) return jsonResponse({ error: 'Name required' }, 400)
+	const expParam = c.req.query('exp')
+	const suinsApiUrl = expParam
+		? `https://api-mainnet.suins.io/nfts/${encodeURIComponent(cleanName)}.sui/${expParam}`
+		: `https://api-mainnet.suins.io/nfts/${encodeURIComponent(cleanName)}.sui`
+	return proxyImageRequest(suinsApiUrl)
+})
 
-		return proxyImageRequest(suinsApiUrl)
+apiRoutes.get('/image-proxy', async (c) => {
+	const targetUrl = c.req.query('url')
+	if (!targetUrl) return jsonResponse({ error: 'URL parameter required' }, 400)
+	return proxyImageRequest(targetUrl)
+})
+
+apiRoutes.get('/names/:address', async (c) => {
+	const address = c.req.param('address')
+	if (!address.startsWith('0x')) {
+		return jsonResponse({ error: 'Valid Sui address required' }, 400)
 	}
+	return handleNamesByAddress(address, c.get('env'))
+})
 
-	// Generic image proxy - /api/image-proxy?url={url}
-	if (url.pathname === '/api/image-proxy') {
-		const targetUrl = url.searchParams.get('url')
-		if (!targetUrl) {
-			return jsonResponse({ error: 'URL parameter required' }, 400)
-		}
-		return proxyImageRequest(targetUrl)
+apiRoutes.get('/nft-details', async (c) => {
+	const objectId = c.req.query('objectId')
+	if (!objectId) return jsonResponse({ error: 'objectId parameter required' }, 400)
+	return handleNftDetails(objectId, c.get('env'))
+})
+
+apiRoutes.get('/marketplace/:name', async (c) => {
+	const name = c.req.param('name')
+	if (!name) return jsonResponse({ error: 'Name parameter required' }, 400)
+	return handleMarketplaceData(name, c.get('env'))
+})
+
+apiRoutes.all('/tradeport/*', async (c) => {
+	return handleTradeportProxy(c.req.raw, new URL(c.req.url))
+})
+
+apiRoutes.get('/suggest-names', async (c) => {
+	const query = c.req.query('q')
+	if (!query || query.length < 3) {
+		return jsonResponse({ error: 'Query parameter required (min 3 chars)' }, 400)
 	}
-
-	// Names by address endpoint - /api/names/{address}
-	if (url.pathname.startsWith('/api/names/')) {
-		const address = url.pathname.replace('/api/names/', '')
-		if (!address || !address.startsWith('0x')) {
-			return jsonResponse({ error: 'Valid Sui address required' }, 400)
-		}
-		return handleNamesByAddress(address, env)
-	}
-
-	// NFT details endpoint - /api/nft-details?objectId={id}
-	if (url.pathname === '/api/nft-details') {
-		const objectId = url.searchParams.get('objectId')
-		if (!objectId) {
-			return jsonResponse({ error: 'objectId parameter required' }, 400)
-		}
-		return handleNftDetails(objectId, env)
-	}
-
-	// Marketplace data endpoint - /api/marketplace/{name}
-	if (url.pathname.startsWith('/api/marketplace/')) {
-		const name = url.pathname.replace('/api/marketplace/', '')
-		if (!name) {
-			return jsonResponse({ error: 'Name parameter required' }, 400)
-		}
-		return handleMarketplaceData(name, env)
-	}
-
-	// Tradeport proxy - /api/tradeport/name/{name} or /api/tradeport/bid
-	if (url.pathname.startsWith('/api/tradeport/')) {
-		return handleTradeportProxy(restRequest, url)
-	}
-
-	// Thematic name suggestions - /api/suggest-names?q={query}
-	if (url.pathname === '/api/suggest-names') {
-		const query = url.searchParams.get('q')
-		if (!query || query.length < 3) {
-			return jsonResponse({ error: 'Query parameter required (min 3 chars)' }, 400)
-		}
-		return handleNameSuggestions(query, env)
-	}
-
-	return null
-}
+	return handleNameSuggestions(query, c.get('env'))
+})
 
 /**
  * Fetch NFT details from Sui RPC
@@ -266,7 +239,10 @@ async function handleNftDetails(objectId: string, env: Env): Promise<Response> {
 	}
 
 	try {
-		const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
+		const client = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
 		const object = await client.getObject({
 			id: objectId,
 			options: {
@@ -332,46 +308,83 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			})
 		}
 
-		const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
+		const client = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
 
 		const allNames: NameInfo[] = []
-		let cursor: string | null | undefined
+		const seenNftIds = new Set<string>()
 
-		// Known SuiNS registration type (main package)
-		const SUINS_REGISTRATION_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration'
+		// Network-aware SuiNS type definitions
+		const SUINS_REGISTRATION_TYPES: Record<string, string[]> = {
+			mainnet: [
+				'0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration',
+				'0xb7004c7914308557f7afbaf0dca8dd258e18e306cb7a45b28019f3d0a693f162::subdomain_registration::SubDomainRegistration',
+			],
+			testnet: [
+				'0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93::suins_registration::SuinsRegistration',
+				'0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93::subdomain_registration::SubDomainRegistration',
+			],
+		}
 
-		// Step 1: Get all SuiNS NFTs owned by this address using type filter for efficiency
-		do {
-			const response = await client.getOwnedObjects({
-				owner: address,
-				filter: { StructType: SUINS_REGISTRATION_TYPE },
-				options: { showContent: true, showType: true },
-				cursor: cursor || undefined,
-				limit: 50,
-			})
+		const typesToQuery =
+			SUINS_REGISTRATION_TYPES[env.SUI_NETWORK] || SUINS_REGISTRATION_TYPES.mainnet
 
-			for (const item of response.data) {
-				if (item.data?.content?.dataType === 'moveObject') {
+		// Step 1: Query all SuiNS NFT types owned by this address
+		for (const structType of typesToQuery) {
+			let cursor: string | null | undefined
+			const isSubdomain = structType.includes('subdomain_registration')
+
+			do {
+				const response = await client
+					.getOwnedObjects({
+						owner: address,
+						filter: { StructType: structType },
+						options: { showContent: true, showType: true },
+						cursor: cursor || undefined,
+						limit: 50,
+					})
+					.catch(() => null)
+				if (!response) break
+
+				for (const item of response.data) {
+					if (item.data?.content?.dataType !== 'moveObject') continue
+					const objectId = item.data.objectId
+					if (seenNftIds.has(objectId)) continue
+					seenNftIds.add(objectId)
+
 					const fields = (item.data.content as any).fields
-					const name = fields?.domain_name || fields?.name
-					const expirationMs = fields?.expiration_timestamp_ms
-						? Number(fields.expiration_timestamp_ms)
-						: null
+					let name: string | undefined
+					let expirationMs: number | null = null
+
+					if (isSubdomain) {
+						const inner = fields?.nft?.fields
+						name = inner?.domain_name || inner?.name
+						expirationMs = inner?.expiration_timestamp_ms
+							? Number(inner.expiration_timestamp_ms)
+							: null
+					} else {
+						name = fields?.domain_name || fields?.name
+						expirationMs = fields?.expiration_timestamp_ms
+							? Number(fields.expiration_timestamp_ms)
+							: null
+					}
 
 					if (name) {
 						allNames.push({
 							name: String(name),
-							nftId: item.data.objectId,
+							nftId: objectId,
 							expirationMs,
 							targetAddress: null,
 							isPrimary: false,
 						})
 					}
 				}
-			}
 
-			cursor = response.hasNextPage ? response.nextCursor : null
-		} while (cursor)
+				cursor = response.hasNextPage ? response.nextCursor : null
+			} while (cursor)
+		}
 
 		// Step 2: Use SuinsClient.getNameRecord to resolve each name to its target address
 		// This is more reliable than the raw RPC method
@@ -385,15 +398,20 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 			const batch = allNames.slice(i, i + BATCH_SIZE)
 			await Promise.all(
 				batch.map(async (nameInfo) => {
+					const suinsName = nameInfo.name.endsWith('.sui') ? nameInfo.name : `${nameInfo.name}.sui`
 					try {
-						// Ensure name has .sui suffix for SuinsClient
-						const suinsName = nameInfo.name.endsWith('.sui')
-							? nameInfo.name
-							: `${nameInfo.name}.sui`
 						const nameRecord = await suinsClient.getNameRecord(suinsName)
 						nameInfo.targetAddress = nameRecord?.targetAddress || null
 					} catch {
-						// Name may not have a target address set or record may not exist
+						// getNameRecord can fail for some valid names
+					}
+					if (!nameInfo.targetAddress) {
+						try {
+							const resolved = await client.resolveNameServiceAddress({ name: suinsName })
+							if (resolved) nameInfo.targetAddress = resolved
+						} catch {
+							// Name genuinely has no target address
+						}
 					}
 				}),
 			)
@@ -567,14 +585,27 @@ async function handleMarketplaceData(name: string, _env: Env): Promise<Response>
 			throw new Error(`Indexer API error: ${response.status}`)
 		}
 
-		const result = await response.json() as { data?: { sui?: { nfts?: Array<{
-			id: string
-			name: string
-			token_id: string
-			owner: string
-			listings: Array<{ id: string; price: number; seller: string; nonce?: string; market_name?: string }>
-			bids: Array<{ id: string; price: number; bidder: string }>
-		}> } }, errors?: Array<{ message: string }> }
+		const result = (await response.json()) as {
+			data?: {
+				sui?: {
+					nfts?: Array<{
+						id: string
+						name: string
+						token_id: string
+						owner: string
+						listings: Array<{
+							id: string
+							price: number
+							seller: string
+							nonce?: string
+							market_name?: string
+						}>
+						bids: Array<{ id: string; price: number; bidder: string }>
+					}>
+				}
+			}
+			errors?: Array<{ message: string }>
+		}
 
 		if (result.errors) {
 			throw new Error(result.errors[0]?.message || 'GraphQL error')
@@ -652,10 +683,19 @@ async function handleMarketplaceData(name: string, _env: Env): Promise<Response>
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch marketplace data'
-		return new Response(JSON.stringify({ error: message, name: normalizedName, nfts: [], bestListing: null, bestBid: null }), {
-			status: 500,
-			headers: corsHeaders,
-		})
+		return new Response(
+			JSON.stringify({
+				error: message,
+				name: normalizedName,
+				nfts: [],
+				bestListing: null,
+				bestBid: null,
+			}),
+			{
+				status: 500,
+				headers: corsHeaders,
+			},
+		)
 	}
 }
 
@@ -788,7 +828,6 @@ export async function getSUIPrice(_env?: { CACHE?: KVNamespace }): Promise<numbe
 	}
 
 	try {
-
 		const controller = new AbortController()
 		const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
@@ -901,21 +940,120 @@ async function handleNameSuggestions(query: string, _env: Env): Promise<Response
 
 function extractKeywords(text: string, keywords: Set<string>): void {
 	const stopWords = new Set([
-		'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-		'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-		'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare',
-		'ought', 'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by',
-		'from', 'as', 'into', 'through', 'during', 'before', 'after', 'above',
-		'below', 'between', 'under', 'again', 'further', 'then', 'once', 'here',
-		'there', 'when', 'where', 'why', 'how', 'all', 'each', 'few', 'more',
-		'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
-		'same', 'so', 'than', 'too', 'very', 'just', 'and', 'but', 'if', 'or',
-		'because', 'until', 'while', 'also', 'about', 'which', 'who', 'whom',
-		'this', 'that', 'these', 'those', 'am', 'it', 'its', 'he', 'she', 'his',
-		'her', 'they', 'them', 'their', 'what', 'both', 'any', 'many', 'known',
+		'the',
+		'a',
+		'an',
+		'is',
+		'are',
+		'was',
+		'were',
+		'be',
+		'been',
+		'being',
+		'have',
+		'has',
+		'had',
+		'do',
+		'does',
+		'did',
+		'will',
+		'would',
+		'could',
+		'should',
+		'may',
+		'might',
+		'must',
+		'shall',
+		'can',
+		'need',
+		'dare',
+		'ought',
+		'used',
+		'to',
+		'of',
+		'in',
+		'for',
+		'on',
+		'with',
+		'at',
+		'by',
+		'from',
+		'as',
+		'into',
+		'through',
+		'during',
+		'before',
+		'after',
+		'above',
+		'below',
+		'between',
+		'under',
+		'again',
+		'further',
+		'then',
+		'once',
+		'here',
+		'there',
+		'when',
+		'where',
+		'why',
+		'how',
+		'all',
+		'each',
+		'few',
+		'more',
+		'most',
+		'other',
+		'some',
+		'such',
+		'no',
+		'nor',
+		'not',
+		'only',
+		'own',
+		'same',
+		'so',
+		'than',
+		'too',
+		'very',
+		'just',
+		'and',
+		'but',
+		'if',
+		'or',
+		'because',
+		'until',
+		'while',
+		'also',
+		'about',
+		'which',
+		'who',
+		'whom',
+		'this',
+		'that',
+		'these',
+		'those',
+		'am',
+		'it',
+		'its',
+		'he',
+		'she',
+		'his',
+		'her',
+		'they',
+		'them',
+		'their',
+		'what',
+		'both',
+		'any',
+		'many',
+		'known',
 	])
 
-	const words = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+	const words = text
+		.toLowerCase()
+		.replace(/[^a-z0-9\s]/g, ' ')
+		.split(/\s+/)
 	for (const word of words) {
 		if (word.length >= 3 && word.length <= 15 && !stopWords.has(word) && /^[a-z]+$/.test(word)) {
 			keywords.add(word)
@@ -937,7 +1075,7 @@ function generateFallbackSuggestions(query: string): string[] {
 	return suggestions
 }
 
-function landingPageHTML(_network: string, options: LandingPageOptions = {}): string {
+export function landingPageHTML(_network: string, options: LandingPageOptions = {}): string {
 	const escapeHtml = (value: string) =>
 		value.replace(/[&<>"']/g, (char) => {
 			switch (char) {
@@ -969,8 +1107,12 @@ function landingPageHTML(_network: string, options: LandingPageOptions = {}): st
 		description: pageDescription,
 		url: canonicalUrl,
 		siteName: 'sui.ski',
-		image: `${canonicalOrigin}/icon-512.png`,
-		imageAlt: 'sui.ski icon',
+		image: getDefaultOgImageUrl(canonicalOrigin),
+		imageAlt: 'sui.ski - SuiNS Gateway',
+		imageWidth: 1200,
+		imageHeight: 630,
+		twitterImage: getTwitterFallbackImage(),
+		cardType: 'summary_large_image',
 	})
 	return `<!DOCTYPE html>
 <html lang="en">

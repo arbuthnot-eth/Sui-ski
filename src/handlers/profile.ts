@@ -1,4 +1,5 @@
 import type { Env, SuiNSRecord } from '../types'
+import { getProfileOgImageUrl, getTwitterFallbackImage } from '../utils/og-image'
 import { normalizeMediaUrl, renderSocialMeta } from '../utils/social'
 import { profileStyles } from './profile.css'
 
@@ -41,7 +42,6 @@ export function generateProfilePage(
 		network === 'mainnet' ? 'https://suiscan.xyz/mainnet' : `https://suiscan.xyz/${network}`
 	const explorerUrl = `${explorerBase}/account/${record.address}`
 	const nftExplorerUrl = record.nftId ? `${explorerBase}/object/${record.nftId}` : ''
-
 
 	const cleanName = name.replace(/\.sui$/i, '').toLowerCase()
 	const fullName = `${cleanName}.sui`
@@ -93,17 +93,20 @@ export function generateProfilePage(
 		(options.description && options.description.trim().length > 0
 			? options.description
 			: buildProfileDescription(fullName, record)) || `${fullName} on Sui`
-	const previewImage =
-		options.image ||
-		selectProfileImage(record, options.hostname) ||
-		`${canonicalOrigin}/icon-512.png`
+	const userAvatar = options.image || selectProfileImage(record, options.hostname)
+	const previewImage = userAvatar || getProfileOgImageUrl(canonicalOrigin, fullName)
+	const twitterPreview = userAvatar || getTwitterFallbackImage()
 	const socialMeta = `\n${renderSocialMeta({
 		title: `${fullName} | sui.ski`,
 		description: metaDescription,
 		url: canonicalUrl,
 		siteName: 'sui.ski',
 		image: previewImage,
-		imageAlt: `${fullName} profile`,
+		imageAlt: `${fullName} profile on sui.ski`,
+		imageWidth: 1200,
+		imageHeight: 630,
+		twitterImage: twitterPreview,
+		cardType: 'summary_large_image',
 	})}\n`
 
 	return `<!DOCTYPE html>
@@ -222,6 +225,43 @@ export function generateProfilePage(
 				</div>
 			</div>
 
+			<!-- Marketplace Card (under owner) -->
+			<div class="card marketplace-card" id="marketplace-card" style="display:none;">
+				<div class="marketplace-header">
+					<div class="marketplace-title">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="9" cy="21" r="1"></circle>
+							<circle cx="20" cy="21" r="1"></circle>
+							<path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+						</svg>
+						<span>Marketplace</span>
+					</div>
+					<a href="https://tradeport.xyz/sui/collection/suins?search=${escapeHtml(cleanName)}" target="_blank" class="marketplace-link">View on Tradeport</a>
+				</div>
+				<div class="marketplace-body">
+					<div class="marketplace-row" id="marketplace-listing-row" style="display:none;">
+						<span class="marketplace-label">Listed for</span>
+						<span class="marketplace-value listing-price" id="marketplace-listing-price">--</span>
+					</div>
+					<div class="marketplace-row" id="marketplace-bid-row" style="display:none;">
+						<span class="marketplace-label">Best offer</span>
+						<span class="marketplace-value bid-price" id="marketplace-bid-price">--</span>
+					</div>
+					<button class="marketplace-buy-btn" id="marketplace-buy-btn" style="display:none;" disabled>
+						<span class="marketplace-buy-text">Buy Now</span>
+						<span class="marketplace-buy-loading hidden"><span class="loading"></span></span>
+					</button>
+					<div class="marketplace-bid-input">
+						<input type="number" id="marketplace-bid-amount" placeholder="Bid amount (SUI)" step="0.01" min="0.01">
+						<button class="marketplace-bid-btn" id="marketplace-place-bid-btn" disabled>
+							<span class="marketplace-bid-text">Place Bid</span>
+							<span class="marketplace-bid-loading hidden"><span class="loading"></span></span>
+						</button>
+					</div>
+					<div class="marketplace-status" id="marketplace-status"></div>
+				</div>
+			</div>
+
 			${
 				record.contentHash || record.walrusSiteId
 					? `
@@ -251,102 +291,73 @@ export function generateProfilePage(
 					: ''
 			}
 
-			<!-- Marketplace Card -->
-			<div class="card marketplace-card" id="marketplace-card" style="display:none;">
-				<div class="marketplace-header">
-					<div class="marketplace-title">
+			<!-- Renewal Card (full width) -->
+			<div class="card renewal-card" id="overview-renewal-card" data-expires-ms="${safeNumber(expiresMs)}" data-current-name="${escapeHtml(cleanName)}">
+				<div class="renewal-card-header">
+					<div class="renewal-card-title">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<circle cx="9" cy="21" r="1"></circle>
-							<circle cx="20" cy="21" r="1"></circle>
-							<path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+							<path d="M23 4v6h-6"></path>
+							<path d="M1 20v-6h6"></path>
+							<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
 						</svg>
-						<span>Marketplace</span>
+						<span>Extend Registration</span>
 					</div>
-					<a href="https://tradeport.xyz/sui/collection/suins?search=${escapeHtml(cleanName)}" target="_blank" class="marketplace-link">View on Tradeport</a>
+					<div class="renewal-selected-name" id="renewal-selected-name">
+						<span class="renewal-name-label">Extending:</span>
+						<span class="renewal-name-value" id="renewal-name-value">${escapeHtml(cleanName)}.sui</span>
+					</div>
 				</div>
-				<div class="marketplace-body">
-					<div class="marketplace-row" id="marketplace-listing-row" style="display:none;">
-						<span class="marketplace-label">Listed for</span>
-						<span class="marketplace-value listing-price" id="marketplace-listing-price">--</span>
+				<div class="renewal-card-body">
+					<div class="renewal-compact-row">
+						<div class="renewal-info-stack">
+							${
+								expiresAt
+									? `<div class="renewal-expiry-compact">
+								<span class="renewal-expiry-label" id="renewal-expiry-label">New expiry</span>
+								<span class="renewal-expiry-date" id="renewal-expiry-date">${new Date(expiresAt.getTime() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+								<span class="renewal-countdown" id="renewal-countdown"></span>
+							</div>`
+									: ''
+							}
+							<div class="renewal-price-compact">
+								<span class="renewal-price-value" id="overview-renewal-price">-- SUI</span>
+								<span class="renewal-savings-inline" id="overview-renewal-savings" style="display:none;">
+									<span id="overview-renewal-savings-text">Save 25%</span>
+								</span>
+							</div>
+						</div>
+						<div class="renewal-duration-stepper">
+							<button type="button" class="stepper-btn stepper-minus" id="renewal-years-minus">−</button>
+							<span class="stepper-value" id="overview-renewal-years" data-value="1">1 yr</span>
+							<button type="button" class="stepper-btn stepper-plus" id="renewal-years-plus">+</button>
+						</div>
 					</div>
-					<div class="marketplace-row" id="marketplace-bid-row" style="display:none;">
-						<span class="marketplace-label">Best offer</span>
-						<span class="marketplace-value bid-price" id="marketplace-bid-price">--</span>
-					</div>
-					<button class="marketplace-buy-btn" id="marketplace-buy-btn" style="display:none;" disabled>
-						<span class="marketplace-buy-text">Buy Now</span>
-						<span class="marketplace-buy-loading hidden"><span class="loading"></span></span>
+					<button class="renewal-btn" id="overview-renewal-btn" disabled>
+						<span class="renewal-btn-text">Connect Wallet to Extend</span>
+						<span class="renewal-btn-loading hidden">
+							<span class="loading"></span>
+						</span>
 					</button>
-					<div class="marketplace-status" id="marketplace-status"></div>
+					<div class="renewal-status" id="overview-renewal-status"></div>
 				</div>
 			</div>
 
-			<!-- Renewal + Linked Names Side-by-Side Container -->
-			<div class="renewal-linked-container">
-				<!-- Renewal Card -->
-				<div class="card renewal-card" id="overview-renewal-card" data-expires-ms="${safeNumber(expiresMs)}" data-current-name="${escapeHtml(cleanName)}">
-					<div class="renewal-card-header">
-						<div class="renewal-card-title">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M23 4v6h-6"></path>
-								<path d="M1 20v-6h6"></path>
-								<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-							</svg>
-							<span>Extend Registration</span>
-						</div>
-						<div class="renewal-selected-name" id="renewal-selected-name">
-							<span class="renewal-name-label">Extending:</span>
-							<span class="renewal-name-value" id="renewal-name-value">${escapeHtml(cleanName)}.sui</span>
-						</div>
-					</div>
-					<div class="renewal-card-body">
-						<div class="renewal-compact-row">
-							<div class="renewal-info-stack">
-								${expiresAt ? `<div class="renewal-expiry-compact">
-									<span class="renewal-expiry-label" id="renewal-expiry-label">New expiry</span>
-									<span class="renewal-expiry-date" id="renewal-expiry-date">${new Date(expiresAt.getTime() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-									<span class="renewal-countdown" id="renewal-countdown"></span>
-								</div>` : ''}
-								<div class="renewal-price-compact">
-									<span class="renewal-price-value" id="overview-renewal-price">-- SUI</span>
-									<span class="renewal-savings-inline" id="overview-renewal-savings" style="display:none;">
-										<span id="overview-renewal-savings-text">Save 25%</span>
-									</span>
-								</div>
-							</div>
-							<div class="renewal-duration-stepper">
-								<button type="button" class="stepper-btn stepper-minus" id="renewal-years-minus">−</button>
-								<span class="stepper-value" id="overview-renewal-years" data-value="1">1 yr</span>
-								<button type="button" class="stepper-btn stepper-plus" id="renewal-years-plus">+</button>
-							</div>
-						</div>
-						<button class="renewal-btn" id="overview-renewal-btn" disabled>
-							<span class="renewal-btn-text">Connect Wallet to Extend</span>
-							<span class="renewal-btn-loading hidden">
-								<span class="loading"></span>
-							</span>
-						</button>
-						<div class="renewal-status" id="overview-renewal-status"></div>
-					</div>
+			<!-- Linked Names Section -->
+			<div class="linked-names-section" id="linked-names-section">
+				<div class="linked-names-header">
+					<span class="linked-names-title">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+							<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+						</svg>
+						Linked Names
+					</span>
+					<span class="linked-names-count" id="linked-names-count">Loading...</span>
 				</div>
-
-				<!-- Linked Names Section -->
-				<div class="linked-names-section" id="linked-names-section">
-					<div class="linked-names-header">
-						<span class="linked-names-title">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-								<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-							</svg>
-							Linked Names
-						</span>
-						<span class="linked-names-count" id="linked-names-count">Loading...</span>
-					</div>
-					<div class="linked-names-list" id="linked-names-list">
-						<div class="linked-names-loading"><span class="loading"></span> Fetching linked names...</div>
-					</div>
-					<div class="linked-names-hint">Click name to view profile · Click + to extend</div>
+				<div class="linked-names-list" id="linked-names-list">
+					<div class="linked-names-loading"><span class="loading"></span> Fetching linked names...</div>
 				</div>
+				<div class="linked-names-hint">Click name to view profile · Click + to extend</div>
 			</div>
 				</div><!-- end tab-overview -->
 
@@ -2344,7 +2355,7 @@ export function generateProfilePage(
 				let swapInfo = null;
 
 				if (shortfall > 0n) {
-					if (!DEEPBOOK_PACKAGE || !DEEPBOOK_NS_SUI_POOL || !DEEPBOOK_DEEP_SUI_POOL) {
+					if (!DEEPBOOK_PACKAGE) {
 						const needed = (Number(totalSuiNeeded) / 1e9).toFixed(4);
 						const have = (Number(suiAvailable) / 1e9).toFixed(4);
 						if (statusEl) statusEl.textContent = 'Need ' + needed + ' SUI (have ' + have + ')';
@@ -2353,99 +2364,65 @@ export function generateProfilePage(
 
 					if (statusEl) statusEl.textContent = 'Insufficient SUI. Checking holdings...';
 
-					const [nsBalRes, deepBalRes, usdcBalRes, nsPriceData] = await Promise.all([
-						suiClient.getBalance({ owner: connectedAddress, coinType: NS_TYPE }).catch(() => ({ totalBalance: '0' })),
-						suiClient.getBalance({ owner: connectedAddress, coinType: DEEP_TYPE }).catch(() => ({ totalBalance: '0' })),
-						suiClient.getBalance({ owner: connectedAddress, coinType: USDC_TYPE }).catch(() => ({ totalBalance: '0' })),
-						fetch('/api/ns-price').then(r => r.json()).catch(() => null),
-					]);
+					const pools = await fetch('/api/deepbook-pools').then(r => r.json()).catch(() => []);
+					if (!pools.length) {
+						const needed = (Number(totalSuiNeeded) / 1e9).toFixed(4);
+						const have = (Number(suiAvailable) / 1e9).toFixed(4);
+						if (statusEl) statusEl.textContent = 'Need ' + needed + ' SUI (have ' + have + ')';
+						return;
+					}
 
-					const nsAvail = BigInt(nsBalRes.totalBalance);
-					const deepAvail = BigInt(deepBalRes.totalBalance);
-					const usdcAvail = BigInt(usdcBalRes.totalBalance);
+					const balanceChecks = pools.map(p =>
+						suiClient.getBalance({ owner: connectedAddress, coinType: p.coinType })
+							.catch(() => ({ totalBalance: '0' }))
+					);
+					const balances = await Promise.all(balanceChecks);
 
-					if (nsAvail > 0n && nsPriceData?.suiPerNs > 0) {
-						const suiPerNs = nsPriceData.suiPerNs;
+					const candidates = [];
+					for (let i = 0; i < pools.length; i++) {
+						const pool = pools[i];
+						const bal = BigInt(balances[i].totalBalance);
+						if (bal <= 0n) continue;
+						const tokenAmount = Number(bal) / Math.pow(10, pool.decimals);
+						const suiValue = tokenAmount * pool.suiPerToken;
+						candidates.push({ pool, balance: bal, suiValue });
+					}
+
+					candidates.sort((a, b) => {
+						if (a.pool.isDirect && !b.pool.isDirect) return -1;
+						if (!a.pool.isDirect && b.pool.isDirect) return 1;
+						return b.suiValue - a.suiValue;
+					});
+
+					for (const candidate of candidates) {
+						const pool = candidate.pool;
 						const shortfallSui = Number(shortfall) / 1e9;
-						const nsTokensNeeded = shortfallSui / suiPerNs;
-						const nsMistNeeded = BigInt(Math.ceil(nsTokensNeeded * 1e6));
-						const nsMistWithBuffer = nsMistNeeded + (nsMistNeeded * 25n) / 100n;
-						const amountToSell = nsMistWithBuffer > nsAvail ? nsAvail : nsMistWithBuffer;
+						const tokensNeeded = shortfallSui / pool.suiPerToken;
+						const tokenMistNeeded = BigInt(Math.ceil(tokensNeeded * Math.pow(10, pool.decimals)));
+						const tokenMistWithBuffer = tokenMistNeeded * 130n / 100n;
+						const amountToSell = tokenMistWithBuffer > candidate.balance ? candidate.balance : tokenMistWithBuffer;
 
-						const expectedSui = Number(amountToSell) / 1e6 * suiPerNs;
-						const minSuiOut = BigInt(Math.floor(expectedSui * 0.85 * 1e9));
+						const expectedSui = Number(amountToSell) / Math.pow(10, pool.decimals) * pool.suiPerToken;
+						const minSuiOut = BigInt(Math.floor(expectedSui * 0.80 * 1e9));
 
-						if (minSuiOut > 0n) {
-							const nsCoins = await suiClient.getCoins({ owner: connectedAddress, coinType: NS_TYPE });
-							if (nsCoins.data.length > 0) {
-								swapInfo = {
-									type: NS_TYPE,
-									pool: DEEPBOOK_NS_SUI_POOL,
-									name: 'NS',
-									coins: nsCoins.data,
-									amountToSell,
-									minSuiOut,
-									needsDeepFee: true,
-								};
-							}
-						}
-					}
+						if (minSuiOut <= 0n) continue;
 
-					if (!swapInfo && deepAvail > 1_000_000n) {
-						const deepForFee = 500_000n;
-						const deepToSellMax = deepAvail - deepForFee;
+						const coins = await suiClient.getCoins({ owner: connectedAddress, coinType: pool.coinType });
+						if (!coins.data.length) continue;
 
-						if (deepToSellMax > 0n) {
-							const roughDeepPrice = 0.02;
-							const expectedSui = Number(deepToSellMax) / 1e6 * roughDeepPrice;
-							const minSuiOut = BigInt(Math.floor(expectedSui * 0.5 * 1e9));
-
-							if (minSuiOut > 0n) {
-								const deepCoins = await suiClient.getCoins({ owner: connectedAddress, coinType: DEEP_TYPE });
-								if (deepCoins.data.length > 0) {
-									swapInfo = {
-										type: DEEP_TYPE,
-										pool: DEEPBOOK_DEEP_SUI_POOL,
-										name: 'DEEP',
-										coins: deepCoins.data,
-										amountToSell: deepToSellMax,
-										deepForFee,
-										minSuiOut,
-										needsDeepFee: false,
-									};
-								}
-							}
-						}
-					}
-
-					if (!swapInfo && usdcAvail > 0n && DEEPBOOK_SUI_USDC_POOL) {
-						const usdcPriceData = await fetch('/api/usdc-price').then(r => r.json()).catch(() => null);
-						if (usdcPriceData?.usdcPerSui > 0) {
-							const shortfallSui = Number(shortfall) / 1e9;
-							const usdcTokensNeeded = shortfallSui * usdcPriceData.usdcPerSui;
-							const usdcMistNeeded = BigInt(Math.ceil(usdcTokensNeeded * 1e6));
-							const usdcMistWithBuffer = usdcMistNeeded + (usdcMistNeeded * 30n) / 100n;
-							const amountToSell = usdcMistWithBuffer > usdcAvail ? usdcAvail : usdcMistWithBuffer;
-
-							const expectedSui = Number(amountToSell) / 1e6 / usdcPriceData.usdcPerSui;
-							const minSuiOut = BigInt(Math.floor(expectedSui * 0.85 * 1e9));
-
-							if (minSuiOut > 0n) {
-								const usdcCoins = await suiClient.getCoins({ owner: connectedAddress, coinType: USDC_TYPE });
-								if (usdcCoins.data.length > 0) {
-									swapInfo = {
-										type: USDC_TYPE,
-										pool: DEEPBOOK_SUI_USDC_POOL,
-										name: 'USDC',
-										coins: usdcCoins.data,
-										amountToSell,
-										minSuiOut,
-										needsDeepFee: true,
-										isQuoteSwap: true,
-									};
-								}
-							}
-						}
+						swapInfo = {
+							type: pool.coinType,
+							pool: pool.poolAddress,
+							name: pool.name,
+							coins: coins.data,
+							amountToSell,
+							minSuiOut,
+							needsDeepFee: true,
+							isDirect: pool.isDirect,
+							suiIsBase: pool.suiIsBase,
+							usdcPoolAddress: pool.usdcPoolAddress,
+						};
+						break;
 					}
 
 					if (!swapInfo) {
@@ -2472,77 +2449,7 @@ export function generateProfilePage(
 				const REG_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration';
 
 				if (swapInfo) {
-					let tokenCoin;
-					if (swapInfo.coins.length === 1) {
-						tokenCoin = tx.object(swapInfo.coins[0].coinObjectId);
-					} else {
-						tokenCoin = tx.object(swapInfo.coins[0].coinObjectId);
-						tx.mergeCoins(tokenCoin, swapInfo.coins.slice(1).map(c => tx.object(c.coinObjectId)));
-					}
-
-					const [tokenToSell] = tx.splitCoins(tokenCoin, [tx.pure.u64(swapInfo.amountToSell)]);
-
-					let deepFeeCoin;
-
-					if (swapInfo.needsDeepFee) {
-						const [suiForDeep] = tx.splitCoins(tx.gas, [tx.pure.u64(SUI_FOR_DEEP_SWAP)]);
-						const [zeroDeep] = tx.moveCall({
-							target: '0x2::coin::zero',
-							typeArguments: [DEEP_TYPE],
-						});
-						const [boughtDeep, dsSuiLeft, dsDeepLeft] = tx.moveCall({
-							target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
-							typeArguments: [DEEP_TYPE, SUI_TYPE],
-							arguments: [
-								tx.object(DEEPBOOK_DEEP_SUI_POOL),
-								suiForDeep,
-								zeroDeep,
-								tx.pure.u64(MIN_DEEP_OUT),
-								tx.object(CLOCK_OBJECT),
-							],
-						});
-						tx.transferObjects([dsSuiLeft, dsDeepLeft], connectedAddress);
-						deepFeeCoin = boughtDeep;
-					} else {
-						const [feeFromDeep] = tx.splitCoins(tokenCoin, [tx.pure.u64(swapInfo.deepForFee)]);
-						deepFeeCoin = feeFromDeep;
-					}
-
-					let swappedSui;
-					if (swapInfo.isQuoteSwap) {
-						const [suiOut, usdcLeft, deepLeft2] = tx.moveCall({
-							target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
-							typeArguments: [SUI_TYPE, swapInfo.type],
-							arguments: [
-								tx.object(swapInfo.pool),
-								tokenToSell,
-								deepFeeCoin,
-								tx.pure.u64(swapInfo.minSuiOut),
-								tx.object(CLOCK_OBJECT),
-							],
-						});
-						swappedSui = suiOut;
-						const leftovers = [usdcLeft, deepLeft2];
-						if (swapInfo.needsDeepFee) leftovers.push(tokenCoin);
-						tx.transferObjects(leftovers, connectedAddress);
-					} else {
-						const [tokenLeft, suiOut, deepLeft2] = tx.moveCall({
-							target: DEEPBOOK_PACKAGE + '::pool::swap_exact_base_for_quote',
-							typeArguments: [swapInfo.type, SUI_TYPE],
-							arguments: [
-								tx.object(swapInfo.pool),
-								tokenToSell,
-								deepFeeCoin,
-								tx.pure.u64(swapInfo.minSuiOut),
-								tx.object(CLOCK_OBJECT),
-							],
-						});
-						swappedSui = suiOut;
-						const leftovers = [tokenLeft, deepLeft2];
-						if (swapInfo.needsDeepFee) leftovers.push(tokenCoin);
-						tx.transferObjects(leftovers, connectedAddress);
-					}
-					tx.mergeCoins(tx.gas, [swappedSui]);
+					prependSwapToTx(tx, swapInfo, connectedAddress);
 				}
 
 				if (isNewFormat) {
@@ -3630,6 +3537,151 @@ export function generateProfilePage(
 		const SUI_FOR_DEEP_SWAP = 10_000_000n;
 		const MIN_DEEP_OUT = 500_000n;
 
+		function prependSwapToTx(tx, swapInfo, sender) {
+			let tokenCoin;
+			if (swapInfo.coins.length === 1) {
+				tokenCoin = tx.object(swapInfo.coins[0].coinObjectId);
+			} else {
+				tokenCoin = tx.object(swapInfo.coins[0].coinObjectId);
+				tx.mergeCoins(tokenCoin, swapInfo.coins.slice(1).map(c => tx.object(c.coinObjectId)));
+			}
+
+			const [tokenToSell] = tx.splitCoins(tokenCoin, [tx.pure.u64(swapInfo.amountToSell)]);
+
+			const [suiForDeep] = tx.splitCoins(tx.gas, [tx.pure.u64(SUI_FOR_DEEP_SWAP)]);
+			const [zeroDeep] = tx.moveCall({
+				target: '0x2::coin::zero',
+				typeArguments: [DEEP_TYPE],
+			});
+			const [deepFeeCoin, dsSuiLeft, dsDeepLeft] = tx.moveCall({
+				target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
+				typeArguments: [DEEP_TYPE, SUI_TYPE],
+				arguments: [
+					tx.object(DEEPBOOK_DEEP_SUI_POOL),
+					suiForDeep,
+					zeroDeep,
+					tx.pure.u64(MIN_DEEP_OUT),
+					tx.object(CLOCK_OBJECT),
+				],
+			});
+			tx.transferObjects([dsSuiLeft, dsDeepLeft], sender);
+
+			let swappedSui;
+			if (!swapInfo.isDirect) {
+				const [tokenLeft1, usdcOut, deepLeft1] = tx.moveCall({
+					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_base_for_quote',
+					typeArguments: [swapInfo.type, USDC_TYPE],
+					arguments: [
+						tx.object(swapInfo.usdcPoolAddress),
+						tokenToSell,
+						deepFeeCoin,
+						tx.pure.u64(0n),
+						tx.object(CLOCK_OBJECT),
+					],
+				});
+				const [suiOut, usdcLeft, deepLeft2] = tx.moveCall({
+					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
+					typeArguments: [SUI_TYPE, USDC_TYPE],
+					arguments: [
+						tx.object(DEEPBOOK_SUI_USDC_POOL),
+						usdcOut,
+						deepLeft1,
+						tx.pure.u64(swapInfo.minSuiOut),
+						tx.object(CLOCK_OBJECT),
+					],
+				});
+				swappedSui = suiOut;
+				tx.transferObjects([tokenLeft1, usdcLeft, deepLeft2, tokenCoin], sender);
+			} else if (swapInfo.suiIsBase) {
+				const [suiOut, tokenLeft, deepLeft2] = tx.moveCall({
+					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
+					typeArguments: [SUI_TYPE, swapInfo.type],
+					arguments: [
+						tx.object(swapInfo.pool),
+						tokenToSell,
+						deepFeeCoin,
+						tx.pure.u64(swapInfo.minSuiOut),
+						tx.object(CLOCK_OBJECT),
+					],
+				});
+				swappedSui = suiOut;
+				tx.transferObjects([tokenLeft, deepLeft2, tokenCoin], sender);
+			} else {
+				const [tokenLeft, suiOut, deepLeft2] = tx.moveCall({
+					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_base_for_quote',
+					typeArguments: [swapInfo.type, SUI_TYPE],
+					arguments: [
+						tx.object(swapInfo.pool),
+						tokenToSell,
+						deepFeeCoin,
+						tx.pure.u64(swapInfo.minSuiOut),
+						tx.object(CLOCK_OBJECT),
+					],
+				});
+				swappedSui = suiOut;
+				tx.transferObjects([tokenLeft, deepLeft2, tokenCoin], sender);
+			}
+			tx.mergeCoins(tx.gas, [swappedSui]);
+		}
+
+		async function findBestSwapForSui(suiClient, shortfallMist, sender) {
+			const pools = await fetch('/api/deepbook-pools').then(r => r.json()).catch(() => []);
+			if (!pools.length) return null;
+
+			const balanceChecks = pools.map(p =>
+				suiClient.getBalance({ owner: sender, coinType: p.coinType })
+					.catch(() => ({ totalBalance: '0' }))
+			);
+			const balances = await Promise.all(balanceChecks);
+
+			const candidates = [];
+			for (let i = 0; i < pools.length; i++) {
+				const pool = pools[i];
+				const bal = BigInt(balances[i].totalBalance);
+				if (bal <= 0n) continue;
+				const tokenAmount = Number(bal) / Math.pow(10, pool.decimals);
+				const suiValue = tokenAmount * pool.suiPerToken;
+				candidates.push({ pool, balance: bal, suiValue });
+			}
+
+			candidates.sort((a, b) => {
+				if (a.pool.isDirect && !b.pool.isDirect) return -1;
+				if (!a.pool.isDirect && b.pool.isDirect) return 1;
+				return b.suiValue - a.suiValue;
+			});
+
+			for (const candidate of candidates) {
+				const pool = candidate.pool;
+				const shortfallSui = Number(shortfallMist) / 1e9;
+				const tokensNeeded = shortfallSui / pool.suiPerToken;
+				const tokenMistNeeded = BigInt(Math.ceil(tokensNeeded * Math.pow(10, pool.decimals)));
+				const tokenMistWithBuffer = tokenMistNeeded * 130n / 100n;
+				const amountToSell = tokenMistWithBuffer > candidate.balance ? candidate.balance : tokenMistWithBuffer;
+
+				const expectedSui = Number(amountToSell) / Math.pow(10, pool.decimals) * pool.suiPerToken;
+				const minSuiOut = BigInt(Math.floor(expectedSui * 0.80 * 1e9));
+
+				if (minSuiOut <= 0n) continue;
+
+				const coins = await suiClient.getCoins({ owner: sender, coinType: pool.coinType });
+				if (!coins.data.length) continue;
+
+				return {
+					type: pool.coinType,
+					pool: pool.poolAddress,
+					name: pool.name,
+					coins: coins.data,
+					amountToSell,
+					minSuiOut,
+					needsDeepFee: true,
+					isDirect: pool.isDirect,
+					suiIsBase: pool.suiIsBase,
+					usdcPoolAddress: pool.usdcPoolAddress,
+				};
+			}
+			return null;
+		}
+
 		async function handleRenewal(yearsEl, btnEl, btnTextEl, btnLoadingEl, statusEl) {
 			const nftIdToUse = selectedRenewalNftId || NFT_ID;
 			const nameToExtend = selectedRenewalName || NAME;
@@ -3709,77 +3761,13 @@ export function generateProfilePage(
 				const suiBalRes = await suiClient.getBalance({ owner: connectedAddress, coinType: SUI_TYPE });
 				const suiAvailableForRenewal = BigInt(suiBalRes.totalBalance);
 
-				if (suiAvailableForRenewal < totalSuiNeededForRenewal && DEEPBOOK_SUI_USDC_POOL) {
-					if (statusEl) statusEl.textContent = 'Low SUI balance, checking USDC...';
-
-					const [usdcBalRes, usdcPriceData] = await Promise.all([
-						suiClient.getBalance({ owner: connectedAddress, coinType: USDC_TYPE }).catch(() => ({ totalBalance: '0' })),
-						fetch('/api/usdc-price').then(r => r.json()).catch(() => null),
-					]);
-
-					const usdcAvail = BigInt(usdcBalRes.totalBalance);
-					if (usdcAvail > 0n && usdcPriceData?.usdcPerSui > 0) {
-						const usdcShortfallMist = totalSuiNeededForRenewal - suiAvailableForRenewal;
-						const shortfallSui = Number(usdcShortfallMist) / 1e9;
-						const usdcTokensNeeded = shortfallSui * usdcPriceData.usdcPerSui;
-						const usdcMistNeeded = BigInt(Math.ceil(usdcTokensNeeded * 1e6));
-						const usdcMistWithBuffer = usdcMistNeeded + (usdcMistNeeded * 30n) / 100n;
-						const usdcToSell = usdcMistWithBuffer > usdcAvail ? usdcAvail : usdcMistWithBuffer;
-
-						const expectedSuiFromUsdc = Number(usdcToSell) / 1e6 / usdcPriceData.usdcPerSui;
-						const minSuiFromUsdc = BigInt(Math.floor(expectedSuiFromUsdc * 0.85 * 1e9));
-
-						if (minSuiFromUsdc > 0n) {
-							const usdcCoins = await suiClient.getCoins({ owner: connectedAddress, coinType: USDC_TYPE });
-							if (usdcCoins.data.length > 0) {
-								if (statusEl) statusEl.textContent = 'Swapping USDC for SUI...';
-
-								let usdcCoin;
-								if (usdcCoins.data.length === 1) {
-									usdcCoin = tx.object(usdcCoins.data[0].coinObjectId);
-								} else {
-									usdcCoin = tx.object(usdcCoins.data[0].coinObjectId);
-									tx.mergeCoins(usdcCoin, usdcCoins.data.slice(1).map(c => tx.object(c.coinObjectId)));
-								}
-
-								const [usdcToSwap] = tx.splitCoins(usdcCoin, [tx.pure.u64(usdcToSell)]);
-								tx.transferObjects([usdcCoin], connectedAddress);
-
-								// Buy DEEP for USDC swap fee
-								const [suiForUsdcDeepFee] = tx.splitCoins(tx.gas, [tx.pure.u64(SUI_FOR_DEEP_SWAP)]);
-								const [zeroDeepForUsdc] = tx.moveCall({
-									target: '0x2::coin::zero',
-									typeArguments: [DEEP_TYPE],
-								});
-								const [deepForUsdc, usdcDeepSuiLeft, usdcDeepDeepLeft] = tx.moveCall({
-									target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
-									typeArguments: [DEEP_TYPE, SUI_TYPE],
-									arguments: [
-										tx.object(DEEPBOOK_DEEP_SUI_POOL),
-										suiForUsdcDeepFee,
-										zeroDeepForUsdc,
-										tx.pure.u64(MIN_DEEP_OUT),
-										tx.object(CLOCK_OBJECT),
-									],
-								});
-								tx.transferObjects([usdcDeepSuiLeft, usdcDeepDeepLeft], connectedAddress);
-
-								// Swap USDC → SUI (quote → base in SUI/USDC pool)
-								const [suiFromUsdc, usdcLeftover, deepFromUsdcSwap] = tx.moveCall({
-									target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
-									typeArguments: [SUI_TYPE, USDC_TYPE],
-									arguments: [
-										tx.object(DEEPBOOK_SUI_USDC_POOL),
-										usdcToSwap,
-										deepForUsdc,
-										tx.pure.u64(minSuiFromUsdc),
-										tx.object(CLOCK_OBJECT),
-									],
-								});
-								tx.transferObjects([usdcLeftover, deepFromUsdcSwap], connectedAddress);
-								tx.mergeCoins(tx.gas, [suiFromUsdc]);
-							}
-						}
+				if (suiAvailableForRenewal < totalSuiNeededForRenewal) {
+					if (statusEl) statusEl.textContent = 'Low SUI balance, checking other tokens...';
+					const shortfallMist = totalSuiNeededForRenewal - suiAvailableForRenewal;
+					const swapInfo = await findBestSwapForSui(suiClient, shortfallMist, connectedAddress);
+					if (swapInfo) {
+						if (statusEl) statusEl.textContent = 'Swapping ' + swapInfo.name + ' for SUI...';
+						prependSwapToTx(tx, swapInfo, connectedAddress);
 					}
 				}
 
@@ -4302,12 +4290,8 @@ export function generateProfilePage(
 		}
 
 		async function fetchLinkedNames() {
-			// Use TARGET_ADDRESS to find names owned by the same wallet
-			// TARGET_ADDRESS is more reliable since OWNER_ADDRESS can be a Kiosk/wrapper object
-			const ownerAddr = TARGET_ADDRESS || OWNER_ADDRESS;
-			console.log('[LinkedNames] Fetching for address:', ownerAddr, '(TARGET_ADDRESS:', TARGET_ADDRESS, 'OWNER_ADDRESS:', OWNER_ADDRESS, ')');
-			if (!linkedNamesList || !ownerAddr) {
-				console.log('[LinkedNames] No address or list element');
+			const primaryAddr = TARGET_ADDRESS || OWNER_ADDRESS;
+			if (!linkedNamesList || !primaryAddr) {
 				if (linkedNamesList) {
 					linkedNamesList.innerHTML = '<div class="linked-names-empty">No address found</div>';
 				}
@@ -4316,14 +4300,39 @@ export function generateProfilePage(
 			}
 
 			try {
-				// Fetch all names owned by this address (grouped by target address)
-				const res = await fetch('/api/names/' + ownerAddr);
-				console.log('[LinkedNames] API response status:', res.status);
-				if (!res.ok) throw new Error('Failed to fetch: ' + res.status);
-				const data = await res.json();
-				console.log('[LinkedNames] Data:', data);
-				const grouped = data.grouped || {};
-				const names = data.names || [];
+				// Fetch names from both TARGET_ADDRESS and OWNER_ADDRESS if they differ
+				const addressesToQuery = [primaryAddr];
+				const secondaryAddr = (TARGET_ADDRESS && OWNER_ADDRESS && TARGET_ADDRESS !== OWNER_ADDRESS)
+					? OWNER_ADDRESS : null;
+				if (secondaryAddr) addressesToQuery.push(secondaryAddr);
+
+				const fetches = addressesToQuery.map(function(addr) {
+					return fetch('/api/names/' + addr).then(function(r) {
+						return r.ok ? r.json() : { names: [], grouped: {} };
+					}).catch(function() { return { names: [], grouped: {} }; });
+				});
+				const results = await Promise.all(fetches);
+
+				// Merge and deduplicate by nftId
+				const seenIds = {};
+				var names = [];
+				for (var ri = 0; ri < results.length; ri++) {
+					var rNames = results[ri].names || [];
+					for (var ni = 0; ni < rNames.length; ni++) {
+						var item = rNames[ni];
+						if (seenIds[item.nftId]) continue;
+						seenIds[item.nftId] = true;
+						names.push(item);
+					}
+				}
+
+				// Rebuild grouped from merged names
+				var grouped = {};
+				for (var gi = 0; gi < names.length; gi++) {
+					var gKey = names[gi].targetAddress || 'unset';
+					if (!grouped[gKey]) grouped[gKey] = [];
+					grouped[gKey].push(names[gi]);
+				}
 
 				if (linkedNamesCount) {
 					linkedNamesCount.textContent = names.length + ' name' + (names.length !== 1 ? 's' : '');
@@ -4494,51 +4503,51 @@ export function generateProfilePage(
 		const marketplaceBuyBtn = document.getElementById('marketplace-buy-btn');
 		const marketplaceBuyText = marketplaceBuyBtn?.querySelector('.marketplace-buy-text');
 		const marketplaceBuyLoading = marketplaceBuyBtn?.querySelector('.marketplace-buy-loading');
+		const marketplaceBidAmountInput = document.getElementById('marketplace-bid-amount');
+		const marketplacePlaceBidBtn = document.getElementById('marketplace-place-bid-btn');
+		const marketplaceBidText = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-text');
+		const marketplaceBidLoading = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-loading');
 		const marketplaceStatus = document.getElementById('marketplace-status');
 
 		let currentListing = null;
 
 		function updateMarketplaceButton() {
-			if (!marketplaceBuyBtn || !marketplaceBuyText || !currentListing) return;
-			const priceInSui = (currentListing.price / 1e9).toFixed(2);
-			if (connectedAddress) {
-				marketplaceBuyBtn.disabled = false;
-				marketplaceBuyText.textContent = 'Buy for ' + priceInSui + ' SUI';
-			} else {
-				marketplaceBuyBtn.disabled = true;
-				marketplaceBuyText.textContent = 'Connect Wallet to Buy';
+			if (marketplaceBuyBtn && marketplaceBuyText && currentListing) {
+				const priceInSui = (currentListing.price / 1e9).toFixed(2);
+				if (connectedAddress) {
+					marketplaceBuyBtn.disabled = false;
+					marketplaceBuyText.textContent = 'Buy for ' + priceInSui + ' SUI';
+				} else {
+					marketplaceBuyBtn.disabled = true;
+					marketplaceBuyText.textContent = 'Connect Wallet to Buy';
+				}
+			}
+			if (marketplacePlaceBidBtn) {
+				marketplacePlaceBidBtn.disabled = !connectedAddress;
 			}
 		}
 
 		async function fetchMarketplaceData() {
+			marketplaceCard.style.display = 'block';
+			updateMarketplaceButton();
 			try {
 				const response = await fetch('/api/marketplace/' + NAME);
 				if (!response.ok) return;
 				const data = await response.json();
 
-				if (data.bestListing || data.bestBid) {
-					marketplaceCard.style.display = 'block';
+				if (data.bestListing && data.bestListing.price) {
+					currentListing = data.bestListing;
+					const priceInSui = (data.bestListing.price / 1e9).toFixed(2);
+					marketplaceListingPrice.textContent = priceInSui + ' SUI';
+					marketplaceListingRow.style.display = 'flex';
+					marketplaceBuyBtn.style.display = 'block';
+					updateMarketplaceButton();
+				}
 
-					if (data.bestListing && data.bestListing.price) {
-						currentListing = data.bestListing;
-						const priceInSui = (data.bestListing.price / 1e9).toFixed(2);
-						marketplaceListingPrice.textContent = priceInSui + ' SUI';
-						marketplaceListingRow.style.display = 'flex';
-						marketplaceBuyBtn.style.display = 'block';
-						if (connectedAddress) {
-							marketplaceBuyBtn.disabled = false;
-							marketplaceBuyText.textContent = 'Buy for ' + priceInSui + ' SUI';
-						} else {
-							marketplaceBuyBtn.disabled = true;
-							marketplaceBuyText.textContent = 'Connect Wallet to Buy';
-						}
-					}
-
-					if (data.bestBid && data.bestBid.price) {
-						const bidInSui = (data.bestBid.price / 1e9).toFixed(2);
-						marketplaceBidPrice.textContent = bidInSui + ' SUI';
-						marketplaceBidRow.style.display = 'flex';
-					}
+				if (data.bestBid && data.bestBid.price) {
+					const bidInSui = (data.bestBid.price / 1e9).toFixed(2);
+					marketplaceBidPrice.textContent = bidInSui + ' SUI';
+					marketplaceBidRow.style.display = 'flex';
 				}
 			} catch (e) {
 				console.log('Marketplace fetch failed:', e);
@@ -4556,6 +4565,10 @@ export function generateProfilePage(
 		const TRADEPORT_LISTINGS_PACKAGE = '0x6cfe7388ccf732432906d7faebcc33fd91e11d4c2f8cb3ae0082b8d3269e3d5b';
 		const TRADEPORT_COMMISSION_BPS = 300;
 		const SUINS_REGISTRATION_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration';
+		const TRADEPORT_MULTI_BID_PACKAGE = '0x63ce6caee2ba264e92bca2d160036eb297d99b2d91d4db89d48a9bffca66e55b';
+		const TRADEPORT_MULTI_BID_STORE = '0x8aaed7e884343fb8b222c721d02eaac2c6ae2abbb4ddcdf16cb55cf8754ee860';
+		const TRADEPORT_MULTI_BID_STORE_VERSION = '572206387';
+		const TRADEPORT_BID_FEE_BPS = 300;
 
 		if (marketplaceBuyBtn) {
 			marketplaceBuyBtn.addEventListener('click', async () => {
@@ -4689,6 +4702,116 @@ export function generateProfilePage(
 					marketplaceBuyBtn.disabled = false;
 					marketplaceBuyText.classList.remove('hidden');
 					marketplaceBuyLoading.classList.add('hidden');
+				}
+			});
+		}
+
+		if (marketplacePlaceBidBtn) {
+			marketplacePlaceBidBtn.addEventListener('click', async () => {
+				if (!connectedAddress || !connectedWallet) {
+					marketplaceStatus.textContent = 'Connect wallet first';
+					marketplaceStatus.className = 'marketplace-status error';
+					return;
+				}
+
+				const bidAmountSui = parseFloat(marketplaceBidAmountInput?.value);
+				if (!bidAmountSui || bidAmountSui <= 0) {
+					marketplaceStatus.textContent = 'Enter a valid bid amount';
+					marketplaceStatus.className = 'marketplace-status error';
+					return;
+				}
+
+				if (!NFT_ID) {
+					marketplaceStatus.textContent = 'No NFT found for this name';
+					marketplaceStatus.className = 'marketplace-status error';
+					return;
+				}
+
+				marketplacePlaceBidBtn.disabled = true;
+				marketplaceBidText.classList.add('hidden');
+				marketplaceBidLoading.classList.remove('hidden');
+				marketplaceStatus.textContent = 'Building transaction...';
+				marketplaceStatus.className = 'marketplace-status';
+
+				try {
+					const bidMist = Math.ceil(bidAmountSui * 1e9);
+					const feeMist = Math.ceil(bidMist * TRADEPORT_BID_FEE_BPS / 10000);
+					const totalMist = bidMist + feeMist;
+
+					const tx = new Transaction();
+					tx.setSender(connectedAddress);
+
+					const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalMist)]);
+
+					const multiBidStoreRef = tx.sharedObjectRef({
+						objectId: TRADEPORT_MULTI_BID_STORE,
+						initialSharedVersion: TRADEPORT_MULTI_BID_STORE_VERSION,
+						mutable: true,
+					});
+
+					tx.moveCall({
+						target: TRADEPORT_MULTI_BID_PACKAGE + '::tradeport_biddings::create_bid_without_transfer_policy',
+						typeArguments: [SUINS_REGISTRATION_TYPE],
+						arguments: [
+							multiBidStoreRef,
+							tx.pure.u64(1),
+							tx.pure.option('address', null),
+							tx.pure.option('address', NFT_ID),
+							tx.pure.option('vector<u8>', null),
+							tx.pure.option('u64', null),
+							tx.pure.u64(bidMist),
+							paymentCoin,
+						],
+					});
+
+					marketplaceStatus.textContent = 'Waiting for wallet...';
+
+					const signExecFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction'];
+					const signExecBlockFeature = connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
+
+					let result;
+					if (signExecFeature?.signAndExecuteTransaction) {
+						result = await signExecFeature.signAndExecuteTransaction({
+							transaction: tx,
+							account: connectedAccount,
+							chain: 'sui:mainnet',
+							options: { showEffects: true },
+						});
+					} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+						result = await signExecBlockFeature.signAndExecuteTransactionBlock({
+							transactionBlock: tx,
+							account: connectedAccount,
+							chain: 'sui:mainnet',
+							options: { showEffects: true },
+						});
+					} else {
+						throw new Error('Wallet does not support transaction signing');
+					}
+
+					const digest = result.digest || result.result?.digest || '';
+					if (digest) {
+						const suiscanUrl = 'https://suiscan.xyz/mainnet/tx/' + digest;
+						marketplaceStatus.innerHTML = 'Bid placed! <a href="' + suiscanUrl + '" target="_blank" style="color: var(--accent);">View tx</a>';
+						marketplaceStatus.className = 'marketplace-status success';
+						marketplaceBidAmountInput.value = '';
+						fetchMarketplaceData();
+					} else {
+						marketplaceStatus.textContent = 'Bid submitted';
+						marketplaceStatus.className = 'marketplace-status success';
+					}
+				} catch (e) {
+					console.error('Bid transaction failed:', e);
+					const msg = e.message || 'Transaction failed';
+					if (msg.includes('rejected') || msg.includes('cancelled')) {
+						marketplaceStatus.textContent = 'Transaction cancelled';
+					} else {
+						marketplaceStatus.textContent = 'Failed: ' + msg.slice(0, 100);
+					}
+					marketplaceStatus.className = 'marketplace-status error';
+				} finally {
+					marketplacePlaceBidBtn.disabled = !connectedAddress;
+					marketplaceBidText.classList.remove('hidden');
+					marketplaceBidLoading.classList.add('hidden');
 				}
 			});
 		}
@@ -5257,4 +5380,3 @@ function selectProfileImage(record: SuiNSRecord, hostname?: string): string | un
 	}
 	return undefined
 }
-
