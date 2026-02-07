@@ -1,6 +1,7 @@
 import type { Env, SuiNSRecord } from '../types'
-import { getProfileOgImageUrl, getTwitterFallbackImage } from '../utils/og-image'
+import { generateLogoSvg, getDefaultOgImageUrl, getProfileOgImageUrl } from '../utils/og-image'
 import { normalizeMediaUrl, renderSocialMeta } from '../utils/social'
+import { generateWalletCookieJs } from '../utils/wallet-cookie'
 import { profileStyles } from './profile.css'
 
 export interface ProfilePageOptions {
@@ -42,9 +43,14 @@ export function generateProfilePage(
 		network === 'mainnet' ? 'https://suiscan.xyz/mainnet' : `https://suiscan.xyz/${network}`
 	const explorerUrl = `${explorerBase}/account/${record.address}`
 	const nftExplorerUrl = record.nftId ? `${explorerBase}/object/${record.nftId}` : ''
+	const initialPortfolioAddress = record.ownerAddress || record.address || ''
+	const tradeportPortfolioUrl = initialPortfolioAddress
+		? `https://www.tradeport.xyz/sui/${encodeURIComponent(initialPortfolioAddress)}?tab=items&bottomTab=trades&collectionFilter=suins`
+		: 'https://www.tradeport.xyz/sui?tab=items&bottomTab=trades&collectionFilter=suins'
 
 	const cleanName = name.replace(/\.sui$/i, '').toLowerCase()
 	const fullName = `${cleanName}.sui`
+	const profileDomain = `${cleanName}.sui.ski`
 	const expiresMs = record.expirationTimestampMs
 		? (() => {
 				const num = Number(record.expirationTimestampMs)
@@ -89,20 +95,23 @@ export function generateProfilePage(
 		? `\n\t<link rel="canonical" href="${escapeHtml(canonicalUrl)}">`
 		: ''
 	const canonicalOrigin = getOriginFromCanonical(canonicalUrl, options.hostname)
+	const rootOrigin = getRootOrigin(canonicalOrigin)
 	const metaDescription =
 		(options.description && options.description.trim().length > 0
 			? options.description
-			: buildProfileDescription(fullName, record)) || `${fullName} on Sui`
+			: buildProfileDescription(profileDomain, record)) || `${fullName} on Sui`
 	const userAvatar = options.image || selectProfileImage(record, options.hostname)
-	const previewImage = userAvatar || getProfileOgImageUrl(canonicalOrigin, fullName)
-	const twitterPreview = userAvatar || getTwitterFallbackImage()
+	const suinsPreviewImage = getSuinsNftPreviewUrl(rootOrigin, cleanName, expiresMs)
+	const previewImage =
+		userAvatar || suinsPreviewImage || getProfileOgImageUrl(canonicalOrigin, fullName)
+	const twitterPreview = userAvatar || getDefaultOgImageUrl(rootOrigin)
 	const socialMeta = `\n${renderSocialMeta({
-		title: `${fullName} | sui.ski`,
+		title: `${profileDomain} | sui.ski`,
 		description: metaDescription,
 		url: canonicalUrl,
 		siteName: 'sui.ski',
 		image: previewImage,
-		imageAlt: `${fullName} profile on sui.ski`,
+		imageAlt: `${profileDomain} profile on sui.ski`,
 		imageWidth: 1200,
 		imageHeight: 630,
 		twitterImage: twitterPreview,
@@ -122,42 +131,55 @@ export function generateProfilePage(
 	<style>${profileStyles}</style>
 </head>
 <body>
-	<!-- Global Wallet Widget (Fixed Position) -->
-	<div class="global-wallet-widget" id="global-wallet-widget">
-		<button class="global-wallet-btn" id="global-wallet-btn">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-				<line x1="1" y1="10" x2="23" y2="10"></line>
-			</svg>
-			<span id="global-wallet-text">Connect</span>
-			<svg class="global-wallet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<polyline points="6 9 12 15 18 9"></polyline>
-			</svg>
-		</button>
-		<div class="global-wallet-dropdown" id="global-wallet-dropdown">
-			<!-- Populated by JS -->
-		</div>
-	</div>
+	<!-- Home Button -->
+	<a class="home-btn" href="https://sui.ski" title="sui.ski home">
+		${generateLogoSvg(28)}
+	</a>
 
-	<div class="container">
-		<div class="page-layout">
-			<div class="main-content">
-				<div class="tab-panel active" id="tab-overview">
-					<div class="card">
-			<div class="profile-hero">
+	<!-- Wallet Widget (Shared with landing page component) -->
+	<div class="wallet-widget" id="wallet-widget">
+		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile">
+			${generateLogoSvg(18)}
+		</button>
+		<button class="wallet-btn" id="wallet-btn">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/>
+				<path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
+			</svg>
+			<span id="wallet-btn-text">Connect</span>
+		</button>
+	</div>
+	<div class="wallet-menu" id="wallet-menu"></div>
+
+		<div class="container">
+			<div class="page-layout">
+				<div class="main-content">
+					<div class="tab-panel active" id="tab-overview">
+						<div class="card">
+				<div class="overview-primary-row">
+				<div class="profile-hero">
 				<div class="identity-card">
 					<div class="identity-visual" id="identity-visual">
 						<canvas id="qr-canvas"></canvas>
-						<button class="identity-qr-toggle" id="qr-toggle" title="Toggle QR code">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
-						</button>
 					</div>
 					<div class="identity-name-wrapper">
-						<div class="identity-name" id="identity-name" title="Click to copy">${escapeHtml(cleanName)}.sui.ski</div>
+						<button class="identity-action-btn" id="qr-toggle" title="Show QR code">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
+						</button>
+						<div class="identity-name" id="identity-name" title="Click to copy">${escapeHtml(cleanName)}.sui</div>
+						<button class="identity-action-btn" id="identity-download-btn" title="Save image">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+						</button>
+						<button class="identity-action-btn" id="identity-restore-btn" title="Restore NFT visual">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.5 9A9 9 0 0 1 18.9 5.3L23 10"></path><path d="M20.5 15a9 9 0 0 1-15.4 3.7L1 14"></path></svg>
+						</button>
 					</div>
 				</div>
 				<div class="hero-main">
 					<div class="wallet-bar" id="wallet-bar">
+						<a class="wallet-home-btn" href="https://sui.ski" title="sui.ski home">
+							${generateLogoSvg(18)}
+						</a>
 						<button class="search-btn" id="search-btn" title="Search SuiNS names (Press /)">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<circle cx="11" cy="11" r="8"></circle>
@@ -166,102 +188,173 @@ export function generateProfilePage(
 							<span>Search...</span>
 							<kbd>/</kbd>
 						</button>
-						<span class="badge network">${network}</span>
 					</div>
-					<div class="header">
+						<div class="header">
 						<div class="header-top">
-							<h1>${
-								record.walrusSiteId
-									? `<a href="/" class="name-site-link" title="View Walrus site">${escapeHtml(cleanName)}<span class="suffix">.sui</span><svg class="site-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></a>`
-									: `${escapeHtml(cleanName)}<span class="suffix">.sui</span>`
-							}</h1>
-							${
-								daysToExpire !== null
-									? `<span class="badge expiry${daysToExpire <= 0 ? ' danger' : daysToExpire <= 7 ? ' danger' : daysToExpire <= 90 ? ' warning' : daysToExpire > 365 ? ' premium' : ''}">${
-											daysToExpire <= 0
-												? 'Expired'
-												: daysToExpire > 365
-													? `${Math.floor(daysToExpire / 365)}y ${daysToExpire % 365}d`
-													: `${daysToExpire}d left`
-										}</span>`
-									: ''
-							}
-						</div>
-						<div class="header-meta">
-							<div class="header-meta-item">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-								${expiresAt ? `Expires ${expiresAt.toLocaleDateString()}` : 'No expiration'}
+							<div class="header-name-wrap">
+								<h1>${
+									record.walrusSiteId
+										? `<a href="/" class="name-site-link" title="View Walrus site">${escapeHtml(cleanName)}<span class="suffix">.sui</span><svg class="site-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></a>`
+										: `${escapeHtml(cleanName)}<span class="suffix">.sui</span>`
+								}</h1>
+								<button class="owner-primary-star header-primary-star hidden" id="owner-primary-star" title="Set as primary name" aria-label="Set as primary name">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+									</svg>
+								</button>
 							</div>
-							<div class="header-meta-item">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-								<a href="https://${escapeHtml(cleanName)}.sui.ski" target="_blank">${escapeHtml(cleanName)}.sui.ski</a>
+								${
+									daysToExpire !== null
+										? `<span class="badge expiry${daysToExpire <= 0 ? ' danger' : daysToExpire <= 7 ? ' danger' : daysToExpire <= 90 ? ' warning' : daysToExpire > 365 ? ' premium' : ''}">
+											<span class="expiry-badge-text">${
+												daysToExpire <= 0
+													? 'Expired'
+													: daysToExpire > 365
+														? `${Math.floor(daysToExpire / 365)}y ${daysToExpire % 365}d`
+														: `${daysToExpire}d left`
+											}</span>
+											${
+												daysToExpire > 0
+													? `<button type="button" class="expiry-quick-renew-btn" id="expiry-quick-renew-btn" title="Quick renew (180d if available, else 365d)" aria-label="Quick renew">+</button>`
+													: ''
+											}
+										</span>`
+										: ''
+								}
+								${
+									expiresAt
+										? `<span class="header-top-expiry-date">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+											Expires ${expiresAt.toLocaleDateString()}
+										</span>`
+										: ''
+								}
+								<span class="badge jacketed hidden" id="jacketed-badge" title="This name is listed in a decay auction">
+									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+									Jacketed
+								</span>
 							</div>
-							${record.nftId ? `<a href="${escapeHtml(nftExplorerUrl)}" target="_blank" class="header-meta-item" style="color:var(--accent);text-decoration:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>View NFT</a>` : ''}
-							<a href="${explorerBase}/account/@${escapeHtml(cleanName)}/portfolio" target="_blank" class="header-meta-item" style="color:var(--accent);text-decoration:none;" title="View all SuiNS names owned by @${escapeHtml(cleanName)}">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"></path></svg>
-								View Portfolio
-							</a>
+							<div class="header-meta">
+									<div class="header-meta-item target-meta-item">
+										<div class="target-preview" id="target-preview">
+											<button type="button" class="target-preview-copy-btn" id="copy-target-address-btn" title="Copy target address" aria-label="Copy target address">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M12 3v18M19 12a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"></path></svg>
+											</button>
+											<span class="target-preview-value" id="target-preview-value"></span>
+											<button class="edit-btn target-self-btn hidden" id="set-self-btn" title="Set target to my address" aria-label="Set target to my address">Self</button>
+											<button class="target-preview-edit-btn hidden" id="edit-address-btn" title="Edit target address" aria-label="Edit target address">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+											</button>
+										</div>
+										<button class="send-btn target-send-btn" id="send-sui-btn" title="Send SUI to this profile target">
+											<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4z"></path><path d="M22 2 11 13"></path></svg>
+											<span>Send</span>
+									</button>
+								</div>
+								<div class="header-meta-item">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+									<a href="https://${escapeHtml(cleanName)}.sui.ski" target="_blank">${escapeHtml(cleanName)}.sui.ski</a>
+								</div>
+								${record.nftId ? `<a href="${escapeHtml(nftExplorerUrl)}" target="_blank" class="header-meta-item" style="color:var(--accent);text-decoration:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>View NFT</a>` : ''}
+								<a href="${escapeHtml(tradeportPortfolioUrl)}" target="_blank" id="view-portfolio-link" class="header-meta-item" style="color:var(--accent);text-decoration:none;" title="View all SuiNS names on TradePort">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"></path></svg>
+									View Portfolio
+								</a>
+							</div>
 						</div>
-					</div>
-					<div class="owner-display">
-						<div class="owner-info" id="owner-info">
-							<span class="owner-label">Owner</span>
-							<span class="owner-name" id="addr-name"></span>
-							<span class="owner-addr" id="addr-text">${escapeHtml(record.address.slice(0, 8))}...${escapeHtml(record.address.slice(-6))}</span>
-							<svg class="visit-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polyline points="9 18 15 12 9 6"></polyline></svg>
-						</div>
-						<div class="owner-actions">
-							<button class="message-btn" id="quick-message-btn" title="Send encrypted message to @${escapeHtml(cleanName)}.sui">
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-								<span>Message</span>
-							</button>
-							<button class="copy-btn" id="copy-address-btn" title="Copy address">
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-							</button>
-							<button class="edit-btn hidden" id="set-self-btn" title="Set to my address">Self</button>
-							<button class="edit-btn hidden" id="set-primary-btn" title="Set as your primary name">Primary</button>
-							<button class="edit-btn" id="edit-address-btn">Edit</button>
-						</div>
-					</div>
-				</div>
-			</div>
 
-			<!-- Marketplace Card (under owner) -->
-			<div class="card marketplace-card" id="marketplace-card" style="display:none;">
-				<div class="marketplace-header">
-					<div class="marketplace-title">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<circle cx="9" cy="21" r="1"></circle>
-							<circle cx="20" cy="21" r="1"></circle>
-							<path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
-						</svg>
-						<span>Marketplace</span>
-					</div>
-					<a href="https://tradeport.xyz/sui/collection/suins?search=${escapeHtml(cleanName)}" target="_blank" class="marketplace-link">View on Tradeport</a>
-				</div>
-				<div class="marketplace-body">
-					<div class="marketplace-row" id="marketplace-listing-row" style="display:none;">
-						<span class="marketplace-label">Listed for</span>
-						<span class="marketplace-value listing-price" id="marketplace-listing-price">--</span>
-					</div>
-					<div class="marketplace-row" id="marketplace-bid-row" style="display:none;">
-						<span class="marketplace-label">Best offer</span>
-						<span class="marketplace-value bid-price" id="marketplace-bid-price">--</span>
-					</div>
-					<button class="marketplace-buy-btn" id="marketplace-buy-btn" style="display:none;" disabled>
-						<span class="marketplace-buy-text">Buy Now</span>
-						<span class="marketplace-buy-loading hidden"><span class="loading"></span></span>
-					</button>
-					<div class="marketplace-bid-input">
-						<input type="number" id="marketplace-bid-amount" placeholder="Bid amount (SUI)" step="0.01" min="0.01">
-						<button class="marketplace-bid-btn" id="marketplace-place-bid-btn" disabled>
-							<span class="marketplace-bid-text">Place Bid</span>
-							<span class="marketplace-bid-loading hidden"><span class="loading"></span></span>
+						<div class="overview-module linked-owner-row">
+						<div class="owner-display linked-owner-card">
+							<div class="owner-info" id="owner-info">
+								<span class="owner-label">Owner:</span>
+								<span class="owner-name" id="addr-name"></span>
+								<span class="owner-addr" id="addr-text">${escapeHtml(record.address.slice(0, 6))}...${escapeHtml(record.address.slice(-4))}</span>
+								<button class="copy-btn owner-copy-btn" id="copy-address-btn" title="Copy owner address" aria-label="Copy owner address">
+									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+								</button>
+								<svg class="visit-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+							</div>
+							<div class="owner-actions">
+								<button class="edit-btn hidden" id="jacket-btn" title="List for decay auction">Jacket</button>
+							</div>
+						</div>
+						<div id="owner-inline-status" class="status owner-inline-status linked-owner-status hidden"></div>
+						<div class="linked-controls-module">
+						<div class="linked-names-section" id="linked-names-section">
+						<div class="linked-names-header">
+							<span class="linked-names-title">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+								<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+							</svg>
+								Linked Names
+							</span>
+					<div class="linked-names-sort" id="linked-names-sort" style="display:none;">
+						<button type="button" class="linked-sort-pill active" data-sort="address">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+							Address
+						</button>
+						<button type="button" class="linked-sort-pill" data-sort="expiry">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+							Expiry
+						</button>
+						<button type="button" class="linked-sort-pill" data-sort="price">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+							Price
 						</button>
 					</div>
-					<div class="marketplace-status" id="marketplace-status"></div>
-				</div>
+						<span class="linked-names-count" id="linked-names-count">Loading...</span>
+					</div>
+					<div class="linked-names-filter" id="linked-names-filter" style="display:none;">
+						<label for="linked-names-filter-input" class="visually-hidden">Filter linked names</label>
+						<input
+							type="text"
+							id="linked-names-filter-input"
+							class="linked-names-filter-input"
+							placeholder="Filter names (partial or fuzzy)..."
+							autocomplete="off"
+							spellcheck="false"
+						/>
+						<button type="button" class="linked-filter-clear" id="linked-filter-clear" aria-label="Clear linked name filter">Clear</button>
+					</div>
+						</div>
+						</div>
+						</div>
+						</div>
+						</div>
+
+			${
+			options.inGracePeriod
+				? `
+		<div class="grace-period-card">
+			<div class="grace-period-header">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+					<circle cx="12" cy="12" r="10"></circle>
+					<polyline points="12 6 12 12 16 14"></polyline>
+				</svg>
+				<span>Grace Period</span>
 			</div>
+			<div class="grace-period-body">
+				<div class="grace-period-info">
+					<span class="grace-period-message" id="grace-period-message">This name expired and is in grace period.</span>
+					<span class="grace-period-countdown" id="grace-period-countdown">Available for registration in <strong id="days-until-available">--</strong> days</span>
+				</div>
+				<button class="burn-nft-btn hidden" id="burn-nft-btn">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+						<polyline points="3 6 5 6 21 6"></polyline>
+						<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+						<line x1="10" y1="11" x2="10" y2="17"></line>
+						<line x1="14" y1="11" x2="14" y2="17"></line>
+					</svg>
+					<span id="burn-nft-text">Burn NFT & Release Name</span>
+					<span class="burn-nft-loading hidden"><span class="loading"></span></span>
+				</button>
+				<div class="grace-period-status hidden" id="grace-period-burn-status"></div>
+			</div>
+		</div>
+		`
+				: ''
+		}
 
 			${
 				record.contentHash || record.walrusSiteId
@@ -288,79 +381,183 @@ export function generateProfilePage(
 						: ''
 				}
 			</div>
-			`
+				`
 					: ''
 			}
 
-			<!-- Renewal Card (full width) -->
+				<div class="overview-secondary-grid" id="overview-secondary-grid">
+				<div class="overview-module side-rail-module">
+				<div class="renewal-module">
+			<!-- Renewal Card -->
 			<div class="card renewal-card" id="overview-renewal-card" data-expires-ms="${safeNumber(expiresMs)}" data-current-name="${escapeHtml(cleanName)}">
 				<div class="renewal-card-header">
-					<div class="renewal-card-title">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path d="M23 4v6h-6"></path>
-							<path d="M1 20v-6h6"></path>
-							<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-						</svg>
-						<span>Extend Registration</span>
-					</div>
-					<div class="renewal-selected-name" id="renewal-selected-name">
-						<span class="renewal-name-label">Extending:</span>
-						<span class="renewal-name-value" id="renewal-name-value">${escapeHtml(cleanName)}.sui</span>
+					<div class="renewal-card-title-row">
+						<div class="renewal-card-title">
+							<span class="renewal-icon-emoji" aria-hidden="true">💸</span>
+							<span class="renewal-title-label">Renewal</span>
+							<span class="renewal-savings-inline renewal-savings-header" id="overview-renewal-savings" style="display:none;">
+								<span id="overview-renewal-savings-text">24% discount</span>
+								<span id="overview-renewal-savings-sui"></span>
+							</span>
+						</div>
+						<div class="renewal-price-values renewal-header-price">
+							<span class="renewal-price-value" id="overview-renewal-price">-- SUI</span>
+							<span class="renewal-price-meta">${
+								expiresAt
+									? `<span class="renewal-expiry-date" id="renewal-expiry-date">${new Date(expiresAt.getTime() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span><span class="renewal-price-usd renewal-price-usd-row" id="overview-renewal-price-usd"></span>`
+									: `<span class="renewal-price-usd renewal-price-usd-row" id="overview-renewal-price-usd"></span>`
+							}</span>
+						</div>
 					</div>
 				</div>
 				<div class="renewal-card-body">
-					<div class="renewal-compact-row">
-						<div class="renewal-info-stack">
-							${
-								expiresAt
-									? `<div class="renewal-expiry-compact">
-								<span class="renewal-expiry-label" id="renewal-expiry-label">New expiry</span>
-								<span class="renewal-expiry-date" id="renewal-expiry-date">${new Date(expiresAt.getTime() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-								<span class="renewal-countdown" id="renewal-countdown"></span>
-							</div>`
-									: ''
-							}
-							<div class="renewal-price-compact">
-								<span class="renewal-price-value" id="overview-renewal-price">-- SUI</span>
-								<span class="renewal-savings-inline" id="overview-renewal-savings" style="display:none;">
-									<span id="overview-renewal-savings-text">Save 25%</span>
-								</span>
-							</div>
-						</div>
+					<div class="renewal-price-row">
+						<span class="renewal-countdown renewal-countdown-row" id="renewal-countdown"></span>
 						<div class="renewal-duration-stepper">
 							<button type="button" class="stepper-btn stepper-minus" id="renewal-years-minus">−</button>
 							<span class="stepper-value" id="overview-renewal-years" data-value="1">1 yr</span>
 							<button type="button" class="stepper-btn stepper-plus" id="renewal-years-plus">+</button>
 						</div>
 					</div>
-					<button class="renewal-btn" id="overview-renewal-btn" disabled>
-						<span class="renewal-btn-text">Connect Wallet to Extend</span>
-						<span class="renewal-btn-loading hidden">
-							<span class="loading"></span>
-						</span>
-					</button>
+					<div class="renewal-controls-row">
+						<button class="renewal-btn" id="overview-renewal-btn">
+							<span class="renewal-btn-text">Connect Wallet</span>
+							<span class="renewal-btn-loading hidden">
+								<span class="loading"></span>
+							</span>
+						</button>
+					</div>
 					<div class="renewal-status" id="overview-renewal-status"></div>
 				</div>
 			</div>
 
-			<!-- Linked Names Section -->
-			<div class="linked-names-section" id="linked-names-section">
-				<div class="linked-names-header">
-					<span class="linked-names-title">
+				</div>
+
+					<div class="side-rail-market" id="overview-market-module" style="display:none;">
+				<!-- Marketplace Card -->
+				<div class="card marketplace-card" id="marketplace-card" style="display:none;">
+				<div class="marketplace-header">
+					<div class="marketplace-title">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-							<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+							<circle cx="9" cy="21" r="1"></circle>
+							<circle cx="20" cy="21" r="1"></circle>
+							<path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
 						</svg>
-						Linked Names
-					</span>
-					<span class="linked-names-count" id="linked-names-count">Loading...</span>
+						<span>Marketplace</span>
+						<a href="${record.nftId ? `https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=${escapeHtml(record.nftId)}&modalSlug=suins&nav=1` : `https://www.tradeport.xyz/sui/collection/suins?search=${escapeHtml(cleanName)}`}" target="_blank" class="marketplace-link">Tradeport</a>
+					</div>
 				</div>
-				<div class="linked-names-list" id="linked-names-list">
-					<div class="linked-names-loading"><span class="loading"></span> Fetching linked names...</div>
+				<div class="marketplace-body">
+					<div class="marketplace-stats-row" id="marketplace-stats-row" style="display:none;">
+						<span class="marketplace-stat"><span class="marketplace-stat-label">Floor</span><span class="marketplace-stat-value" id="marketplace-floor-price">--</span></span>
+						<span class="marketplace-stat"><span class="marketplace-stat-label">Volume</span><span class="marketplace-stat-value" id="marketplace-volume">--</span></span>
+					</div>
+					<div class="marketplace-row" id="marketplace-listing-row" style="display:none;">
+						<span class="marketplace-label">Listed for</span>
+						<span class="marketplace-value listing-price" id="marketplace-listing-price">--</span>
+					</div>
+						<div class="marketplace-row" id="marketplace-bid-row" style="display:none;">
+							<span class="marketplace-bid-meta">
+								<span class="marketplace-label">Bid</span>
+								<a
+									class="marketplace-bidder"
+									id="marketplace-bidder"
+									href="https://sui.ski"
+									target="_blank"
+									rel="noopener noreferrer"
+								>--</a>
+							</span>
+						<span class="marketplace-value bid-price" id="marketplace-bid-price">--</span>
+						<button class="marketplace-accept-bid-btn" id="marketplace-accept-bid-btn" style="display:none;" disabled>
+							<span class="marketplace-accept-text">Accept</span>
+							<span class="marketplace-accept-loading hidden"><span class="loading"></span></span>
+						</button>
+					</div>
+						<button class="marketplace-buy-btn" id="marketplace-buy-btn" style="display:none;" disabled>
+							<span class="marketplace-buy-text">Buy Now</span>
+							<span class="marketplace-buy-loading hidden"><span class="loading"></span></span>
+						</button>
+						<div class="marketplace-bid-input" id="marketplace-bid-input">
+							<div class="marketplace-bid-price-control">
+										<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-down" aria-label="Decrease bid by 1 SUI">-</button>
+								<input type="text" id="marketplace-bid-amount" placeholder="Bid amount" inputmode="numeric" pattern="[0-9]*">
+								<span class="marketplace-bid-currency">SUI</span>
+								<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-up" aria-label="Increase bid by 1 SUI">+</button>
+							</div>
+							<button class="marketplace-bid-btn" id="marketplace-place-bid-btn" disabled>
+								<span class="marketplace-bid-text">Place Bid</span>
+								<span class="marketplace-bid-loading hidden"><span class="loading"></span></span>
+							</button>
+						</div>
+						<div class="marketplace-bid-estimate" id="marketplace-bid-estimate"></div>
+						<div class="marketplace-list-input" id="marketplace-list-input" style="display:none;">
+							<div class="marketplace-list-top-row">
+								<div class="marketplace-list-price-control">
+										<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-down" aria-label="Decrease list price by 1 SUI">-</button>
+									<input type="text" id="marketplace-list-amount" placeholder="12" inputmode="numeric" pattern="[0-9]*">
+									<span class="marketplace-list-currency">SUI</span>
+									<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-up" aria-label="Increase list price by 1 SUI">+</button>
+								</div>
+								<div class="marketplace-list-estimate" id="marketplace-list-estimate"></div>
+							</div>
+							<button class="marketplace-list-btn" id="marketplace-list-btn" style="display:none;" disabled>
+								<span class="marketplace-list-text">List ${escapeHtml(cleanName)}.sui</span>
+								<span class="marketplace-list-loading hidden"><span class="loading"></span></span>
+							</button>
+						</div>
+					<div class="marketplace-status" id="marketplace-status"></div>
+					<div class="marketplace-activity" id="marketplace-activity" style="display:none;">
+						<div class="marketplace-activity-header">
+							<span>Activity</span>
+							<a href="${record.nftId ? `https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=${escapeHtml(record.nftId)}&modalSlug=suins&nav=1` : `https://www.tradeport.xyz/sui/collection/suins?search=${escapeHtml(cleanName)}`}" target="_blank" id="marketplace-activity-link" class="marketplace-activity-link">TradePort</a>
+						</div>
+						<div class="marketplace-activity-list" id="marketplace-activity-list">
+							<div class="marketplace-activity-empty">Loading activity...</div>
+						</div>
+					</div>
 				</div>
-				<div class="linked-names-hint">Click name to view profile · Click + to extend</div>
 			</div>
-				</div><!-- end tab-overview -->
+			<!-- Auction Card -->
+			<div class="card auction-card" id="auction-card" style="display:none;">
+				<div class="auction-header">
+					<div class="auction-title">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+							<polyline points="17 6 23 6 23 12"></polyline>
+						</svg>
+						<span>Decay Auction</span>
+						<span class="auction-seller-label" id="auction-seller-label" style="display:none;">Your Listing</span>
+					</div>
+				</div>
+				<div class="auction-body">
+					<div class="auction-row">
+						<span class="auction-label">Current Price</span>
+						<span class="auction-value price" id="auction-current-price">--</span>
+					</div>
+					<div class="auction-row">
+						<span class="auction-label">Time Left</span>
+						<span class="auction-value time-left" id="auction-time-left">--</span>
+					</div>
+					<button class="auction-buy-btn" id="auction-buy-btn" disabled>
+						<span class="auction-buy-text" id="auction-buy-text">Connect Wallet to Buy</span>
+						<span class="auction-buy-loading hidden"><span class="loading"></span></span>
+					</button>
+					<div class="auction-status" id="auction-status"></div>
+					</div>
+					</div>
+					</div>
+					</div>
+
+						<div class="overview-module linked-wide-module">
+						<div class="linked-names-section linked-names-results">
+							<div class="linked-names-list" id="linked-names-list">
+								<div class="linked-names-loading"><span class="loading"></span> Fetching linked names...</div>
+							</div>
+							<div class="linked-names-hint" id="linked-names-hint"></div>
+						</div>
+					</div>
+					</div><!-- end overview-secondary-grid -->
+				</div><!-- end profile-hero -->
 
 				<div class="links">
 			<a href="${escapeHtml(explorerUrl)}" target="_blank">
@@ -419,6 +616,47 @@ export function generateProfilePage(
 		</div>
 	</div>
 
+	<!-- Send SUI Modal -->
+	<div class="send-modal" id="send-modal">
+		<div class="send-modal-content">
+			<h3>Send SUI</h3>
+			<p>Recipient is the target address for this profile.</p>
+			<div class="send-recipient-row">
+				<span class="send-recipient-label">To</span>
+				<code id="send-recipient-address">--</code>
+			</div>
+			<label for="send-amount" class="visually-hidden">Amount in SUI</label>
+			<input type="number" id="send-amount" placeholder="Amount (SUI)" min="0.000000001" step="0.001" />
+			<div id="send-status" class="status hidden"></div>
+			<div class="send-modal-buttons">
+				<button class="cancel-btn" id="send-cancel-btn">Cancel</button>
+				<button class="save-btn" id="send-confirm-btn">Send</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Jacket Decay Auction Modal -->
+	<div class="jacket-modal" id="jacket-modal">
+		<div class="jacket-modal-content">
+			<h3>List for Decay Auction</h3>
+			<p>The price starts high and decays to zero over the chosen duration. Anyone can buy at the current price.</p>
+			<label for="jacket-start-price">Start Price (SUI)</label>
+			<input type="number" id="jacket-start-price" min="1" step="1" value="100000000" />
+			<label for="jacket-duration">Duration</label>
+			<select id="jacket-duration">
+				<option value="7">7 days</option>
+				<option value="14">14 days</option>
+				<option value="30" selected>30 days</option>
+			</select>
+			<div class="jacket-warning">Your NFT will be transferred to the auction contract. You can cancel within 24 hours.</div>
+			<div class="jacket-status" id="jacket-status"></div>
+			<div class="jacket-modal-buttons">
+				<button class="cancel-btn" id="jacket-cancel-btn">Cancel</button>
+				<button class="list-btn" id="jacket-list-btn">List</button>
+			</div>
+		</div>
+	</div>
+
 	<!-- Wallet Selection Modal -->
 	<div class="wallet-modal" id="wallet-modal">
 		<div class="wallet-modal-content">
@@ -436,12 +674,32 @@ export function generateProfilePage(
 	</div>
 
 	<script type="module">
-		import { getWallets } from 'https://esm.sh/@wallet-standard/app@1.1.0';
-		import { SuiJsonRpcClient } from 'https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle';
-		import { Transaction } from 'https://esm.sh/@mysten/sui@2.2.0/transactions?bundle';
-		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@1.0.0?bundle';
-		import { SealClient, SessionKey } from 'https://esm.sh/@mysten/seal@0.9.6';
-		import { fromHex, toHex } from 'https://esm.sh/@mysten/bcs@1.3.0';
+		let getWallets, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction, SealClient, SessionKey, fromHex, toHex;
+		{
+			const SDK_TIMEOUT = 15000;
+			const timedImport = (url) => Promise.race([
+				import(url),
+				new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
+			]);
+			const results = await Promise.allSettled([
+				timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
+				timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
+				timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
+				timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
+				timedImport('https://esm.sh/@mysten/seal@0.9.6'),
+				timedImport('https://esm.sh/@mysten/bcs@1.3.0'),
+			]);
+			if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
+			if (results[1].status === 'fulfilled') ({ SuiJsonRpcClient } = results[1].value);
+			if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value);
+			if (results[3].status === 'fulfilled') ({ SuinsClient, SuinsTransaction } = results[3].value);
+			if (results[4].status === 'fulfilled') ({ SealClient, SessionKey } = results[4].value);
+			if (results[5].status === 'fulfilled') ({ fromHex, toHex } = results[5].value);
+			const failed = results.filter(r => r.status === 'rejected');
+			if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
+		}
+
+		${generateWalletCookieJs()}
 
 		// ===== CONSTANTS =====
 		const NAME = ${serializeJson(cleanName)};
@@ -461,17 +719,22 @@ export function generateProfilePage(
 	const TARGET_ADDRESS = ${serializeJson(record.address)};
 	const OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
 	const CURRENT_ADDRESS = TARGET_ADDRESS || OWNER_ADDRESS;
-	const PROFILE_URL = ${serializeJson(`https://${cleanName}.sui.ski`)};
-	const NFT_EXPLORER_URL = ${serializeJson(nftExplorerUrl)};
+		const PROFILE_URL = ${serializeJson(`https://${cleanName}.sui.ski`)};
+		const LOGO_SVG_MARKUP = ${serializeJson(generateLogoSvg(220))};
+		const LOGO_DATA_URL = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(LOGO_SVG_MARKUP);
+		const TRADEPORT_LOGO_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGMAAAA9EAIAAABmTZwGAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRP///////wlY99wAAAAHdElNRQfqAgcQMh6XRTP/AAAFxElEQVR42u3cf1DTdRzH8c9wE4H4pQJiKRyKCuqZphImgmZKcnUcXaKhJ3d2WIY/8jpMHaggEk6NMNM8pSL8AVfadBNFwh+ZcqiICENEFJk4dYLo2Nq++/7oD7ozCzfQj7yHvB9/fm/77nW75x/ffbebSNjAZDz81BxwNiXuIDf1xqbcBmKTmAHst4QoM8vefL7ziJU9fR1/7JXlMsF7v7vda96jizz6+70RvM3z3cGlYVdcJvVLCyjrMV+y3UHxPK/CJ6knyX2YlUXzI+uh37nOI14dmLbkSxGTf/Kd6J+4sBsxufOgJ1lCK6n28C0au/gjXYB26taEELffXs0YdbGjZ+ieSbWy48JuxOTGQs+wLXVTzmfucc6P/op7veyIfoNozFZdwL1B1dHQu7oGO+gBtu7BQXX8xXhFUsqMYXmVeUfj11WSQCGL3wG9y3ZhUh1QzilEiSOOPpLljFvISk2yFjfoRbYIk+qwJpl6eCknX54U7mM2T/xrVbMUepFtwaSeEaMw7GgyHB0lsx/Xj2NZiXEO9CJbgUk9F91Erfbaogsf5O2Ob4beYiswKQpqZ539Y5dSM1w18zAHvQUeJkXNCek2rwgxl2AeZqiF3gIJk6KsrqTkfI4SegUkTIqykgX7VixYInjxSdx86C0wMKkXoiX7fmbt19ArYGBSL8Q9h2sFJ/tCr4CBSb0Qt89WHFBeg14BA5NClGFSiDI7sTTw4yXe0DPaS7SbLCSE+JCucZ2SThSEEB0xQg/pTCKhhFtnimZFl7asPcgXNrjn2+g9Fea0KdjoK/6lJbTKr/WIKZkLlVQ8iGCuOgtN0aZBrikP95qPOAUwk/lUSSjsWvsS1qCZranWzL1zt/WIm8plp8OfHvvcTzof95Z4rnVd6sa6FDrWShaJ88SzYdfS0kPt9/Yck0gQBEEQoMe0Q5SxURtl3JOr8Dxg+YGiu06lA+wkS8cpNy23Sx2oiZxGAkV6SVhnjm2Iuhwul5/6cId/ZKTlR3oXBtRMqxu5IqJ/yvQ+vX3WjM8hvclAMrYz19L1El5LCV76MWqe2XsicWaa0S/7u56T+V23flUwRCAPSRX0uv/STK3yL/AtOLfRKahaMT55xGD+UeCdNarV0Lue3UuY1P8xMb+3vGdvHnns6vQ4ksg0Nx+DXtQ2XYp2Xm2QMjG1cXiyqleBfWo9CRIO8cehd3VMt0iqFXf+tqrgtHHVXrn7NOGyzqEmFXqRJZd+OBQn9SmsyPgk5AAXwpQYJkAvaq9ulNS/mfz3bx8iFbKbiyrnQm+xRLvzetSZLQrXlMwhC9lTJr6lGnqRdd00qVammXL1iBziqi+v56G3WGKIaXZvmFuUumXMlHXC5/widgP0Iku6dVKtTKr8cxOTyBVhKOsEvcWSxtibIedyyh8o7kpF0FsswaSI0EcvVqdyMyrup++H3mKdavoxr/SExoi6L4pl0Fvahkn9w6wq3SwNJyL9qJvh0FusK5RmrAqVCRcEMWdzP6HBpJ7AOl0SJ9+CXmEdX8clMVpNWOWKwzb3SRCTegJ7v2ZxViX5jPFoWgy9xbrivjnZsWeIjmhJDfSWxzCpNnCZ6mGHtkKvsM60Xv9+07IW+8bg63LoLY9hUm3g0qtU36yFXtFemjJV3BEb+qIJk2oDv6xx88VEcpzjjFroLdZdLy+WZblBr3gMk3q6WNP2Rh/oEdY1OdXPurCZrCdBws/QWwjBpCwQ+unHqsXQK9qLTWCGGK5CryAEk7JA+J59S9dlfrfE17IrGZu4/YFJPV2uWa/3hx7RXsJoroe5DHoFIZgUog6TQpRhUogyTApRhkkhyjApRBkmhSjDpBBlmBSiDJNClGFSiDJMClGGSSHKMClEGSaFKMOkEGWYFKIMk0KUYVKIMkwKUYZJIcowKUQZJoUo6zpJpdlPdi/pzBcUBbvKhjo+23Od0z1jhhZ35tqeHo6vuNvEHxj9DcC9E2fGe9rKAAAAAElFTkSuQmCC';
+		const META_SEAL_SCHEMA = 'meta-seal-lite-v1';
+		const NFT_EXPLORER_URL = ${serializeJson(nftExplorerUrl)};
 	const EXPLORER_BASE = ${serializeJson(explorerBase)};
 	const IS_SUBNAME = NAME.includes('.');
 	const STORAGE_KEY = 'sui_ski_wallet';
 	const EXPIRATION_MS = ${safeNumber(expiresMs)};
 	const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 	const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
-	const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
-	const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
-	const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
+		const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
+		const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
+		const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
+	const DECAY_AUCTION_PACKAGE_ID = ${serializeJson(String(env.DECAY_AUCTION_PACKAGE_ID || ''))};
 
 		let connectedWallet = null;
 		let connectedAccount = null;
@@ -483,6 +746,9 @@ export function generateProfilePage(
 		let targetPrimaryName = null;
 		let canEdit = false;
 		let ownerDisplayAddress = CURRENT_ADDRESS;
+		let currentTargetAddress = TARGET_ADDRESS || '';
+		let currentListing = null;
+		let pendingBidAmount = null;
 
 		try {
 			walletsApi = getWallets();
@@ -494,44 +760,118 @@ export function generateProfilePage(
 		const walletBar = document.getElementById('wallet-bar');
 		const editBtn = document.getElementById('edit-address-btn');
 		const setSelfBtn = document.getElementById('set-self-btn');
-		const setPrimaryBtn = document.getElementById('set-primary-btn');
+		const ownerPrimaryStar = document.getElementById('owner-primary-star');
 		const copyBtn = document.getElementById('copy-address-btn');
+		const ownerAddrText = document.getElementById('addr-text');
+		const ownerDisplayCard = document.querySelector('.owner-display');
+		const jacketBtn = document.getElementById('jacket-btn');
+		const jacketModal = document.getElementById('jacket-modal');
+		const jacketStartPrice = document.getElementById('jacket-start-price');
+		const jacketDuration = document.getElementById('jacket-duration');
+		const jacketStatus = document.getElementById('jacket-status');
+		const jacketCancelBtn = document.getElementById('jacket-cancel-btn');
+		const jacketListBtn = document.getElementById('jacket-list-btn');
 
-		// Global Wallet Widget Elements
-		const globalWalletWidget = document.getElementById('global-wallet-widget');
-		const globalWalletBtn = document.getElementById('global-wallet-btn');
-		const globalWalletText = document.getElementById('global-wallet-text');
-		const globalWalletDropdown = document.getElementById('global-wallet-dropdown');
+		// Shared wallet widget elements (same pattern as landing page)
+		const walletWidget = document.getElementById('wallet-widget');
+		const walletBtn = document.getElementById('wallet-btn');
+		const walletBtnText = document.getElementById('wallet-btn-text');
+		const walletProfileBtn = document.getElementById('wallet-profile-btn');
+		const walletMenu = document.getElementById('wallet-menu');
+		const viewPortfolioLink = document.getElementById('view-portfolio-link');
 		const editModal = document.getElementById('edit-modal');
-		const targetAddressInput = document.getElementById('target-address');
-		const resolvedAddressEl = document.getElementById('resolved-address');
-		const modalStatus = document.getElementById('modal-status');
-		const cancelBtn = document.getElementById('cancel-edit-btn');
-		const saveBtn = document.getElementById('save-address-btn');
+		const sendModal = document.getElementById('send-modal');
+			const targetAddressInput = document.getElementById('target-address');
+			const resolvedAddressEl = document.getElementById('resolved-address');
+			const modalStatus = document.getElementById('modal-status');
+			const ownerInlineStatus = document.getElementById('owner-inline-status');
+			const cancelBtn = document.getElementById('cancel-edit-btn');
+			const saveBtn = document.getElementById('save-address-btn');
+			const copyTargetBtn = document.getElementById('copy-target-address-btn');
+			const targetPreviewBtn = document.getElementById('target-preview');
+			const targetPreviewValue = document.getElementById('target-preview-value');
+			const sendBtn = document.getElementById('send-sui-btn');
+			const sendAmountInput = document.getElementById('send-amount');
+			const sendRecipientAddressEl = document.getElementById('send-recipient-address');
+			const sendStatus = document.getElementById('send-status');
+			const sendCancelBtn = document.getElementById('send-cancel-btn');
+			const sendConfirmBtn = document.getElementById('send-confirm-btn');
 		// Identity card elements (merged NFT + QR)
 		const identityVisual = document.getElementById('identity-visual');
 		const identityCanvas = document.getElementById('qr-canvas');
-		const identityName = document.getElementById('identity-name');
-		const qrToggle = document.getElementById('qr-toggle');
-		let nftImageUrl = null;
-		let showingQr = false; // Default to NFT display, QR is fallback
-		let nftDisplayLoaded = false;
-
-
-		// Quick message button - focuses the compose input
-		const quickMsgBtn = document.getElementById('quick-message-btn');
-		if (quickMsgBtn) {
-			quickMsgBtn.addEventListener('click', () => {
-				const composeInput = document.getElementById('msg-compose-input');
-				if (composeInput) {
-					composeInput.focus();
-					composeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-				}
-			});
-		}
+			const identityName = document.getElementById('identity-name');
+			const qrToggle = document.getElementById('qr-toggle');
+			const identityDownloadBtn = document.getElementById('identity-download-btn');
+			const identityRestoreBtn = document.getElementById('identity-restore-btn');
+			let nftImageUrl = null;
+			let rawIdentityNftImage = null;
+			let showingQr = false; // Default to NFT display, QR is fallback
+			let nftDisplayLoaded = false;
+			let restoringIdentityVisual = false;
 
 		function truncAddr(addr) {
 			return addr.slice(0, 6) + '...' + addr.slice(-4);
+		}
+
+		function previewAddr6(addr) {
+			if (!addr || typeof addr !== 'string' || addr.length < 14) return addr || '';
+			return addr.slice(0, 6) + '...' + addr.slice(-6);
+		}
+
+		function getTradeportPortfolioHref(address) {
+			const normalized = typeof address === 'string' ? address.trim() : '';
+			const query = '?tab=items&bottomTab=trades&collectionFilter=suins';
+			return normalized
+				? 'https://www.tradeport.xyz/sui/' + encodeURIComponent(normalized) + query
+				: 'https://www.tradeport.xyz/sui' + query;
+		}
+
+		function updatePortfolioLink(address) {
+			if (!viewPortfolioLink) return;
+			const resolvedAddress =
+				address || ownerDisplayAddress || CURRENT_ADDRESS || TARGET_ADDRESS || OWNER_ADDRESS || '';
+			viewPortfolioLink.href = getTradeportPortfolioHref(resolvedAddress);
+			viewPortfolioLink.title = resolvedAddress
+				? 'View all SuiNS names on TradePort for ' + truncAddr(resolvedAddress)
+				: 'View all SuiNS names on TradePort';
+		}
+
+			function renderTargetPreview(address) {
+				const targetPreviewEl = document.getElementById('target-preview');
+				const targetPreviewValueEl = document.getElementById('target-preview-value');
+				const targetCopyBtnEl = document.getElementById('copy-target-address-btn');
+				if (!targetPreviewEl) return;
+				currentTargetAddress = address || '';
+				if (address) {
+					targetPreviewEl.classList.remove('no-target');
+					targetPreviewEl.title = 'Copy target address: ' + address;
+					targetPreviewEl.setAttribute('role', 'button');
+					targetPreviewEl.tabIndex = 0;
+					targetPreviewEl.setAttribute('aria-label', 'Copy target address');
+					if (targetPreviewValueEl) targetPreviewValueEl.textContent = previewAddr6(address);
+					if (targetCopyBtnEl) {
+						targetCopyBtnEl.classList.remove('hidden');
+						targetCopyBtnEl.disabled = false;
+						targetCopyBtnEl.title = 'Copy target address: ' + address;
+					targetCopyBtnEl.setAttribute('aria-label', 'Copy target address');
+				}
+				targetPreviewEl.style.display = '';
+				targetPreviewEl.classList.add('is-copyable');
+				} else {
+					targetPreviewEl.style.display = '';
+					targetPreviewEl.classList.remove('is-copyable', 'copied');
+					targetPreviewEl.classList.add('no-target');
+					targetPreviewEl.removeAttribute('role');
+					targetPreviewEl.removeAttribute('aria-label');
+					targetPreviewEl.removeAttribute('tabindex');
+					targetPreviewEl.title = 'No target address';
+					if (targetPreviewValueEl) targetPreviewValueEl.textContent = 'None';
+					if (targetCopyBtnEl) {
+						targetCopyBtnEl.classList.add('hidden');
+						targetCopyBtnEl.disabled = true;
+						targetCopyBtnEl.title = 'No target address';
+				}
+			}
 		}
 
 		function showStatus(el, msg, type) {
@@ -539,8 +879,63 @@ export function generateProfilePage(
 			el.className = 'status ' + type;
 		}
 
-		function hideStatus(el) {
-			el.className = 'status hidden';
+			function hideStatus(el) {
+				el.className = 'status hidden';
+			}
+
+			let ownerInlineStatusTimer = null;
+			function showOwnerInlineStatus(message, type = 'info', isHtml = false) {
+				if (!ownerInlineStatus) return;
+				if (ownerInlineStatusTimer) {
+					clearTimeout(ownerInlineStatusTimer);
+					ownerInlineStatusTimer = null;
+				}
+
+				if (isHtml) {
+					ownerInlineStatus.innerHTML = message;
+				} else {
+					ownerInlineStatus.textContent = message;
+				}
+				ownerInlineStatus.className = 'status owner-inline-status ' + type;
+
+				ownerInlineStatusTimer = setTimeout(() => {
+					ownerInlineStatus.className = 'status owner-inline-status hidden';
+				}, 7000);
+			}
+
+		function getTxExplorerLinks(digest) {
+			const safeDigest = encodeURIComponent(String(digest || ''));
+			if (!safeDigest) return [];
+
+			const links = [
+				{
+					label: 'Suiscan',
+					url: 'https://suiscan.xyz/' + NETWORK + '/tx/' + safeDigest,
+				},
+				{
+					label: 'Sui Explorer',
+					url: 'https://suiexplorer.com/txblock/' + safeDigest + '?network=' + NETWORK,
+				},
+			];
+
+			if (NETWORK === 'mainnet') {
+				links.push({
+					label: 'Suivision',
+					url: 'https://suivision.xyz/txblock/' + safeDigest,
+				});
+			}
+
+			return links;
+		}
+
+		function renderTxExplorerLinks(digest, includeViewPrefix = false) {
+			const links = getTxExplorerLinks(digest);
+			if (!links.length) return '';
+			return links.map((link) =>
+				'<a href="' + link.url + '" target="_blank" rel="noopener noreferrer">' +
+				(includeViewPrefix ? 'View on ' : '') + link.label +
+				'</a>'
+			).join(' · ');
 		}
 
 		// Check if input looks like a SuiNS name
@@ -607,13 +1002,29 @@ export function generateProfilePage(
 		function getSuiWallets() {
 			const wallets = [];
 			const seenNames = new Set();
+			const isSuiCapableWallet = (wallet) => {
+				if (!wallet) return false;
+				const features = wallet.features || {};
+				const hasSuiChain =
+					Array.isArray(wallet.chains) && wallet.chains.some(chain => chain.startsWith('sui:'));
+				const hasConnect = !!(features['standard:connect'] || wallet.connect);
+				const hasSuiTxFeature = !!(
+					features['sui:signAndExecuteTransactionBlock'] ||
+					features['sui:signAndExecuteTransaction'] ||
+					features['sui:signTransaction'] ||
+					wallet.signAndExecuteTransactionBlock ||
+					wallet.signAndExecuteTransaction ||
+					wallet.signTransaction
+				);
+				return hasSuiChain || (hasConnect && hasSuiTxFeature);
+			};
 
 			// First, try wallet-standard registry
 			if (walletsApi) {
 				try {
 					const standardWallets = walletsApi.get();
 					for (const wallet of standardWallets) {
-						if (wallet.chains?.some(chain => chain.startsWith('sui:'))) {
+						if (isSuiCapableWallet(wallet)) {
 							wallets.push(wallet);
 							seenNames.add(wallet.name);
 						}
@@ -621,6 +1032,16 @@ export function generateProfilePage(
 				} catch (e) {
 					console.log('Error getting wallets from standard:', e);
 				}
+			}
+
+			// Fallback: scan registry exposed by some wallet injectors
+			const injectedWallets = Array.isArray(window.__sui_wallets__) ? window.__sui_wallets__ : [];
+			for (const wallet of injectedWallets) {
+				if (!wallet || !isSuiCapableWallet(wallet)) continue;
+				const walletName = wallet.name || 'Sui Wallet';
+				if (seenNames.has(walletName)) continue;
+				wallets.push(wallet);
+				seenNames.add(walletName);
 			}
 
 			// Fallback: check window globals for common Sui wallets
@@ -638,25 +1059,22 @@ export function generateProfilePage(
 				try {
 					const wallet = check();
 					if (wallet && !seenNames.has(name)) {
-						// Wrap window wallet to match standard interface
+						if (!isSuiCapableWallet(wallet)) continue;
+						// Wrap window wallet to match landing-page wallet features.
 						wallets.push({
 							name,
 							icon,
 							chains: ['sui:mainnet', 'sui:testnet'],
 							features: {
-								'standard:connect': {
-									connect: async () => {
-										if (wallet.connect) return await wallet.connect();
-										if (wallet.requestPermissions) return await wallet.requestPermissions();
-									}
-								},
-								'standard:disconnect': {
-									disconnect: async () => wallet.disconnect?.()
-								}
+								'standard:connect': wallet.connect ? { connect: wallet.connect.bind(wallet) } : undefined,
+								'standard:disconnect': wallet.disconnect ? { disconnect: wallet.disconnect.bind(wallet) } : undefined,
+								'sui:signAndExecuteTransaction': wallet.signAndExecuteTransaction
+									? { signAndExecuteTransaction: wallet.signAndExecuteTransaction.bind(wallet) } : undefined,
+								'sui:signAndExecuteTransactionBlock': wallet.signAndExecuteTransactionBlock
+									? { signAndExecuteTransactionBlock: wallet.signAndExecuteTransactionBlock.bind(wallet) } : undefined,
 							},
-							get accounts() {
-								return wallet.accounts || [];
-							}
+							get accounts() { return wallet.accounts || []; },
+							_raw: wallet,
 						});
 						seenNames.add(name);
 					}
@@ -670,51 +1088,11 @@ export function generateProfilePage(
 
 		// Detect wallets with retry logic (non-blocking)
 		async function detectWallets() {
-			// First, try immediate detection
-			const immediateWallets = getSuiWallets();
-			if (immediateWallets.length > 0) {
-				return immediateWallets;
-			}
-
-			// If no wallets found immediately, return empty and let the UI show install links
-			// The wallet API will register wallets asynchronously
-			return new Promise((resolve) => {
-				let attempts = 0;
-				const maxAttempts = 10; // Reduced from 25 to avoid long blocking
-				let resolved = false;
-
-				const check = () => {
-					if (resolved) return;
-					attempts++;
-					const wallets = getSuiWallets();
-
-					if (wallets.length > 0 || attempts >= maxAttempts) {
-						resolved = true;
-						resolve(wallets);
-					} else {
-						setTimeout(check, 100); // Reduced from 150ms
-					}
-				};
-
-				// Also listen for new wallets being registered
-				if (walletsApi) {
-					try {
-						walletsApi.on('register', () => {
-							if (resolved) return;
-							const wallets = getSuiWallets();
-							if (wallets.length > 0) {
-								resolved = true;
-								resolve(wallets);
-							}
-						});
-					} catch (e) {
-						console.log('Could not register wallet listener:', e);
-					}
-				}
-
-				// Start checking after a short delay to allow async wallet registration
-				setTimeout(check, 50);
-			});
+			await new Promise(r => setTimeout(r, 100));
+			let wallets = getSuiWallets();
+			if (wallets.length) return wallets;
+			await new Promise(r => setTimeout(r, 500));
+			return getSuiWallets();
 		}
 
 		// Fetch NFT owner address
@@ -780,7 +1158,7 @@ export function generateProfilePage(
 				connectedPrimaryName = primaryName;
 
 				// Can edit if wallet is the NFT owner OR the current target address
-				canEdit = connectedAddress === nftOwnerAddress || connectedAddress === CURRENT_ADDRESS;
+				canEdit = canConnectedWalletEditTarget();
 				updateEditButton();
 				renderWalletBar(); // Re-render to show primary name
 				updateGlobalWalletWidget(); // Update global widget with primary name
@@ -791,62 +1169,87 @@ export function generateProfilePage(
 
 		// Update edit button state
 		function updateEditButton() {
-			const isAlreadySelf = connectedAddress && connectedAddress === CURRENT_ADDRESS;
-			const isOwner = connectedAddress && nftOwnerAddress && connectedAddress === nftOwnerAddress;
+			const normalizedConnected = connectedAddress ? String(connectedAddress).toLowerCase() : '';
+			const explicitTargetAddress = getExplicitTargetAddress();
+			const normalizedTarget = String(explicitTargetAddress || '').toLowerCase();
+			const normalizedOwner = String(nftOwnerAddress || OWNER_ADDRESS || '').toLowerCase();
+			const hasExplicitTarget = isLikelySuiAddress(explicitTargetAddress);
+			const isAlreadySelf = Boolean(normalizedConnected && normalizedTarget && normalizedConnected === normalizedTarget);
+			const isOwner = Boolean(normalizedConnected && normalizedOwner && normalizedConnected === normalizedOwner);
+			const isLinkedTarget = Boolean(hasExplicitTarget && isAlreadySelf);
+			const isAlreadyPrimary = Boolean(
+				connectedAddress
+				&& connectedPrimaryName
+				&& connectedPrimaryName.replace(/\\.sui$/i, '') === FULL_NAME.replace(/\\.sui$/i, ''),
+			);
 
-			// Self button only visible to owner
-			if (isOwner) {
-				if (isAlreadySelf) {
-					setSelfBtn.disabled = true;
-					setSelfBtn.title = 'Already set to your address';
-					setSelfBtn.classList.add('already-set');
-				} else {
-					setSelfBtn.disabled = false;
-					setSelfBtn.title = connectedPrimaryName
-						? 'Set to ' + connectedPrimaryName
-						: 'Set to ' + truncAddr(connectedAddress);
-					setSelfBtn.classList.remove('already-set');
-				}
+			// Show for owners when target is missing or points elsewhere.
+			if (isOwner && (!hasExplicitTarget || !isAlreadySelf)) {
+				setSelfBtn.disabled = false;
+				setSelfBtn.title = connectedPrimaryName
+					? 'Set to ' + connectedPrimaryName
+					: 'Set to ' + truncAddr(connectedAddress);
 				setSelfBtn.classList.remove('hidden');
 			} else {
 				setSelfBtn.classList.add('hidden');
 			}
 
-			// Primary button - visible when connected wallet is the target address
-			if (setPrimaryBtn) {
-				if (isAlreadySelf) {
-					const isAlreadyPrimary = connectedPrimaryName && connectedPrimaryName.replace(/\\.sui$/i, '') === FULL_NAME.replace(/\\.sui$/i, '');
-					setPrimaryBtn.classList.remove('hidden');
-					if (isAlreadyPrimary) {
-						setPrimaryBtn.disabled = true;
-						setPrimaryBtn.textContent = 'Primary ✓';
-						setPrimaryBtn.title = 'This is already your primary name';
-						setPrimaryBtn.classList.add('primary-active');
-					} else {
-						setPrimaryBtn.disabled = false;
-						setPrimaryBtn.textContent = 'Primary';
-						setPrimaryBtn.title = 'Set as your primary name';
-						setPrimaryBtn.classList.remove('primary-active');
-					}
+			// Primary star (shown next to the profile title)
+			if (ownerPrimaryStar) {
+				const canSeePrimaryStar = Boolean(connectedAddress && (isOwner || isLinkedTarget));
+				ownerPrimaryStar.classList.toggle('hidden', !canSeePrimaryStar);
+				ownerPrimaryStar.classList.toggle('selected', canSeePrimaryStar && isAlreadyPrimary);
+				if (!canSeePrimaryStar) {
+					ownerPrimaryStar.disabled = true;
+					ownerPrimaryStar.title = '';
+				} else if (isAlreadyPrimary) {
+					ownerPrimaryStar.disabled = true;
+					ownerPrimaryStar.title = 'This is your primary name';
+				} else if (isOwner && connectedWallet && connectedAccount) {
+					ownerPrimaryStar.disabled = false;
+					ownerPrimaryStar.title = 'Set as primary name';
 				} else {
-					setPrimaryBtn.classList.add('hidden');
+					ownerPrimaryStar.disabled = true;
+					ownerPrimaryStar.title = isLinkedTarget
+						? 'Only the NFT owner can set primary'
+						: 'Wallet not ready';
 				}
 			}
 
+			if (ownerDisplayCard) {
+				ownerDisplayCard.classList.toggle('primary-view', isAlreadyPrimary);
+				ownerDisplayCard.classList.toggle('owner-view', isOwner && !isAlreadyPrimary);
+			}
+			if (document.body) {
+				document.body.classList.toggle('profile-primary-active', isAlreadyPrimary);
+			}
+
+			// Jacket button - visible when owner and package configured
+			if (jacketBtn) {
+				jacketBtn.classList.toggle('hidden', !isOwner || !DECAY_AUCTION_PACKAGE_ID);
+			}
+
 			// Edit button
-			if (!connectedAddress) {
-				editBtn.disabled = false;
-				editBtn.title = 'Connect wallet to edit';
-			} else if (canEdit) {
-				editBtn.disabled = false;
-				editBtn.title = 'Edit target address';
-			} else {
-				editBtn.disabled = true;
-				editBtn.title = 'Only the NFT owner or target address can edit';
+			if (editBtn) {
+				const canShowEdit = Boolean(connectedAddress && (isOwner || canEdit));
+				editBtn.classList.toggle('hidden', !canShowEdit);
+				editBtn.disabled = !canShowEdit;
+				editBtn.title = canShowEdit ? 'Edit target address' : '';
+			}
+			if (copyTargetBtn) {
+				copyTargetBtn.classList.toggle('hidden', !hasExplicitTarget);
+				copyTargetBtn.disabled = !hasExplicitTarget;
+			}
+			if (targetPreviewBtn) {
+				targetPreviewBtn.classList.remove('hidden');
+			}
+			if (targetPreviewValue) {
+				targetPreviewValue.classList.remove('hidden');
 			}
 
 			// Update grace period banner visibility
 			updateGracePeriodActions();
+			updateGracePeriodCountdown();
 		}
 
 		// Update grace period actions visibility
@@ -927,7 +1330,7 @@ export function generateProfilePage(
 
 					// Success - show result with status link
 					showGracePeriodStatus(
-						'Queued! <a href="' + EXPLORER_BASE + '/tx/' + result.digest + '" target="_blank">Payment</a> · ' +
+						'Queued! Payment tx: ' + renderTxExplorerLinks(result.digest, true) + ' · ' +
 						'<a href="' + verifyData.statusUrl + '" target="_blank">Status</a><br>' +
 						'<small>Nautilus TEE will process renewal shortly.</small>',
 						'success'
@@ -973,8 +1376,8 @@ export function generateProfilePage(
 					if (data.status === 'completed') {
 						clearInterval(interval);
 						showGracePeriodStatus(
-							\`Renewed! <a href="\${EXPLORER_BASE}/tx/\${data.renewalTxDigest}" target="_blank">View tx</a><br>
-							<small>Reload page to see updated expiration.</small>\`,
+							'Renewed! ' + renderTxExplorerLinks(data.renewalTxDigest, true) + '<br>' +
+							'<small>Reload page to see updated expiration.</small>',
 							'success'
 						);
 					} else if (data.status === 'failed') {
@@ -1001,6 +1404,117 @@ export function generateProfilePage(
 
 		const giftBtnEl = document.getElementById('gift-renewal-btn');
 		if (giftBtnEl) giftBtnEl.addEventListener('click', handleGiftRenewal);
+
+		// Update grace period countdown and burn button
+		function updateGracePeriodCountdown() {
+			if (!IS_IN_GRACE_PERIOD) return;
+
+			const daysEl = document.getElementById('days-until-available');
+			const burnBtn = document.getElementById('burn-nft-btn');
+
+			if (daysEl && AVAILABLE_AT) {
+				const msUntilAvailable = AVAILABLE_AT - Date.now();
+				const daysUntilAvailable = Math.max(0, Math.ceil(msUntilAvailable / (24 * 60 * 60 * 1000)));
+				daysEl.textContent = String(daysUntilAvailable);
+			}
+
+			if (burnBtn) {
+				const isOwner = connectedAddress && nftOwnerAddress && connectedAddress.toLowerCase() === nftOwnerAddress.toLowerCase();
+				burnBtn.classList.toggle('hidden', !isOwner);
+			}
+		}
+
+		// Burn NFT and release name
+		async function handleBurnNft() {
+			if (!connectedAddress || !connectedWallet || !NFT_ID) {
+				showBurnStatus('Connect wallet first', 'error');
+				return;
+			}
+
+			const isOwner = connectedAddress && nftOwnerAddress && connectedAddress.toLowerCase() === nftOwnerAddress.toLowerCase();
+			if (!isOwner) {
+				showBurnStatus('Only the NFT owner can burn', 'error');
+				return;
+			}
+
+			if (!confirm('⚠️ This will permanently burn your NFT and release "' + FULL_NAME + '" for registration.\\n\\nThis action cannot be undone. Continue?')) {
+				return;
+			}
+
+			const btn = document.getElementById('burn-nft-btn');
+			const txt = document.getElementById('burn-nft-text');
+			const loading = btn?.querySelector('.burn-nft-loading');
+			const orig = txt?.textContent || 'Burn NFT & Release Name';
+
+			try {
+				if (btn) btn.disabled = true;
+				if (txt) txt.style.display = 'none';
+				if (loading) loading.classList.remove('hidden');
+
+				const tx = new Transaction();
+				tx.moveCall({
+					target: '${env.SUI_NETWORK === 'mainnet' ? '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0' : '0xcb63193327801b8a90aa3778a6c50def5d2be3aac0630393d3329346cee58eaf'}::suins_registration::burn',
+					arguments: [tx.object(NFT_ID)],
+				});
+
+				let result;
+				const txOptions = { showEffects: true, showObjectChanges: true };
+
+				if (connectedWallet.features?.['sui:signAndExecuteTransaction']?.signAndExecuteTransaction) {
+					result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
+						transaction: tx,
+						options: txOptions,
+					});
+				} else if (connectedWallet.features?.['sui:signAndExecuteTransactionBlock']?.signAndExecuteTransactionBlock) {
+					const suiClient = getSuiClient();
+					const txBytes = await tx.build({ client: suiClient });
+					result = await connectedWallet.features['sui:signAndExecuteTransactionBlock'].signAndExecuteTransactionBlock({
+						transactionBlock: txBytes,
+						options: txOptions,
+					});
+				} else {
+					throw new Error('Wallet does not support transaction signing');
+				}
+
+				showBurnStatus(
+					'NFT burned! ' + renderTxExplorerLinks(result.digest, true) + '<br>' +
+					'<small>The name is now available for registration.</small>',
+					'success'
+				);
+
+				if (btn) {
+					btn.disabled = true;
+					btn.classList.add('hidden');
+				}
+
+			} catch (e) {
+				const m = e.message || '';
+				if (m.includes('rejected') || m.includes('cancelled')) {
+					showBurnStatus('Cancelled', 'error');
+				} else {
+					showBurnStatus('Error: ' + m, 'error');
+				}
+			} finally {
+				if (btn) btn.disabled = false;
+				if (txt) {
+					txt.textContent = orig;
+					txt.style.display = '';
+				}
+				if (loading) loading.classList.add('hidden');
+			}
+		}
+
+		function showBurnStatus(msg, type) {
+			const el = document.getElementById('grace-period-burn-status');
+			if (!el) return;
+			el.innerHTML = msg;
+			el.className = 'grace-period-status ' + type;
+			el.classList.remove('hidden');
+			if (type !== 'success') setTimeout(() => { el.classList.add('hidden'); }, 15000);
+		}
+
+		const burnBtnEl = document.getElementById('burn-nft-btn');
+		if (burnBtnEl) burnBtnEl.addEventListener('click', handleBurnNft);
 
 		// Update grace period owner info display
 		async function updateGracePeriodOwnerInfo() {
@@ -1031,28 +1545,26 @@ export function generateProfilePage(
 			}
 		}
 
-		// Save wallet connection to localStorage
 		function saveWalletConnection() {
 			if (connectedWalletName && connectedAddress) {
 				localStorage.setItem(STORAGE_KEY, JSON.stringify({
 					walletName: connectedWalletName,
 					address: connectedAddress
 				}));
+				setWalletCookie(connectedWalletName, connectedAddress);
 			}
 		}
 
-		// Clear wallet connection from localStorage
 		function clearWalletConnection() {
 			localStorage.removeItem(STORAGE_KEY);
+			clearWalletCookie();
 		}
 
-		// Try to restore wallet connection from localStorage
 		async function restoreWalletConnection() {
 			try {
 				const saved = localStorage.getItem(STORAGE_KEY);
-				if (!saved) return false;
-
-				const { walletName } = JSON.parse(saved);
+				const cookieHint = getWalletCookie();
+				const walletName = saved ? JSON.parse(saved).walletName : cookieHint?.walletName;
 				if (!walletName) return false;
 
 				const wallets = getSuiWallets();
@@ -1067,10 +1579,13 @@ export function generateProfilePage(
 				let accounts = wallet.accounts || [];
 
 				if (accounts.length === 0) {
-					const connectFeature = wallet.features?.['standard:connect'];
-					if (connectFeature?.connect) {
+					const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
+					if (typeof connectFeature === 'function') {
+						const result = await connectFeature();
+						accounts = result?.accounts || result || wallet.accounts || wallet._raw?.accounts || [];
+					} else if (connectFeature?.connect) {
 						const result = await connectFeature.connect();
-						accounts = result?.accounts || wallet.accounts || [];
+						accounts = result?.accounts || wallet.accounts || wallet._raw?.accounts || [];
 					}
 				}
 
@@ -1113,29 +1628,24 @@ export function generateProfilePage(
 		// Connect to a specific wallet
 		async function connectToWallet(wallet) {
 			try {
-				let accounts = wallet.accounts || [];
+				walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Connecting...</div>';
+				const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
+				if (!connectFeature) throw new Error('Wallet does not support connection');
 
-				// Per Sui docs: wallets auto-restore authorized accounts
-				// Only call connect() if no accounts are available
-				if (accounts.length === 0) {
-					const connectFeature = wallet.features?.['standard:connect'];
-					if (!connectFeature?.connect) {
-						throw new Error('Wallet does not support connection');
-					}
-
+				let accounts;
+				if (typeof connectFeature === 'function') {
+					const result = await connectFeature();
+					accounts = result?.accounts || result;
+				} else if (typeof connectFeature.connect === 'function') {
 					const result = await connectFeature.connect();
-					accounts = result?.accounts || wallet.accounts || [];
-
-					// Some wallets populate accounts async
-					if (accounts.length === 0) {
-						await new Promise(r => setTimeout(r, 150));
-						accounts = wallet.accounts || [];
-					}
+					accounts = result?.accounts || result;
 				}
 
-				if (accounts.length === 0) {
-					throw new Error('No accounts. Please unlock your wallet.');
+				if (!accounts?.length) {
+					await new Promise(r => setTimeout(r, 200));
+					accounts = wallet.accounts || wallet._raw?.accounts;
 				}
+				if (!accounts?.length) throw new Error('No accounts. Please unlock your wallet.');
 
 				connectedAccount = accounts[0];
 				connectedAddress = accounts[0].address;
@@ -1149,13 +1659,16 @@ export function generateProfilePage(
 				const errorMsg = e.message || 'Unknown error';
 				const isUserAction = errorMsg.includes('rejected') ||
 					errorMsg.includes('cancelled') ||
+					errorMsg.includes('authorized') ||
 					errorMsg.includes('Unexpected');
 				if (!isUserAction) {
 					console.error('Wallet error:', errorMsg);
 				}
-				const userMessage = isUserAction
-					? 'Connection cancelled.'
-					: 'Connection failed: ' + errorMsg;
+				const userMessage = errorMsg.includes('authorized')
+					? 'Please authorize this site in your wallet settings and try again.'
+					: isUserAction
+						? 'Connection cancelled.'
+						: 'Connection failed: ' + errorMsg;
 				walletList.innerHTML = '<div class="wallet-no-wallets" style="color: var(--error);">' +
 					userMessage +
 					'<br><br>' +
@@ -1232,6 +1745,9 @@ export function generateProfilePage(
 
 		// Disconnect wallet
 		function disconnectWallet() {
+			if (connectedWallet?.features?.['standard:disconnect']?.disconnect) {
+				try { connectedWallet.features['standard:disconnect'].disconnect(); } catch {}
+			}
 			connectedWallet = null;
 			connectedAccount = null;
 			connectedAddress = null;
@@ -1249,110 +1765,136 @@ export function generateProfilePage(
 			if (existingWalletStatus) existingWalletStatus.remove();
 		}
 
-		// Update global wallet widget
-		function updateGlobalWalletWidget() {
-			if (!globalWalletWidget || !globalWalletBtn || !globalWalletText || !globalWalletDropdown) return;
+		function getWalletProfileHref() {
+			if (connectedPrimaryName) {
+				const cleanedName = connectedPrimaryName.replace(/\\.sui$/i, '');
+				return \`https://\${cleanedName}.sui.ski\`;
+			}
+			return 'https://sui.ski';
+		}
 
-			if (!connectedAddress) {
-				// Not connected - show connect button
-				globalWalletBtn.classList.remove('connected');
-				globalWalletText.textContent = 'Connect';
-				globalWalletDropdown.innerHTML = '';
-			} else {
-				// Connected - show address and dropdown
-				const displayName = connectedPrimaryName || truncAddr(connectedAddress);
-				globalWalletBtn.classList.add('connected');
-				globalWalletText.textContent = displayName;
+		function closeWalletMenu() {
+			if (walletMenu) walletMenu.classList.remove('open');
+		}
 
-				globalWalletDropdown.innerHTML = \`
-					<div class="global-wallet-dropdown-addr">\${connectedAddress}</div>
-					\${connectedPrimaryName ? \`
-					<button class="global-wallet-dropdown-item" id="gw-view-profile">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-						View My Profile
-					</button>
-					\` : ''}
-					<button class="global-wallet-dropdown-item" id="gw-switch">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
-						Switch Wallet
-					</button>
-					<button class="global-wallet-dropdown-item disconnect" id="gw-disconnect">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-						Disconnect
-					</button>
-				\`;
+		function updateWalletProfileButton() {
+			if (!walletProfileBtn) return;
+			const href = getWalletProfileHref();
+			walletProfileBtn.dataset.href = href;
+			walletProfileBtn.title = connectedPrimaryName ? 'View my primary profile' : 'Go to sui.ski';
+		}
 
-				// Re-attach event handlers
-				const viewProfileBtn = document.getElementById('gw-view-profile');
-				if (viewProfileBtn) {
-					viewProfileBtn.addEventListener('click', () => {
-						const cleanedName = connectedPrimaryName.replace(/\\.sui$/i, '');
-						window.location.href = \`https://\${cleanedName}.sui.ski\`;
-					});
-				}
+		function renderWalletMenu() {
+			if (!walletMenu || !connectedAddress) {
+				if (walletMenu) walletMenu.innerHTML = '';
+				return;
+			}
 
-				const switchBtn = document.getElementById('gw-switch');
-				if (switchBtn) {
-					switchBtn.addEventListener('click', () => {
-						globalWalletWidget.classList.remove('open');
-						disconnectWallet();
-						setTimeout(() => connectWallet(), 100);
-					});
-				}
+			const profileHref = connectedPrimaryName
+				? getWalletProfileHref()
+				: null;
+			const namesHref = \`https://www.tradeport.xyz/sui/\${connectedAddress}?tab=items&collectionFilter=suins\`;
 
-				const disconnectBtn = document.getElementById('gw-disconnect');
-				if (disconnectBtn) {
-					disconnectBtn.addEventListener('click', () => {
-						globalWalletWidget.classList.remove('open');
-						disconnectWallet();
-					});
-				}
+			let html = '<button class="wallet-menu-item" id="wm-copy">' +
+				'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+				'Copy Address</button>';
+			if (profileHref) {
+				html += '<a class="wallet-menu-item" href="' + profileHref + '">' +
+					'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>' +
+					'My Profile</a>';
+			}
+			html += '<a class="wallet-menu-item" href="' + namesHref + '" target="_blank" rel="noopener noreferrer">' +
+				'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>' +
+				'My Names</a>';
+			html += '<button class="wallet-menu-item" id="wm-switch">' +
+				'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>' +
+				'Switch Wallet</button>';
+			html += '<button class="wallet-menu-item disconnect" id="wm-disconnect">' +
+				'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>' +
+				'Disconnect</button>';
+			walletMenu.innerHTML = html;
 
-				// Copy address on click
-				const addrEl = globalWalletDropdown.querySelector('.global-wallet-dropdown-addr');
-				if (addrEl) {
-					addrEl.addEventListener('click', async () => {
-						try {
-							await navigator.clipboard.writeText(connectedAddress);
-							addrEl.classList.add('copied');
-							const originalText = addrEl.textContent;
-							addrEl.textContent = 'Copied!';
-							setTimeout(() => {
-								addrEl.classList.remove('copied');
-								addrEl.textContent = originalText;
-							}, 1500);
-						} catch (err) {
-							console.error('Failed to copy:', err);
-						}
-					});
-				}
+			const copyBtn = document.getElementById('wm-copy');
+			if (copyBtn) {
+				copyBtn.onclick = async () => {
+					try {
+						await navigator.clipboard.writeText(connectedAddress);
+						const flash = document.createElement('span');
+						flash.className = 'copied-flash';
+						flash.textContent = 'Copied!';
+						copyBtn.appendChild(flash);
+						setTimeout(() => flash.remove(), 1500);
+					} catch (err) {
+						console.error('Failed to copy address:', err);
+					}
+				};
+			}
+
+			const switchBtn = document.getElementById('wm-switch');
+			if (switchBtn) {
+				switchBtn.onclick = () => {
+					closeWalletMenu();
+					disconnectWallet();
+					setTimeout(() => connectWallet(), 120);
+				};
+			}
+
+			const disconnectBtn = document.getElementById('wm-disconnect');
+			if (disconnectBtn) {
+				disconnectBtn.onclick = () => {
+					closeWalletMenu();
+					disconnectWallet();
+				};
 			}
 		}
 
-		// Global wallet widget click handlers
-		if (globalWalletBtn) {
-			globalWalletBtn.addEventListener('click', (e) => {
+		// Update wallet widget (shared behavior with landing component)
+		function updateGlobalWalletWidget() {
+			if (!walletBtn || !walletBtnText) return;
+
+			updateWalletProfileButton();
+			if (!connectedAddress) {
+				walletBtn.classList.remove('connected');
+				walletBtnText.textContent = 'Connect';
+				closeWalletMenu();
+				if (walletMenu) walletMenu.innerHTML = '';
+				return;
+			}
+
+			const displayName = connectedPrimaryName || truncAddr(connectedAddress);
+			walletBtn.classList.add('connected');
+			walletBtnText.textContent = displayName;
+			renderWalletMenu();
+		}
+
+		if (walletProfileBtn) {
+			walletProfileBtn.addEventListener('click', (e) => {
 				e.stopPropagation();
-				if (!connectedAddress) {
-					// Not connected - show wallet modal
-					connectWallet();
-				} else {
-					// Connected - toggle dropdown
-					globalWalletWidget.classList.toggle('open');
-				}
+				window.location.href = walletProfileBtn.dataset.href || 'https://sui.ski';
 			});
 		}
 
-		// Close global wallet dropdown when clicking outside
+		if (walletBtn) {
+			walletBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				if (!connectedAddress) {
+					connectWallet();
+					return;
+				}
+				renderWalletMenu();
+				if (walletMenu) walletMenu.classList.toggle('open');
+			});
+		}
+
 		document.addEventListener('click', (e) => {
-			if (globalWalletWidget && !globalWalletWidget.contains(e.target)) {
-				globalWalletWidget.classList.remove('open');
-			}
+			if (walletWidget && walletWidget.contains(e.target)) return;
+			if (walletMenu && walletMenu.contains(e.target)) return;
+			closeWalletMenu();
 		});
 
 		// Global function to update UI when wallet connects/disconnects
 		// This can be extended by other features (messaging, etc.)
-		var updateUIForWallet = function() {
+			var updateUIForWallet = function() {
 			// Expose wallet state to window for cross-script access
 			window.connectedAddress = connectedAddress;
 			window.connectedWallet = connectedWallet;
@@ -1362,26 +1904,219 @@ export function generateProfilePage(
 			renderWalletBar();
 			updateGlobalWalletWidget();
 			checkEditPermission();
-			updateEditButton();
-			if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
-			if (typeof updateRenewalButton === 'function') updateRenewalButton();
-			if (typeof updateMarketplaceButton === 'function') updateMarketplaceButton();
-		};
+				updateEditButton();
+				if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
+				if (typeof updateRenewalButton === 'function') updateRenewalButton();
+				if (typeof updateMarketplaceButton === 'function') updateMarketplaceButton();
 
-		// Copy address to clipboard (uses NFT owner during grace period)
-		function copyAddress() {
+				if (connectedAddress && typeof pendingBidAmount !== 'undefined' && pendingBidAmount !== null) {
+					setTimeout(() => {
+						if (marketplaceBidAmountInput) {
+							marketplaceBidAmountInput.value = String(pendingBidAmount);
+						}
+						pendingBidAmount = null;
+						if (marketplacePlaceBidBtn) {
+							marketplacePlaceBidBtn.click();
+						}
+					}, 500);
+				}
+			};
+
+		const COPY_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+		const COPY_OK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+		function flashCopyButton(btn) {
+			if (!btn) return;
+			btn.innerHTML = COPY_OK_SVG;
+			setTimeout(() => {
+				btn.innerHTML = COPY_ICON_SVG;
+			}, 1500);
+		}
+
+		function flashTargetCopyButton(btn) {
+			if (!btn) return;
+			btn.classList.add('copied');
+			setTimeout(() => {
+				btn.classList.remove('copied');
+			}, 1400);
+		}
+
+		function flashTargetPreview() {
+			if (!targetPreviewBtn) return;
+			targetPreviewBtn.classList.add('copied');
+			setTimeout(() => {
+				targetPreviewBtn.classList.remove('copied');
+			}, 1400);
+		}
+
+		function flashOwnerAddress() {
+			if (!ownerAddrText) return;
+			ownerAddrText.classList.add('copied');
+			setTimeout(() => {
+				ownerAddrText.classList.remove('copied');
+			}, 1400);
+		}
+
+		// Copy owner address to clipboard (uses NFT owner during grace period)
+		async function copyAddress() {
 			const addressToCopy = ownerDisplayAddress || CURRENT_ADDRESS;
 			if (!addressToCopy) {
 				console.warn('No owner address available to copy.');
 				return;
 			}
 
-			navigator.clipboard.writeText(addressToCopy).then(() => {
-				copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-				setTimeout(() => {
-					copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-				}, 1500);
-			});
+			try {
+				await navigator.clipboard.writeText(addressToCopy);
+				flashCopyButton(copyBtn);
+				flashOwnerAddress();
+				showOwnerInlineStatus('Owner address copied to clipboard.', 'success');
+			} catch (error) {
+				console.error('Failed to copy owner address:', error);
+				showOwnerInlineStatus('Could not copy owner address.', 'error');
+			}
+		}
+
+		async function copyTargetAddress() {
+			const addressToCopy = getExplicitTargetAddress();
+			if (!addressToCopy) return;
+
+			try {
+				await navigator.clipboard.writeText(addressToCopy);
+				flashTargetCopyButton(copyTargetBtn);
+				flashTargetPreview();
+				showOwnerInlineStatus('Target address copied to clipboard.', 'success');
+			} catch (error) {
+				console.error('Failed to copy target address:', error);
+				showOwnerInlineStatus('Could not copy target address.', 'error');
+			}
+		}
+
+		function isLikelySuiAddress(address) {
+			return Boolean(address && typeof address === 'string' && address.startsWith('0x') && address.length >= 10);
+		}
+
+		function getExplicitTargetAddress() {
+			return currentTargetAddress || TARGET_ADDRESS || '';
+		}
+
+		function getActiveTargetAddress() {
+			return getExplicitTargetAddress() || CURRENT_ADDRESS || ownerDisplayAddress || '';
+		}
+
+		function canConnectedWalletEditTarget() {
+			const normalizedConnected = connectedAddress ? String(connectedAddress).toLowerCase() : '';
+			if (!normalizedConnected) return false;
+			const normalizedOwner = String(nftOwnerAddress || OWNER_ADDRESS || '').toLowerCase();
+			const normalizedTarget = String(getExplicitTargetAddress() || '').toLowerCase();
+			return Boolean(
+				(normalizedOwner && normalizedConnected === normalizedOwner)
+				|| (normalizedTarget && normalizedConnected === normalizedTarget),
+			);
+		}
+
+		function openSendModal() {
+			const recipient = getActiveTargetAddress();
+			if (!isLikelySuiAddress(recipient)) {
+				showOwnerInlineStatus('No valid target address available for this profile.', 'error');
+				return;
+			}
+			if (!connectedAddress || !connectedWallet || !connectedAccount) {
+				connectWallet().then(() => {
+					if (connectedAddress && connectedWallet && connectedAccount) openSendModal();
+				});
+				return;
+			}
+			if (sendRecipientAddressEl) {
+				sendRecipientAddressEl.textContent = recipient;
+				sendRecipientAddressEl.title = recipient;
+			}
+			if (sendAmountInput) sendAmountInput.value = '';
+			if (sendStatus) hideStatus(sendStatus);
+			if (sendModal) sendModal.classList.add('open');
+		}
+
+		function closeSendModal() {
+			if (sendModal) sendModal.classList.remove('open');
+			if (sendStatus) hideStatus(sendStatus);
+		}
+
+		async function sendSuiToProfile() {
+			if (!sendStatus || !sendConfirmBtn || !sendAmountInput) return;
+
+			const recipient = getActiveTargetAddress();
+			if (!isLikelySuiAddress(recipient)) {
+				showStatus(sendStatus, 'Recipient address is invalid', 'error');
+				return;
+			}
+			if (!connectedAddress || !connectedWallet || !connectedAccount) {
+				showStatus(sendStatus, 'Connect wallet first', 'error');
+				return;
+			}
+
+			const amountSui = Number(sendAmountInput.value);
+			if (!Number.isFinite(amountSui) || amountSui <= 0) {
+				showStatus(sendStatus, 'Enter a valid amount', 'error');
+				return;
+			}
+
+			const amountMist = BigInt(Math.ceil(amountSui * 1e9));
+			if (amountMist <= 0n) {
+				showStatus(sendStatus, 'Amount is too small', 'error');
+				return;
+			}
+
+			sendConfirmBtn.disabled = true;
+			showStatus(sendStatus, '<span class="loading"></span> Building transaction...', 'info');
+
+			try {
+				const tx = new Transaction();
+				tx.setSender(connectedAddress);
+				const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountMist)]);
+				tx.transferObjects([coin], tx.pure.address(recipient));
+				tx.setGasBudget(50000000);
+
+				showStatus(sendStatus, '<span class="loading"></span> Approve in wallet...', 'info');
+
+				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+				let result;
+				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
+
+				if (signExecFeature?.signAndExecuteTransaction) {
+					result = await signExecFeature.signAndExecuteTransaction({
+						transaction: tx,
+						account: connectedAccount,
+						chain,
+						options: { showEffects: true },
+					});
+				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
+						transactionBlock: tx,
+						account: connectedAccount,
+						chain,
+						options: { showEffects: true },
+					});
+				} else {
+					const txBytes = await tx.build({ client: getSuiClient() });
+					const phantomProvider = window.phantom?.sui;
+					if (phantomProvider?.signAndExecuteTransactionBlock) {
+						result = await phantomProvider.signAndExecuteTransactionBlock({
+							transactionBlock: txBytes,
+							options: { showEffects: true },
+						});
+					} else {
+						throw new Error('Wallet does not support transaction signing');
+					}
+				}
+
+				showStatus(sendStatus, '<strong>Sent!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
+				setTimeout(() => closeSendModal(), 1400);
+			} catch (error) {
+				const msg = error?.message || 'Transaction failed';
+				showStatus(sendStatus, 'Failed: ' + msg, 'error');
+			} finally {
+				sendConfirmBtn.disabled = false;
+			}
 		}
 
 		// ===== IDENTITY CARD (NFT + QR CODE) =====
@@ -1456,20 +2191,804 @@ export function generateProfilePage(
 			);
 		}
 
-		// Toggle button click
+		// Toggle button click (in name wrapper)
 		if (qrToggle) {
-			qrToggle.style.display = 'none'; // Hidden until NFT image loads
 			qrToggle.addEventListener('click', (e) => {
 				e.stopPropagation();
 				toggleIdentityView();
 			});
 		}
 
+			// Download button click (in name wrapper)
+			if (identityDownloadBtn) {
+				identityDownloadBtn.addEventListener('click', (e) => {
+					e.stopPropagation();
+					downloadIdentityImage(identityDownloadBtn, showingQr);
+				});
+			}
+			if (identityRestoreBtn) {
+				identityRestoreBtn.addEventListener('click', async (e) => {
+					e.stopPropagation();
+					await restoreIdentityVisual();
+				});
+			}
+
+				async function downloadIdentityImage(feedbackBtn, preferQr = showingQr) {
+					const taggedFilename = NAME.replace(/\\./g, '-') + '-sui.png';
+				const sealPayload = buildMetaSealPayload(preferQr);
+				try {
+					const taggedCanvas = await buildTaggedIdentityCanvas(preferQr, currentListing, currentBestBid);
+					if (taggedCanvas) {
+						triggerCanvasDownload(taggedCanvas, taggedFilename, feedbackBtn, sealPayload);
+						return;
+					}
+				} catch (error) {
+					console.error('Tagged download failed, using fallback:', error);
+				}
+
+				// Fallback to raw visual export if tagged generation fails
+				const fallbackFilename = NAME.replace(/\\./g, '-') + '-sui.png';
+				if (preferQr && identityCanvas) {
+					triggerCanvasDownload(identityCanvas, fallbackFilename, feedbackBtn, sealPayload);
+					return;
+				}
+				const nftImg = identityVisual?.querySelector('img');
+				if (nftImg) {
+					const canvas = document.createElement('canvas');
+				canvas.width = nftImg.naturalWidth || nftImg.width;
+				canvas.height = nftImg.naturalHeight || nftImg.height;
+					const ctx = canvas.getContext('2d');
+					if (ctx) {
+						ctx.drawImage(nftImg, 0, 0, canvas.width, canvas.height);
+						triggerCanvasDownload(canvas, fallbackFilename, feedbackBtn, sealPayload);
+						return;
+					}
+				}
+				if (identityCanvas) {
+					triggerCanvasDownload(identityCanvas, fallbackFilename, feedbackBtn, sealPayload);
+				}
+			}
+
+				async function buildTaggedIdentityCanvas(preferQr = showingQr, listing = null, bestBid = null) {
+					const nftSource = rawIdentityNftImage || identityVisual?.querySelector('img') || null;
+					const qrSource = identityCanvas && identityCanvas.width > 0 ? identityCanvas : null;
+					// Prefer the SuiNS registration NFT visual for export; QR is fallback only.
+					const visualSource = nftSource || qrSource;
+					if (!visualSource) return null;
+
+					const srcWidth = visualSource.naturalWidth || visualSource.width || 1600;
+					const srcHeight = visualSource.naturalHeight || visualSource.height || 900;
+					const canvas = document.createElement('canvas');
+					canvas.width = srcWidth;
+					canvas.height = srcHeight;
+					const ctx = canvas.getContext('2d');
+					if (!ctx) return null;
+
+					// Keep the exported image essentially the NFT itself.
+					ctx.drawImage(visualSource, 0, 0, srcWidth, srcHeight);
+
+					// Subtle contrast pass so logo implant reads on bright NFTs.
+					const topFade = ctx.createLinearGradient(0, 0, 0, srcHeight * 0.24);
+					topFade.addColorStop(0, 'rgba(5, 9, 20, 0.26)');
+					topFade.addColorStop(1, 'rgba(5, 9, 20, 0.0)');
+					ctx.fillStyle = topFade;
+					ctx.fillRect(0, 0, srcWidth, srcHeight * 0.24);
+
+					let logoImage = null;
+					try {
+						logoImage = await loadImageForCanvas(LOGO_DATA_URL);
+					} catch {}
+
+					// Place QR back in the lower-left corner.
+					const qrBadgeSize = Math.max(132, Math.round(Math.min(srcWidth, srcHeight) * 0.2));
+					const qrMargin = Math.max(16, Math.round(qrBadgeSize * 0.14));
+					const qrX = qrMargin;
+					const qrY = srcHeight - qrBadgeSize - qrMargin;
+					drawCornerBrandedQr(ctx, qrX, qrY, qrBadgeSize, PROFILE_URL, logoImage, qrSource);
+
+					// Upper-right brand lockup: shared sui.ski logo mark + ".sui.ski".
+					const brandIconSize = Math.max(40, Math.min(96, Math.round(Math.min(srcWidth, srcHeight) * 0.18)));
+					const brandPadding = Math.max(12, Math.round(Math.min(srcWidth, srcHeight) * 0.035));
+					const brandShiftDown = Math.max(6, Math.round(Math.min(srcWidth, srcHeight) * 0.018));
+					const brandX = srcWidth - brandPadding - brandIconSize;
+					const brandY = brandPadding + brandShiftDown;
+					if (logoImage) {
+						drawVisualIntoBox(
+							ctx,
+							logoImage,
+							brandX,
+							brandY,
+							brandIconSize,
+							brandIconSize,
+							Math.round(brandIconSize * 0.2),
+						);
+					} else {
+						drawSiteLogoGlyph(
+							ctx,
+							brandX,
+							brandY,
+							brandIconSize,
+						);
+					}
+
+						const nftTagSize = Math.max(13, Math.round(brandIconSize * 0.28));
+						const nftTagY = brandY + brandIconSize + Math.max(6, Math.round(nftTagSize * 0.42));
+						const brandTextGradient = ctx.createLinearGradient(
+							brandX,
+							brandY,
+							brandX + brandIconSize,
+							brandY + brandIconSize,
+						);
+						brandTextGradient.addColorStop(0, '#60a5fa');
+						brandTextGradient.addColorStop(1, '#a78bfa');
+						ctx.fillStyle = brandTextGradient;
+						ctx.font = '700 ' + nftTagSize + 'px Inter, system-ui, -apple-system, sans-serif';
+						ctx.textAlign = 'center';
+						ctx.textBaseline = 'alphabetic';
+						ctx.fillText('.sui.ski', brandX + brandIconSize / 2, nftTagY);
+						ctx.textAlign = 'left';
+
+					// Draw TradePort market data badge if available
+					const hasListing = listing && listing.price;
+					const hasBestBid = bestBid && bestBid.price;
+					if (hasListing || hasBestBid) {
+						let tradeportLogo = null;
+						try {
+							const rawLogo = await loadImageForCanvas(TRADEPORT_LOGO_URL);
+							const tempCanvas = document.createElement('canvas');
+							tempCanvas.width = rawLogo.width;
+							tempCanvas.height = rawLogo.height;
+							const tempCtx = tempCanvas.getContext('2d');
+							tempCtx.drawImage(rawLogo, 0, 0);
+							const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+							const data = imageData.data;
+							for (let i = 0; i < data.length; i += 4) {
+								const r = data[i];
+								const g = data[i + 1];
+								const b = data[i + 2];
+								const brightness = (r + g + b) / 3;
+								if (brightness > 240) {
+									data[i + 3] = 0;
+								}
+							}
+							tempCtx.putImageData(imageData, 0, 0);
+							tradeportLogo = tempCanvas;
+						} catch {}
+
+						const badgePadding = Math.max(10, Math.round(Math.min(srcWidth, srcHeight) * 0.015));
+						const priceTextSize = Math.max(16, Math.round(Math.min(srcWidth, srcHeight) * 0.04));
+						const labelTextSize = Math.max(14, Math.round(priceTextSize * 0.9));
+						const logoSize = Math.max(28, Math.round(priceTextSize * 3.0));
+						const labelLineHeight = labelTextSize + 3;
+						const valueLineHeight = priceTextSize + 2;
+
+						const formatSuiPrice = (mist) => {
+							const sui = Number(mist) / 1e9;
+							const whole = Math.floor(sui);
+							const decimal = sui - whole;
+							if (decimal < 0.05) {
+								return whole.toString();
+							}
+							return sui.toFixed(2);
+						};
+
+						const entries = [];
+						if (hasListing) {
+							const listPrice = formatSuiPrice(listing.price);
+							entries.push({ label: 'List:', suiValue: listPrice + ' SUI' });
+						}
+						if (hasBestBid) {
+							const bidPrice = formatSuiPrice(bestBid.price);
+							entries.push({ label: 'Offer:', suiValue: bidPrice + ' SUI' });
+						}
+
+						ctx.font = '700 ' + priceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
+						let maxWidth = 0;
+						for (const entry of entries) {
+							const labelWidth = ctx.measureText(entry.label).width;
+							const valueWidth = ctx.measureText(entry.suiValue).width;
+							maxWidth = Math.max(maxWidth, labelWidth, valueWidth);
+						}
+
+						const entryHeight = labelLineHeight + valueLineHeight;
+						const totalEntriesHeight = entries.length * entryHeight + (entries.length - 1) * 4;
+						const badgeWidth = logoSize + badgePadding + maxWidth + badgePadding;
+						const badgeHeight = Math.max(logoSize, totalEntriesHeight) + badgePadding * 2;
+						const badgeSpacing = Math.max(12, Math.round(qrMargin * 0.6));
+						const badgeX = qrX;
+						const badgeY = qrY - badgeHeight - badgeSpacing;
+
+						if (tradeportLogo) {
+							const logoX = badgeX + badgePadding;
+							const logoY = badgeY + badgePadding + 7;
+							ctx.drawImage(tradeportLogo, logoX, logoY, logoSize, logoSize);
+						}
+
+						ctx.textAlign = 'left';
+						ctx.textBaseline = 'top';
+
+						const textX = badgeX + badgePadding + logoSize + badgePadding;
+						const logoBottomY = badgeY + badgePadding + 7 + logoSize;
+						const additionalOffset = Math.max(10, Math.round(badgePadding * 1.2));
+						const textStartY = logoBottomY - totalEntriesHeight + additionalOffset;
+
+						ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
+						ctx.lineWidth = Math.max(5, Math.round(priceTextSize * 0.4));
+						ctx.lineJoin = 'round';
+						ctx.miterLimit = 2;
+						ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+						ctx.shadowBlur = Math.max(6, Math.round(priceTextSize * 0.5));
+						ctx.shadowOffsetX = 0;
+						ctx.shadowOffsetY = 1;
+
+						let currentY = textStartY;
+						for (let i = 0; i < entries.length; i++) {
+							const entry = entries[i];
+
+							ctx.font = '700 ' + labelTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
+							ctx.strokeText(entry.label, textX, currentY);
+							ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+							ctx.fillText(entry.label, textX, currentY);
+
+							currentY += labelLineHeight;
+
+							ctx.font = '800 ' + priceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
+							ctx.strokeText(entry.suiValue, textX, currentY);
+							ctx.fillStyle = '#FFFFFF';
+							ctx.fillText(entry.suiValue, textX, currentY);
+
+							currentY += valueLineHeight + 4;
+						}
+
+						ctx.shadowColor = 'transparent';
+						ctx.textAlign = 'left';
+					}
+
+					return canvas;
+				}
+
+			async function applyTaggedIdentityToProfile() {
+				if (!identityVisual || !rawIdentityNftImage) return;
+				try {
+					const taggedCanvas = await buildTaggedIdentityCanvas(false, currentListing, currentBestBid);
+					if (!taggedCanvas) return;
+					const taggedImg = new Image();
+					taggedImg.onload = () => {
+						const existingImg = identityVisual.querySelector('img');
+						if (existingImg) existingImg.remove();
+						taggedImg.style.width = '100%';
+						taggedImg.style.height = '100%';
+						taggedImg.style.objectFit = 'cover';
+						taggedImg.style.display = 'block';
+						taggedImg.style.position = 'absolute';
+						taggedImg.style.top = '0';
+						taggedImg.style.left = '0';
+						taggedImg.style.borderRadius = '12px';
+						identityVisual.appendChild(taggedImg);
+						if (identityCanvas) identityCanvas.style.display = 'none';
+
+						// Keep viewer in sync with tagged profile visual.
+						if (nftViewerImage) {
+							const viewerImg = nftViewerImage.querySelector('img');
+							if (viewerImg) viewerImg.remove();
+							const clone = taggedImg.cloneNode(true);
+							clone.style.position = 'static';
+							clone.style.borderRadius = '16px';
+							nftViewerImage.appendChild(clone);
+						}
+					};
+					taggedImg.src = taggedCanvas.toDataURL('image/png');
+				} catch (error) {
+					console.error('Failed to apply tagged identity visual:', error);
+				}
+			}
+
+		function drawRoundedRect(ctx, x, y, width, height, radius) {
+			const r = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
+			ctx.beginPath();
+			ctx.moveTo(x + r, y);
+			ctx.arcTo(x + width, y, x + width, y + height, r);
+			ctx.arcTo(x + width, y + height, x, y + height, r);
+			ctx.arcTo(x, y + height, x, y, r);
+			ctx.arcTo(x, y, x + width, y, r);
+			ctx.closePath();
+		}
+
+		function drawSiteLogoGlyph(ctx, x, y, size) {
+			// Exact sui.ski mark geometry used site-wide: 512 viewbox.
+			const scale = size / 512;
+			const px = (v) => x + v * scale;
+			const py = (v) => y + v * scale;
+			const lg = ctx.createLinearGradient(x, y, x + size, y + size);
+			lg.addColorStop(0, '#60a5fa');
+			lg.addColorStop(1, '#a78bfa');
+
+			ctx.save();
+			ctx.fillStyle = lg;
+			ctx.beginPath();
+			ctx.moveTo(px(256), py(96));
+			ctx.lineTo(px(416), py(352));
+			ctx.lineTo(px(336), py(352));
+			ctx.lineTo(px(280), py(256));
+			ctx.lineTo(px(256), py(296));
+			ctx.lineTo(px(232), py(256));
+			ctx.lineTo(px(176), py(352));
+			ctx.lineTo(px(96), py(352));
+			ctx.closePath();
+			ctx.fill();
+
+			ctx.strokeStyle = lg;
+			ctx.lineWidth = Math.max(1.5, 24 * scale);
+			ctx.lineCap = 'round';
+			ctx.beginPath();
+			ctx.moveTo(px(128), py(384));
+			ctx.quadraticCurveTo(px(208), py(348), px(288), py(384));
+			ctx.quadraticCurveTo(px(368), py(420), px(432), py(384));
+			ctx.stroke();
+			ctx.restore();
+		}
+
+		function drawSuiWaveMark(ctx, x, baselineY, width) {
+			// Based on: M128 384Q208 348 288 384Q368 420 432 384
+			const pathWidth = 304;
+			const scale = width / pathWidth;
+			const lineWidth = Math.max(4, Math.round(24 * scale));
+			const c1x = x + 80 * scale;
+			const c1y = baselineY - 36 * scale;
+			const midX = x + 160 * scale;
+			const midY = baselineY;
+			const c2x = x + 240 * scale;
+			const c2y = baselineY + 36 * scale;
+			const endX = x + 304 * scale;
+			const endY = baselineY;
+
+			const lg = ctx.createLinearGradient(x, baselineY, endX, baselineY);
+			lg.addColorStop(0, 'rgba(106, 227, 255, 0.9)');
+			lg.addColorStop(0.5, 'rgba(133, 122, 255, 0.9)');
+			lg.addColorStop(1, 'rgba(131, 250, 191, 0.9)');
+
+			ctx.save();
+			ctx.lineCap = 'round';
+			ctx.lineWidth = lineWidth;
+			ctx.strokeStyle = lg;
+			ctx.beginPath();
+			ctx.moveTo(x, baselineY);
+			ctx.quadraticCurveTo(c1x, c1y, midX, midY);
+			ctx.quadraticCurveTo(c2x, c2y, endX, endY);
+			ctx.stroke();
+			ctx.restore();
+		}
+
+		function drawSuiPeakMark(ctx, x, y, width) {
+			// Based on: M256 96L416 352H336L280 256L256 296L232 256L176 352H96Z
+			const baseMinX = 96;
+			const baseMinY = 96;
+			const pathWidth = 320;
+			const pathHeight = 256;
+			const scale = width / pathWidth;
+
+			const px = (value) => x + (value - baseMinX) * scale;
+			const py = (value) => y + (value - baseMinY) * scale;
+
+			const lg = ctx.createLinearGradient(x, y, x + width, y + pathHeight * scale);
+			lg.addColorStop(0, 'rgba(111, 255, 209, 0.95)');
+			lg.addColorStop(0.45, 'rgba(132, 119, 255, 0.95)');
+			lg.addColorStop(1, 'rgba(248, 125, 186, 0.95)');
+
+			ctx.save();
+			ctx.beginPath();
+			ctx.moveTo(px(256), py(96));
+			ctx.lineTo(px(416), py(352));
+			ctx.lineTo(px(336), py(352));
+			ctx.lineTo(px(280), py(256));
+			ctx.lineTo(px(256), py(296));
+			ctx.lineTo(px(232), py(256));
+			ctx.lineTo(px(176), py(352));
+			ctx.lineTo(px(96), py(352));
+			ctx.closePath();
+			ctx.fillStyle = lg;
+			ctx.fill();
+			ctx.restore();
+		}
+
+			function drawVisualIntoBox(ctx, source, x, y, width, height, radius = 0) {
+				const srcWidth = source.naturalWidth || source.videoWidth || source.width;
+				const srcHeight = source.naturalHeight || source.videoHeight || source.height;
+				if (!srcWidth || !srcHeight) return;
+
+			const scale = Math.max(width / srcWidth, height / srcHeight);
+			const drawWidth = srcWidth * scale;
+			const drawHeight = srcHeight * scale;
+			const drawX = x + (width - drawWidth) / 2;
+			const drawY = y + (height - drawHeight) / 2;
+
+			ctx.save();
+			if (radius > 0) {
+				drawRoundedRect(ctx, x, y, width, height, radius);
+				ctx.clip();
+			}
+				ctx.drawImage(source, drawX, drawY, drawWidth, drawHeight);
+				ctx.restore();
+			}
+
+			function buildQrCanvasForExport(size, value, fallbackCanvas = null) {
+				// Reuse the exact in-page QR canvas first so download matches profile styling/colors.
+				if (fallbackCanvas && fallbackCanvas.width > 0 && fallbackCanvas.height > 0) {
+					return fallbackCanvas;
+				}
+				if (window.QRious) {
+					const qrCanvas = document.createElement('canvas');
+					new window.QRious({
+						element: qrCanvas,
+						value,
+						size,
+						level: 'H',
+						padding: 0,
+						background: '#ffffff',
+						foreground: '#0b1224',
+					});
+					return qrCanvas;
+				}
+				return null;
+			}
+
+			function sampleDarkness(imageData, width, height, x, y) {
+				const px = Math.max(0, Math.min(width - 1, Math.round(x)));
+				const py = Math.max(0, Math.min(height - 1, Math.round(y)));
+				const idx = (py * width + px) * 4;
+				const r = imageData[idx];
+				const g = imageData[idx + 1];
+				const b = imageData[idx + 2];
+				const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+				return 1 - luminance / 255; // 1 = dark, 0 = light
+			}
+
+			function estimateQrModuleCount(imageData, size) {
+				let bestModules = 29;
+				let bestScore = -Infinity;
+				// Practical range for these URLs; keeps scoring fast.
+				for (let modules = 21; modules <= 73; modules += 4) {
+					const step = size / modules;
+					if (step < 1.5) continue;
+					let score = 0;
+					for (let y = 0; y < modules; y++) {
+						for (let x = 0; x < modules; x++) {
+							const cx = (x + 0.5) * step;
+							const cy = (y + 0.5) * step;
+							const dark = sampleDarkness(imageData, size, size, cx, cy);
+							score += Math.abs(dark - 0.5);
+						}
+					}
+					if (score > bestScore) {
+						bestScore = score;
+						bestModules = modules;
+					}
+				}
+				return bestModules;
+			}
+
+			function decodeQrMatrixFromCanvas(baseQrCanvas, size) {
+				const readCanvas = document.createElement('canvas');
+				readCanvas.width = size;
+				readCanvas.height = size;
+				const readCtx = readCanvas.getContext('2d');
+				if (!readCtx) return null;
+				readCtx.fillStyle = '#ffffff';
+				readCtx.fillRect(0, 0, size, size);
+				readCtx.drawImage(baseQrCanvas, 0, 0, size, size);
+				const image = readCtx.getImageData(0, 0, size, size);
+				const modules = estimateQrModuleCount(image.data, size);
+				const step = size / modules;
+				const matrix = Array.from({ length: modules }, () => Array(modules).fill(false));
+				for (let y = 0; y < modules; y++) {
+					for (let x = 0; x < modules; x++) {
+						const cx = (x + 0.5) * step;
+						const cy = (y + 0.5) * step;
+						const dark = sampleDarkness(image.data, size, size, cx, cy);
+						matrix[y][x] = dark >= 0.5;
+					}
+				}
+				return matrix;
+			}
+
+			function isFinderRegion(x, y, modules) {
+				const edge = modules - 7;
+				return (x < 7 && y < 7) || (x >= edge && y < 7) || (x < 7 && y >= edge);
+			}
+
+			function drawRoundedModule(ctx, x, y, size, radius) {
+				drawRoundedRect(ctx, x, y, size, size, radius);
+				ctx.fill();
+			}
+
+			function drawStyledFinderEye(ctx, x, y, cell, themeGradient) {
+				const outer = 7 * cell;
+				const inner = 5 * cell;
+				const pupil = 3 * cell;
+				const rOuter = Math.max(cell * 0.9, 3);
+				const rInner = Math.max(cell * 0.7, 2);
+				const rPupil = Math.max(cell * 0.55, 1.5);
+
+				ctx.save();
+				ctx.fillStyle = themeGradient;
+				drawRoundedRect(ctx, x, y, outer, outer, rOuter);
+				ctx.fill();
+
+				// Branded accent ring on top of the dark finder base.
+				const accent = ctx.createLinearGradient(x, y, x + outer, y + outer);
+				accent.addColorStop(0, 'rgba(99, 224, 255, 0.7)');
+				accent.addColorStop(0.5, 'rgba(139, 120, 255, 0.55)');
+				accent.addColorStop(1, 'rgba(122, 244, 205, 0.7)');
+				ctx.lineWidth = Math.max(1.2, cell * 0.32);
+				ctx.strokeStyle = accent;
+				drawRoundedRect(
+					ctx,
+					x + ctx.lineWidth * 0.5,
+					y + ctx.lineWidth * 0.5,
+					outer - ctx.lineWidth,
+					outer - ctx.lineWidth,
+					Math.max(1, rOuter - ctx.lineWidth * 0.4),
+				);
+				ctx.stroke();
+
+				// Keep center ring as negative-space to blend with underlying NFT tones.
+				clearRoundedRect(ctx, x + cell, y + cell, inner, inner, rInner);
+
+				// Soft ring inside the white window for depth.
+				ctx.lineWidth = Math.max(1, cell * 0.2);
+				ctx.strokeStyle = 'rgba(202, 220, 255, 0.44)';
+				drawRoundedRect(
+					ctx,
+					x + cell + ctx.lineWidth * 0.5,
+					y + cell + ctx.lineWidth * 0.5,
+					inner - ctx.lineWidth,
+					inner - ctx.lineWidth,
+					Math.max(1, rInner - ctx.lineWidth * 0.35),
+				);
+				ctx.stroke();
+
+				ctx.fillStyle = 'rgba(11, 18, 36, 0.98)';
+				drawRoundedRect(ctx, x + 2 * cell, y + 2 * cell, pupil, pupil, rPupil);
+				ctx.fill();
+
+				// Tiny highlight in the pupil.
+				const h = Math.max(0.8, cell * 0.36);
+				ctx.fillStyle = 'rgba(210, 240, 255, 0.78)';
+				drawRoundedRect(
+					ctx,
+					x + 2 * cell + h * 0.65,
+					y + 2 * cell + h * 0.5,
+					h,
+					h,
+					h * 0.45,
+				);
+				ctx.fill();
+				ctx.restore();
+			}
+
+			function clearRoundedRect(ctx, x, y, width, height, radius) {
+				ctx.save();
+				drawRoundedRect(ctx, x, y, width, height, radius);
+				ctx.clip();
+				ctx.clearRect(Math.floor(x) - 1, Math.floor(y) - 1, Math.ceil(width) + 2, Math.ceil(height) + 2);
+				ctx.restore();
+			}
+
+			function styleQrCanvas(baseQrCanvas, size) {
+				const matrix = decodeQrMatrixFromCanvas(baseQrCanvas, size);
+				if (!matrix || !matrix.length) return baseQrCanvas;
+				const modules = matrix.length;
+				const quietModules = 4;
+				const totalModules = modules + quietModules * 2;
+				const cell = size / totalModules;
+				const origin = quietModules * cell;
+
+				const styled = document.createElement('canvas');
+				styled.width = size;
+				styled.height = size;
+				const styledCtx = styled.getContext('2d');
+				if (!styledCtx) return baseQrCanvas;
+
+				const moduleGradient = styledCtx.createLinearGradient(0, 0, size, size);
+				moduleGradient.addColorStop(0, 'rgba(5, 12, 27, 0.96)');
+				moduleGradient.addColorStop(0.42, 'rgba(15, 34, 64, 0.96)');
+				moduleGradient.addColorStop(1, 'rgba(13, 56, 91, 0.96)');
+				styledCtx.fillStyle = moduleGradient;
+
+				const moduleRadius = Math.max(0.8, cell * 0.29);
+				for (let y = 0; y < modules; y++) {
+					for (let x = 0; x < modules; x++) {
+						if (!matrix[y][x] || isFinderRegion(x, y, modules)) continue;
+						const px = origin + x * cell;
+						const py = origin + y * cell;
+						drawRoundedModule(styledCtx, px, py, cell, moduleRadius);
+					}
+				}
+
+				const topLeftTheme = styledCtx.createLinearGradient(origin, origin, origin + 7 * cell, origin + 7 * cell);
+				topLeftTheme.addColorStop(0, 'rgba(10, 22, 48, 1)');
+				topLeftTheme.addColorStop(1, 'rgba(23, 84, 145, 1)');
+				drawStyledFinderEye(styledCtx, origin, origin, cell, topLeftTheme);
+
+				const topRightX = origin + (modules - 7) * cell;
+				const topRightTheme = styledCtx.createLinearGradient(topRightX, origin, topRightX + 7 * cell, origin + 7 * cell);
+				topRightTheme.addColorStop(0, 'rgba(12, 34, 66, 1)');
+				topRightTheme.addColorStop(1, 'rgba(28, 97, 162, 1)');
+				drawStyledFinderEye(styledCtx, topRightX, origin, cell, topRightTheme);
+
+				const bottomLeftY = origin + (modules - 7) * cell;
+				const bottomLeftTheme = styledCtx.createLinearGradient(origin, bottomLeftY, origin + 7 * cell, bottomLeftY + 7 * cell);
+				bottomLeftTheme.addColorStop(0, 'rgba(11, 28, 56, 1)');
+				bottomLeftTheme.addColorStop(1, 'rgba(24, 91, 152, 1)');
+				drawStyledFinderEye(styledCtx, origin, bottomLeftY, cell, bottomLeftTheme);
+
+				return styled;
+			}
+
+			function sampleBackdropTone(ctx, x, y, width, height) {
+				const fallback = { r: 24, g: 38, b: 64 };
+				try {
+					const sx = Math.max(0, Math.floor(x));
+					const sy = Math.max(0, Math.floor(y));
+					const sw = Math.max(1, Math.min(ctx.canvas.width - sx, Math.floor(width)));
+					const sh = Math.max(1, Math.min(ctx.canvas.height - sy, Math.floor(height)));
+					const img = ctx.getImageData(sx, sy, sw, sh).data;
+					let r = 0;
+					let g = 0;
+					let b = 0;
+					let count = 0;
+					const stride = Math.max(1, Math.floor(Math.min(sw, sh) / 18));
+					for (let py = 0; py < sh; py += stride) {
+						for (let px = 0; px < sw; px += stride) {
+							const idx = (py * sw + px) * 4;
+							r += img[idx];
+							g += img[idx + 1];
+							b += img[idx + 2];
+							count++;
+						}
+					}
+					if (!count) return fallback;
+					r = Math.round(r / count);
+					g = Math.round(g / count);
+					b = Math.round(b / count);
+					// Keep NFT hue but gently lift brightness for scan contrast.
+					return {
+						r: Math.round(r + (255 - r) * 0.18),
+						g: Math.round(g + (255 - g) * 0.18),
+						b: Math.round(b + (255 - b) * 0.18),
+					};
+				} catch {
+					return fallback;
+				}
+			}
+
+			function drawCornerBrandedQr(ctx, x, y, size, targetUrl, logoImage = null, fallbackQrCanvas = null) {
+				const qrCanvas = buildQrCanvasForExport(Math.max(256, size), targetUrl, fallbackQrCanvas);
+				if (!qrCanvas) return;
+
+				// Draw the same QR visual from profile page directly on top of the NFT.
+				drawVisualIntoBox(ctx, qrCanvas, x, y, size, size, Math.round(size * 0.08));
+			}
+
+		function loadImageForCanvas(src) {
+			return new Promise((resolve, reject) => {
+				const img = new Image();
+				img.crossOrigin = 'anonymous';
+				img.onload = () => resolve(img);
+				img.onerror = reject;
+				img.src = src;
+			});
+		}
+
+				function buildMetaSealPayload(preferQr) {
+					return JSON.stringify({
+						s: META_SEAL_SCHEMA,
+						a: 'sui.ski',
+						n: FULL_NAME,
+						d: NAME + '.sui.ski',
+						p: PROFILE_URL,
+						net: NETWORK,
+						nft: NFT_ID || null,
+						v: preferQr ? 'qr' : 'nft',
+						t: Date.now(),
+					});
+				}
+
+			function hash32(text) {
+				let hash = 2166136261;
+				for (let i = 0; i < text.length; i++) {
+					hash ^= text.charCodeAt(i);
+					hash = Math.imul(hash, 16777619);
+				}
+				return hash >>> 0;
+			}
+
+			function applyMetaSealSignature(sourceCanvas, payload) {
+				const sealedCanvas = document.createElement('canvas');
+				sealedCanvas.width = sourceCanvas.width;
+				sealedCanvas.height = sourceCanvas.height;
+				const sealedCtx = sealedCanvas.getContext('2d');
+				if (!sealedCtx) return sourceCanvas;
+
+				sealedCtx.drawImage(sourceCanvas, 0, 0);
+				const imageData = sealedCtx.getImageData(0, 0, sealedCanvas.width, sealedCanvas.height);
+				const data = imageData.data;
+				const totalPixels = data.length / 4;
+
+				const encoder = new TextEncoder();
+					const payloadBytes = encoder.encode(payload).slice(0, 192);
+				const sealBytes = new Uint8Array(payloadBytes.length + 8);
+				sealBytes[0] = 0x4d; // M
+				sealBytes[1] = 0x53; // S
+				sealBytes[2] = 0x4c; // L
+				sealBytes[3] = 0x31; // 1
+				sealBytes[4] = (payloadBytes.length >> 8) & 0xff;
+				sealBytes[5] = payloadBytes.length & 0xff;
+				let checksum = 0;
+				for (const b of payloadBytes) checksum = (checksum + b) & 0xff;
+				sealBytes[6] = checksum;
+				sealBytes[7] = hash32(payload) & 0xff;
+				sealBytes.set(payloadBytes, 8);
+
+				const bitCount = sealBytes.length * 8;
+				if (totalPixels < bitCount * 2) return sealedCanvas;
+
+				const seed = hash32(payload) % totalPixels;
+					const step = Math.max(31, Math.floor(totalPixels / (bitCount + 101)));
+				let pixelIndex = seed;
+
+				for (let i = 0; i < bitCount; i++) {
+					const byte = sealBytes[i >> 3];
+					const bit = (byte >> (7 - (i & 7))) & 1;
+					const channelIndex = pixelIndex * 4 + 2; // Blue channel LSB
+					data[channelIndex] = (data[channelIndex] & 0xfe) | bit;
+					pixelIndex = (pixelIndex + step + (i % 13)) % totalPixels;
+				}
+
+				sealedCtx.putImageData(imageData, 0, 0);
+				return sealedCanvas;
+			}
+
+			function triggerCanvasDownload(canvas, filename, feedbackBtn, sealPayload = null) {
+				try {
+					const exportCanvas = sealPayload ? applyMetaSealSignature(canvas, sealPayload) : canvas;
+					exportCanvas.toBlob((blob) => {
+						if (!blob) return;
+						const url = URL.createObjectURL(blob);
+						const a = document.createElement('a');
+					a.href = url;
+					a.download = filename;
+					document.body.appendChild(a);
+					a.click();
+					document.body.removeChild(a);
+					URL.revokeObjectURL(url);
+					if (feedbackBtn) flashDownloadSuccess(feedbackBtn);
+				}, 'image/png');
+			} catch (error) {
+				console.error('Failed to export image:', error);
+			}
+		}
+
+		function flashDownloadSuccess(btn) {
+			btn.classList.add('success');
+			const orig = btn.innerHTML;
+			btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+			setTimeout(() => {
+				btn.classList.remove('success');
+				btn.innerHTML = orig;
+			}, 1500);
+		}
+
 		// ===== QR CODE =====
-		const qrExpanded = document.getElementById('qr-expanded');
+		const nftViewer = document.getElementById('nft-viewer');
+		const nftViewerContent = document.getElementById('nft-viewer-content');
+		const nftViewerImage = document.getElementById('nft-viewer-image');
+		const nftViewerClose = document.getElementById('nft-viewer-close');
+		const nftViewerQrBtn = document.getElementById('nft-viewer-qr-btn');
+		const nftViewerCopyBtn = document.getElementById('nft-viewer-copy-btn');
+		const nftViewerDownloadBtn = document.getElementById('nft-viewer-download-btn');
 		const qrExpandedCanvas = document.getElementById('qr-expanded-canvas');
-		const qrCopyBtn = document.getElementById('qr-copy-btn');
-		const qrDownloadBtn = document.getElementById('qr-download-btn');
+		let viewerShowingQr = false;
 
 		async function loadQRious() {
 			if (window.QRious) return;
@@ -1482,11 +3001,11 @@ export function generateProfilePage(
 			});
 		}
 
-		function renderQR(canvas, size) {
+		function renderQR(canvas, size, value = PROFILE_URL) {
 			if (!canvas || !window.QRious) return;
 			new window.QRious({
 				element: canvas,
-				value: PROFILE_URL,
+				value: value,
 				size: size,
 				level: 'H',
 				background: '#050818',
@@ -1499,18 +3018,39 @@ export function generateProfilePage(
 			await loadQRious();
 			if (identityCanvas) renderQR(identityCanvas, 320);
 			if (qrExpandedCanvas) renderQR(qrExpandedCanvas, 420);
+			if (rawIdentityNftImage) applyTaggedIdentityToProfile();
 		}
 
-		function openQrOverlay() {
-			qrExpanded?.classList.add('active');
+		function openNftViewer() {
+			if (!nftViewer) return;
+			viewerShowingQr = false;
+			syncViewerDisplay();
+			nftViewer.classList.add('active');
 		}
 
-		// Click identity visual to expand QR
+		function closeNftViewer() {
+			nftViewer?.classList.remove('active');
+		}
+
+		function syncViewerDisplay() {
+			if (!nftViewerImage) return;
+			const existingImg = nftViewerImage.querySelector('img');
+			const viewerCanvas = nftViewerImage.querySelector('canvas');
+			if (viewerShowingQr) {
+				if (existingImg) existingImg.style.display = 'none';
+				if (viewerCanvas) viewerCanvas.style.display = 'block';
+				if (nftViewerQrBtn) nftViewerQrBtn.classList.add('active');
+			} else {
+				if (existingImg) existingImg.style.display = 'block';
+				if (viewerCanvas) viewerCanvas.style.display = nftImageUrl ? 'none' : 'block';
+				if (nftViewerQrBtn) nftViewerQrBtn.classList.remove('active');
+			}
+		}
+
+		// Click identity visual to open viewer
 		if (identityVisual) {
-			identityVisual.addEventListener('click', (e) => {
-				// Don't expand if clicking toggle button (if it exists)
-				if (e.target.closest('.identity-qr-toggle')) return;
-				openQrOverlay();
+			identityVisual.addEventListener('click', () => {
+				openNftViewer();
 			});
 		}
 
@@ -1535,23 +3075,46 @@ export function generateProfilePage(
 			});
 		}
 
-		if (qrExpanded) {
-			qrExpanded.addEventListener('click', (e) => {
-				if (e.target === qrExpanded || e.target.id === 'qr-close') {
-					qrExpanded.classList.remove('active');
-				}
+		// NFT Viewer: close on backdrop or X click
+		if (nftViewer) {
+			nftViewer.addEventListener('click', (e) => {
+				if (e.target === nftViewer) closeNftViewer();
+			});
+		}
+		if (nftViewerClose) {
+			nftViewerClose.addEventListener('click', (e) => {
+				e.stopPropagation();
+				closeNftViewer();
 			});
 		}
 
-		// Copy URL (expanded overlay)
-		if (qrCopyBtn) {
-			qrCopyBtn.addEventListener('click', async (e) => {
+		// NFT Viewer: click image to toggle NFT/QR
+		if (nftViewerImage) {
+			nftViewerImage.addEventListener('click', (e) => {
+				e.stopPropagation();
+				viewerShowingQr = !viewerShowingQr;
+				syncViewerDisplay();
+			});
+		}
+
+		// NFT Viewer: QR button
+		if (nftViewerQrBtn) {
+			nftViewerQrBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				viewerShowingQr = !viewerShowingQr;
+				syncViewerDisplay();
+			});
+		}
+
+		// NFT Viewer: Copy URL
+		if (nftViewerCopyBtn) {
+			nftViewerCopyBtn.addEventListener('click', async (e) => {
 				e.stopPropagation();
 				try {
 					await navigator.clipboard.writeText(PROFILE_URL);
-					qrCopyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+					nftViewerCopyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
 					setTimeout(() => {
-						qrCopyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy';
+						nftViewerCopyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy';
 					}, 1500);
 				} catch (err) {
 					console.error('Copy failed:', err);
@@ -1559,25 +3122,18 @@ export function generateProfilePage(
 			});
 		}
 
-		// Download QR
-		if (qrDownloadBtn) {
-			qrDownloadBtn.addEventListener('click', (e) => {
+		// NFT Viewer: Download
+		if (nftViewerDownloadBtn) {
+			nftViewerDownloadBtn.addEventListener('click', (e) => {
 				e.stopPropagation();
-				if (!qrExpandedCanvas) return;
-				const link = document.createElement('a');
-				link.download = NAME + '-qr.png';
-				link.href = qrExpandedCanvas.toDataURL('image/png');
-				link.click();
+				downloadIdentityImage(nftViewerDownloadBtn, viewerShowingQr);
 			});
 		}
 
-		// Initialize QR code - show it initially as placeholder until NFT loads
+		// Initialize QR code
 		initQR().then(() => {
-			// Show QR code initially (will be hidden when NFT loads)
 			showIdentityQr();
 		}).catch(console.error);
-		// Hide toggle button initially (will show when NFT loads)
-		if (qrToggle) qrToggle.style.display = 'none';
 
 		// Generate SuiNS image URL via our proxy (to avoid CORS issues)
 		function getSuiNSImageUrl(domainName, expirationMs = null) {
@@ -1621,9 +3177,9 @@ export function generateProfilePage(
 			tryNextUrl();
 		}
 
-		// Normalize image URL (handle IPFS, proxy external URLs to avoid CORS)
-		function normalizeImageUrl(url) {
-			if (!url || typeof url !== 'string') return null;
+			// Normalize image URL (handle IPFS, proxy external URLs to avoid CORS)
+			function normalizeImageUrl(url) {
+				if (!url || typeof url !== 'string') return null;
 
 			// Check if it's an IPFS CID (starts with Qm or bafy)
 			if (/^(Qm|bafy)[A-Za-z0-9]+/i.test(url)) {
@@ -1643,21 +3199,116 @@ export function generateProfilePage(
 			if (url.startsWith('http://') || url.startsWith('https://')) {
 				// Proxy external URLs to avoid CORS issues
 				return \`/api/image-proxy?url=\${encodeURIComponent(url)}\`;
+				}
+				return null;
 			}
-			return null;
-		}
 
-		// Display NFT image in identity card
-		function displayNFTImage(img, imageUrl) {
-			if (!identityVisual) return;
+			function normalizeIdentityName(value) {
+				return String(value || '').toLowerCase().replace(/\\.sui$/i, '');
+			}
 
-			// Remove any existing images
+			async function buildIdentityImageCandidates(forceRecovery = false) {
+				const imageUrlsToTry = [];
+				const addUniqueImageUrl = (url) => {
+					if (!url || imageUrlsToTry.includes(url)) return;
+					imageUrlsToTry.push(url);
+				};
+
+				// Always prefer the direct SuiNS image endpoint for the active profile name.
+				if (typeof EXPIRATION_MS === 'number' && EXPIRATION_MS > 0) {
+					addUniqueImageUrl(getSuiNSImageUrl(NAME, EXPIRATION_MS));
+				}
+				addUniqueImageUrl(getSuiNSImageUrl(NAME));
+
+				let resolvedNftId = NFT_ID || '';
+				let resolvedExpirationMs = typeof EXPIRATION_MS === 'number' && EXPIRATION_MS > 0
+					? EXPIRATION_MS
+					: null;
+
+				if (forceRecovery || !resolvedNftId || !resolvedExpirationMs) {
+					const addressCandidates = Array.from(
+						new Set(
+							[OWNER_ADDRESS, TARGET_ADDRESS, currentTargetAddress]
+								.map((value) => String(value || '').trim())
+								.filter((value) => value.startsWith('0x') && value.length > 10),
+						),
+					);
+
+					for (const address of addressCandidates) {
+						try {
+							const response = await fetch('/api/names/' + encodeURIComponent(address));
+							if (!response.ok) continue;
+							const payload = await response.json();
+							const names = Array.isArray(payload?.names) ? payload.names : [];
+							const match = names.find((item) => normalizeIdentityName(item?.name) === normalizeIdentityName(NAME));
+							if (!match) continue;
+							if (!resolvedNftId && match?.nftId) resolvedNftId = String(match.nftId);
+							if (
+								!resolvedExpirationMs
+								&& typeof match?.expirationMs === 'number'
+								&& Number.isFinite(match.expirationMs)
+								&& match.expirationMs > 0
+							) {
+								resolvedExpirationMs = match.expirationMs;
+							}
+							if (resolvedNftId && resolvedExpirationMs) break;
+						} catch (error) {
+							console.log('Identity recovery lookup failed for address', address, error);
+						}
+					}
+				}
+
+				if (
+					typeof resolvedExpirationMs === 'number'
+					&& resolvedExpirationMs > 0
+					&& resolvedExpirationMs !== EXPIRATION_MS
+				) {
+					addUniqueImageUrl(getSuiNSImageUrl(NAME, resolvedExpirationMs));
+				}
+
+				// Try fetching display image from NFT metadata if an object id is available.
+				if (resolvedNftId) {
+					try {
+						const response = await fetch('/api/nft-details?objectId=' + encodeURIComponent(resolvedNftId));
+						if (response.ok) {
+							const data = await response.json();
+							const displayUrl = data?.display?.image_url
+								|| data?.display?.image
+								|| data?.display?.avatar_url
+								|| data?.display?.avatar
+								|| data?.content?.image_url;
+							const normalizedUrl = normalizeImageUrl(displayUrl);
+							if (normalizedUrl) addUniqueImageUrl(normalizedUrl);
+						}
+					} catch (error) {
+						console.log('Failed to fetch identity NFT details:', error);
+					}
+				}
+
+				return imageUrlsToTry;
+			}
+
+			function loadNFTImageWithFallbacksAsync(imageUrls) {
+				return new Promise((resolve) => {
+					loadNFTImageWithFallbacks(
+						imageUrls,
+						(img, url) => {
+							displayNFTImage(img, url);
+							resolve(true);
+						},
+						() => resolve(false),
+					);
+				});
+			}
+
+			// Display NFT image in identity card and viewer
+			function displayNFTImage(img, imageUrl) {
+				if (!identityVisual) return;
+				rawIdentityNftImage = img;
+
 			const existingImg = identityVisual.querySelector('img');
-			if (existingImg) {
-				existingImg.remove();
-			}
+			if (existingImg) existingImg.remove();
 
-			// Add the new image with proper styling
 			img.style.width = '100%';
 			img.style.height = '100%';
 			img.style.objectFit = 'cover';
@@ -1668,93 +3319,101 @@ export function generateProfilePage(
 			img.style.borderRadius = '12px';
 			identityVisual.appendChild(img);
 
-			// Hide QR code and show toggle button
-			if (identityCanvas) {
-				identityCanvas.style.display = 'none';
-			}
-			if (qrToggle) {
-				qrToggle.style.display = 'flex';
+			if (identityCanvas) identityCanvas.style.display = 'none';
+
+			// Clone image into viewer overlay
+			if (nftViewerImage) {
+				const viewerImg = nftViewerImage.querySelector('img');
+				if (viewerImg) viewerImg.remove();
+				const clone = img.cloneNode(true);
+				clone.style.position = 'static';
+				clone.style.borderRadius = '16px';
+				nftViewerImage.appendChild(clone);
 			}
 
 			showingQr = false;
 			nftDisplayLoaded = true;
 			nftImageUrl = imageUrl;
-
-			console.log('NFT image loaded successfully:', imageUrl);
-		}
-
-		// Load NFT image - try SuiNS API first (most reliable), then on-chain display data
-		async function loadCurrentNFTImage() {
-			if (nftDisplayLoaded || !identityVisual) return;
-
-			// Build list of image URLs to try (in order of preference)
-			const imageUrlsToTry = [];
-
-			// 1. SuiNS API URL (most reliable for SuiNS NFTs) - include expiration timestamp
-			imageUrlsToTry.push(getSuiNSImageUrl(NAME, EXPIRATION_MS));
-
-			// 2. Try fetching from on-chain display data if NFT_ID is available
-			if (NFT_ID) {
-				try {
-					const response = await fetch(\`/api/nft-details?objectId=\${encodeURIComponent(NFT_ID)}\`);
-					if (response.ok) {
-						const data = await response.json();
-
-						// Extract image URL from display/content data
-						const displayUrl = data.display?.image_url || data.display?.image ||
-						                   data.display?.avatar_url || data.display?.avatar ||
-						                   data.content?.image_url;
-
-						if (displayUrl) {
-							const normalizedUrl = normalizeImageUrl(displayUrl);
-							if (normalizedUrl && !imageUrlsToTry.includes(normalizedUrl)) {
-								imageUrlsToTry.push(normalizedUrl);
-							}
-						}
-					}
-				} catch (error) {
-					console.log('Failed to fetch NFT details:', error);
-				}
+			applyTaggedIdentityToProfile();
 			}
 
-			// Try loading images with fallbacks
-			loadNFTImageWithFallbacks(
-				imageUrlsToTry,
-				(img, url) => displayNFTImage(img, url),
-				() => {
+			// Load NFT image - try SuiNS API first (most reliable), then on-chain display data
+			async function loadCurrentNFTImage() {
+				if (nftDisplayLoaded || !identityVisual) return;
+				const imageUrlsToTry = await buildIdentityImageCandidates(false);
+				const loaded = await loadNFTImageWithFallbacksAsync(imageUrlsToTry);
+				if (!loaded) {
 					console.log('All image URLs failed, keeping QR code');
 					nftDisplayLoaded = true;
 				}
-			);
-		}
+			}
 
-		// Try to load NFT image immediately
-		loadCurrentNFTImage();
+			async function restoreIdentityVisual() {
+				if (restoringIdentityVisual || !identityVisual) return;
+				restoringIdentityVisual = true;
+				if (identityRestoreBtn) {
+					identityRestoreBtn.disabled = true;
+					identityRestoreBtn.classList.add('loading');
+				}
+				try {
+					nftDisplayLoaded = false;
+					nftImageUrl = null;
+					rawIdentityNftImage = null;
+					const staleImg = identityVisual.querySelector('img');
+					if (staleImg) staleImg.remove();
+					showIdentityQr();
+
+					const imageUrlsToTry = await buildIdentityImageCandidates(true);
+					const loaded = await loadNFTImageWithFallbacksAsync(imageUrlsToTry);
+					if (loaded) {
+						showOwnerInlineStatus('NFT visual restored.', 'success');
+					} else {
+						nftDisplayLoaded = true;
+						showOwnerInlineStatus('No NFT image is currently available for this name.', 'info');
+					}
+				} catch (error) {
+					console.error('Failed to restore NFT visual:', error);
+					showOwnerInlineStatus('Failed to restore NFT visual.', 'error');
+				} finally {
+					restoringIdentityVisual = false;
+					if (identityRestoreBtn) {
+						identityRestoreBtn.disabled = false;
+						identityRestoreBtn.classList.remove('loading');
+					}
+				}
+			}
+
+			// Try to load NFT image immediately
+			loadCurrentNFTImage();
 
 		// Set target address to connected wallet (direct transaction)
-		async function setToSelf() {
-			if (!connectedAddress) {
-				await connectWallet();
-				if (!connectedAddress || !canEdit) return;
-			}
+			async function setToSelf() {
+				if (!connectedAddress) {
+					await connectWallet();
+					if (!connectedAddress || !canConnectedWalletEditTarget()) return;
+				}
 
-			if (!canEdit) {
-				alert('Only the NFT owner or target address can edit.');
-				return;
-			}
+				if (!canConnectedWalletEditTarget()) {
+					showOwnerInlineStatus('Only the NFT owner or target address can edit.', 'error');
+					return;
+				}
 
-			if (connectedAddress === CURRENT_ADDRESS) {
-				alert('Already set to your address.');
-				return;
-			}
+				const activeTargetAddress = getExplicitTargetAddress();
+				if (
+					connectedAddress
+					&& activeTargetAddress
+					&& connectedAddress.toLowerCase() === String(activeTargetAddress).toLowerCase()
+				) {
+					showOwnerInlineStatus('Already set to your address.', 'info');
+					return;
+				}
 
 			if (!confirm(\`Set target address to \${connectedPrimaryName || truncAddr(connectedAddress)}?\`)) {
 				return;
 			}
 
-			try {
-				setSelfBtn.disabled = true;
-				setSelfBtn.textContent = '...';
+				try {
+					setSelfBtn.disabled = true;
 
 				const suiClient = getSuiClient();
 				const suinsClient = new SuinsClient({
@@ -1821,21 +3480,27 @@ export function generateProfilePage(
 					}
 				}
 
-				// Update UI
-				document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
-				document.querySelector('.owner-name').innerHTML = formatSuiName(connectedPrimaryName);
-				ownerDisplayAddress = connectedAddress;
-				alert('Updated! TX: ' + result.digest);
+					// Update UI
+					document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
+						document.querySelector('.owner-name').innerHTML = formatSuiName(connectedPrimaryName);
+						ownerDisplayAddress = connectedAddress;
+						renderTargetPreview(connectedAddress);
+						updatePortfolioLink(connectedAddress);
+						showOwnerInlineStatus(
+							'<strong>Updated!</strong> ' + renderTxExplorerLinks(result.digest, true),
+							'success',
+							true,
+					);
 
-			} catch (error) {
-				const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error');
-				console.error('Set self error:', errorMsg, error);
-				alert('Failed: ' + errorMsg);
-			} finally {
-				setSelfBtn.disabled = false;
-				setSelfBtn.textContent = 'Self';
+				} catch (error) {
+					const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error');
+					console.error('Set self error:', errorMsg, error);
+					showOwnerInlineStatus('Failed: ' + errorMsg, 'error');
+				} finally {
+					setSelfBtn.disabled = false;
+					updateEditButton();
+				}
 			}
-		}
 
 		// Set this name as the connected wallet's primary/default name
 		async function setPrimary() {
@@ -1844,20 +3509,29 @@ export function generateProfilePage(
 				if (!connectedAddress) return;
 			}
 
-			if (connectedAddress !== CURRENT_ADDRESS) {
-				alert('Your wallet must be the target address of this name to set it as primary.');
+			const isOwner = connectedAddress && nftOwnerAddress && connectedAddress === nftOwnerAddress;
+			if (!isOwner) {
+				showOwnerInlineStatus('Only the NFT owner can set this as primary.', 'error');
+				return;
+			}
+			if (!connectedWallet || !connectedAccount) {
+				showOwnerInlineStatus('Please connect your wallet first.', 'error');
 				return;
 			}
 
-			const isAlreadyPrimary = connectedPrimaryName && connectedPrimaryName.replace(/\\.sui$/i, '') === FULL_NAME.replace(/\\.sui$/i, '');
+			const isAlreadyPrimary =
+				connectedPrimaryName
+				&& connectedPrimaryName.replace(/\\.sui$/i, '') === FULL_NAME.replace(/\\.sui$/i, '');
 			if (isAlreadyPrimary) {
-				alert('This is already your primary name.');
+				showOwnerInlineStatus('This is already your primary name.', 'info');
 				return;
 			}
 
 			try {
-				setPrimaryBtn.disabled = true;
-				setPrimaryBtn.textContent = '...';
+				if (ownerPrimaryStar) {
+					ownerPrimaryStar.disabled = true;
+					ownerPrimaryStar.classList.add('loading');
+				}
 
 				const suiClient = getSuiClient();
 				const suinsClient = new SuinsClient({
@@ -1869,8 +3543,24 @@ export function generateProfilePage(
 					? connectedAccount.address
 					: connectedAccount.address?.toString() || connectedAddress;
 
+				let nftId = NFT_ID;
+				if (!nftId) {
+					const nameRecord = await suinsClient.getNameRecord(FULL_NAME);
+					nftId = nameRecord?.nftId || '';
+				}
+				if (!nftId) throw new Error('Could not find NFT ID');
+
 				const tx = new Transaction();
 				const suinsTx = new SuinsTransaction(suinsClient, tx);
+
+				// If target is not self yet, update it first so default name can be set in one flow.
+				if (connectedAddress !== CURRENT_ADDRESS) {
+					suinsTx.setTargetAddress({
+						nft: nftId,
+						address: connectedAddress,
+						isSubname: IS_SUBNAME,
+					});
+				}
 
 				suinsTx.setDefault(FULL_NAME);
 
@@ -1910,22 +3600,36 @@ export function generateProfilePage(
 					}
 				}
 
-				connectedPrimaryName = FULL_NAME;
-				updateEditButton();
-				updateGlobalWalletWidget();
-				renderWalletBar();
+					connectedPrimaryName = FULL_NAME;
+					ownerDisplayAddress = connectedAddress;
+					updatePortfolioLink(connectedAddress);
+					updateEditButton();
+					updateGlobalWalletWidget();
+					renderWalletBar();
 
-				const explorerTxUrl = (NETWORK === 'mainnet' ? 'https://suiscan.xyz/mainnet' : 'https://suiscan.xyz/' + NETWORK) + '/tx/' + result.digest;
-				alert('Primary name set! TX: ' + result.digest);
+				const ownerAddrEl = document.querySelector('.owner-addr');
+				const ownerNameEl = document.querySelector('.owner-name');
+				if (ownerAddrEl) {
+					ownerAddrEl.textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
+				}
+				if (ownerNameEl) {
+					ownerNameEl.innerHTML = formatSuiName(connectedPrimaryName);
+				}
+				showOwnerInlineStatus(
+					'<strong>Primary set!</strong> ' + renderTxExplorerLinks(result.digest, true),
+					'success',
+					true,
+				);
 
 			} catch (error) {
 				const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error');
 				console.error('Set primary error:', errorMsg, error);
-				alert('Failed: ' + errorMsg);
+				showOwnerInlineStatus('Failed: ' + errorMsg, 'error');
 			} finally {
-				setPrimaryBtn.disabled = false;
-				const isAlreadyPrimary = connectedPrimaryName && connectedPrimaryName.replace(/\\.sui$/i, '') === FULL_NAME.replace(/\\.sui$/i, '');
-				setPrimaryBtn.textContent = isAlreadyPrimary ? 'Primary ✓' : 'Primary';
+				if (ownerPrimaryStar) {
+					ownerPrimaryStar.classList.remove('loading');
+				}
+				updateEditButton();
 			}
 		}
 
@@ -1933,9 +3637,9 @@ export function generateProfilePage(
 		function openEditModal() {
 			if (!connectedAddress) {
 				connectWallet().then(() => {
-					if (connectedAddress && canEdit) {
+					if (connectedAddress && canConnectedWalletEditTarget()) {
 						editModal.classList.add('open');
-						targetAddressInput.value = CURRENT_ADDRESS;
+						targetAddressInput.value = getExplicitTargetAddress();
 						resolvedAddressEl.textContent = '';
 						hideStatus(modalStatus);
 					}
@@ -1943,13 +3647,13 @@ export function generateProfilePage(
 				return;
 			}
 
-			if (!canEdit) {
+			if (!canConnectedWalletEditTarget()) {
 				alert('Only the NFT owner or target address can edit.');
 				return;
 			}
 
 			editModal.classList.add('open');
-			targetAddressInput.value = CURRENT_ADDRESS;
+			targetAddressInput.value = getExplicitTargetAddress();
 			resolvedAddressEl.textContent = '';
 			hideStatus(modalStatus);
 		}
@@ -1996,7 +3700,7 @@ export function generateProfilePage(
 				return;
 			}
 
-			if (newAddress === CURRENT_ADDRESS) {
+			if (newAddress === getExplicitTargetAddress()) {
 				showStatus(modalStatus, 'This is already the target address', 'info');
 				return;
 			}
@@ -2074,18 +3778,18 @@ export function generateProfilePage(
 					}
 				}
 
-				showStatus(modalStatus, \`
-					<strong>Updated!</strong> <a href="https://suiscan.xyz/\${NETWORK}/tx/\${result.digest}" target="_blank">View tx →</a>
-				\`, 'success');
+				showStatus(modalStatus, '<strong>Updated!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 
 				// Update displayed address and fetch new primary name
 				setTimeout(async () => {
 					document.querySelector('.owner-addr').textContent = newAddress.slice(0, 8) + '...' + newAddress.slice(-6);
-					const newName = await fetchPrimaryName(newAddress);
-					document.querySelector('.owner-name').innerHTML = formatSuiName(newName);
-					ownerDisplayAddress = newAddress;
-					closeEditModal();
-				}, 2000);
+						const newName = await fetchPrimaryName(newAddress);
+						document.querySelector('.owner-name').innerHTML = formatSuiName(newName);
+						ownerDisplayAddress = newAddress;
+						updatePortfolioLink(newAddress);
+						renderTargetPreview(newAddress);
+						closeEditModal();
+					}, 2000);
 
 			} catch (error) {
 				console.error('Set address error:', error);
@@ -2099,15 +3803,259 @@ export function generateProfilePage(
 			}
 		}
 
+		// Jacket decay auction
+		function openJacketModal() {
+			if (!connectedAddress) {
+				connectWallet().then(() => {
+					if (connectedAddress && nftOwnerAddress && connectedAddress === nftOwnerAddress) {
+						jacketModal.classList.add('open');
+					}
+				});
+				return;
+			}
+			if (jacketStatus) jacketStatus.textContent = '';
+			jacketModal.classList.add('open');
+		}
+
+		function closeJacketModal() {
+			jacketModal.classList.remove('open');
+			if (jacketStatus) jacketStatus.textContent = '';
+		}
+
+		async function listForAuction() {
+			if (!connectedAddress) {
+				await connectWallet();
+				if (!connectedAddress) return;
+			}
+
+			if (!nftOwnerAddress || connectedAddress !== nftOwnerAddress) {
+				if (jacketStatus) {
+					jacketStatus.textContent = 'You must be the NFT owner to list';
+					jacketStatus.className = 'jacket-status error';
+				}
+				return;
+			}
+
+			if (!NFT_ID) {
+				if (jacketStatus) {
+					jacketStatus.textContent = 'No NFT found for this name';
+					jacketStatus.className = 'jacket-status error';
+				}
+				return;
+			}
+
+			const priceSui = Number(jacketStartPrice.value);
+			if (!priceSui || priceSui < 1) {
+				if (jacketStatus) {
+					jacketStatus.textContent = 'Start price must be at least 1 SUI';
+					jacketStatus.className = 'jacket-status error';
+				}
+				return;
+			}
+
+			const durationDays = Number(jacketDuration.value);
+			const startPriceMist = String(BigInt(Math.floor(priceSui)) * 1000000000n);
+			const durationMs = String(BigInt(durationDays) * 86400000n);
+
+			try {
+				jacketListBtn.disabled = true;
+				jacketListBtn.textContent = '...';
+				if (jacketStatus) {
+					jacketStatus.textContent = 'Building transaction...';
+					jacketStatus.className = 'jacket-status';
+				}
+
+				const senderAddress = typeof connectedAccount.address === 'string'
+					? connectedAccount.address
+					: connectedAccount.address?.toString() || connectedAddress;
+
+				const res = await fetch('/api/auction/list', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						nftId: NFT_ID,
+						startPriceMist,
+						durationMs,
+						senderAddress,
+					}),
+				});
+				const data = await res.json();
+
+				if (data.error) throw new Error(data.error);
+
+				const tx = Transaction.from(data.txBytes);
+
+				if (jacketStatus) {
+					jacketStatus.textContent = 'Confirm in wallet...';
+					jacketStatus.className = 'jacket-status';
+				}
+
+				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+				let result;
+				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
+
+				const txOptions = { showEffects: true, showObjectChanges: true };
+				if (signExecFeature?.signAndExecuteTransaction) {
+					result = await signExecFeature.signAndExecuteTransaction({
+						transaction: tx,
+						account: connectedAccount,
+						chain,
+						options: txOptions,
+					});
+				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
+						transactionBlock: tx,
+						account: connectedAccount,
+						chain,
+						options: txOptions,
+					});
+				} else {
+					const phantomProvider = window.phantom?.sui;
+					if (phantomProvider?.signAndExecuteTransactionBlock) {
+						const suiClient = getSuiClient();
+						const txBytes = await tx.build({ client: suiClient });
+						result = await phantomProvider.signAndExecuteTransactionBlock({
+							transactionBlock: txBytes,
+							options: txOptions,
+						});
+					} else {
+						throw new Error('Wallet does not support transaction signing');
+					}
+				}
+
+				let listingId = null;
+				const objectChanges = result.objectChanges || [];
+				for (const change of objectChanges) {
+					if (change.type === 'created' && change.objectType && change.objectType.includes('DecayListing')) {
+						listingId = change.objectId;
+						break;
+					}
+				}
+
+				if (!listingId && result.digest) {
+					try {
+						const suiClient = getSuiClient();
+						const txDetail = await suiClient.getTransactionBlock({ digest: result.digest, options: { showObjectChanges: true } });
+						const changes = txDetail.objectChanges || [];
+						for (const change of changes) {
+							if (change.type === 'created' && change.objectType && change.objectType.includes('DecayListing')) {
+								listingId = change.objectId;
+								break;
+							}
+						}
+					} catch (e) {
+						console.error('Failed to fetch tx details for listing ID:', e);
+					}
+				}
+
+				if (listingId && NFT_ID) {
+					try {
+						await fetch('/api/auction/register', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ nftId: NFT_ID, listingId }),
+						});
+					} catch (e) {
+						console.error('Failed to register auction listing:', e);
+					}
+				}
+
+				if (jacketStatus) {
+					jacketStatus.innerHTML = 'Listed! ' + renderTxExplorerLinks(result.digest, true);
+					jacketStatus.className = 'jacket-status success';
+				}
+				jacketBtn.disabled = true;
+				jacketBtn.textContent = 'Listed';
+				fetchAuctionStatus();
+			} catch (error) {
+				const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error');
+				console.error('Jacket listing error:', errorMsg, error);
+				if (jacketStatus) {
+					jacketStatus.textContent = 'Failed: ' + errorMsg;
+					jacketStatus.className = 'jacket-status error';
+				}
+			} finally {
+				jacketListBtn.disabled = false;
+				jacketListBtn.textContent = 'List';
+			}
+		}
+
 		// Event listeners
 		if (editBtn) editBtn.addEventListener('click', openEditModal);
 		if (setSelfBtn) setSelfBtn.addEventListener('click', setToSelf);
-		if (setPrimaryBtn) setPrimaryBtn.addEventListener('click', setPrimary);
+		if (ownerPrimaryStar) ownerPrimaryStar.addEventListener('click', setPrimary);
+		if (jacketBtn) jacketBtn.addEventListener('click', openJacketModal);
+		if (jacketCancelBtn) jacketCancelBtn.addEventListener('click', closeJacketModal);
+		if (jacketListBtn) jacketListBtn.addEventListener('click', listForAuction);
+		if (jacketModal) jacketModal.addEventListener('click', (e) => {
+			if (e.target === jacketModal) closeJacketModal();
+		});
 		if (copyBtn) copyBtn.addEventListener('click', copyAddress);
+		if (ownerAddrText) {
+			ownerAddrText.classList.add('copyable');
+			ownerAddrText.setAttribute('title', 'Copy owner address');
+			ownerAddrText.setAttribute('aria-label', 'Copy owner address');
+			ownerAddrText.setAttribute('role', 'button');
+			ownerAddrText.tabIndex = 0;
+			ownerAddrText.addEventListener('click', function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				copyAddress();
+			});
+			ownerAddrText.addEventListener('keydown', function(e) {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					e.stopPropagation();
+					copyAddress();
+				}
+			});
+		}
+			if (copyTargetBtn) {
+				copyTargetBtn.addEventListener('click', (event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					copyTargetAddress();
+				});
+			}
+			if (targetPreviewBtn) {
+				targetPreviewBtn.addEventListener('click', (event) => {
+					if (!getExplicitTargetAddress()) return;
+					const rawTarget = event.target;
+					const targetEl = rawTarget instanceof Element
+						? rawTarget
+						: rawTarget instanceof Node
+							? rawTarget.parentElement
+							: null;
+					if (!targetEl) return;
+					if (targetEl.closest('button, a, input, textarea, select')) return;
+					copyTargetAddress();
+				});
+				targetPreviewBtn.addEventListener('keydown', (event) => {
+					if (!getExplicitTargetAddress()) return;
+					if (event.key !== 'Enter' && event.key !== ' ') return;
+					event.preventDefault();
+					copyTargetAddress();
+				});
+			}
 		if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
 		if (saveBtn) saveBtn.addEventListener('click', saveTargetAddress);
 		if (editModal) editModal.addEventListener('click', (e) => {
 			if (e.target === editModal) closeEditModal();
+		});
+		if (sendBtn) sendBtn.addEventListener('click', openSendModal);
+		if (sendCancelBtn) sendCancelBtn.addEventListener('click', closeSendModal);
+		if (sendConfirmBtn) sendConfirmBtn.addEventListener('click', sendSuiToProfile);
+		if (sendAmountInput) {
+			sendAmountInput.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					sendSuiToProfile();
+				}
+			});
+		}
+		if (sendModal) sendModal.addEventListener('click', (e) => {
+			if (e.target === sendModal) closeSendModal();
 		});
 
 		// Format SuiNS name with gradient suffix
@@ -2159,7 +4107,8 @@ export function generateProfilePage(
 				}
 			}
 
-			ownerDisplayAddress = displayAddress || '';
+				ownerDisplayAddress = displayAddress || '';
+				updatePortfolioLink(ownerDisplayAddress);
 
 			if (ownerAddrEl && displayAddress) {
 				ownerAddrEl.textContent = truncAddr(displayAddress);
@@ -2172,10 +4121,30 @@ export function generateProfilePage(
 				ownerAddrEl.title = 'Unknown owner';
 			}
 
+			renderTargetPreview(TARGET_ADDRESS);
+
 			if (displayName) {
 				if (ownerNameEl) {
 					ownerNameEl.innerHTML = formatSuiName(displayName);
 					ownerNameEl.style.display = '';
+					ownerNameEl.classList.add('owner-name-copy');
+					ownerNameEl.title = 'Click to copy';
+					ownerNameEl.dataset.copyName = displayName;
+					if (!ownerNameEl.dataset.copyBound) {
+						ownerNameEl.addEventListener('click', async (event) => {
+							event.stopPropagation();
+							try {
+								const nameToCopy = ownerNameEl.dataset.copyName || '';
+								if (!nameToCopy) return;
+								await navigator.clipboard.writeText(nameToCopy);
+								ownerNameEl.classList.add('copied');
+								setTimeout(() => ownerNameEl.classList.remove('copied'), 900);
+							} catch (err) {
+								console.error('Failed to copy owner name:', err);
+							}
+						});
+						ownerNameEl.dataset.copyBound = 'true';
+					}
 				}
 
 				if (ownerInfo) {
@@ -2210,46 +4179,66 @@ export function generateProfilePage(
 			}
 		}
 
-		// Initialize
-		renderWalletBar();
+			// Initialize
+			updatePortfolioLink(ownerDisplayAddress);
+			renderWalletBar();
 		updateGlobalWalletWidget();
 		updateEditButton();
 		restoreWalletConnection();
 		fetchAndDisplayOwnerInfo();
 		updateGracePeriodOwnerInfo();
+		updateGracePeriodCountdown();
 
 
 		// ===== QUICK SEARCH (Keyboard-activated + Button) =====
-		const searchOverlay = document.getElementById('search-overlay');
-		const searchInput = document.getElementById('search-input');
-		const searchResults = document.getElementById('search-results');
-		let searchActive = false;
-		let searchTimeout = null;
-		let selectedIndex = 0;
-		let currentResults = [];
+			const searchOverlay = document.getElementById('search-overlay');
+			const searchInput = document.getElementById('search-input');
+			const searchResults = document.getElementById('search-results');
+			let searchActive = false;
+			let searchTimeout = null;
+			let selectedIndex = 0;
+			let currentResults = [];
+			let searchRequestNonce = 0;
+			const suggestionCache = new Map();
+			const availabilityCache = new Map();
+			const FEATURED_FALLBACK = ['agents', 'agent', 'vault', 'alpha', 'pro', 'wallet', 'builder', 'domain', 'defi'];
 
-		function openSearch(initialChar) {
-			if (searchActive) return;
-			searchActive = true;
-			selectedIndex = 0;
-			currentResults = [];
-			if (searchOverlay) searchOverlay.classList.add('active');
-			if (searchResults) searchResults.innerHTML = '';
-			if (initialChar && searchInput) {
-				searchInput.value = initialChar;
-				performSearch(initialChar);
+			function openSearch(initialChar) {
+				if (searchActive) return;
+				searchActive = true;
+				selectedIndex = 0;
+				currentResults = [];
+				if (searchOverlay) searchOverlay.classList.add('active');
+				if (searchResults) searchResults.innerHTML = '';
+				if (initialChar && searchInput) {
+					searchInput.value = initialChar;
+					performSearch(initialChar);
+				} else {
+					performSearch('');
+				}
+				setTimeout(() => searchInput?.focus(), 50);
 			}
-			setTimeout(() => searchInput?.focus(), 50);
-		}
 
-		function closeSearch() {
-			searchActive = false;
-			if (searchOverlay) searchOverlay.classList.remove('active');
-			if (searchInput) searchInput.value = '';
-			if (searchResults) searchResults.innerHTML = '';
-			currentResults = [];
-			selectedIndex = 0;
-		}
+			function closeSearch() {
+				searchActive = false;
+				searchRequestNonce++;
+				clearTimeout(searchTimeout);
+				if (searchOverlay) searchOverlay.classList.remove('active');
+				if (searchInput) searchInput.value = '';
+				if (searchResults) searchResults.innerHTML = '';
+				currentResults = [];
+				selectedIndex = 0;
+			}
+
+			function showSearchLoading(message) {
+				if (!searchResults) return;
+				searchResults.innerHTML = '<div class="search-loading"><span class="loading"></span>' + message + '</div>';
+			}
+
+			function showSearchEmpty(message) {
+				if (!searchResults) return;
+				searchResults.innerHTML = '<div class="search-empty">' + message + '</div>';
+			}
 
 		function cleanNameInput(input) {
 			let name = input?.trim()?.toLowerCase() || '';
@@ -2339,19 +4328,125 @@ export function generateProfilePage(
 			});
 		}
 
-		function updateSelection() {
-			if (!searchResults) return;
-			searchResults.querySelectorAll('.search-result-item').forEach((item, idx) => {
-				item.classList.toggle('selected', idx === selectedIndex);
-			});
-		}
+			function updateSelection() {
+				if (!searchResults) return;
+				searchResults.querySelectorAll('.search-result-item').forEach((item, idx) => {
+					item.classList.toggle('selected', idx === selectedIndex);
+				});
+			}
 
-		async function checkNameAvailability(name) {
-			try {
-				const suiClient = getSuiClient();
-				const suinsClient = new SuinsClient({
-					client: suiClient,
-					network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+			async function fetchSuggestions(query) {
+				if (suggestionCache.has(query)) return suggestionCache.get(query);
+				try {
+					const res = await fetch('/api/suggest-names?q=' + encodeURIComponent(query));
+					if (res.ok) {
+						const data = await res.json();
+						const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [query];
+						suggestionCache.set(query, suggestions);
+						return suggestions;
+					}
+				} catch {}
+				return [query];
+			}
+
+			async function fetchFeaturedNames() {
+				try {
+					const res = await fetch('/api/featured-names');
+					if (!res.ok) return FEATURED_FALLBACK;
+					const data = await res.json();
+					const featured = Array.isArray(data?.names) ? data.names : [];
+					const extracted = featured
+						.map((item) => (item && typeof item.name === 'string' ? cleanNameInput(item.name) : ''))
+						.filter((name) => !!name && name.length >= 3);
+					if (!extracted.length) return FEATURED_FALLBACK;
+					const unique = Array.from(new Set(extracted));
+					return ['agents', ...unique.filter((name) => name !== 'agents')].slice(0, 10);
+				} catch {
+					return FEATURED_FALLBACK;
+				}
+			}
+
+			function buildUniqueCandidates(baseName, suggestions) {
+				const unique = [baseName];
+				const seen = new Set([baseName]);
+				for (const candidate of suggestions || []) {
+					const clean = cleanNameInput(candidate);
+					if (!clean || seen.has(clean)) continue;
+					seen.add(clean);
+					unique.push(clean);
+					if (unique.length >= 10) break;
+				}
+				return unique;
+			}
+
+			function buildVariantFallbacks(baseName) {
+				const suffixes = ['ai', 'app', 'hub', 'pro', 'xyz', 'dao', 'labs', 'wallet', 'agent'];
+				const variants = [];
+				for (const suffix of suffixes) {
+					const candidate = cleanNameInput(baseName + suffix);
+					if (!candidate) continue;
+					if (candidate.length < 3 || candidate.length > 15) continue;
+					variants.push(candidate);
+				}
+				return variants;
+			}
+
+			async function expandCandidates(baseName, suggestions) {
+				const expanded = buildUniqueCandidates(baseName, suggestions);
+				if (expanded.length >= 6) return expanded.slice(0, 10);
+
+				const featured = await fetchFeaturedNames();
+				for (const featuredName of featured) {
+					const clean = cleanNameInput(featuredName);
+					if (!clean || expanded.includes(clean)) continue;
+					expanded.push(clean);
+					if (expanded.length >= 10) return expanded;
+				}
+
+				const variants = buildVariantFallbacks(baseName);
+				for (const variant of variants) {
+					if (expanded.includes(variant)) continue;
+					expanded.push(variant);
+					if (expanded.length >= 10) break;
+				}
+
+				return expanded;
+			}
+
+			async function populateSearchCandidates(names, requestNonce) {
+				const cleaned = Array.from(
+					new Set((names || []).map((name) => cleanNameInput(name)).filter((name) => !!name)),
+				);
+				if (!cleaned.length) {
+					currentResults = [];
+					renderSearchResults();
+					showSearchEmpty('No matching names');
+					return;
+				}
+
+				currentResults = cleaned.map((name) => ({ name, status: 'checking' }));
+				selectedIndex = 0;
+				renderSearchResults();
+
+				const checked = await Promise.all(cleaned.map((name) => checkNameAvailability(name)));
+				if (requestNonce !== searchRequestNonce || !searchActive) return;
+				currentResults = checked;
+				selectedIndex = 0;
+				renderSearchResults();
+			}
+
+			async function checkNameAvailability(name) {
+				const cached = availabilityCache.get(name);
+				if (cached) return cached;
+				const remember = (value) => {
+					availabilityCache.set(name, value);
+					return value;
+				};
+				try {
+					const suiClient = getSuiClient();
+					const suinsClient = new SuinsClient({
+						client: suiClient,
+						network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
 				});
 
 				const [record, marketRes, tradeportRes] = await Promise.all([
@@ -2379,16 +4474,18 @@ export function generateProfilePage(
 						const rawPrice = tpData.price || tpData.listing?.price;
 						listing = tpData.listing || tpData;
 						listingPrice = (Number(rawPrice) / 1e9).toFixed(2);
-						tradeportUrl = 'https://tradeport.xyz/sui/collection/suins?search=' + encodeURIComponent(name);
+						tradeportUrl = NFT_ID
+							? 'https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=' + encodeURIComponent(NFT_ID) + '&modalSlug=suins&nav=1'
+							: 'https://www.tradeport.xyz/sui/collection/suins?search=' + encodeURIComponent(name);
 					}
 				}
 
-				if (!record) {
-					if (listing) {
-						return { name, status: 'listed', listingPrice, tradeportUrl, listing };
+					if (!record) {
+						if (listing) {
+							return remember({ name, status: 'listed', listingPrice, tradeportUrl, listing });
+						}
+						return remember({ name, status: 'available' });
 					}
-					return { name, status: 'available' };
-				}
 
 				let expiresIn = null;
 				if (record.expirationTimestampMs) {
@@ -2396,39 +4493,47 @@ export function generateProfilePage(
 					expiresIn = Math.ceil((expiresMs - Date.now()) / (24 * 60 * 60 * 1000));
 				}
 
-				if (listing) {
-					return { name, status: 'listed', expiresIn, listingPrice, tradeportUrl, listing };
+					if (listing) {
+						return remember({ name, status: 'listed', expiresIn, listingPrice, tradeportUrl, listing });
+					}
+
+					return remember({ name, status: 'taken', expiresIn });
+				} catch (e) {
+					console.error('Error checking name:', e);
+					return remember({ name, status: 'taken' });
+				}
+			}
+
+			async function performSearch(query) {
+				const name = cleanNameInput(query);
+				const requestNonce = ++searchRequestNonce;
+
+				if (!name) {
+					showSearchLoading('Loading premium names...');
+					const featuredNames = await fetchFeaturedNames();
+					if (requestNonce !== searchRequestNonce || !searchActive) return;
+					await populateSearchCandidates(featuredNames, requestNonce);
+					return;
 				}
 
-				return { name, status: 'taken', expiresIn };
-			} catch (e) {
-				console.error('Error checking name:', e);
-				return { name, status: 'taken' };
-			}
-		}
+				if (name.length < 3) {
+					currentResults = [];
+					renderSearchResults();
+					showSearchEmpty('Min 3 characters');
+					return;
+				}
 
-		async function performSearch(query) {
-			const name = cleanNameInput(query);
-			if (!name || name.length < 1) {
-				currentResults = [];
+				// Show immediate result for the typed query while suggestion API resolves.
+				currentResults = [{ name, status: 'checking' }];
+				selectedIndex = 0;
 				renderSearchResults();
-				return;
+
+				const suggestions = await fetchSuggestions(name);
+				if (requestNonce !== searchRequestNonce || !searchActive) return;
+				const candidates = await expandCandidates(name, suggestions);
+				if (requestNonce !== searchRequestNonce || !searchActive) return;
+				await populateSearchCandidates(candidates, requestNonce);
 			}
-
-			// Show the name being searched with checking status
-			currentResults = [{ name, status: 'checking' }];
-			selectedIndex = 0;
-			renderSearchResults();
-
-			// Check availability
-			const result = await checkNameAvailability(name);
-
-			// Only update if the input hasn't changed
-			if (cleanNameInput(searchInput?.value) === name) {
-				currentResults = [result];
-				renderSearchResults();
-			}
-		}
 
 		async function buyListedName(result) {
 			if (!connectedAddress || !connectedWallet) {
@@ -2440,7 +4545,10 @@ export function generateProfilePage(
 			if (!listing || !listing.price) return;
 
 			const nonce = listing.nonce || '';
-			const tradeportUrl = result.tradeportUrl || 'https://tradeport.xyz/sui/collection/suins?search=' + encodeURIComponent(result.name);
+			const tradeportUrl = result.tradeportUrl
+				|| (NFT_ID
+					? 'https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=' + encodeURIComponent(NFT_ID) + '&modalSlug=suins&nav=1'
+					: 'https://www.tradeport.xyz/sui/collection/suins?search=' + encodeURIComponent(result.name));
 
 			if (!nonce || nonce.startsWith('1::')) {
 				window.open(tradeportUrl, '_blank');
@@ -2854,7 +4962,7 @@ export function generateProfilePage(
 
 					// Show link to view on explorer
 					setTimeout(() => {
-						showMessageStatus('<a href="https://suiscan.xyz/' + NETWORK + '/tx/' + result.digest + '" target="_blank" style="color: inherit; text-decoration: underline;">View transaction on explorer →</a>', 'success');
+						showMessageStatus(renderTxExplorerLinks(result.digest, true), 'success');
 					}, 2000);
 				}
 
@@ -3435,6 +5543,22 @@ export function generateProfilePage(
 		const expMins = document.getElementById('exp-mins');
 		const expSecs = document.getElementById('exp-secs');
 		const renewalCountdown = document.getElementById('renewal-countdown');
+		let currentRenewalYears = 1;
+		const MIN_YEARS = 1;
+		const MAX_YEARS = 5;
+		const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+
+		function getSelectedRenewalBaseExpirationMs() {
+			return (typeof selectedRenewalExpiration !== 'undefined' && selectedRenewalExpiration)
+				? selectedRenewalExpiration
+				: EXPIRATION_MS;
+		}
+
+		function getProjectedRenewalExpirationMs() {
+			const baseExpiration = getSelectedRenewalBaseExpirationMs();
+			if (!baseExpiration) return 0;
+			return baseExpiration + (currentRenewalYears * ONE_YEAR_MS);
+		}
 
 		function updateExpirationCountdown() {
 			if (!EXPIRATION_MS) return;
@@ -3447,29 +5571,35 @@ export function generateProfilePage(
 				if (expHours) expHours.textContent = '00';
 				if (expMins) expMins.textContent = '00';
 				if (expSecs) expSecs.textContent = '00';
-				if (renewalCountdown) renewalCountdown.textContent = 'Expired';
-				return;
+			} else {
+				const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+				const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+				const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+				const secs = Math.floor((diff % (60 * 1000)) / 1000);
+
+				if (expDays) expDays.textContent = String(days).padStart(2, '0');
+				if (expHours) expHours.textContent = String(hours).padStart(2, '0');
+				if (expMins) expMins.textContent = String(mins).padStart(2, '0');
+				if (expSecs) expSecs.textContent = String(secs).padStart(2, '0');
 			}
 
-			const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-			const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-			const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
-			const secs = Math.floor((diff % (60 * 1000)) / 1000);
-
-			if (expDays) expDays.textContent = String(days).padStart(2, '0');
-			if (expHours) expHours.textContent = String(hours).padStart(2, '0');
-			if (expMins) expMins.textContent = String(mins).padStart(2, '0');
-			if (expSecs) expSecs.textContent = String(secs).padStart(2, '0');
-
 			if (renewalCountdown) {
-				if (days > 365) {
-					const years = Math.floor(days / 365);
-					const remainingDays = days % 365;
-					renewalCountdown.textContent = '(' + years + 'y ' + remainingDays + 'd left)';
-				} else if (days > 0) {
-					renewalCountdown.textContent = '(' + days + 'd ' + hours + 'h left)';
+				const projectedDiff = getProjectedRenewalExpirationMs() - now;
+				if (projectedDiff <= 0) {
+					renewalCountdown.textContent = 'Expired';
 				} else {
-					renewalCountdown.textContent = '(' + hours + 'h ' + mins + 'm left)';
+					const projectedDays = Math.floor(projectedDiff / (24 * 60 * 60 * 1000));
+					const projectedHours = Math.floor((projectedDiff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+					const projectedMins = Math.floor((projectedDiff % (60 * 60 * 1000)) / (60 * 1000));
+					if (projectedDays > 365) {
+						const years = Math.floor(projectedDays / 365);
+						const remainingDays = projectedDays % 365;
+						renewalCountdown.textContent = years + 'y ' + remainingDays + 'd left';
+					} else if (projectedDays > 0) {
+						renewalCountdown.textContent = projectedDays + 'd ' + projectedHours + 'h left';
+					} else {
+						renewalCountdown.textContent = projectedHours + 'h ' + projectedMins + 'm left';
+					}
 				}
 			}
 		}
@@ -3492,13 +5622,42 @@ export function generateProfilePage(
 		const ovRenewalBtnLoading = ovRenewalBtn?.querySelector('.renewal-btn-loading');
 		const ovRenewalStatus = document.getElementById('overview-renewal-status');
 		const ovRenewalExpiryDate = document.getElementById('renewal-expiry-date');
-		const ovRenewalCountdown = document.getElementById('renewal-countdown');
+		const ovRenewalCard = document.getElementById('overview-renewal-card');
+		const expiryQuickRenewBtn = document.getElementById('expiry-quick-renew-btn');
 
-		// Stepper control for years
-		let currentRenewalYears = 1;
-		const MIN_YEARS = 1;
-		const MAX_YEARS = 5;
-		const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+		const expiryBadgeText = document.querySelector('.expiry-badge-text');
+		const expiryBadge = document.querySelector('.badge.expiry');
+
+		function updateExpiryBadgeWithRenewal() {
+			if (!expiryBadgeText || !EXPIRATION_MS) return;
+			const projectedExpiration = getProjectedRenewalExpirationMs();
+			const daysFromNow = Math.ceil((projectedExpiration - Date.now()) / 86400000);
+
+			if (daysFromNow <= 0) {
+				expiryBadgeText.textContent = 'Expired';
+			} else if (daysFromNow > 365) {
+				const years = Math.floor(daysFromNow / 365);
+				const days = daysFromNow % 365;
+				expiryBadgeText.textContent = years + 'y ' + days + 'd';
+			} else {
+				expiryBadgeText.textContent = daysFromNow + 'd left';
+			}
+
+			if (expiryBadge) {
+				expiryBadge.className = 'badge expiry';
+				if (daysFromNow <= 0) {
+					expiryBadge.classList.add('danger');
+				} else if (daysFromNow > 365) {
+					expiryBadge.classList.add('premium');
+				} else if (daysFromNow > 90) {
+					expiryBadge.classList.remove('warning', 'danger', 'premium');
+				} else if (daysFromNow > 7) {
+					expiryBadge.classList.add('warning');
+				} else {
+					expiryBadge.classList.add('danger');
+				}
+			}
+		}
 
 		function updateYearsStepper() {
 			if (ovRenewalYears) {
@@ -3509,21 +5668,14 @@ export function generateProfilePage(
 			if (ovRenewalYearsPlus) ovRenewalYearsPlus.disabled = currentRenewalYears >= MAX_YEARS;
 
 			// Update projected expiration date
-			const baseExpiration = (typeof selectedRenewalExpiration !== 'undefined' && selectedRenewalExpiration)
-				? selectedRenewalExpiration
-				: EXPIRATION_MS;
-			if (baseExpiration && ovRenewalExpiryDate) {
-				const newExpiration = new Date(baseExpiration + (currentRenewalYears * ONE_YEAR_MS));
+			const projectedExpiration = getProjectedRenewalExpirationMs();
+			if (projectedExpiration && ovRenewalExpiryDate) {
+				const newExpiration = new Date(projectedExpiration);
 				ovRenewalExpiryDate.textContent = newExpiration.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-				// Update countdown to show new duration
-				if (ovRenewalCountdown) {
-					const daysUntilNew = Math.ceil((newExpiration.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-					ovRenewalCountdown.textContent = '→ ' + daysUntilNew + ' days';
-					ovRenewalCountdown.className = 'renewal-countdown';
-				}
 			}
 
+			updateExpirationCountdown();
+			updateExpiryBadgeWithRenewal();
 			updateRenewalDisplay(ovRenewalYears, ovRenewalPrice, ovRenewalSavings, ovRenewalSavingsText);
 		}
 
@@ -3544,9 +5696,6 @@ export function generateProfilePage(
 			});
 		}
 
-		// Initialize stepper state (minus disabled at 1 year, set initial projected date)
-		updateYearsStepper();
-
 		// Renewal functionality - Bid tab elements (legacy)
 		const renewalYearsSelect = document.getElementById('renewal-years');
 		const renewalPriceEl = document.getElementById('renewal-price');
@@ -3560,23 +5709,73 @@ export function generateProfilePage(
 		var renewalPricingCache = {};
 
 		async function fetchRenewalPricing(years) {
-			const nameToPrice = selectedRenewalName || NAME;
-			const cacheKey = nameToPrice + '-' + years;
-			if (renewalPricingCache[cacheKey]) {
-				return renewalPricingCache[cacheKey];
-			}
-
 			try {
+				const nameToPrice = selectedRenewalName || NAME;
+				const cacheKey = nameToPrice + '-' + years;
+				if (renewalPricingCache && renewalPricingCache[cacheKey]) {
+					return renewalPricingCache[cacheKey];
+				}
+
 				const res = await fetch('/api/renewal-pricing?domain=' + encodeURIComponent(nameToPrice) + '&years=' + years);
 				if (!res.ok) throw new Error('Failed to fetch pricing');
 				const data = await res.json();
-				renewalPricingCache[cacheKey] = data;
+				if (renewalPricingCache) renewalPricingCache[cacheKey] = data;
 				return data;
 			} catch (error) {
 				console.error('Renewal pricing error:', error);
 				return null;
 			}
 		}
+
+		async function resolveQuickRenewalYears(nameToExtend) {
+			try {
+				const halfYearRes = await fetch('/api/renewal-pricing?domain=' + encodeURIComponent(nameToExtend) + '&years=0.5');
+				if (!halfYearRes.ok) return 1;
+				const halfYearPricing = await halfYearRes.json();
+				const nsNeededMist = BigInt(halfYearPricing?.nsNeededMist || 0);
+				if (nsNeededMist > 0n) {
+					if (renewalPricingCache) {
+						renewalPricingCache[nameToExtend + '-0.5'] = halfYearPricing;
+					}
+					return 0.5;
+				}
+			} catch (error) {
+				console.log('180-day renewal pricing unavailable, falling back to 365-day renewal:', error?.message || error);
+			}
+			return 1;
+		}
+
+		var lastRenewalSuiAmount = 0;
+		var cachedSuiUsdPrice = 0;
+		const ovRenewalPriceUsd = document.getElementById('overview-renewal-price-usd');
+		const suiPriceEl = document.getElementById('sui-price');
+
+		function updateRenewalUsdPrice() {
+			if (!ovRenewalPriceUsd || !cachedSuiUsdPrice || !lastRenewalSuiAmount) return;
+			const usd = lastRenewalSuiAmount * cachedSuiUsdPrice;
+			ovRenewalPriceUsd.textContent = '≈ $' + usd.toFixed(2);
+		}
+
+		async function updateSUIPrice() {
+			try {
+				const response = await fetch('/api/sui-price');
+				if (!response.ok) throw new Error('Failed to fetch price');
+				const contentType = response.headers.get('content-type') || '';
+				if (!contentType.includes('application/json')) throw new Error('Invalid price response type');
+				const data = await response.json();
+				if (data && typeof data.price === 'number' && Number.isFinite(data.price)) {
+					cachedSuiUsdPrice = data.price;
+					if (suiPriceEl) suiPriceEl.textContent = '$' + data.price.toFixed(2);
+					updateRenewalUsdPrice();
+					if (typeof updateListEstimateDisplay === 'function') updateListEstimateDisplay();
+				}
+			} catch (error) {
+				console.error('Failed to update SUI price:', error);
+				if (suiPriceEl) suiPriceEl.textContent = '$--';
+			}
+		}
+		updateSUIPrice();
+		setInterval(updateSUIPrice, 60000);
 
 		async function updateRenewalDisplay(yearsEl, priceEl, savingsRowEl, savingsTextEl) {
 			if (!yearsEl || !priceEl) return;
@@ -3593,11 +5792,22 @@ export function generateProfilePage(
 
 			const discountedSui = Number(pricing.discountedSuiMist) / 1e9;
 			priceEl.textContent = discountedSui.toFixed(4) + ' SUI';
+			lastRenewalSuiAmount = discountedSui;
+			updateRenewalUsdPrice();
 
-			if (savingsRowEl && pricing.savingsPercent > 0) {
-				savingsRowEl.style.display = 'inline-flex';
-				if (savingsTextEl) {
-					savingsTextEl.textContent = 'Save ' + pricing.savingsPercent.toFixed(1) + '%';
+			if (savingsRowEl) {
+				if (pricing.savingsPercent > 0) {
+					savingsRowEl.style.display = 'inline-flex';
+					if (savingsTextEl) {
+						savingsTextEl.textContent = '24% discount';
+					}
+					const savingsSuiEl = document.getElementById('overview-renewal-savings-sui');
+					if (savingsSuiEl && pricing.savingsMist) {
+						const savedSui = Number(pricing.savingsMist) / 1e9;
+						savingsSuiEl.textContent = '(' + savedSui.toFixed(4) + ' SUI)';
+					}
+				} else {
+					savingsRowEl.style.display = 'none';
 				}
 			}
 		}
@@ -3607,23 +5817,31 @@ export function generateProfilePage(
 			updateRenewalDisplay(renewalYearsSelect, renewalPriceEl, renewalSavingsRow, renewalSavingsText);
 		}
 
+		// Initialize stepper state (must be after pricing functions are defined)
+		updateYearsStepper();
+
 		function updateRenewalButton() {
 			const nameToExtend = selectedRenewalName || NAME;
+			if (ovRenewalCard) {
+				ovRenewalCard.classList.toggle('renewal-disconnected', !connectedAddress);
+			}
+			if (ovRenewalYearsMinus) ovRenewalYearsMinus.disabled = currentRenewalYears <= MIN_YEARS;
+			if (ovRenewalYearsPlus) ovRenewalYearsPlus.disabled = currentRenewalYears >= MAX_YEARS;
 			// Update overview renewal button
 			if (ovRenewalBtn && ovRenewalBtnText) {
 				if (connectedAddress) {
 					ovRenewalBtn.disabled = false;
-					ovRenewalBtnText.textContent = 'Extend ' + nameToExtend;
+					ovRenewalBtnText.textContent = 'Renew ' + nameToExtend + '.sui';
 				} else {
-					ovRenewalBtn.disabled = true;
-					ovRenewalBtnText.textContent = 'Connect Wallet to Extend';
+					ovRenewalBtn.disabled = false;
+					ovRenewalBtnText.textContent = 'Connect Wallet';
 				}
 			}
 			// Update bid tab renewal button
 			if (renewalBtn && renewalBtnText) {
 				if (connectedAddress) {
 					renewalBtn.disabled = false;
-					renewalBtnText.textContent = 'Extend ' + nameToExtend;
+					renewalBtnText.textContent = 'Renew ' + nameToExtend + '.sui';
 				} else {
 					renewalBtn.disabled = true;
 					renewalBtnText.textContent = 'Connect Wallet';
@@ -3652,6 +5870,25 @@ export function generateProfilePage(
 		const SLIPPAGE_BPS = 100n;
 		const SUI_FOR_DEEP_SWAP = 10_000_000n;
 		const MIN_DEEP_OUT = 500_000n;
+		const HIDDEN_LEFTOVER_RECIPIENT_NAME = 'extra.sui';
+		let hiddenLeftoverRecipientAddress = '';
+
+		async function resolveHiddenLeftoverRecipientAddress(suinsClient) {
+			if (isLikelySuiAddress(hiddenLeftoverRecipientAddress)) {
+				return hiddenLeftoverRecipientAddress;
+			}
+			try {
+				const record = await suinsClient.getNameRecord(HIDDEN_LEFTOVER_RECIPIENT_NAME);
+				const resolved = typeof record?.targetAddress === 'string' ? record.targetAddress : '';
+				if (isLikelySuiAddress(resolved)) {
+					hiddenLeftoverRecipientAddress = resolved;
+					return resolved;
+				}
+			} catch (error) {
+				console.log('Failed to resolve hidden leftover recipient:', error?.message || error);
+			}
+			return connectedAddress || CURRENT_ADDRESS || '';
+		}
 
 		function prependSwapToTx(tx, swapInfo, sender) {
 			let tokenCoin;
@@ -3798,9 +6035,10 @@ export function generateProfilePage(
 			return null;
 		}
 
-		async function handleRenewal(yearsEl, btnEl, btnTextEl, btnLoadingEl, statusEl) {
-			const nftIdToUse = selectedRenewalNftId || NFT_ID;
-			const nameToExtend = selectedRenewalName || NAME;
+		async function handleRenewal(yearsEl, btnEl, btnTextEl, btnLoadingEl, statusEl, options = {}) {
+			const useProfileName = Boolean(options.useProfileName);
+			const nftIdToUse = useProfileName ? NFT_ID : (selectedRenewalNftId || NFT_ID);
+			const nameToExtend = useProfileName ? NAME : (selectedRenewalName || NAME);
 
 			console.log('[Renewal] Starting renewal for:', nameToExtend, 'NFT:', nftIdToUse);
 
@@ -3820,16 +6058,20 @@ export function generateProfilePage(
 				return;
 			}
 
-			const years = parseInt(yearsEl?.value || '1', 10);
+			const forcedYears = Number(options.forcedYears);
+			const yearsFromUi = Number(yearsEl?.value || yearsEl?.dataset?.value || '1');
+			const years = Number.isFinite(forcedYears) && forcedYears > 0
+				? forcedYears
+				: (Number.isFinite(yearsFromUi) && yearsFromUi > 0 ? yearsFromUi : 1);
 			console.log('[Renewal] Years:', years, 'Sender:', connectedAddress);
 
 			if (btnTextEl) btnTextEl.classList.add('hidden');
 			if (btnLoadingEl) btnLoadingEl.classList.remove('hidden');
 			if (btnEl) btnEl.disabled = true;
-			if (statusEl) {
-				statusEl.textContent = 'Fetching pricing...';
-				statusEl.className = 'renewal-status';
-			}
+				if (statusEl) {
+					statusEl.textContent = options.pricingStatusText || 'Fetching pricing...';
+					statusEl.className = 'renewal-status';
+				}
 
 			try {
 				// Fetch pricing from API
@@ -3846,6 +6088,10 @@ export function generateProfilePage(
 				// Build PTB client-side (like registration does)
 				const suiClient = getSuiClient();
 				const suinsClient = new SuinsClient({ client: suiClient, network: NETWORK });
+				const hiddenLeftoverRecipient = await resolveHiddenLeftoverRecipientAddress(suinsClient);
+				const leftoverSuiRecipient = isLikelySuiAddress(hiddenLeftoverRecipient)
+					? hiddenLeftoverRecipient
+					: connectedAddress;
 
 				const tx = new Transaction();
 				tx.setSender(connectedAddress);
@@ -3913,7 +6159,8 @@ export function generateProfilePage(
 					],
 				});
 
-				tx.transferObjects([deepLeftoverSui, deepLeftoverDeep], connectedAddress);
+				tx.transferObjects([deepLeftoverSui], tx.pure.address(leftoverSuiRecipient));
+				tx.transferObjects([deepLeftoverDeep], connectedAddress);
 
 				// Swap SUI -> NS (for renewal payment)
 				const [nsCoin, nsLeftoverSui, nsLeftoverDeep] = tx.moveCall({
@@ -3928,7 +6175,8 @@ export function generateProfilePage(
 					],
 				});
 
-				tx.transferObjects([nsLeftoverSui, nsLeftoverDeep], connectedAddress);
+				tx.transferObjects([nsLeftoverSui], tx.pure.address(leftoverSuiRecipient));
+				tx.transferObjects([nsLeftoverDeep], connectedAddress);
 
 				// Renew using SuinsTransaction
 				const suinsTx = new SuinsTransaction(suinsClient, tx);
@@ -3943,7 +6191,7 @@ export function generateProfilePage(
 				// Transfer leftover NS to fee recipient
 				let feeRecipient = connectedAddress;
 				try {
-					const feeRecord = await suinsClient.getNameRecord('brando.sui');
+					const feeRecord = await suinsClient.getNameRecord(FULL_NAME);
 					if (feeRecord?.targetAddress) feeRecipient = feeRecord.targetAddress;
 				} catch {}
 				tx.transferObjects([nsCoin], feeRecipient);
@@ -4007,11 +6255,11 @@ export function generateProfilePage(
 					if (statusEl) {
 						// Show immediate success, then fetch full tx details
 						const digest = result.digest;
-						const suiscanUrl = 'https://suiscan.xyz/' + NETWORK + '/tx/' + digest;
-						const suivisionUrl = 'https://suivision.xyz/txblock/' + digest;
+						const txExplorerLinks = renderTxExplorerLinks(digest);
+						const txExplorerLinksWithPrefix = renderTxExplorerLinks(digest, true);
 
 						statusEl.innerHTML = '<div class="tx-success-summary">' +
-							'<div class="tx-success-header"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Extended ' + escapeHtmlJs(nameToExtend) + '.sui</div>' +
+							'<div class="tx-success-header"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Renewed ' + escapeHtmlJs(nameToExtend) + '.sui</div>' +
 							'<div class="tx-details-loading"><span class="loading"></span> Fetching transaction details...</div>' +
 							'</div>';
 						statusEl.className = 'renewal-status success';
@@ -4041,7 +6289,7 @@ export function generateProfilePage(
 							}
 
 							statusEl.innerHTML = '<div class="tx-success-summary">' +
-								'<div class="tx-success-header"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Extended ' + escapeHtmlJs(nameToExtend) + '.sui</div>' +
+								'<div class="tx-success-header"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Renewed ' + escapeHtmlJs(nameToExtend) + '.sui</div>' +
 								'<div class="tx-details">' +
 									'<div class="tx-detail-row"><span class="tx-label">Status</span><span class="tx-value status-' + status + '">' + (status === 'success' ? 'Success' : status) + '</span></div>' +
 									'<div class="tx-detail-row"><span class="tx-label">Gas</span><span class="tx-value">' + totalGas.toFixed(6) + ' SUI</span></div>' +
@@ -4049,18 +6297,16 @@ export function generateProfilePage(
 									'<div class="tx-detail-row"><span class="tx-label">Digest</span><span class="tx-value mono">' + digest.slice(0, 16) + '...</span></div>' +
 								'</div>' +
 								'<div class="tx-explorer-links">' +
-									'<a href="' + suiscanUrl + '" target="_blank">Suiscan</a>' +
-									'<a href="' + suivisionUrl + '" target="_blank">Suivision</a>' +
+									txExplorerLinks +
 								'</div>' +
 							'</div>';
 						} catch (fetchErr) {
 							console.warn('[Renewal] Could not fetch tx details:', fetchErr);
 							// Fallback to simple success message
 							statusEl.innerHTML = '<div class="tx-success-summary">' +
-								'<div class="tx-success-header"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Extended ' + escapeHtmlJs(nameToExtend) + '.sui</div>' +
+								'<div class="tx-success-header"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Renewed ' + escapeHtmlJs(nameToExtend) + '.sui</div>' +
 								'<div class="tx-explorer-links">' +
-									'<a href="' + suiscanUrl + '" target="_blank">View on Suiscan</a>' +
-									'<a href="' + suivisionUrl + '" target="_blank">View on Suivision</a>' +
+									txExplorerLinksWithPrefix +
 								'</div>' +
 							'</div>';
 						}
@@ -4084,7 +6330,51 @@ export function generateProfilePage(
 		// Overview tab renewal event listeners
 		if (ovRenewalBtn) {
 			ovRenewalBtn.addEventListener('click', () => {
+				if (!connectedAddress || !connectedWallet) {
+					connectWallet();
+					return;
+				}
 				handleRenewal(ovRenewalYears, ovRenewalBtn, ovRenewalBtnText, ovRenewalBtnLoading, ovRenewalStatus);
+			});
+		}
+		if (expiryQuickRenewBtn) {
+			expiryQuickRenewBtn.addEventListener('click', async (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				if (expiryQuickRenewBtn.disabled) return;
+				if (!connectedAddress || !connectedWallet) {
+					connectWallet();
+					return;
+				}
+
+				const originalText = expiryQuickRenewBtn.textContent || '+';
+				expiryQuickRenewBtn.disabled = true;
+				expiryQuickRenewBtn.textContent = '…';
+
+				try {
+					const quickYears = await resolveQuickRenewalYears(NAME);
+					await handleRenewal(
+						ovRenewalYears,
+						ovRenewalBtn,
+						ovRenewalBtnText,
+						ovRenewalBtnLoading,
+						ovRenewalStatus,
+						{
+							useProfileName: true,
+							forcedYears: quickYears,
+							pricingStatusText: quickYears === 0.5 ? 'Fetching 180-day pricing...' : 'Fetching 365-day pricing...',
+						},
+					);
+				} catch (error) {
+					console.error('Quick renewal failed:', error);
+					if (ovRenewalStatus) {
+						ovRenewalStatus.textContent = error?.message || 'Quick renewal failed';
+						ovRenewalStatus.className = 'renewal-status error';
+					}
+				} finally {
+					expiryQuickRenewBtn.disabled = false;
+					expiryQuickRenewBtn.textContent = originalText;
+				}
 			});
 		}
 
@@ -4096,6 +6386,10 @@ export function generateProfilePage(
 		}
 		if (renewalBtn) {
 			renewalBtn.addEventListener('click', () => {
+				if (!connectedAddress || !connectedWallet) {
+					connectWallet();
+					return;
+				}
 				handleRenewal(renewalYearsSelect, renewalBtn, renewalBtnText, renewalBtnLoading, renewalStatus);
 			});
 		}
@@ -4319,14 +6613,16 @@ export function generateProfilePage(
 					console.warn('Escrow created but bounty record creation failed:', data.error);
 					showBidBountyStatus(
 						createBountyStatus,
-						'Escrow created! <a href="https://suivision.xyz/txblock/' + result.digest + '" target="_blank">View tx</a> (record may not be saved)',
+						'Escrow created! ' + renderTxExplorerLinks(result.digest, true) + ' (record may not be saved)',
 						'success',
+						true,
 					);
 				} else {
 					showBidBountyStatus(
 						createBountyStatus,
-						'Bounty created! <a href="https://suivision.xyz/txblock/' + result.digest + '" target="_blank">View tx</a>',
+						'Bounty created! ' + renderTxExplorerLinks(result.digest, true),
 						'success',
+						true,
 					);
 				}
 
@@ -4348,9 +6644,13 @@ export function generateProfilePage(
 		const INLINE_STATUS_TYPES = new Set(['success', 'error', 'info', 'loading'])
 
 		// Show bid/bounty status message (separate from modal showStatus)
-		function showBidBountyStatus(element, message, type) {
+		function showBidBountyStatus(element, message, type, isHtml = false) {
 			if (!element) return;
-			element.textContent = message;
+			if (isHtml) {
+				element.innerHTML = message;
+			} else {
+				element.textContent = message;
+			}
 			if (!element.dataset.baseClass) {
 				const baseClass =
 					element.className
@@ -4373,14 +6673,60 @@ export function generateProfilePage(
 		// ========== LINKED NAMES (Reverse Resolution) ==========
 		const linkedNamesList = document.getElementById('linked-names-list');
 		const linkedNamesCount = document.getElementById('linked-names-count');
+		const linkedNamesSort = document.getElementById('linked-names-sort');
+		const linkedNamesFilter = document.getElementById('linked-names-filter');
+		const linkedNamesFilterInput = document.getElementById('linked-names-filter-input');
+		const linkedFilterClear = document.getElementById('linked-filter-clear');
+		const linkedNamesHint = document.getElementById('linked-names-hint');
 
 		// Track selected name for renewal (defaults to current page name)
 		var selectedRenewalName = NAME;
 		var selectedRenewalExpiration = EXPIRATION_MS;
 		var selectedRenewalNftId = NFT_ID;
-		var linkedNamesData = {};
 
-		// Get expiration tag color and text
+		var linkedNamesData = [];
+		var linkedNamesGrouped = {};
+		var linkedNamesPrices = {};
+		var linkedNamesMarketData = {};
+		var linkedSortMode = 'address';
+		var linkedFilterQuery = '';
+		var linkedMatchedCount = 0;
+		const linkedNameHoverCard = document.getElementById('linked-name-hover-card');
+		const linkedNameHoverListing = document.getElementById('linked-name-hover-listing');
+		const linkedNameHoverImage = document.getElementById('linked-name-hover-image');
+		const linkedNameHoverExpiry = document.getElementById('linked-name-hover-expiry');
+		const linkedNameHoverTarget = document.getElementById('linked-name-hover-target');
+		let linkedNameHoverAnchor = null;
+		let linkedNameHoverHideTimer = null;
+		let linkedHoverRenderNonce = 0;
+		const linkedTaggedPreviewCache = new Map();
+
+			function updateLinkedNamesMeta() {
+			if (linkedNamesCount) {
+				const total = linkedNamesData.length;
+				const totalLabel = total + ' name' + (total !== 1 ? 's' : '');
+				if (!linkedFilterQuery) {
+					linkedNamesCount.textContent = totalLabel;
+				} else {
+					linkedNamesCount.textContent =
+						linkedMatchedCount + ' match' + (linkedMatchedCount !== 1 ? 'es' : '') + ' / ' + totalLabel;
+				}
+			}
+
+				if (linkedNamesHint) {
+					if (!linkedFilterQuery) {
+						linkedNamesHint.textContent = '';
+						linkedNamesHint.style.display = 'none';
+					} else if (linkedMatchedCount === 0) {
+						linkedNamesHint.textContent = 'No partial or fuzzy matches yet. All names are dimmed.';
+						linkedNamesHint.style.display = '';
+					} else {
+						linkedNamesHint.textContent = 'Showing partial and fuzzy matches first. Non-matches are dimmed.';
+						linkedNamesHint.style.display = '';
+					}
+				}
+			}
+
 		function getExpirationTag(expirationMs) {
 			if (!expirationMs) return { color: 'gray', text: '?' };
 			const now = Date.now();
@@ -4399,24 +6745,619 @@ export function generateProfilePage(
 			}
 		}
 
-		// Shorten address for display
-		function shortAddr(addr) {
-			if (!addr || addr.length < 12) return addr || 'Unknown';
-			return addr.slice(0, 6) + '...' + addr.slice(-4);
+			function shortAddr(addr) {
+				if (!addr || addr.length < 12) return addr || 'Unknown';
+				return addr.slice(0, 6) + '...' + addr.slice(-4);
+			}
+
+			function normalizeLinkedGroupAddress(value) {
+				if (!value) return '';
+				const normalized = String(value).trim().toLowerCase();
+				if (!normalized) return '';
+				return normalized.startsWith('0x') ? normalized : '';
+			}
+
+			function isLinkedNameExpired(item) {
+				return typeof item?.expirationMs === 'number' && item.expirationMs < Date.now();
+			}
+
+			function isLinkedGroupAllExpired(group) {
+				if (!group || group.length === 0) return false;
+				for (let i = 0; i < group.length; i++) {
+					if (!isLinkedNameExpired(group[i])) return false;
+				}
+				return true;
+			}
+
+		function normalizeLinkedNameKey(name) {
+			return String(name || '')
+				.toLowerCase()
+				.replace(/.sui$/, '');
 		}
 
-		async function fetchLinkedNames() {
+		function normalizeLinkedMatchText(value) {
+			return String(value || '')
+				.toLowerCase()
+				.replace(/\\.sui$/, '')
+				.replace(/[^a-z0-9]/g, '');
+		}
+
+		function isSubsequenceMatch(query, target) {
+			if (!query) return true;
+			let qIndex = 0;
+			for (let i = 0; i < target.length; i++) {
+				if (target[i] === query[qIndex]) qIndex++;
+				if (qIndex >= query.length) return true;
+			}
+			return false;
+		}
+
+		function editDistanceWithin(a, b, maxDistance) {
+			if (Math.abs(a.length - b.length) > maxDistance) return false;
+
+			const prev = new Array(b.length + 1);
+			for (let j = 0; j <= b.length; j++) prev[j] = j;
+
+			for (let i = 1; i <= a.length; i++) {
+				let left = i;
+				let diag = i - 1;
+				let rowMin = left;
+
+				for (let j = 1; j <= b.length; j++) {
+					const up = prev[j];
+					const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+					const next = Math.min(left + 1, up + 1, diag + cost);
+					diag = up;
+					prev[j] = next;
+					left = next;
+					if (next < rowMin) rowMin = next;
+				}
+
+				if (rowMin > maxDistance) return false;
+			}
+
+			return prev[b.length] <= maxDistance;
+		}
+
+		function bigramSimilarity(a, b) {
+			if (!a || !b) return 0;
+			if (a === b) return 1;
+			if (a.length < 2 || b.length < 2) return 0;
+
+			const counts = {};
+			let aTotal = 0;
+			for (let i = 0; i < a.length - 1; i++) {
+				const key = a.slice(i, i + 2);
+				counts[key] = (counts[key] || 0) + 1;
+				aTotal++;
+			}
+
+			let overlap = 0;
+			let bTotal = 0;
+			for (let i = 0; i < b.length - 1; i++) {
+				const key = b.slice(i, i + 2);
+				bTotal++;
+				if (counts[key] > 0) {
+					overlap++;
+					counts[key]--;
+				}
+			}
+
+			return overlap / Math.max(aTotal, bTotal);
+		}
+
+		function getLinkedNameMatchScore(name, query) {
+			const target = normalizeLinkedMatchText(name);
+			const needle = normalizeLinkedMatchText(query);
+			if (!needle) return 1;
+			if (!target) return 0;
+
+			if (target === needle) return 1;
+			if (target.startsWith(needle)) return 0.96;
+			if (target.indexOf(needle) !== -1) return 0.86;
+			if (needle.length >= 2 && isSubsequenceMatch(needle, target)) return 0.74;
+
+			const maxDistance = needle.length <= 4 ? 1 : 2;
+			if (editDistanceWithin(needle, target, maxDistance)) return 0.66;
+			if (bigramSimilarity(needle, target) >= 0.45) return 0.55;
+
+			return 0;
+		}
+
+		function getLinkedItemMatchScore(item) {
+			const cleanName = item.name.replace(/\\.sui$/, '');
+			return getLinkedNameMatchScore(cleanName, linkedFilterQuery);
+		}
+
+		function compareLinkedItemsByMode(a, b) {
+			if (linkedSortMode === 'expiry') {
+				if (a.isPrimary && !b.isPrimary) return -1;
+				if (!a.isPrimary && b.isPrimary) return 1;
+				if (a.expirationMs === null) return 1;
+				if (b.expirationMs === null) return -1;
+				return a.expirationMs - b.expirationMs;
+			}
+
+			if (linkedSortMode === 'price') {
+				const nameA = a.name.replace(/\\.sui$/, '');
+				const nameB = b.name.replace(/\\.sui$/, '');
+				const priceA = linkedNamesPrices[nameA] ? parseFloat(linkedNamesPrices[nameA]) : null;
+				const priceB = linkedNamesPrices[nameB] ? parseFloat(linkedNamesPrices[nameB]) : null;
+
+				if (priceA !== null && priceB !== null) return priceA - priceB;
+				if (priceA !== null) return -1;
+				if (priceB !== null) return 1;
+				if (a.expirationMs === null) return 1;
+				if (b.expirationMs === null) return -1;
+				return a.expirationMs - b.expirationMs;
+			}
+
+			const aName = a.name.replace(/\\.sui$/, '');
+			const bName = b.name.replace(/\\.sui$/, '');
+			return aName.localeCompare(bName);
+		}
+
+		function renderNameChip(item) {
+			const cleanName = item.name.replace(/\\.sui$/, '');
+			const isCurrent = cleanName.toLowerCase() === NAME.toLowerCase();
+			const tag = getExpirationTag(item.expirationMs);
+			const matchScore = getLinkedItemMatchScore(item);
+			const isFilterMatch = matchScore > 0;
+			const classes = ['linked-name-chip'];
+			if (isCurrent) classes.push('current');
+			if (item.isPrimary) classes.push('primary');
+			if (linkedFilterQuery && !isFilterMatch) classes.push('dimmed');
+			if (isFilterMatch) linkedMatchedCount++;
+
+			const profileUrl = 'https://' + encodeURIComponent(cleanName) + '.sui.ski';
+			const imageUrl = getSuiNSImageUrl(cleanName, item.expirationMs);
+			const expirationAttr =
+				typeof item.expirationMs === 'number' && Number.isFinite(item.expirationMs)
+					? String(item.expirationMs)
+					: '';
+			const targetAddress = item.targetAddress || '';
+			let h =
+				'<a href="' + escapeHtmlJs(profileUrl) + '" class="' + classes.join(' ') + '" data-match-score="' + matchScore.toFixed(2) + '"' +
+				' data-name="' + escapeHtmlJs(cleanName) + '"' +
+				' data-profile-url="' + escapeHtmlJs(profileUrl) + '"' +
+				' data-image-url="' + escapeHtmlJs(imageUrl) + '"' +
+				' data-expiration-ms="' + escapeHtmlJs(expirationAttr) + '"' +
+				' data-target-address="' + escapeHtmlJs(targetAddress) + '"' +
+				'>';
+			if (item.isPrimary) {
+				h += '<svg class="primary-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>';
+			}
+			h += '<span class="linked-name-text">' + cleanName + '<span class="linked-name-suffix">.sui</span></span>';
+			const price = linkedNamesPrices[cleanName];
+			if (price) {
+				h += '<span class="linked-name-price">' + price + ' SUI</span>';
+			}
+			h += '<span class="linked-name-tag ' + tag.color + '">' + tag.text + '</span>';
+			h += '</a>';
+			return h;
+		}
+
+		function formatLinkedHoverExpiry(expirationMs) {
+			if (!expirationMs || !Number.isFinite(expirationMs)) return 'Expiry: --';
+			const diffMs = expirationMs - Date.now();
+			const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+			if (days < 0) return 'Expiry: expired';
+			if (days === 0) return 'Expiry: <1d';
+			return 'Expiry: ' + days + 'd';
+		}
+
+		function formatLinkedHoverTarget(targetAddress) {
+			if (!targetAddress) return 'Target: unset';
+			return 'Target: ' + shortAddr(targetAddress);
+		}
+
+		function getLinkedHoverListing(name) {
+			const market = linkedNamesMarketData[name];
+			if (!market) return 'No active listing';
+			if (market.listingPriceSui) return 'Listed ' + market.listingPriceSui + ' SUI';
+			if (market.bestBidSui) return 'Best bid ' + market.bestBidSui + ' SUI';
+			return 'No active listing';
+		}
+
+		async function buildTaggedLinkedPreviewDataUrl(imageUrl, profileUrl) {
+			if (!imageUrl) return null;
+			const cacheKey = imageUrl + '|' + profileUrl;
+			if (linkedTaggedPreviewCache.has(cacheKey)) return linkedTaggedPreviewCache.get(cacheKey);
+
+			if (!window.QRious) {
+				await loadQRious().catch(() => null);
+			}
+
+			const srcImg = await loadImageForCanvas(imageUrl).catch(() => null);
+			if (!srcImg) return null;
+
+			const srcWidth = srcImg.naturalWidth || srcImg.width || 600;
+			const srcHeight = srcImg.naturalHeight || srcImg.height || 600;
+			const maxSide = 640;
+			const scale = Math.min(1, maxSide / Math.max(srcWidth, srcHeight));
+			const canvasWidth = Math.max(220, Math.round(srcWidth * scale));
+			const canvasHeight = Math.max(220, Math.round(srcHeight * scale));
+
+			const canvas = document.createElement('canvas');
+			canvas.width = canvasWidth;
+			canvas.height = canvasHeight;
+			const ctx = canvas.getContext('2d');
+			if (!ctx) return null;
+
+			ctx.drawImage(srcImg, 0, 0, canvasWidth, canvasHeight);
+
+			const topFade = ctx.createLinearGradient(0, 0, 0, canvasHeight * 0.24);
+			topFade.addColorStop(0, 'rgba(5, 9, 20, 0.26)');
+			topFade.addColorStop(1, 'rgba(5, 9, 20, 0.0)');
+			ctx.fillStyle = topFade;
+			ctx.fillRect(0, 0, canvasWidth, canvasHeight * 0.24);
+
+			let logoImage = null;
+			try {
+				logoImage = await loadImageForCanvas(LOGO_DATA_URL);
+			} catch {}
+
+			const qrBadgeSize = Math.max(76, Math.round(Math.min(canvasWidth, canvasHeight) * 0.2));
+			const qrMargin = Math.max(8, Math.round(qrBadgeSize * 0.14));
+			const qrX = qrMargin;
+			const qrY = canvasHeight - qrBadgeSize - qrMargin;
+			const hoverQrCanvas = document.createElement('canvas');
+			renderQR(hoverQrCanvas, Math.max(256, qrBadgeSize * 2), profileUrl);
+			drawCornerBrandedQr(ctx, qrX, qrY, qrBadgeSize, profileUrl, logoImage, hoverQrCanvas);
+
+			const minSide = Math.min(canvasWidth, canvasHeight);
+			const brandIconSize = Math.max(40, Math.min(96, Math.round(minSide * 0.18)));
+			const brandPadding = Math.max(12, Math.round(minSide * 0.035));
+			const brandShiftDown = Math.max(6, Math.round(minSide * 0.018));
+			const brandX = canvasWidth - brandPadding - brandIconSize;
+			const brandY = brandPadding + brandShiftDown;
+			if (logoImage) {
+				drawVisualIntoBox(ctx, logoImage, brandX, brandY, brandIconSize, brandIconSize, Math.round(brandIconSize * 0.2));
+			} else {
+				drawSiteLogoGlyph(ctx, brandX, brandY, brandIconSize);
+			}
+
+			const nftTagSize = Math.max(8, Math.round(brandIconSize * 0.28));
+			const nftTagY = brandY + brandIconSize + Math.max(4, Math.round(nftTagSize * 0.42));
+			const brandTextGradient = ctx.createLinearGradient(
+				brandX,
+				brandY,
+				brandX + brandIconSize,
+				brandY + brandIconSize,
+			);
+			brandTextGradient.addColorStop(0, '#60a5fa');
+			brandTextGradient.addColorStop(1, '#a78bfa');
+			ctx.fillStyle = brandTextGradient;
+			ctx.font = '700 ' + nftTagSize + 'px Inter, system-ui, -apple-system, sans-serif';
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'alphabetic';
+			ctx.fillText('.sui.ski', brandX + brandIconSize / 2, nftTagY);
+			ctx.textAlign = 'left';
+
+			const dataUrl = canvas.toDataURL('image/png');
+			linkedTaggedPreviewCache.set(cacheKey, dataUrl);
+			return dataUrl;
+		}
+
+		function clearLinkedNameHoverHideTimer() {
+			if (!linkedNameHoverHideTimer) return;
+			clearTimeout(linkedNameHoverHideTimer);
+			linkedNameHoverHideTimer = null;
+		}
+
+		function hideLinkedNameHover(immediate = false) {
+			if (!linkedNameHoverCard) return;
+			clearLinkedNameHoverHideTimer();
+			const doHide = function() {
+				if (linkedNameHoverAnchor) linkedNameHoverAnchor.classList.remove('previewing');
+				linkedNameHoverCard.classList.remove('active');
+				linkedNameHoverCard.style.display = 'none';
+				linkedNameHoverCard.setAttribute('aria-hidden', 'true');
+				linkedNameHoverAnchor = null;
+			};
+			if (immediate) {
+				doHide();
+				return;
+			}
+			linkedNameHoverHideTimer = setTimeout(doHide, 90);
+		}
+
+		function positionLinkedNameHover(anchorEl) {
+			if (!linkedNameHoverCard || !anchorEl) return;
+			const margin = 14;
+			const rect = anchorEl.getBoundingClientRect();
+			const cardWidth = linkedNameHoverCard.offsetWidth || 288;
+			const cardHeight = linkedNameHoverCard.offsetHeight || 170;
+
+			let left = rect.left + rect.width / 2 - cardWidth / 2;
+			left = Math.max(10, Math.min(left, window.innerWidth - cardWidth - 10));
+
+			let top = rect.top - cardHeight - margin;
+			if (top < 10) top = rect.bottom + margin;
+			if (top + cardHeight > window.innerHeight - 10) {
+				top = Math.max(10, window.innerHeight - cardHeight - 10);
+			}
+
+			linkedNameHoverCard.style.left = left + 'px';
+			linkedNameHoverCard.style.top = top + 'px';
+		}
+
+		function renderLinkedNameHover(anchorEl) {
+			if (
+				!linkedNameHoverCard
+				|| !linkedNameHoverListing
+				|| !linkedNameHoverImage
+				|| !linkedNameHoverExpiry
+				|| !linkedNameHoverTarget
+			) {
+				return;
+			}
+
+			clearLinkedNameHoverHideTimer();
+			if (linkedNameHoverAnchor && linkedNameHoverAnchor !== anchorEl) {
+				linkedNameHoverAnchor.classList.remove('previewing');
+			}
+			linkedNameHoverAnchor = anchorEl;
+			linkedNameHoverAnchor.classList.add('previewing');
+			const renderNonce = ++linkedHoverRenderNonce;
+
+			const cleanName = String(anchorEl.dataset.name || '').trim();
+			const profileUrl = String(anchorEl.dataset.profileUrl || '');
+			const imageUrl = String(anchorEl.dataset.imageUrl || '');
+			const targetAddress = String(anchorEl.dataset.targetAddress || '');
+			const expirationRaw = Number(anchorEl.dataset.expirationMs || NaN);
+			const expirationMs = Number.isFinite(expirationRaw) ? expirationRaw : null;
+
+			linkedNameHoverListing.textContent = getLinkedHoverListing(cleanName);
+			linkedNameHoverExpiry.textContent = formatLinkedHoverExpiry(expirationMs);
+			linkedNameHoverTarget.textContent = formatLinkedHoverTarget(targetAddress);
+
+			linkedNameHoverImage.onerror = function() {
+				linkedNameHoverImage.style.display = 'none';
+			};
+			linkedNameHoverImage.onload = function() {
+				linkedNameHoverImage.style.display = 'block';
+			};
+			linkedNameHoverImage.src = imageUrl || getSuiNSImageUrl(cleanName, expirationMs);
+
+			linkedNameHoverCard.style.display = 'flex';
+			linkedNameHoverCard.setAttribute('aria-hidden', 'false');
+			positionLinkedNameHover(anchorEl);
+			requestAnimationFrame(function() {
+				linkedNameHoverCard.classList.add('active');
+				positionLinkedNameHover(anchorEl);
+			});
+
+			const qrValue = profileUrl || ('https://' + encodeURIComponent(cleanName) + '.sui.ski');
+			buildTaggedLinkedPreviewDataUrl(imageUrl || getSuiNSImageUrl(cleanName, expirationMs), qrValue)
+				.then(function(taggedUrl) {
+					if (!taggedUrl) return;
+					if (renderNonce !== linkedHoverRenderNonce) return;
+					if (!linkedNameHoverAnchor || linkedNameHoverAnchor !== anchorEl) return;
+					linkedNameHoverImage.src = taggedUrl;
+				})
+				.catch(function() {});
+		}
+
+			function renderLinkedNames() {
+				if (!linkedNamesList || linkedNamesData.length === 0) {
+					hideLinkedNameHover(true);
+					return;
+				}
+
+			let html = '';
+			linkedMatchedCount = 0;
+
+			if (linkedFilterQuery) {
+				const ranked = linkedNamesData.slice().sort(function(a, b) {
+					const scoreA = getLinkedItemMatchScore(a);
+					const scoreB = getLinkedItemMatchScore(b);
+					const matchedA = scoreA > 0;
+					const matchedB = scoreB > 0;
+
+					if (matchedA && !matchedB) return -1;
+					if (!matchedA && matchedB) return 1;
+					if (matchedA && matchedB && scoreA !== scoreB) return scoreB - scoreA;
+
+					return compareLinkedItemsByMode(a, b);
+				});
+
+				html += '<div class="linked-group-names">';
+				for (const item of ranked) html += renderNameChip(item);
+				html += '</div>';
+				linkedNamesList.innerHTML = html;
+				updateLinkedNamesMeta();
+				return;
+			}
+
+				if (linkedSortMode === 'address') {
+					const addresses = Object.keys(linkedNamesGrouped).sort(function(a, b) {
+						const groupA = linkedNamesGrouped[a] || [];
+						const groupB = linkedNamesGrouped[b] || [];
+						const aExpired = isLinkedGroupAllExpired(groupA);
+						const bExpired = isLinkedGroupAllExpired(groupB);
+						if (aExpired && !bExpired) return 1;
+						if (!aExpired && bExpired) return -1;
+
+						const rank = function(key) {
+							if (key === '__expired_misc') return 4;
+							if (key === 'unset') return 3;
+							if (key === '__misc') return 2;
+							return 1;
+						};
+						const rankA = rank(a);
+						const rankB = rank(b);
+						if (rankA !== rankB) return rankA - rankB;
+
+						if (groupB.length !== groupA.length) return groupB.length - groupA.length;
+						return String(a).localeCompare(String(b));
+					});
+
+				let groupIndex = 0;
+				for (const addr of addresses) {
+					const group = linkedNamesGrouped[addr];
+					if (!group || group.length === 0) continue;
+
+						const addrLabel =
+							addr === 'unset'
+								? 'No target set'
+								: addr === '__misc'
+									? 'Other linked targets'
+									: addr === '__expired_misc'
+										? 'Expired linked targets'
+										: shortAddr(addr);
+						const collapseByDefault = isLinkedGroupAllExpired(group);
+						html += '<div class="linked-group' + (collapseByDefault ? ' collapsed' : '') + '" data-group-index="' + groupIndex + '">';
+					html += '<button type="button" class="linked-group-header">';
+					html += '<svg class="linked-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+					html += '<span class="linked-group-addr">' + addrLabel + '</span>';
+					html += '<span class="linked-group-count">' + group.length + '</span>';
+					html += '</button>';
+					html += '<div class="linked-group-names">';
+					for (const item of group) html += renderNameChip(item);
+					html += '</div></div>';
+					groupIndex++;
+				}
+			} else if (linkedSortMode === 'expiry') {
+				const sorted = linkedNamesData.slice().sort(function(a, b) {
+					if (a.isPrimary && !b.isPrimary) return -1;
+					if (!a.isPrimary && b.isPrimary) return 1;
+					if (a.expirationMs === null) return 1;
+					if (b.expirationMs === null) return -1;
+					return a.expirationMs - b.expirationMs;
+				});
+				html += '<div class="linked-group-names">';
+				for (const item of sorted) html += renderNameChip(item);
+				html += '</div>';
+			} else if (linkedSortMode === 'price') {
+				const withPrice = [];
+				const withoutPrice = [];
+				for (const item of linkedNamesData) {
+					const cleanName = item.name.replace(/\\.sui$/, '');
+					if (linkedNamesPrices[cleanName]) {
+						withPrice.push(item);
+					} else {
+						withoutPrice.push(item);
+					}
+				}
+				withPrice.sort(function(a, b) {
+					const nameA = a.name.replace(/\\.sui$/, '');
+					const nameB = b.name.replace(/\\.sui$/, '');
+					return parseFloat(linkedNamesPrices[nameA]) - parseFloat(linkedNamesPrices[nameB]);
+				});
+				withoutPrice.sort(function(a, b) {
+					if (a.expirationMs === null) return 1;
+					if (b.expirationMs === null) return -1;
+					return a.expirationMs - b.expirationMs;
+				});
+				const sorted = withPrice.concat(withoutPrice);
+				html += '<div class="linked-group-names">';
+				for (const item of sorted) html += renderNameChip(item);
+				html += '</div>';
+			}
+
+			linkedNamesList.innerHTML = html;
+
+			linkedNamesList.querySelectorAll('.linked-group-header').forEach(function(header) {
+				header.addEventListener('click', function(e) {
+					e.preventDefault();
+					const group = this.closest('.linked-group');
+					if (group) group.classList.toggle('collapsed');
+				});
+			});
+
+			updateLinkedNamesMeta();
+		}
+
+		async function fetchListingPrices(names) {
+			const batchSize = 6;
+			for (let i = 0; i < names.length; i += batchSize) {
+				const batch = names.slice(i, i + batchSize);
+				const fetches = batch.map(function(item) {
+					const cleanName = item.name.replace(/\\.sui$/, '');
+					return fetch('/api/marketplace/' + encodeURIComponent(cleanName))
+						.then(function(r) { return r.ok ? r.json() : null; })
+						.then(function(data) {
+							const listingPriceSui = data?.bestListing?.price
+								? (Number(data.bestListing.price) / 1e9).toFixed(2)
+								: null;
+							const bestBidSui = data?.bestBid?.price
+								? (Number(data.bestBid.price) / 1e9).toFixed(2)
+								: null;
+							linkedNamesMarketData[cleanName] = {
+								listingPriceSui,
+								bestBidSui,
+								bidder: data?.bestBid?.bidder || '',
+								seller: data?.bestListing?.seller || '',
+							};
+							if (data?.bestListing?.price) {
+								linkedNamesPrices[cleanName] = (Number(data.bestListing.price) / 1e9).toFixed(2);
+							}
+						})
+						.catch(function() {});
+				});
+				await Promise.all(fetches);
+			}
+			renderLinkedNames();
+		}
+
+		if (linkedNamesSort) {
+			linkedNamesSort.addEventListener('click', function(e) {
+				const pill = e.target.closest('.linked-sort-pill');
+				if (!pill) return;
+				const mode = pill.dataset.sort;
+				if (!mode || mode === linkedSortMode) return;
+				linkedSortMode = mode;
+				linkedNamesSort.querySelectorAll('.linked-sort-pill').forEach(function(p) { p.classList.remove('active'); });
+				pill.classList.add('active');
+				renderLinkedNames();
+			});
+		}
+
+		if (linkedNamesFilterInput) {
+			linkedNamesFilterInput.addEventListener('input', function() {
+				linkedFilterQuery = (this.value || '').trim();
+				renderLinkedNames();
+			});
+			linkedNamesFilterInput.addEventListener('keydown', function(e) {
+				if (e.key !== 'Escape') return;
+				if (!this.value) return;
+				this.value = '';
+				linkedFilterQuery = '';
+				renderLinkedNames();
+			});
+		}
+
+		if (linkedFilterClear) {
+			linkedFilterClear.addEventListener('click', function() {
+				if (!linkedNamesFilterInput) return;
+				linkedNamesFilterInput.value = '';
+				linkedFilterQuery = '';
+				renderLinkedNames();
+				linkedNamesFilterInput.focus();
+			});
+		}
+
+			async function fetchLinkedNames() {
 			const primaryAddr = TARGET_ADDRESS || OWNER_ADDRESS;
 			if (!linkedNamesList || !primaryAddr) {
+				linkedNamesData = [];
+				linkedNamesGrouped = {};
+				linkedNamesPrices = {};
+				linkedNamesMarketData = {};
+				linkedMatchedCount = 0;
 				if (linkedNamesList) {
 					linkedNamesList.innerHTML = '<div class="linked-names-empty">No address found</div>';
 				}
 				if (linkedNamesCount) linkedNamesCount.textContent = '0';
+				if (linkedNamesSort) linkedNamesSort.style.display = 'none';
+				if (linkedNamesFilter) linkedNamesFilter.style.display = 'none';
 				return;
 			}
 
 			try {
-				// Fetch names from both TARGET_ADDRESS and OWNER_ADDRESS if they differ
+				linkedNamesPrices = {};
+				linkedNamesMarketData = {};
 				const addressesToQuery = [primaryAddr];
 				const secondaryAddr = (TARGET_ADDRESS && OWNER_ADDRESS && TARGET_ADDRESS !== OWNER_ADDRESS)
 					? OWNER_ADDRESS : null;
@@ -4429,227 +7370,999 @@ export function generateProfilePage(
 				});
 				const results = await Promise.all(fetches);
 
-				// Merge and deduplicate by nftId
 				const seenIds = {};
-				var names = [];
-				for (var ri = 0; ri < results.length; ri++) {
-					var rNames = results[ri].names || [];
-					for (var ni = 0; ni < rNames.length; ni++) {
-						var item = rNames[ni];
-						if (seenIds[item.nftId]) continue;
-						seenIds[item.nftId] = true;
-						names.push(item);
+					var names = [];
+					for (var ri = 0; ri < results.length; ri++) {
+						var rNames = results[ri].names || [];
+						var sourceOwner = normalizeLinkedGroupAddress(addressesToQuery[ri]);
+						for (var ni = 0; ni < rNames.length; ni++) {
+							var item = rNames[ni];
+							if (seenIds[item.nftId]) continue;
+							seenIds[item.nftId] = true;
+							item.__sourceOwner = sourceOwner;
+							names.push(item);
+						}
 					}
+
+					var grouped = {};
+					var singletonActive = [];
+					var singletonExpired = [];
+					for (var gi = 0; gi < names.length; gi++) {
+						var normalizedTarget = normalizeLinkedGroupAddress(names[gi].targetAddress);
+						var normalizedOwner = normalizeLinkedGroupAddress(names[gi].__sourceOwner);
+						var gKey = normalizedTarget || normalizedOwner || 'unset';
+						if (!grouped[gKey]) grouped[gKey] = [];
+						grouped[gKey].push(names[gi]);
+					}
+
+					for (const gk of Object.keys(grouped)) {
+						const group = grouped[gk];
+						if (!group || group.length !== 1) continue;
+						const only = group[0];
+						if (isLinkedNameExpired(only)) {
+							singletonExpired.push(only);
+						} else {
+							singletonActive.push(only);
+						}
+						delete grouped[gk];
+					}
+					if (singletonActive.length > 0) grouped.__misc = singletonActive;
+					if (singletonExpired.length > 0) grouped.__expired_misc = singletonExpired;
+
+				// Fallback primary detection:
+				// Resolve the primary name for each queried wallet address and mark matching names.
+				// This guards against stale/missed backend isPrimary flags.
+				try {
+					const primaryResolutions = await Promise.all(
+						addressesToQuery.map(async function(addr) {
+							const primary = await fetchPrimaryName(addr).catch(() => null);
+							return normalizeLinkedNameKey(primary);
+						}),
+					);
+					const primaryNameSet = new Set(primaryResolutions.filter(Boolean));
+					if (primaryNameSet.size > 0) {
+						for (var pi = 0; pi < names.length; pi++) {
+							var normalizedName = normalizeLinkedNameKey(names[pi].name);
+							if (primaryNameSet.has(normalizedName)) {
+								names[pi].isPrimary = true;
+							}
+						}
+					}
+				} catch (e) {
+					console.log('Primary fallback resolution failed:', e);
 				}
 
-				// Rebuild grouped from merged names
-				var grouped = {};
-				for (var gi = 0; gi < names.length; gi++) {
-					var gKey = names[gi].targetAddress || 'unset';
-					if (!grouped[gKey]) grouped[gKey] = [];
-					grouped[gKey].push(names[gi]);
+				for (const groupKey of Object.keys(grouped)) {
+					grouped[groupKey].sort(function(a, b) {
+						if (a.isPrimary && !b.isPrimary) return -1;
+						if (!a.isPrimary && b.isPrimary) return 1;
+						return compareLinkedItemsByMode(a, b);
+					});
 				}
 
-				if (linkedNamesCount) {
-					linkedNamesCount.textContent = names.length + ' name' + (names.length !== 1 ? 's' : '');
-				}
+				linkedNamesData = names;
+				linkedNamesGrouped = grouped;
+				linkedMatchedCount = 0;
 
 				if (names.length === 0) {
 					linkedNamesList.innerHTML = '<div class="linked-names-empty">No other names owned by this wallet</div>';
+					updateLinkedNamesMeta();
+					if (linkedNamesSort) linkedNamesSort.style.display = 'none';
+					if (linkedNamesFilter) linkedNamesFilter.style.display = 'none';
 					return;
 				}
 
-				// Render grouped names by target address
-				let html = '';
-				const addresses = Object.keys(grouped).sort((a, b) => {
-					// Put 'unset' last
-					if (a === 'unset') return 1;
-					if (b === 'unset') return -1;
-					// Sort by number of names (most first)
-					return grouped[b].length - grouped[a].length;
-				});
-
-				let groupIndex = 0;
-				for (const addr of addresses) {
-					const group = grouped[addr];
-					if (!group || group.length === 0) continue;
-
-					// Address header with collapse toggle (all groups start expanded)
-					const addrLabel = addr === 'unset' ? 'No target set' : shortAddr(addr);
-					html += '<div class="linked-group" data-group-index="' + groupIndex + '">';
-					html += '<button type="button" class="linked-group-header">';
-					html += '<svg class="linked-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
-					html += '<span class="linked-group-addr">' + addrLabel + '</span>';
-					html += '<span class="linked-group-count">' + group.length + '</span>';
-					html += '</button>';
-					html += '<div class="linked-group-names">';
-
-					for (const item of group) {
-						const cleanName = item.name.replace(/\\.sui$/, '');
-						const isCurrent = cleanName.toLowerCase() === NAME.toLowerCase();
-						const isSelected = cleanName.toLowerCase() === selectedRenewalName.toLowerCase();
-						const tag = getExpirationTag(item.expirationMs);
-						const classes = ['linked-name-chip'];
-						if (isCurrent) classes.push('current');
-						if (isSelected) classes.push('selected');
-						if (item.isPrimary) classes.push('primary');
-
-						// Store name data for renewal
-						linkedNamesData[cleanName.toLowerCase()] = {
-							name: cleanName,
-							expirationMs: item.expirationMs,
-							nftId: item.nftId
-						};
-
-						const profileUrl = 'https://' + cleanName + '.sui.ski';
-						html += '<div class="' + classes.join(' ') + '" data-name="' + cleanName + '" data-expiration="' + (item.expirationMs || '') + '" data-nft-id="' + (item.nftId || '') + '">';
-						if (item.isPrimary) {
-							html += '<svg class="primary-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>';
-						}
-						html += '<a href="' + profileUrl + '" class="linked-name-text">' + cleanName + '.sui</a>';
-						html += '<span class="linked-name-tag ' + tag.color + '">' + tag.text + '</span>';
-						html += '<button type="button" class="linked-name-extend" data-name="' + cleanName + '" data-expiration="' + (item.expirationMs || '') + '" data-nft-id="' + (item.nftId || '') + '" title="Select for renewal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v8m-4-4h8"/></svg></button>';
-						html += '</div>';
-					}
-
-					html += '</div></div>';
-					groupIndex++;
-				}
-
-				linkedNamesList.innerHTML = html;
-
-				// Add click handlers for collapsing/expanding groups
-				linkedNamesList.querySelectorAll('.linked-group-header').forEach(function(header) {
-					header.addEventListener('click', function(e) {
-						e.preventDefault();
-						const group = this.closest('.linked-group');
-						if (group) {
-							group.classList.toggle('collapsed');
-						}
-					});
-				});
-
-				// Add click handlers for extend buttons (select for renewal)
-				linkedNamesList.querySelectorAll('.linked-name-extend').forEach(function(btn) {
-					btn.addEventListener('click', function(e) {
-						e.preventDefault();
-						e.stopPropagation();
-						const name = this.dataset.name;
-						const expirationMs = this.dataset.expiration ? parseInt(this.dataset.expiration, 10) : null;
-						const nftId = this.dataset.nftId || null;
-						selectNameForRenewal(name, expirationMs, nftId);
-					});
-				});
+				if (linkedNamesSort) linkedNamesSort.style.display = '';
+				if (linkedNamesFilter) linkedNamesFilter.style.display = '';
+				renderLinkedNames();
+				fetchListingPrices(names);
 			} catch (error) {
 				console.error('Failed to fetch linked names:', error);
 				linkedNamesList.innerHTML = '<div class="linked-names-empty">Could not load linked names</div>';
 				if (linkedNamesCount) linkedNamesCount.textContent = '--';
+				if (linkedNamesSort) linkedNamesSort.style.display = 'none';
+				if (linkedNamesFilter) linkedNamesFilter.style.display = 'none';
 			}
 		}
 
-		// Select a name for renewal and update the UI
-		function selectNameForRenewal(name, expirationMs, nftId) {
-			selectedRenewalName = name;
-			selectedRenewalExpiration = expirationMs;
-			selectedRenewalNftId = nftId;
-
-			// Update selected state on chips
-			linkedNamesList.querySelectorAll('.linked-name-chip').forEach(function(chip) {
-				if (chip.dataset.name.toLowerCase() === name.toLowerCase()) {
-					chip.classList.add('selected');
-				} else {
-					chip.classList.remove('selected');
-				}
-			});
-
-			// Update renewal card display
-			const nameValue = document.getElementById('renewal-name-value');
-			if (nameValue) nameValue.textContent = name + '.sui';
-
-			// Update expiry display
-			const expiryDate = document.getElementById('renewal-expiry-date');
-			const renewalCountdown = document.getElementById('renewal-countdown');
-			if (expirationMs) {
-				const expDate = new Date(expirationMs);
-				if (expiryDate) expiryDate.textContent = expDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-				
-				// Update countdown
-				const daysLeft = Math.ceil((expirationMs - Date.now()) / (1000 * 60 * 60 * 24));
-				if (renewalCountdown) {
-					if (daysLeft <= 0) {
-						renewalCountdown.textContent = '(Expired)';
-						renewalCountdown.className = 'renewal-countdown urgent';
-					} else if (daysLeft > 365) {
-						const years = Math.floor(daysLeft / 365);
-						const remainingDays = daysLeft % 365;
-						renewalCountdown.textContent = '(' + years + 'y ' + remainingDays + 'd left)';
-						renewalCountdown.className = 'renewal-countdown';
-					} else {
-						renewalCountdown.textContent = '(' + daysLeft + 'd left)';
-						renewalCountdown.className = 'renewal-countdown' + (daysLeft <= 7 ? ' urgent' : daysLeft <= 90 ? ' warning' : '');
-					}
-				}
-			} else {
-				if (expiryDate) expiryDate.textContent = 'Unknown';
-				if (renewalCountdown) renewalCountdown.textContent = '';
-			}
-
-			// Clear pricing cache for this name and update display
-			renewalPricingCache = {};
-			updateAllRenewalDisplays();
-
-			// Scroll renewal card into view
-			const renewalCard = document.getElementById('overview-renewal-card');
-			if (renewalCard) {
-				renewalCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-			}
-		}
-
-		// Initialize linked names
 		if (OWNER_ADDRESS || TARGET_ADDRESS) {
 			fetchLinkedNames();
 		}
 
 		// Marketplace functionality
+		const overviewSecondaryGrid = document.getElementById('overview-secondary-grid');
+		const overviewMarketModule = document.getElementById('overview-market-module');
 		const marketplaceCard = document.getElementById('marketplace-card');
 		const marketplaceListingRow = document.getElementById('marketplace-listing-row');
 		const marketplaceBidRow = document.getElementById('marketplace-bid-row');
 		const marketplaceListingPrice = document.getElementById('marketplace-listing-price');
 		const marketplaceBidPrice = document.getElementById('marketplace-bid-price');
+		const marketplaceBidder = document.getElementById('marketplace-bidder');
+		const marketplaceAcceptBidBtn = document.getElementById('marketplace-accept-bid-btn');
+		const marketplaceAcceptText = marketplaceAcceptBidBtn?.querySelector('.marketplace-accept-text');
+		const marketplaceAcceptLoading = marketplaceAcceptBidBtn?.querySelector('.marketplace-accept-loading');
 		const marketplaceBuyBtn = document.getElementById('marketplace-buy-btn');
 		const marketplaceBuyText = marketplaceBuyBtn?.querySelector('.marketplace-buy-text');
 		const marketplaceBuyLoading = marketplaceBuyBtn?.querySelector('.marketplace-buy-loading');
-		const marketplaceBidAmountInput = document.getElementById('marketplace-bid-amount');
-		const marketplacePlaceBidBtn = document.getElementById('marketplace-place-bid-btn');
-		const marketplaceBidText = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-text');
-		const marketplaceBidLoading = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-loading');
-		const marketplaceStatus = document.getElementById('marketplace-status');
+			const marketplaceBidInputWrap = document.getElementById('marketplace-bid-input');
+			const marketplaceBidAmountInput = document.getElementById('marketplace-bid-amount');
+			const marketplaceBidPriceUpBtn = document.getElementById('marketplace-bid-price-up');
+			const marketplaceBidPriceDownBtn = document.getElementById('marketplace-bid-price-down');
+			const marketplacePlaceBidBtn = document.getElementById('marketplace-place-bid-btn');
+			const marketplaceBidText = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-text');
+			const marketplaceBidLoading = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-loading');
+			const marketplaceBidEstimate = document.getElementById('marketplace-bid-estimate');
+			const marketplaceListInputWrap = document.getElementById('marketplace-list-input');
+			const marketplaceListAmountInput = document.getElementById('marketplace-list-amount');
+			const marketplaceListPriceUpBtn = document.getElementById('marketplace-list-price-up');
+			const marketplaceListPriceDownBtn = document.getElementById('marketplace-list-price-down');
+			const marketplaceListBtn = document.getElementById('marketplace-list-btn');
+			const marketplaceListText = marketplaceListBtn?.querySelector('.marketplace-list-text');
+			const marketplaceListLoading = marketplaceListBtn?.querySelector('.marketplace-list-loading');
+			const marketplaceListEstimate = document.getElementById('marketplace-list-estimate');
+			const marketplaceStatsRow = document.getElementById('marketplace-stats-row');
+			const marketplaceFloorPrice = document.getElementById('marketplace-floor-price');
+			const marketplaceVolume = document.getElementById('marketplace-volume');
+			const marketplaceStatus = document.getElementById('marketplace-status');
+			const marketplaceActivity = document.getElementById('marketplace-activity');
+			const marketplaceActivityList = document.getElementById('marketplace-activity-list');
+			const marketplaceActivityLink = document.getElementById('marketplace-activity-link');
 
-		let currentListing = null;
+				let currentBestBid = null;
+				let resolvingNftOwnerForMarketplace = false;
+				let bidInputTouched = false;
+				let listInputTouched = false;
+				let profileRegistrationCostSui = null;
+				let profileRegistrationCostPending = null;
+				const bidPrimaryNameCache = new Map();
+				let marketplaceActivityRenderNonce = 0;
 
-		function updateMarketplaceButton() {
-			if (marketplaceBuyBtn && marketplaceBuyText && currentListing) {
-				const priceInSui = (currentListing.price / 1e9).toFixed(2);
-				if (connectedAddress) {
-					marketplaceBuyBtn.disabled = false;
-					marketplaceBuyText.textContent = 'Buy for ' + priceInSui + ' SUI';
-				} else {
-					marketplaceBuyBtn.disabled = true;
-					marketplaceBuyText.textContent = 'Connect Wallet to Buy';
+		function tryParseMarketplaceTx(candidate) {
+			if (!candidate) return null;
+
+			if (typeof candidate === 'string') {
+				const trimmed = candidate.trim();
+				if (!trimmed) return null;
+				if (
+					(trimmed.startsWith('{') && trimmed.endsWith('}'))
+					|| (trimmed.startsWith('[') && trimmed.endsWith(']'))
+				) {
+					try {
+						const parsed = JSON.parse(trimmed);
+						const nestedTx = tryParseMarketplaceTx(parsed);
+						if (nestedTx) return nestedTx;
+					} catch {
+						// Fall through and try as raw/base64 tx bytes
+					}
+				}
+				try {
+					return Transaction.from(trimmed);
+				} catch {
+					return null;
 				}
 			}
-			if (marketplacePlaceBidBtn) {
-				marketplacePlaceBidBtn.disabled = !connectedAddress;
+
+			if (typeof candidate === 'object') {
+				const nestedPayload =
+					candidate.transaction
+					|| candidate.txBytes
+					|| candidate.tx_bytes
+					|| candidate.serializedTransaction
+					|| candidate.serialized_transaction;
+				if (nestedPayload) {
+					const nestedTx = tryParseMarketplaceTx(nestedPayload);
+					if (nestedTx) return nestedTx;
+				}
+				try {
+					return Transaction.from(candidate);
+				} catch {
+					return null;
+				}
 			}
+
+			return null;
 		}
 
-		async function fetchMarketplaceData() {
-			marketplaceCard.style.display = 'block';
-			updateMarketplaceButton();
-			try {
-				const response = await fetch('/api/marketplace/' + NAME);
-				if (!response.ok) return;
-				const data = await response.json();
+			function parseMarketplaceAcceptTx(payload) {
+				const tx = tryParseMarketplaceTx(payload);
+				if (!tx) {
+					throw new Error('Missing or invalid transaction payload');
+				}
+				return tx;
+			}
+
+			async function ensureProfileRegistrationCostSui() {
+				if (Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0) {
+					return profileRegistrationCostSui;
+				}
+				if (profileRegistrationCostPending) return profileRegistrationCostPending;
+
+				profileRegistrationCostPending = (async () => {
+					try {
+						const cacheKey = NAME + '-3';
+						let pricing = renewalPricingCache?.[cacheKey] || null;
+
+						if (!pricing) {
+							const res = await fetch('/api/renewal-pricing?domain=' + encodeURIComponent(NAME) + '&years=3');
+							if (!res.ok) return null;
+							pricing = await res.json();
+							if (renewalPricingCache) renewalPricingCache[cacheKey] = pricing;
+						}
+
+						const registrationCostSui = Number(pricing?.discountedSuiMist) / 1e9;
+						if (Number.isFinite(registrationCostSui) && registrationCostSui > 0) {
+							profileRegistrationCostSui = registrationCostSui;
+							return registrationCostSui;
+						}
+						return null;
+					} catch (error) {
+						console.log('Failed to fetch 3-year registration cost baseline:', error);
+						return null;
+					}
+				})().finally(() => {
+					profileRegistrationCostPending = null;
+				});
+
+				return profileRegistrationCostPending;
+			}
+
+			async function ensureMarketplaceFunding(tx, requiredMist) {
+				if (!connectedAddress) return;
+
+			const suiClient = getSuiClient();
+			const gasReserveMist = 50_000_000n;
+			const balanceRes = await suiClient.getBalance({
+				owner: connectedAddress,
+				coinType: SUI_TYPE,
+			});
+			const availableMist = BigInt(balanceRes?.totalBalance || '0');
+			const shortfallMist = requiredMist + gasReserveMist - availableMist;
+
+			if (shortfallMist <= 0n) return;
+				if (!DEEPBOOK_PACKAGE) {
+					const neededSui = Number(requiredMist) / 1e9;
+					const haveSui = Number(availableMist) / 1e9;
+					throw new Error(
+						'Need ' + neededSui.toFixed(4) + ' SUI (have ' + haveSui.toFixed(4) + '). Connect more SUI.',
+					);
+				}
+
+			marketplaceStatus.textContent = 'Insufficient SUI. Routing via DeepBook...';
+			const swapInfo = await findBestSwapForSui(suiClient, shortfallMist, connectedAddress);
+				if (!swapInfo) {
+					const neededSui = Number(requiredMist) / 1e9;
+					const haveSui = Number(availableMist) / 1e9;
+					throw new Error(
+						'Need ' + neededSui.toFixed(4) + ' SUI (have ' + haveSui.toFixed(4) + '). No swap route found.',
+					);
+				}
+
+				marketplaceStatus.textContent = 'Swapping ' + swapInfo.name + ' to SUI via DeepBook...';
+					prependSwapToTx(tx, swapInfo, connectedAddress);
+				}
+
+			function getBidMinimumSui() {
+				const bestOfferSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
+				const bestOfferBaselineSui = bestOfferSui > 0 ? (Math.ceil(bestOfferSui) + 1) : 1;
+				const registrationBaselineSui =
+					Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0
+						? Math.ceil(profileRegistrationCostSui)
+						: 1;
+				return Math.max(1, bestOfferBaselineSui, registrationBaselineSui);
+			}
+
+			function getRoundedBidAmountSuiOrNull() {
+				if (!marketplaceBidAmountInput) return null;
+				const amountSui = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
+				if (!Number.isFinite(amountSui) || amountSui <= 0) return null;
+				return Math.max(getBidMinimumSui(), Math.ceil(amountSui));
+			}
+
+			function normalizeBidAmountInput() {
+				if (!marketplaceBidAmountInput) return null;
+				const minimumSui = getBidMinimumSui();
+				marketplaceBidAmountInput.min = String(minimumSui);
+				const roundedAmount = getRoundedBidAmountSuiOrNull();
+				if (!roundedAmount) return null;
+				marketplaceBidAmountInput.value = String(roundedAmount);
+				return roundedAmount;
+			}
+
+			function updateBidEstimateDisplay() {
+				if (!marketplaceBidEstimate) return;
+				const tradeportBidFeeBps = 300;
+				if (!connectedAddress) {
+					marketplaceBidEstimate.textContent = '';
+					return;
+				}
+				const minimumSui = getBidMinimumSui();
+				const currentInput = parseFloat(String(marketplaceBidAmountInput?.value || '').replace(/[^0-9.]/g, ''));
+				const bidSui = Number.isFinite(currentInput) && currentInput > 0
+					? Math.max(minimumSui, Math.ceil(currentInput))
+					: minimumSui;
+				const tradeportFeeSui = bidSui * (tradeportBidFeeBps / 10000);
+				const estimatedCostSui = bidSui + tradeportFeeSui;
+				marketplaceBidEstimate.textContent = 'Est. cost ' + estimatedCostSui.toFixed(2) + ' SUI';
+			}
+
+			function setBidInputDefaultFromBestOffer(force = false) {
+				if (!marketplaceBidAmountInput) return;
+				const nextBidSui = getBidMinimumSui();
+				const hasBestBid = Boolean(currentBestBid?.price);
+				const currentInput = parseFloat(marketplaceBidAmountInput.value);
+				const hasInput = Number.isFinite(currentInput) && currentInput > 0;
+
+				marketplaceBidAmountInput.min = String(nextBidSui);
+
+				if (!hasBestBid && (force || !bidInputTouched)) {
+					marketplaceBidAmountInput.value = '';
+					bidInputTouched = false;
+					updateBidEstimateDisplay();
+					return;
+				}
+
+				if (hasBestBid && (force || !bidInputTouched || !hasInput || currentInput < nextBidSui)) {
+					marketplaceBidAmountInput.value = String(nextBidSui);
+					bidInputTouched = false;
+				}
+				updateBidEstimateDisplay();
+			}
+
+			function getBidderFallback(address) {
+				if (!address || typeof address !== 'string') return '--';
+				return address.slice(0, 8) + '...' + address.slice(-6);
+			}
+
+			function getBidderProfileHref(address, resolvedName) {
+				const normalizedName = String(resolvedName || '').trim().toLowerCase();
+				const cleanedName = normalizedName.replace(/.sui$/i, '');
+				if (cleanedName && /^[a-z0-9][a-z0-9-]*$/.test(cleanedName)) {
+					return 'https://' + encodeURIComponent(cleanedName) + '.sui.ski';
+				}
+
+				if (address && typeof address === 'string' && address.startsWith('0x')) {
+					return getTradeportPortfolioHref(address);
+				}
+
+				return '';
+			}
+
+			function setMarketplaceBidderLink(address, resolvedName = '') {
+				if (!marketplaceBidder) return;
+				const hasAddress = Boolean(address && typeof address === 'string' && address.startsWith('0x'));
+				const display = resolvedName || (hasAddress ? getBidderFallback(address) : '--');
+				marketplaceBidder.textContent = display;
+				marketplaceBidder.title = hasAddress ? address : '';
+
+				const href = getBidderProfileHref(address, resolvedName);
+				if (href) {
+					marketplaceBidder.href = href;
+					marketplaceBidder.setAttribute('aria-disabled', 'false');
+					marketplaceBidder.classList.remove('inactive');
+				} else {
+					marketplaceBidder.removeAttribute('href');
+					marketplaceBidder.setAttribute('aria-disabled', 'true');
+					marketplaceBidder.classList.add('inactive');
+				}
+			}
+
+					function getTradeportItemUrl(tokenId) {
+						const normalized = typeof tokenId === 'string' ? tokenId.trim() : '';
+						return normalized
+							? 'https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=' + encodeURIComponent(normalized) + '&modalSlug=suins&nav=1'
+							: 'https://www.tradeport.xyz/sui/collection/suins';
+					}
+
+					function normalizeTradeportBidPriceMist(rawPrice) {
+						const numeric = Number(rawPrice);
+						if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+						// Tradeport/indexer payloads can be either SUI units or mist.
+						return numeric < 1_000_000 ? Math.round(numeric * 1e9) : Math.round(numeric);
+					}
+
+					function pickBestBidCandidateFromList(candidates, fallbackTokenId) {
+						if (!Array.isArray(candidates) || candidates.length === 0) return null;
+						let best = null;
+						let bestPrice = 0;
+						for (const candidate of candidates) {
+							if (!candidate || typeof candidate !== 'object') continue;
+							const priceMist = normalizeTradeportBidPriceMist(
+								candidate.price
+								?? candidate.bidPrice
+								?? candidate.bid_price
+								?? candidate.offerPrice
+								?? candidate.offer_price
+								?? candidate.amount
+								?? candidate.value,
+							);
+							if (!priceMist || priceMist <= bestPrice) continue;
+							bestPrice = priceMist;
+							const tokenId = String(candidate.tokenId || candidate.token_id || fallbackTokenId || '');
+							best = {
+								id: String(candidate.id || candidate.bidId || candidate.bid_id || 'tradeport-fallback-bid'),
+								price: priceMist,
+								bidder: String(candidate.bidder || candidate.buyer || candidate.offerer || candidate.address || candidate.wallet || ''),
+								tokenId: tokenId,
+								tradeportUrl: getTradeportItemUrl(tokenId),
+							};
+						}
+						return best;
+					}
+
+					function extractBestBidFromTradeportPayload(payload) {
+						if (!payload || typeof payload !== 'object') return null;
+						const fallbackTokenId = String(NFT_ID || '');
+						const containers = [payload, payload.data, payload.result, payload.market, payload.listing, payload.name];
+						let best = null;
+						let bestPrice = 0;
+
+						for (const container of containers) {
+							if (!container || typeof container !== 'object') continue;
+							const listCandidate = pickBestBidCandidateFromList(
+								container.bids
+								|| container.offers
+								|| container.activeBids
+								|| container.active_bids
+								|| container.activeOffers
+								|| container.active_offers,
+								fallbackTokenId,
+							);
+							if (listCandidate && Number(listCandidate.price) > bestPrice) {
+								best = listCandidate;
+								bestPrice = Number(listCandidate.price);
+							}
+
+							const scalarPriceMist = normalizeTradeportBidPriceMist(
+								container.bestBid
+								?? container.best_bid
+								?? container.highestBid
+								?? container.highest_bid
+								?? container.bestOffer
+								?? container.best_offer
+								?? container.offer,
+							);
+							if (scalarPriceMist > bestPrice) {
+								const tokenId = String(container.tokenId || container.token_id || fallbackTokenId || '');
+								best = {
+									id: 'tradeport-fallback-bid',
+									price: scalarPriceMist,
+									bidder: String(container.bestBidder || container.best_bidder || container.bidder || container.buyer || ''),
+									tokenId: tokenId,
+									tradeportUrl: getTradeportItemUrl(tokenId),
+								};
+								bestPrice = scalarPriceMist;
+							}
+						}
+
+						return best;
+					}
+
+				function setMarketplaceActivityMessage(message) {
+					if (!marketplaceActivity || !marketplaceActivityList) return;
+					marketplaceActivity.style.display = 'block';
+					marketplaceActivityList.innerHTML = '<div class="marketplace-activity-empty">' + escapeHtmlJs(message) + '</div>';
+				}
+
+				async function renderMarketplaceActivity(data) {
+					if (!marketplaceActivity || !marketplaceActivityList) return;
+
+					const preferredTokenId = String(NFT_ID || '').toLowerCase();
+					const nfts = Array.isArray(data?.nfts) ? data.nfts : [];
+					let targetNft = null;
+
+					if (preferredTokenId) {
+						targetNft = nfts.find((nft) =>
+							String(nft?.tokenId || nft?.token_id || '').toLowerCase() === preferredTokenId,
+						);
+					}
+					if (!targetNft && nfts.length > 0) {
+						targetNft = nfts[0];
+					}
+
+					const tokenForLink = preferredTokenId || String(targetNft?.tokenId || targetNft?.token_id || '');
+
+					if (marketplaceActivityLink) {
+						marketplaceActivityLink.href = getTradeportItemUrl(tokenForLink);
+						marketplaceActivityLink.title = tokenForLink
+							? 'View full NFT trades on TradePort'
+							: 'View SuiNS trades on TradePort';
+					}
+
+					const activityPayload = targetNft && targetNft.id
+						? { nftId: targetNft.id }
+						: preferredTokenId
+							? { tokenId: NFT_ID }
+							: null;
+
+					if (!activityPayload) {
+						marketplaceActivity.style.display = 'block';
+						marketplaceActivityList.innerHTML =
+							'<div class="marketplace-activity-empty">No NFT data available.</div>';
+						return;
+					}
+
+					try {
+						const activityResponse = await fetch('/api/marketplace/activity', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify(activityPayload),
+						});
+
+						if (!activityResponse.ok) {
+							marketplaceActivity.style.display = 'block';
+							marketplaceActivityList.innerHTML =
+								'<div class="marketplace-activity-empty">Activity unavailable right now.</div>';
+							return;
+						}
+
+						const activityData = await activityResponse.json();
+						const actions = Array.isArray(activityData?.actions) ? activityData.actions : [];
+
+						if (actions.length === 0) {
+							marketplaceActivity.style.display = 'block';
+							marketplaceActivityList.innerHTML =
+								'<div class="marketplace-activity-empty">No marketplace activity yet.</div>';
+							return;
+						}
+
+						const renderNonce = ++marketplaceActivityRenderNonce;
+
+						function getActionLabel(type) {
+							const labels = {
+								sale: 'Sale',
+								list: 'Listed',
+								delist: 'Delisted',
+								bid: 'Bid',
+								cancel_bid: 'Bid Cancelled',
+								accept_bid: 'Bid Accepted',
+							};
+							return labels[type] || type;
+						}
+
+						function getActionAddress(action) {
+							if (action.type === 'sale') return action.receiver;
+							if (action.type === 'list' || action.type === 'delist') return action.sender;
+							if (action.type === 'bid' || action.type === 'cancel_bid') return action.sender;
+							if (action.type === 'accept_bid') return action.receiver;
+							return action.sender || action.receiver || '';
+						}
+
+						function formatTimeAgo(blockTime) {
+							try {
+								const date = new Date(blockTime);
+								const now = new Date();
+								const diffMs = now - date;
+								const diffSec = Math.floor(diffMs / 1000);
+								const diffMin = Math.floor(diffSec / 60);
+								const diffHour = Math.floor(diffMin / 60);
+								const diffDay = Math.floor(diffHour / 24);
+
+								if (diffDay > 0) return diffDay + 'd ago';
+								if (diffHour > 0) return diffHour + 'h ago';
+								if (diffMin > 0) return diffMin + 'm ago';
+								return 'Just now';
+							} catch {
+								return '';
+							}
+						}
+
+						marketplaceActivity.style.display = 'block';
+						marketplaceActivityList.innerHTML = actions
+							.slice(0, 10)
+							.map((action) => {
+								const label = getActionLabel(action.type);
+								const addr = getActionAddress(action);
+								const fallbackActor = addr ? getBidderFallback(addr) : '--';
+								const activityActorAttr = addr ? ' data-activity-address="' + escapeHtmlJs(addr) + '"' : '';
+								const activityActorClass = addr
+									? 'marketplace-activity-actor marketplace-activity-actor-link'
+									: 'marketplace-activity-actor';
+								const activityActorHtml =
+									'<span class="' + activityActorClass + '"' + activityActorAttr +
+									(addr
+										? ' role="link" tabindex="0" title="View SuiNS names on TradePort for ' + escapeHtmlJs(fallbackActor) + '"'
+										: '') +
+									'>' + escapeHtmlJs(fallbackActor) + '</span>';
+
+								const priceDisplay = action.price > 0
+									? '<span class="marketplace-activity-amount">' + formatMarketplaceBidSuiDisplay(Number(action.price) / 1e9) + ' SUI</span>'
+									: '';
+
+								const timeAgo = formatTimeAgo(action.blockTime);
+								const timeDisplay = timeAgo ? '<span class="marketplace-activity-time">' + escapeHtmlJs(timeAgo) + '</span>' : '';
+
+								return (
+									'<div class="marketplace-activity-item ' + escapeHtmlJs(action.type) + '">' +
+										'<span class="marketplace-activity-kind">' + escapeHtmlJs(label) + '</span>' +
+										activityActorHtml +
+										priceDisplay +
+										timeDisplay +
+									'</div>'
+								);
+							})
+							.join('');
+
+						const addressNodes = Array.from(
+							marketplaceActivityList.querySelectorAll('[data-activity-address]'),
+						);
+						const uniqueAddresses = Array.from(
+							new Set(
+								addressNodes
+									.map((node) => node.getAttribute('data-activity-address') || '')
+									.filter(Boolean),
+							),
+						);
+
+						if (uniqueAddresses.length > 0) {
+							const namePairs = await Promise.all(
+								uniqueAddresses.map(async (address) => {
+									const resolved = await resolveBidderDisplay(address).catch(() => getBidderFallback(address));
+									return [address, resolved];
+								}),
+							);
+
+							if (renderNonce === marketplaceActivityRenderNonce) {
+								const nameMap = new Map(namePairs);
+								addressNodes.forEach((node) => {
+									const address = node.getAttribute('data-activity-address') || '';
+									const display = nameMap.get(address);
+									if (display) {
+										node.textContent = display;
+										node.setAttribute('title', address);
+									}
+								});
+							}
+						}
+					} catch (error) {
+						console.log('Activity fetch failed:', error);
+						marketplaceActivity.style.display = 'block';
+						marketplaceActivityList.innerHTML =
+							'<div class="marketplace-activity-empty">Activity unavailable right now.</div>';
+					}
+				}
+
+				async function resolveBidderDisplay(address) {
+				if (!address || typeof address !== 'string') return '--';
+				const cacheKey = address.toLowerCase();
+			if (bidPrimaryNameCache.has(cacheKey)) {
+				return bidPrimaryNameCache.get(cacheKey);
+			}
+
+			const resolvedName = await fetchPrimaryName(address).catch(() => null);
+			const display = resolvedName || getBidderFallback(address);
+			bidPrimaryNameCache.set(cacheKey, display);
+				return display;
+			}
+
+			function isConnectedProfileOwner() {
+				return Boolean(
+					connectedAddress
+					&& nftOwnerAddress
+					&& connectedAddress.toLowerCase() === nftOwnerAddress.toLowerCase(),
+				);
+			}
+
+			function hasOwnerListingForCurrentNft() {
+				return Boolean(
+					isConnectedProfileOwner()
+					&& connectedAddress
+					&& currentListing?.seller
+					&& currentListing.seller.toLowerCase() === connectedAddress.toLowerCase()
+					&& (!NFT_ID || !currentListing?.tokenId || currentListing.tokenId.toLowerCase() === NFT_ID.toLowerCase()),
+				);
+			}
+
+			function getListMinimumSui() {
+				const bestBidSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
+				const bestBidBaselineSui = bestBidSui > 0 ? (Math.ceil(bestBidSui) + 1) : 1;
+				const registrationBaselineSui =
+					Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0
+						? Math.ceil(profileRegistrationCostSui)
+						: 1;
+				return Math.max(1, bestBidBaselineSui, registrationBaselineSui);
+			}
+
+			function getMarketplaceListLabel() {
+				const normalizedName = String(NAME || '').replace(/\.sui$/i, '');
+				return 'List ' + normalizedName + '.sui';
+			}
+
+			function getMarketplaceListingTokenId() {
+				if (currentListing?.tokenId) return String(currentListing.tokenId);
+				if (currentBestBid?.tokenId) return String(currentBestBid.tokenId);
+				if (NFT_ID) return NFT_ID;
+				return '';
+			}
+
+			function formatMarketplaceBidSuiDisplay(amountSui) {
+				if (!Number.isFinite(amountSui) || amountSui <= 0) return '--';
+				const nearestInt = Math.round(amountSui);
+				if (Math.abs(amountSui - nearestInt) < 0.05) {
+					return String(nearestInt);
+				}
+				return amountSui.toFixed(2);
+			}
+
+			function getRoundedListAmountSuiOrNull() {
+				if (!marketplaceListAmountInput) return null;
+				const amountSui = parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''));
+				if (!Number.isFinite(amountSui) || amountSui <= 0) return null;
+				return Math.max(getListMinimumSui(), Math.ceil(amountSui));
+			}
+
+			function normalizeListAmountInput() {
+				if (!marketplaceListAmountInput) return null;
+				const minimumSui = getListMinimumSui();
+				marketplaceListAmountInput.min = String(minimumSui);
+				const roundedAmount = getRoundedListAmountSuiOrNull();
+				if (!roundedAmount) return null;
+				marketplaceListAmountInput.value = String(roundedAmount);
+				return roundedAmount;
+			}
+
+			function setListInputDefault(force = false) {
+				if (!marketplaceListAmountInput) return;
+
+				const existingAmount = parseFloat(marketplaceListAmountInput.value);
+				const hasTyped = listInputTouched && Number.isFinite(existingAmount) && existingAmount > 0;
+				if (!force && hasTyped) return;
+
+				const minimumSui = getListMinimumSui();
+
+				let defaultValue = 0;
+
+				if (hasOwnerListingForCurrentNft() && currentListing?.price) {
+					defaultValue = Number(currentListing.price) / 1e9;
+				} else {
+					defaultValue = minimumSui;
+				}
+
+				if (defaultValue < minimumSui) {
+					defaultValue = minimumSui;
+				}
+
+				if (defaultValue > 0) {
+					marketplaceListAmountInput.value = String(Math.max(minimumSui, Math.ceil(defaultValue)));
+					marketplaceListAmountInput.min = String(minimumSui);
+				} else {
+					marketplaceListAmountInput.value = '';
+					marketplaceListAmountInput.min = String(minimumSui);
+				}
+
+				listInputTouched = false;
+			}
+
+			function getListAmountMistOrNull() {
+				const amountSui = normalizeListAmountInput();
+				if (!amountSui) return null;
+				return BigInt(amountSui) * 1_000_000_000n;
+			}
+
+			function updateListEstimateDisplay() {
+				if (!marketplaceListEstimate) return;
+
+				const rawListAmountSui = marketplaceListAmountInput
+					? parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''))
+					: 0;
+
+				if (!Number.isFinite(rawListAmountSui) || rawListAmountSui <= 0) {
+					marketplaceListEstimate.innerHTML = '';
+					return;
+				}
+
+				const listingAmountSui = Math.ceil(rawListAmountSui);
+				const usdEstimate = cachedSuiUsdPrice > 0 ? (listingAmountSui * cachedSuiUsdPrice).toFixed(2) : null;
+				if (usdEstimate) {
+					marketplaceListEstimate.innerHTML = '<span class="marketplace-list-usd">≈ $' + usdEstimate + '</span>';
+				} else {
+					marketplaceListEstimate.innerHTML = '';
+				}
+			}
+
+			function updateListButtonState() {
+				if (!marketplaceListBtn) return;
+				const listingTokenId = getMarketplaceListingTokenId();
+				const minimumSui = getListMinimumSui();
+				if (marketplaceListAmountInput) {
+					marketplaceListAmountInput.min = String(minimumSui);
+				}
+				const rawListAmountSui = marketplaceListAmountInput
+					? parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''))
+					: 0;
+				const roundedListAmountSui =
+					Number.isFinite(rawListAmountSui) && rawListAmountSui > 0
+						? Math.max(minimumSui, Math.ceil(rawListAmountSui))
+						: 0;
+				const meetsMinimum = roundedListAmountSui >= minimumSui;
+				const canList = Boolean(
+					isConnectedProfileOwner()
+					&& connectedAddress
+					&& connectedWallet
+					&& listingTokenId
+					&& roundedListAmountSui > 0
+					&& meetsMinimum,
+				);
+				marketplaceListBtn.disabled = !canList;
+
+				if (marketplaceStatus && roundedListAmountSui > 0 && roundedListAmountSui < minimumSui) {
+					marketplaceStatus.textContent = 'List price must be at least ' + minimumSui + ' SUI';
+					marketplaceStatus.className = 'marketplace-status error';
+				} else if (marketplaceStatus && marketplaceStatus.className === 'marketplace-status error') {
+					marketplaceStatus.textContent = '';
+					marketplaceStatus.className = 'marketplace-status';
+				}
+
+				updateListEstimateDisplay();
+			}
+
+				function updateMarketplaceButton() {
+				if (connectedAddress && !nftOwnerAddress && NFT_ID && !resolvingNftOwnerForMarketplace) {
+					resolvingNftOwnerForMarketplace = true;
+					fetchNftOwner()
+						.then((owner) => {
+							if (owner) nftOwnerAddress = owner;
+						})
+						.catch(() => null)
+						.finally(() => {
+							resolvingNftOwnerForMarketplace = false;
+							updateMarketplaceButton();
+						});
+				}
+
+					const isOwner = isConnectedProfileOwner();
+					const isDisconnectedBidderView = !connectedAddress && !isOwner;
+					const useTradeportBidTheme = isDisconnectedBidderView;
+					if (marketplaceCard) {
+						marketplaceCard.classList.toggle('marketplace-disconnected', isDisconnectedBidderView);
+						marketplaceCard.classList.toggle('marketplace-tradeport-empty', useTradeportBidTheme);
+						marketplaceCard.classList.toggle('marketplace-owner-listing', isOwner);
+					}
+
+				if (marketplaceBuyBtn && marketplaceBuyText && currentListing) {
+					const priceInSui = (currentListing.price / 1e9).toFixed(2);
+					if (isOwner) {
+						marketplaceBuyBtn.style.display = 'none';
+					} else if (connectedAddress) {
+						marketplaceBuyBtn.style.display = 'flex';
+						marketplaceBuyBtn.disabled = false;
+						marketplaceBuyText.textContent = 'Buy for ' + priceInSui + ' SUI';
+					} else {
+						marketplaceBuyBtn.style.display = 'flex';
+						marketplaceBuyBtn.disabled = true;
+						marketplaceBuyText.textContent = 'Connect Wallet to Buy';
+					}
+				}
+
+				if (marketplaceBidInputWrap) {
+					marketplaceBidInputWrap.style.display = isOwner ? 'none' : 'flex';
+				}
+				if (marketplaceBidEstimate) {
+					marketplaceBidEstimate.style.display = isOwner || isDisconnectedBidderView ? 'none' : 'block';
+				}
+					if (marketplacePlaceBidBtn && marketplaceBidText) {
+						if (!connectedAddress && !isOwner) {
+							marketplacePlaceBidBtn.disabled = false;
+							marketplacePlaceBidBtn.classList.add('connect-wallet');
+							marketplaceBidText.textContent = 'Connect Wallet to Bid';
+						} else {
+							marketplacePlaceBidBtn.disabled = !connectedAddress || isOwner;
+							marketplacePlaceBidBtn.classList.remove('connect-wallet');
+							marketplaceBidText.textContent = 'Place Bid';
+						}
+				}
+				updateBidEstimateDisplay();
+
+				if (marketplaceListInputWrap) {
+					marketplaceListInputWrap.style.display = isOwner ? 'flex' : 'none';
+				}
+				if (isOwner) {
+					setListInputDefault();
+					ensureProfileRegistrationCostSui()
+						.then(() => {
+							setListInputDefault();
+							updateListButtonState();
+						})
+						.catch(() => null);
+				}
+				if (marketplaceListBtn) {
+						if (isOwner) {
+							marketplaceListBtn.style.display = 'flex';
+						if (marketplaceListText) marketplaceListText.textContent = getMarketplaceListLabel();
+					} else {
+						marketplaceListBtn.style.display = 'none';
+					}
+				}
+				updateListButtonState();
+
+				if (marketplaceAcceptBidBtn && marketplaceAcceptText) {
+					const bidMatchesCurrentNft =
+						!NFT_ID ||
+						!currentBestBid?.tokenId ||
+						currentBestBid.tokenId.toLowerCase() === NFT_ID.toLowerCase();
+					const canAcceptBestBid = Boolean(
+						isOwner && currentBestBid?.id && currentBestBid?.price && bidMatchesCurrentNft,
+					);
+
+					if (!canAcceptBestBid) {
+						marketplaceAcceptBidBtn.style.display = 'none';
+					} else {
+						marketplaceAcceptBidBtn.style.display = 'flex';
+						marketplaceAcceptBidBtn.disabled = false;
+						marketplaceAcceptText.textContent = 'Accept';
+					}
+				}
+			}
+
+			async function fetchMarketplaceData() {
+				marketplaceCard.style.display = 'block';
+				syncOverviewModulesLayout();
+				updateMarketplaceButton();
+				setMarketplaceActivityMessage('Loading activity...');
+				if (marketplaceActivityLink) {
+					marketplaceActivityLink.href = getTradeportItemUrl(NFT_ID || '');
+				}
+				ensureProfileRegistrationCostSui()
+					.then(() => {
+						setListInputDefault();
+						setBidInputDefaultFromBestOffer();
+						updateListButtonState();
+					})
+					.catch(() => null);
+				try {
+					const marketplaceUrl = NFT_ID
+						? '/api/marketplace/' + NAME + '?tokenId=' + encodeURIComponent(NFT_ID)
+						: '/api/marketplace/' + NAME;
+					const response = await fetch(marketplaceUrl);
+					if (!response.ok) {
+						setMarketplaceActivityMessage('Activity unavailable right now.');
+						return;
+					}
+					const data = await response.json();
+
+					if (marketplaceStatsRow && (data.floor || data.volume)) {
+						if (data.floor && marketplaceFloorPrice) {
+							const floorSui = (data.floor / 1e9);
+							marketplaceFloorPrice.textContent = (floorSui < 10 ? floorSui.toFixed(1) : Math.round(floorSui)) + ' SUI';
+						}
+						if (data.volume && marketplaceVolume) {
+							const volSui = data.volume / 1e9;
+							marketplaceVolume.textContent = volSui >= 1000 ? (volSui / 1000).toFixed(1) + 'K SUI' : Math.round(volSui) + ' SUI';
+						}
+						marketplaceStatsRow.style.display = 'flex';
+					}
+
+						// Fallback if bestBid is not explicitly populated by API.
+						let resolvedBestBid = data.bestBid && data.bestBid.price ? data.bestBid : null;
+						if (!resolvedBestBid && Array.isArray(data?.nfts)) {
+						const preferredTokenId = String(NFT_ID || '').toLowerCase();
+						for (const nft of data.nfts) {
+							const tokenId = String(nft?.tokenId || nft?.token_id || '');
+							if (preferredTokenId && tokenId && tokenId.toLowerCase() !== preferredTokenId) continue;
+							const bids = Array.isArray(nft?.bids) ? nft.bids : [];
+							for (const bid of bids) {
+								const price = Number(bid?.price || 0);
+								if (!price || price <= 0) continue;
+								if (!resolvedBestBid || price > Number(resolvedBestBid.price || 0)) {
+									resolvedBestBid = { ...bid, tokenId };
+								}
+							}
+						}
+						if (!resolvedBestBid) {
+							try {
+								const normalizedName = String(NAME || '').endsWith('.sui') ? String(NAME) : (String(NAME) + '.sui');
+								const tradeportBestBidResponse = await fetch('/api/tradeport/name/' + encodeURIComponent(normalizedName));
+								if (tradeportBestBidResponse.ok) {
+									const tradeportPayload = await tradeportBestBidResponse.json().catch(() => null);
+									const tradeportBestBid = extractBestBidFromTradeportPayload(tradeportPayload);
+									if (tradeportBestBid?.price) {
+										resolvedBestBid = tradeportBestBid;
+									}
+								}
+							} catch (fallbackErr) {
+								console.log('Tradeport bid fallback failed:', fallbackErr);
+							}
+						}
+					}
 
 				if (data.bestListing && data.bestListing.price) {
 					currentListing = data.bestListing;
@@ -4657,18 +8370,49 @@ export function generateProfilePage(
 					marketplaceListingPrice.textContent = priceInSui + ' SUI';
 					marketplaceListingRow.style.display = 'flex';
 					marketplaceBuyBtn.style.display = 'block';
-					updateMarketplaceButton();
+					setListInputDefault();
+				} else {
+					currentListing = null;
+					marketplaceListingRow.style.display = 'none';
+					marketplaceBuyBtn.style.display = 'none';
+					setListInputDefault(true);
 				}
 
-				if (data.bestBid && data.bestBid.price) {
-					const bidInSui = (data.bestBid.price / 1e9).toFixed(2);
-					marketplaceBidPrice.textContent = bidInSui + ' SUI';
-					marketplaceBidRow.style.display = 'flex';
+						if (resolvedBestBid && resolvedBestBid.price) {
+							currentBestBid = resolvedBestBid;
+							const bidInSui = formatMarketplaceBidSuiDisplay(Number(resolvedBestBid.price) / 1e9);
+							marketplaceBidPrice.textContent = bidInSui + ' SUI';
+							marketplaceBidRow.style.display = 'grid';
+						if (marketplaceBidder) {
+							const bidderAddress = resolvedBestBid.bidder || '';
+							setMarketplaceBidderLink(bidderAddress);
+							resolveBidderDisplay(bidderAddress).then((display) => {
+								if (currentBestBid?.bidder === bidderAddress) {
+									setMarketplaceBidderLink(bidderAddress, display);
+								}
+							});
+						}
+						setBidInputDefaultFromBestOffer();
+					} else {
+					currentBestBid = null;
+						marketplaceBidRow.style.display = 'none';
+						if (marketplaceBidder) {
+							setMarketplaceBidderLink('', '');
+						}
+					setBidInputDefaultFromBestOffer();
+					}
+					setListInputDefault();
+					updateMarketplaceButton();
+					renderMarketplaceActivity(data).catch((error) => {
+						console.log('Marketplace activity render failed:', error);
+						setMarketplaceActivityMessage('Activity unavailable right now.');
+					});
+					applyTaggedIdentityToProfile();
+				} catch (e) {
+					console.log('Marketplace fetch failed:', e);
+					setMarketplaceActivityMessage('Activity unavailable right now.');
 				}
-			} catch (e) {
-				console.log('Marketplace fetch failed:', e);
 			}
-		}
 
 		// Tradeport contract constants
 		// Legacy listings (nonce starts with 0x)
@@ -4681,10 +8425,11 @@ export function generateProfilePage(
 		const TRADEPORT_LISTINGS_PACKAGE = '0x6cfe7388ccf732432906d7faebcc33fd91e11d4c2f8cb3ae0082b8d3269e3d5b';
 		const TRADEPORT_COMMISSION_BPS = 300;
 		const SUINS_REGISTRATION_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration';
-		const TRADEPORT_MULTI_BID_PACKAGE = '0x63ce6caee2ba264e92bca2d160036eb297d99b2d91d4db89d48a9bffca66e55b';
-		const TRADEPORT_MULTI_BID_STORE = '0x8aaed7e884343fb8b222c721d02eaac2c6ae2abbb4ddcdf16cb55cf8754ee860';
-		const TRADEPORT_MULTI_BID_STORE_VERSION = '572206387';
-		const TRADEPORT_BID_FEE_BPS = 300;
+			const TRADEPORT_MULTI_BID_PACKAGE = '0x63ce6caee2ba264e92bca2d160036eb297d99b2d91d4db89d48a9bffca66e55b';
+			const TRADEPORT_MULTI_BID_STORE = '0x8aaed7e884343fb8b222c721d02eaac2c6ae2abbb4ddcdf16cb55cf8754ee860';
+			const TRADEPORT_MULTI_BID_STORE_VERSION = '572206387';
+			const TRADEPORT_BID_FEE_BPS = 300;
+			const ACCEPT_BID_EXTRA_FEE_BPS = 500;
 
 		if (marketplaceBuyBtn) {
 			marketplaceBuyBtn.addEventListener('click', async () => {
@@ -4698,7 +8443,10 @@ export function generateProfilePage(
 
 				// Kiosk listings (1::) or no nonce - redirect to Tradeport
 				if (!nonce || nonce.startsWith('1::')) {
-					const tradeportUrl = currentListing.tradeportUrl || 'https://tradeport.xyz/sui/collection/suins?search=' + encodeURIComponent(NAME);
+					const tradeportUrl = currentListing.tradeportUrl
+						|| (NFT_ID
+							? 'https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=' + encodeURIComponent(NFT_ID) + '&modalSlug=suins&nav=1'
+							: 'https://www.tradeport.xyz/sui/collection/suins?search=' + encodeURIComponent(NAME));
 					window.open(tradeportUrl, '_blank');
 					marketplaceStatus.textContent = 'Complete purchase on Tradeport';
 					marketplaceStatus.className = 'marketplace-status success';
@@ -4712,15 +8460,20 @@ export function generateProfilePage(
 				marketplaceStatus.className = 'marketplace-status';
 
 				try {
+					const isNewFormat = nonce.startsWith('0::');
+					const listingPriceMist = BigInt(currentListing.price);
+					const marketFeeMist = isNewFormat
+						? BigInt(Math.ceil(currentListing.price * TRADEPORT_COMMISSION_BPS / 10000))
+						: 0n;
+					const totalRequiredMist = listingPriceMist + marketFeeMist;
+
 					const tx = new Transaction();
 					tx.setSender(connectedAddress);
+					await ensureMarketplaceFunding(tx, totalRequiredMist);
 
-					if (nonce.startsWith('0::')) {
+					if (isNewFormat) {
 						// Newer Tradeport listings - use tradeport_listings::buy_listing_without_transfer_policy
-						const marketFee = Math.ceil(currentListing.price * TRADEPORT_COMMISSION_BPS / 10000);
-						const totalAmount = currentListing.price + marketFee;
-
-						const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalAmount)]);
+						const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalRequiredMist)]);
 
 						const listingsStoreRef = tx.sharedObjectRef({
 							objectId: TRADEPORT_LISTINGS_STORE,
@@ -4745,7 +8498,7 @@ export function generateProfilePage(
 						});
 					} else {
 						// Legacy Tradeport listings (0x nonce) - use listings::buy
-						const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(currentListing.price)]);
+						const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(listingPriceMist)]);
 
 						const listingStoreRef = tx.sharedObjectRef({
 							objectId: TRADEPORT_LEGACY_STORE,
@@ -4797,8 +8550,7 @@ export function generateProfilePage(
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
-						const suiscanUrl = 'https://suiscan.xyz/mainnet/tx/' + digest;
-						marketplaceStatus.innerHTML = 'Purchase successful! <a href="' + suiscanUrl + '" target="_blank" style="color: var(--accent);">View tx</a>';
+						marketplaceStatus.innerHTML = 'Purchase successful! ' + renderTxExplorerLinks(digest, true);
 						marketplaceStatus.className = 'marketplace-status success';
 						marketplaceBuyBtn.style.display = 'none';
 					} else {
@@ -4822,20 +8574,162 @@ export function generateProfilePage(
 			});
 		}
 
-		if (marketplacePlaceBidBtn) {
-			marketplacePlaceBidBtn.addEventListener('click', async () => {
+			if (marketplaceListBtn) {
+				marketplaceListBtn.addEventListener('click', async () => {
 				if (!connectedAddress || !connectedWallet) {
 					marketplaceStatus.textContent = 'Connect wallet first';
 					marketplaceStatus.className = 'marketplace-status error';
 					return;
 				}
-
-				const bidAmountSui = parseFloat(marketplaceBidAmountInput?.value);
-				if (!bidAmountSui || bidAmountSui <= 0) {
-					marketplaceStatus.textContent = 'Enter a valid bid amount';
+				if (!isConnectedProfileOwner()) {
+					marketplaceStatus.textContent = 'Only the NFT owner can list this name';
 					marketplaceStatus.className = 'marketplace-status error';
 					return;
 				}
+					const listingTokenId = getMarketplaceListingTokenId();
+					if (!listingTokenId) {
+						marketplaceStatus.textContent = 'No NFT found for this name';
+						marketplaceStatus.className = 'marketplace-status error';
+						return;
+					}
+
+				const listAmountMist = getListAmountMistOrNull();
+				if (!listAmountMist) {
+					marketplaceStatus.textContent = 'Enter a valid listing amount';
+					marketplaceStatus.className = 'marketplace-status error';
+					return;
+				}
+
+				const isRelist = hasOwnerListingForCurrentNft();
+				marketplaceListBtn.disabled = true;
+				marketplaceListText?.classList.add('hidden');
+				marketplaceListLoading?.classList.remove('hidden');
+				marketplaceStatus.textContent = isRelist
+					? 'Building relist transaction...'
+					: 'Building listing transaction...';
+				marketplaceStatus.className = 'marketplace-status';
+
+				try {
+					const tx = new Transaction();
+					tx.setSender(connectedAddress);
+
+					const listingsStoreRef = tx.sharedObjectRef({
+						objectId: TRADEPORT_LISTINGS_STORE,
+						initialSharedVersion: TRADEPORT_LISTINGS_STORE_VERSION,
+						mutable: true,
+					});
+
+						if (isRelist) {
+							tx.moveCall({
+								target: TRADEPORT_LISTINGS_PACKAGE + '::tradeport_listings::relist_listing_without_transfer_policy',
+								typeArguments: [SUINS_REGISTRATION_TYPE],
+								arguments: [
+									listingsStoreRef,
+									tx.pure.id(listingTokenId),
+									tx.pure.u64(listAmountMist),
+								],
+							});
+						} else {
+							tx.moveCall({
+								target: TRADEPORT_LISTINGS_PACKAGE + '::tradeport_listings::create_listing_without_transfer_policy',
+								typeArguments: [SUINS_REGISTRATION_TYPE],
+								arguments: [
+									listingsStoreRef,
+									tx.object(listingTokenId),
+									tx.pure.u64(listAmountMist),
+								],
+							});
+						}
+
+					marketplaceStatus.textContent = 'Waiting for wallet...';
+
+					const signExecFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction'];
+					const signExecBlockFeature = connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
+
+					let result;
+					if (signExecFeature?.signAndExecuteTransaction) {
+						result = await signExecFeature.signAndExecuteTransaction({
+							transaction: tx,
+							account: connectedAccount,
+							chain: 'sui:mainnet',
+							options: { showEffects: true },
+						});
+					} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+						result = await signExecBlockFeature.signAndExecuteTransactionBlock({
+							transactionBlock: tx,
+							account: connectedAccount,
+							chain: 'sui:mainnet',
+							options: { showEffects: true },
+						});
+					} else {
+						throw new Error('Wallet does not support transaction signing');
+					}
+
+					const digest = result.digest || result.result?.digest || '';
+					if (digest) {
+						marketplaceStatus.innerHTML =
+							(isRelist ? 'Listing updated! ' : 'Listed! ') + renderTxExplorerLinks(digest, true);
+						marketplaceStatus.className = 'marketplace-status success';
+						listInputTouched = false;
+						await fetchMarketplaceData();
+					} else {
+						marketplaceStatus.textContent = isRelist
+							? 'Relist transaction submitted'
+							: 'List transaction submitted';
+						marketplaceStatus.className = 'marketplace-status success';
+					}
+				} catch (e) {
+					console.error('List transaction failed:', e);
+					const msg = e?.message || 'Transaction failed';
+					if (msg.includes('rejected') || msg.includes('cancelled')) {
+						marketplaceStatus.textContent = 'Transaction cancelled';
+					} else {
+						marketplaceStatus.textContent = 'Failed: ' + msg.slice(0, 100);
+					}
+					marketplaceStatus.className = 'marketplace-status error';
+				} finally {
+					marketplaceListText?.classList.remove('hidden');
+					marketplaceListLoading?.classList.add('hidden');
+					updateMarketplaceButton();
+				}
+			});
+		}
+
+			if (marketplacePlaceBidBtn) {
+				marketplacePlaceBidBtn.addEventListener('click', async () => {
+					if (!connectedAddress || !connectedWallet) {
+						if (marketplacePlaceBidBtn.classList.contains('connect-wallet')) {
+							const bidAmountSui = getRoundedBidAmountSuiOrNull();
+							if (bidAmountSui && bidAmountSui > 0) {
+								pendingBidAmount = bidAmountSui;
+							}
+							connectWallet();
+							return;
+						}
+					marketplaceStatus.textContent = 'Connect wallet first';
+					marketplaceStatus.className = 'marketplace-status error';
+					return;
+				}
+					if (isConnectedProfileOwner()) {
+						marketplaceStatus.textContent = 'Owners should list this name instead of bidding';
+						marketplaceStatus.className = 'marketplace-status error';
+						return;
+					}
+
+					const bidAmountSui = normalizeBidAmountInput();
+					if (!bidAmountSui || bidAmountSui <= 0) {
+						marketplaceStatus.textContent = 'Enter a valid bid amount';
+						marketplaceStatus.className = 'marketplace-status error';
+						return;
+					}
+
+					const minBidSui = getBidMinimumSui();
+					if (bidAmountSui + 1e-9 < minBidSui) {
+						marketplaceStatus.textContent =
+							'Bid must be at least ' + minBidSui + ' SUI';
+						marketplaceStatus.className = 'marketplace-status error';
+						return;
+					}
 
 				if (!NFT_ID) {
 					marketplaceStatus.textContent = 'No NFT found for this name';
@@ -4847,20 +8741,21 @@ export function generateProfilePage(
 				marketplaceBidText.classList.add('hidden');
 				marketplaceBidLoading.classList.remove('hidden');
 				marketplaceStatus.textContent = 'Building transaction...';
-				marketplaceStatus.className = 'marketplace-status';
+					marketplaceStatus.className = 'marketplace-status';
 
-				try {
-					const bidMist = Math.ceil(bidAmountSui * 1e9);
-					const feeMist = Math.ceil(bidMist * TRADEPORT_BID_FEE_BPS / 10000);
-					const totalMist = bidMist + feeMist;
+					try {
+						const bidMist = BigInt(Math.ceil(bidAmountSui * 1e9));
+						const tradeportFeeMist = (bidMist * BigInt(TRADEPORT_BID_FEE_BPS) + 9999n) / 10000n;
+						const totalMist = bidMist + tradeportFeeMist;
 
-					const tx = new Transaction();
-					tx.setSender(connectedAddress);
+						const tx = new Transaction();
+						tx.setSender(connectedAddress);
+						await ensureMarketplaceFunding(tx, totalMist);
 
-					const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalMist)]);
+						const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalMist)]);
 
-					const multiBidStoreRef = tx.sharedObjectRef({
-						objectId: TRADEPORT_MULTI_BID_STORE,
+						const multiBidStoreRef = tx.sharedObjectRef({
+							objectId: TRADEPORT_MULTI_BID_STORE,
 						initialSharedVersion: TRADEPORT_MULTI_BID_STORE_VERSION,
 						mutable: true,
 					});
@@ -4906,10 +8801,9 @@ export function generateProfilePage(
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
-						const suiscanUrl = 'https://suiscan.xyz/mainnet/tx/' + digest;
-						marketplaceStatus.innerHTML = 'Bid placed! <a href="' + suiscanUrl + '" target="_blank" style="color: var(--accent);">View tx</a>';
+						marketplaceStatus.innerHTML = 'Bid placed! ' + renderTxExplorerLinks(digest, true);
 						marketplaceStatus.className = 'marketplace-status success';
-						marketplaceBidAmountInput.value = '';
+						bidInputTouched = false;
 						fetchMarketplaceData();
 					} else {
 						marketplaceStatus.textContent = 'Bid submitted';
@@ -4932,39 +8826,477 @@ export function generateProfilePage(
 			});
 		}
 
+			if (marketplaceBidAmountInput) {
+				marketplaceBidAmountInput.addEventListener('input', () => {
+					const sanitized = String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, '');
+					if (sanitized !== marketplaceBidAmountInput.value) {
+						marketplaceBidAmountInput.value = sanitized;
+					}
+					bidInputTouched = true;
+					updateBidEstimateDisplay();
+				});
+				marketplaceBidAmountInput.addEventListener('blur', () => {
+					normalizeBidAmountInput();
+					updateBidEstimateDisplay();
+				});
+			}
+
+		if (marketplaceListAmountInput) {
+			marketplaceListAmountInput.addEventListener('input', () => {
+				const sanitized = String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, '');
+				if (sanitized !== marketplaceListAmountInput.value) {
+					marketplaceListAmountInput.value = sanitized;
+				}
+				listInputTouched = true;
+				updateListButtonState();
+			});
+			marketplaceListAmountInput.addEventListener('blur', () => {
+				normalizeListAmountInput();
+				updateListButtonState();
+			});
+		}
+
+		if (marketplaceListPriceUpBtn && marketplaceListAmountInput) {
+			marketplaceListPriceUpBtn.addEventListener('click', () => {
+				const currentValue = parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''));
+				const minimumSui = getListMinimumSui();
+				const nextValue = Number.isFinite(currentValue) && currentValue > 0
+					? Math.max(minimumSui, Math.ceil(currentValue)) + 1
+					: minimumSui;
+				marketplaceListAmountInput.value = String(nextValue);
+				listInputTouched = true;
+				updateListButtonState();
+			});
+		}
+
+			if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
+				marketplaceListPriceDownBtn.addEventListener('click', () => {
+				const currentValue = parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''));
+				const minimumSui = getListMinimumSui();
+				const currentRounded = Number.isFinite(currentValue) && currentValue > 0
+					? Math.max(minimumSui, Math.ceil(currentValue))
+					: minimumSui;
+				const nextValue = Math.max(minimumSui, currentRounded - 1);
+				marketplaceListAmountInput.value = String(nextValue);
+				listInputTouched = true;
+				updateListButtonState();
+				});
+			}
+
+			if (marketplaceBidPriceUpBtn && marketplaceBidAmountInput) {
+				marketplaceBidPriceUpBtn.addEventListener('click', () => {
+					const currentValue = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
+					const minimumSui = getBidMinimumSui();
+					const nextValue = Number.isFinite(currentValue) && currentValue > 0
+						? Math.max(minimumSui, Math.ceil(currentValue)) + 1
+						: minimumSui;
+					marketplaceBidAmountInput.value = String(nextValue);
+					bidInputTouched = true;
+					updateBidEstimateDisplay();
+				});
+			}
+
+			if (marketplaceBidPriceDownBtn && marketplaceBidAmountInput) {
+				marketplaceBidPriceDownBtn.addEventListener('click', () => {
+					const currentValue = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
+					const minimumSui = getBidMinimumSui();
+					const currentRounded = Number.isFinite(currentValue) && currentValue > 0
+						? Math.max(minimumSui, Math.ceil(currentValue))
+						: minimumSui;
+					const nextValue = Math.max(minimumSui, currentRounded - 1);
+					marketplaceBidAmountInput.value = String(nextValue);
+					bidInputTouched = true;
+					updateBidEstimateDisplay();
+				});
+			}
+
+		if (marketplaceActivityList) {
+			marketplaceActivityList.addEventListener('click', (event) => {
+				const rawTarget = event.target;
+				const targetEl = rawTarget instanceof Element
+					? rawTarget
+					: rawTarget instanceof Node
+						? rawTarget.parentElement
+						: null;
+				if (!targetEl) return;
+				const actorEl = targetEl.closest('[data-activity-address]');
+				if (!(actorEl instanceof Element)) return;
+				const address = actorEl.getAttribute('data-activity-address') || '';
+				if (!address) return;
+				window.open(getTradeportPortfolioHref(address), '_blank', 'noopener,noreferrer');
+			});
+
+			marketplaceActivityList.addEventListener('keydown', (event) => {
+				if (event.key !== 'Enter' && event.key !== ' ') return;
+				const rawTarget = event.target;
+				const targetEl = rawTarget instanceof Element
+					? rawTarget
+					: rawTarget instanceof Node
+						? rawTarget.parentElement
+						: null;
+				if (!targetEl) return;
+				const actorEl = targetEl.closest('[data-activity-address]');
+				if (!(actorEl instanceof Element)) return;
+				const address = actorEl.getAttribute('data-activity-address') || '';
+				if (!address) return;
+				event.preventDefault();
+				window.open(getTradeportPortfolioHref(address), '_blank', 'noopener,noreferrer');
+			});
+		}
+
+		if (marketplaceAcceptBidBtn) {
+			marketplaceAcceptBidBtn.addEventListener('click', async () => {
+				if (!connectedAddress || !connectedWallet || !currentBestBid?.id) {
+					marketplaceStatus.textContent = 'Connect wallet first';
+					marketplaceStatus.className = 'marketplace-status error';
+					return;
+				}
+
+				const isOwner =
+					nftOwnerAddress &&
+					connectedAddress.toLowerCase() === String(nftOwnerAddress).toLowerCase();
+				if (!isOwner) {
+					marketplaceStatus.textContent = 'Only the NFT owner can accept bids';
+					marketplaceStatus.className = 'marketplace-status error';
+					return;
+				}
+
+				const bidMatchesCurrentNft =
+					!NFT_ID ||
+					!currentBestBid.tokenId ||
+					currentBestBid.tokenId.toLowerCase() === NFT_ID.toLowerCase();
+				if (!bidMatchesCurrentNft) {
+					marketplaceStatus.textContent = 'Highest bid is for a different NFT';
+					marketplaceStatus.className = 'marketplace-status error';
+					return;
+				}
+
+				marketplaceAcceptBidBtn.disabled = true;
+				marketplaceAcceptText?.classList.add('hidden');
+				marketplaceAcceptLoading?.classList.remove('hidden');
+				marketplaceStatus.textContent = 'Preparing accept transaction...';
+				marketplaceStatus.className = 'marketplace-status';
+
+				try {
+					const txResponse = await fetch('/api/marketplace/accept-bid', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							bidId: currentBestBid.id,
+							sellerAddress: connectedAddress,
+						}),
+					});
+
+					const txData = await txResponse.json().catch(() => ({}));
+					if (!txResponse.ok) {
+						throw new Error(txData?.error || 'Failed to prepare accept transaction');
+					}
+
+						const tx = parseMarketplaceAcceptTx(txData);
+						const acceptedBidMist = BigInt(Math.ceil(Number(currentBestBid?.price || 0)));
+						if (acceptedBidMist > 0n) {
+							const suinsClient = new SuinsClient({ client: getSuiClient(), network: NETWORK });
+							const extraBidFeeRecipient = await resolveHiddenLeftoverRecipientAddress(suinsClient);
+							const extraFeeRecipientAddress = isLikelySuiAddress(extraBidFeeRecipient)
+								? extraBidFeeRecipient
+								: connectedAddress;
+							const extraFeeMist = (acceptedBidMist * BigInt(ACCEPT_BID_EXTRA_FEE_BPS) + 9999n) / 10000n;
+							if (extraFeeMist > 0n) {
+								await ensureMarketplaceFunding(tx, extraFeeMist);
+								const [extraFeeCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(extraFeeMist)]);
+								tx.transferObjects([extraFeeCoin], tx.pure.address(extraFeeRecipientAddress));
+							}
+						}
+
+						marketplaceStatus.textContent = 'Waiting for wallet...';
+
+					const signExecFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction'];
+					const signExecBlockFeature = connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
+
+					let result;
+					if (signExecFeature?.signAndExecuteTransaction) {
+						result = await signExecFeature.signAndExecuteTransaction({
+							transaction: tx,
+							account: connectedAccount,
+							chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+							options: { showEffects: true },
+						});
+					} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+						result = await signExecBlockFeature.signAndExecuteTransactionBlock({
+							transactionBlock: tx,
+							account: connectedAccount,
+							chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
+							options: { showEffects: true },
+						});
+					} else {
+						throw new Error('Wallet does not support transaction signing');
+					}
+
+					const digest = result.digest || result.result?.digest || '';
+					if (digest) {
+						marketplaceStatus.innerHTML =
+							'Bid accepted! ' + renderTxExplorerLinks(digest, true);
+						marketplaceStatus.className = 'marketplace-status success';
+						currentBestBid = null;
+						marketplaceBidRow.style.display = 'none';
+						updateMarketplaceButton();
+						setTimeout(() => {
+							fetchMarketplaceData();
+						}, 2000);
+					} else {
+						marketplaceStatus.textContent = 'Transaction submitted';
+						marketplaceStatus.className = 'marketplace-status success';
+					}
+				} catch (e) {
+					const msg = e?.message || 'Transaction failed';
+					marketplaceStatus.textContent = msg.includes('cancel')
+						? 'Transaction cancelled'
+						: 'Failed: ' + msg.slice(0, 120);
+					marketplaceStatus.className = 'marketplace-status error';
+				} finally {
+					marketplaceAcceptBidBtn.disabled = false;
+					marketplaceAcceptText?.classList.remove('hidden');
+					marketplaceAcceptLoading?.classList.add('hidden');
+					updateMarketplaceButton();
+				}
+			});
+		}
+
+		// Decay auction functionality
+		const auctionCard = document.getElementById('auction-card');
+		const auctionCurrentPrice = document.getElementById('auction-current-price');
+		const auctionTimeLeft = document.getElementById('auction-time-left');
+		const auctionBuyBtn = document.getElementById('auction-buy-btn');
+		const auctionBuyText = document.getElementById('auction-buy-text');
+		const auctionBuyLoading = auctionBuyBtn?.querySelector('.auction-buy-loading');
+		const auctionStatus = document.getElementById('auction-status');
+		const auctionSellerLabel = document.getElementById('auction-seller-label');
+
+		let auctionData = null;
+		let auctionInterval = null;
+
+		function syncOverviewModulesLayout() {
+			if (!overviewSecondaryGrid || !overviewMarketModule) return;
+
+			const hasMarketplace = marketplaceCard && marketplaceCard.style.display !== 'none';
+			const hasAuction = auctionCard && auctionCard.style.display !== 'none';
+			const showMarketModule = Boolean(hasMarketplace || hasAuction);
+
+			overviewMarketModule.style.display = showMarketModule ? 'flex' : 'none';
+			overviewSecondaryGrid.classList.toggle('has-market-module', showMarketModule);
+		}
+
+		function computeAuctionPrice(startPriceMist, startTimeMs, endTimeMs) {
+			const now = Date.now();
+			if (now >= endTimeMs) return 0;
+			const remaining = endTimeMs - now;
+			const duration = endTimeMs - startTimeMs;
+			const fraction = Math.max(0, remaining / duration);
+			return Math.floor(Number(startPriceMist) * Math.pow(fraction, 8));
+		}
+
+		function formatTimeLeft(endTimeMs) {
+			const remaining = endTimeMs - Date.now();
+			if (remaining <= 0) return 'Ended';
+			const days = Math.floor(remaining / 86400000);
+			const hours = Math.floor((remaining % 86400000) / 3600000);
+			const mins = Math.floor((remaining % 3600000) / 60000);
+			if (days > 0) return days + 'd ' + hours + 'h ' + mins + 'm';
+			if (hours > 0) return hours + 'h ' + mins + 'm';
+			return mins + 'm';
+		}
+
+		function updateAuctionDisplay() {
+			if (!auctionData) return;
+			const priceMist = computeAuctionPrice(
+				Number(auctionData.startPriceMist),
+				Number(auctionData.startTimeMs),
+				Number(auctionData.endTimeMs),
+			);
+			const priceSui = (priceMist / 1e9).toFixed(4);
+			auctionCurrentPrice.textContent = priceSui + ' SUI';
+			auctionTimeLeft.textContent = formatTimeLeft(Number(auctionData.endTimeMs));
+
+			if (Date.now() >= Number(auctionData.endTimeMs)) {
+				auctionBuyBtn.disabled = true;
+				auctionBuyText.textContent = 'Auction Ended';
+				if (auctionInterval) clearInterval(auctionInterval);
+				return;
+			}
+
+			const isSeller = connectedAddress && auctionData.seller && connectedAddress === auctionData.seller;
+			if (isSeller) {
+				auctionSellerLabel.style.display = 'inline';
+				auctionBuyBtn.style.display = 'none';
+			} else if (connectedAddress) {
+				auctionBuyBtn.disabled = false;
+				auctionBuyText.textContent = 'Buy for ' + priceSui + ' SUI';
+			} else {
+				auctionBuyBtn.disabled = true;
+				auctionBuyText.textContent = 'Connect Wallet to Buy';
+			}
+		}
+
+		async function fetchAuctionStatus() {
+			if (!NFT_ID) return;
+			try {
+				const res = await fetch('/api/auction/status/' + NFT_ID);
+				if (!res.ok) return;
+				const data = await res.json();
+				if (!data.active) return;
+
+					auctionData = data;
+					auctionCard.style.display = 'block';
+					syncOverviewModulesLayout();
+					updateAuctionDisplay();
+				if (auctionInterval) clearInterval(auctionInterval);
+				auctionInterval = setInterval(updateAuctionDisplay, 1000);
+
+				const jacketedBadge = document.getElementById('jacketed-badge');
+				if (jacketedBadge) {
+					jacketedBadge.classList.remove('hidden');
+					jacketedBadge.addEventListener('click', () => {
+						auctionCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+					});
+				}
+			} catch (e) {
+				console.log('Auction status fetch failed:', e);
+			}
+		}
+
+		if (auctionBuyBtn) {
+			auctionBuyBtn.addEventListener('click', async () => {
+				if (!connectedAddress || !auctionData) return;
+
+				auctionBuyBtn.disabled = true;
+				auctionBuyText.classList.add('hidden');
+				auctionBuyLoading.classList.remove('hidden');
+				auctionStatus.textContent = '';
+
+				try {
+					const res = await fetch('/api/auction/buy', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							listingId: auctionData.listingId,
+							buyerAddress: connectedAddress,
+						}),
+					});
+					const data = await res.json();
+					if (data.error) throw new Error(data.error);
+
+					const tx = Transaction.from(data.txBytes);
+					auctionStatus.textContent = 'Confirm in wallet...';
+
+					const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+					let result;
+					const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+					const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
+
+					if (signExecFeature?.signAndExecuteTransaction) {
+						result = await signExecFeature.signAndExecuteTransaction({
+							transaction: tx,
+							account: connectedAccount,
+							chain,
+							options: { showEffects: true },
+						});
+					} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+						result = await signExecBlockFeature.signAndExecuteTransactionBlock({
+							transactionBlock: tx,
+							account: connectedAccount,
+							chain,
+							options: { showEffects: true },
+						});
+					} else {
+						const phantomProvider = window.phantom?.sui;
+						if (phantomProvider?.signAndExecuteTransactionBlock) {
+							const suiClient = getSuiClient();
+							const txBytes = await tx.build({ client: suiClient });
+							result = await phantomProvider.signAndExecuteTransactionBlock({
+								transactionBlock: txBytes,
+								options: { showEffects: true },
+							});
+						} else {
+							throw new Error('Wallet does not support transaction signing');
+						}
+					}
+
+					const digest = result.digest || '';
+					auctionStatus.innerHTML = 'Purchased! ' + renderTxExplorerLinks(digest, true);
+					auctionStatus.className = 'auction-status success';
+					auctionBuyBtn.disabled = true;
+					auctionBuyText.textContent = 'Purchased';
+					auctionBuyText.classList.remove('hidden');
+					auctionBuyLoading.classList.add('hidden');
+					if (auctionInterval) clearInterval(auctionInterval);
+				} catch (e) {
+					const msg = e.message || 'Transaction failed';
+					if (msg.includes('rejected') || msg.includes('cancelled')) {
+						auctionStatus.textContent = 'Transaction cancelled';
+					} else {
+						auctionStatus.textContent = 'Failed: ' + msg.slice(0, 100);
+					}
+					auctionStatus.className = 'auction-status error';
+					auctionBuyText.classList.remove('hidden');
+					auctionBuyLoading.classList.add('hidden');
+					updateAuctionDisplay();
+				}
+			});
+		}
+
 		// Fetch marketplace data on load
+		syncOverviewModulesLayout();
 		fetchMarketplaceData();
+		fetchAuctionStatus();
 
 	</script>
 
-	<!-- Expanded QR Overlay -->
-	<div class="qr-expanded" id="qr-expanded">
-		<div class="qr-expanded-content">
-			<canvas id="qr-expanded-canvas"></canvas>
-			<div class="qr-expanded-url">${escapeHtml(cleanName)}.sui.ski</div>
-			<div class="qr-expanded-actions">
-				<button class="copy-btn" id="qr-copy-btn">
+	<!-- NFT Viewer Overlay -->
+	<div class="nft-viewer" id="nft-viewer">
+		<div class="nft-viewer-content" id="nft-viewer-content">
+			<button class="nft-viewer-close" id="nft-viewer-close" title="Close">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+			</button>
+			<div class="nft-viewer-image" id="nft-viewer-image">
+				<canvas id="qr-expanded-canvas"></canvas>
+			</div>
+			<div class="nft-viewer-label" id="nft-viewer-label">${escapeHtml(cleanName)}.sui</div>
+			<div class="nft-viewer-actions">
+				<button class="nft-viewer-btn" id="nft-viewer-qr-btn" title="Toggle QR code">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
+					QR
+				</button>
+				<button class="nft-viewer-btn" id="nft-viewer-copy-btn" title="Copy link">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
 					Copy
 				</button>
-				<button class="download-btn" id="qr-download-btn">
+				<button class="nft-viewer-btn" id="nft-viewer-download-btn" title="Save image">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 					Save
 				</button>
 			</div>
 		</div>
-		<div class="qr-expanded-close" id="qr-close">Click anywhere to close</div>
 	</div>
 
-	<!-- Crypto Tracker -->
-	<div id="crypto-tracker" style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(10px); border-top: 1px solid rgba(96, 165, 250, 0.2); padding: 12px 20px; display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; z-index: 1000; font-size: 0.875rem;">
-		<span style="color: #c7d2fe; font-weight: 500;">SUI: <span id="sui-price" style="color: #60a5fa; font-weight: 600;">$--</span></span>
+	<!-- Footer Tracker -->
+	<div id="crypto-tracker" style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(10px); border-top: 1px solid rgba(96, 165, 250, 0.2); padding: 12px 20px; display: flex; justify-content: center; gap: 16px; flex-wrap: nowrap; z-index: 1000; font-size: 0.875rem; align-items: center;">
+		<span class="tracker-line">
+			<span style="color: #c7d2fe; font-weight: 500;">SUI: <span id="sui-price" style="color: #60a5fa; font-weight: 600;">$--</span></span>
+			<span class="tracker-sep">·</span>
+			<span class="tracker-built-on">
+				Built on
+				<a href="https://docs.sui.io" target="_blank" rel="noopener">Sui</a>
+				<span class="tracker-sep">·</span>
+				<a href="https://docs.suins.io" target="_blank" rel="noopener">SuiNS</a>
+				<span class="tracker-sep">·</span>
+				<a href="https://moveregistry.com/docs" target="_blank" rel="noopener">MVR</a>
+				<span class="tracker-sep">·</span>
+				<a href="https://docs.sui.io/standards/deepbook" target="_blank" rel="noopener">DeepBook</a>
+				<span class="tracker-sep">·</span>
+				<a href="https://docs.wal.app" target="_blank" rel="noopener">Walrus</a>
+			</span>
+		</span>
 	</div>
-
-	<!-- Footer -->
-	<footer style="margin-top: 48px; padding-top: 32px; text-align: center; color: var(--text-muted); font-size: 0.875rem; border-top: 1px solid var(--border);">
-		<p style="margin: 0;">Built on <a href="https://sui.io" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Sui</a> · <a href="https://suins.io" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">SuiNS</a> · <a href="https://moveregistry.com" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">MVR</a> · <a href="https://walrus.xyz" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">Walrus</a></p>
-	</footer>
 
 	<script>
 		// Config (duplicated from module script for this non-module context)
@@ -4980,40 +9312,6 @@ export function generateProfilePage(
 		const getConnectedAddress = () => window.connectedAddress;
 		const getConnectedWallet = () => window.connectedWallet;
 		const getConnectedAccount = () => window.connectedAccount;
-
-		// Update SUI price
-		const suiPriceEl = document.getElementById('sui-price');
-		async function updateSUIPrice() {
-			if (!suiPriceEl) return;
-			try {
-				const response = await fetch('/api/sui-price');
-				if (!response.ok) {
-					throw new Error('Failed to fetch price');
-				}
-				const contentType = response.headers.get('content-type') || '';
-				if (!contentType.includes('application/json')) {
-					throw new Error('Invalid price response type');
-				}
-				let data;
-				try {
-					data = await response.json();
-				} catch (parseError) {
-					throw new Error('Failed to parse price response');
-				}
-				if (data && typeof data.price === 'number' && Number.isFinite(data.price)) {
-					suiPriceEl.textContent = '$' + data.price.toFixed(2);
-				} else {
-					throw new Error('Malformed price payload');
-				}
-			} catch (error) {
-				console.error('Failed to update SUI price:', error);
-				suiPriceEl.textContent = '$--';
-			}
-		}
-		if (suiPriceEl) {
-			updateSUIPrice();
-			setInterval(updateSUIPrice, 60000); // Update every minute
-		}
 
 		// ===== PRIVATE SUBSCRIPTIONS (Seal + Walrus) =====
 		// Subscriptions are encrypted with Seal and stored on Walrus for privacy
@@ -5445,25 +9743,38 @@ function pickRecordValue(record: SuiNSRecord, keys: string[]): string | undefine
 	return undefined
 }
 
-function buildProfileDescription(fullName: string, record: SuiNSRecord): string {
+function buildProfileDescription(profileDomain: string, record: SuiNSRecord): string {
 	const fromRecords = pickRecordValue(record, DESCRIPTION_RECORD_KEYS)
 	if (fromRecords) {
 		return fromRecords
 	}
 	if (record.content?.type === 'url' && record.content.value) {
-		return collapseWhitespace(`${fullName} · Link: ${record.content.value}`)
+		return collapseWhitespace(`${profileDomain} · Link: ${record.content.value}`)
 	}
 	const shortOwner = shortenAddress(record.address || '')
 	if (shortOwner) {
-		return `${fullName} on Sui · Owner ${shortOwner}`
+		return `${profileDomain} on Sui · Owner ${shortOwner}`
 	}
-	return `${fullName} profile on Sui`
+	return `${profileDomain} profile on Sui`
 }
 
 function shortenAddress(address: string): string {
 	if (!address) return ''
 	if (address.length <= 12) return address
 	return `${address.slice(0, 6)}...${address.slice(-4)}`
+}
+
+function getRootOrigin(origin: string): string {
+	try {
+		const url = new URL(origin)
+		const parts = url.hostname.split('.')
+		if (parts.length > 2) {
+			url.hostname = parts.slice(-2).join('.')
+		}
+		return url.origin
+	} catch {
+		return 'https://sui.ski'
+	}
 }
 
 function getOriginFromCanonical(canonicalUrl?: string, hostname?: string): string {
@@ -5495,4 +9806,12 @@ function selectProfileImage(record: SuiNSRecord, hostname?: string): string | un
 		}
 	}
 	return undefined
+}
+
+function getSuinsNftPreviewUrl(origin: string, cleanName: string, expiresMs?: number): string {
+	const encodedName = encodeURIComponent(`${cleanName}.sui`)
+	if (typeof expiresMs === 'number' && Number.isFinite(expiresMs) && expiresMs > 0) {
+		return `${origin}/api/suins-image/${encodedName}?exp=${Math.floor(expiresMs)}&v=2`
+	}
+	return `${origin}/api/suins-image/${encodedName}?v=2`
 }

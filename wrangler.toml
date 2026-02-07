@@ -39,10 +39,10 @@ SERVICE_FEE_NAME = "brando.sui"
 # Secrets (set via `wrangler secret put <NAME>`)
 # LLM_API_KEY - API key for LLM provider (Anthropic/OpenAI)
 
-SUBNAMECAP_RPC_URL = "https://fullnode.testnet.sui.io:443"
-SUBNAMECAP_SUINS_PACKAGE_ID = "0xcb63193327801b8a90aa3778a6c50def5d2be3aac0630393d3329346cee58eaf"
-SUBNAMECAP_SUBDOMAINS_PACKAGE_ID = "0xd96a273f5f7ac23c7f4c2ce3d52138aae0e9a8f783cfb9f4c62fb4bfa2f9341c"
-SUBNAMECAP_SUINS_OBJECT_ID = "0x2abb88c1cdecdd3e8a33043e73bb12a7d1f2b35b787f33a26e851c1c43f9958d"
+# SuiNS mainnet addresses (source: suins docs / @mysten/suins constants)
+SUBNAMECAP_SUINS_PACKAGE_ID = "0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0"
+SUBNAMECAP_SUBDOMAINS_PACKAGE_ID = "0xe177697e191327901637f8d2c5ffbbde8b1aaac27ec1024c4b62d1ebd1cd7430"
+SUBNAMECAP_SUINS_OBJECT_ID = "0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871"
 JACKET_SINGLE_USE_PACKAGE_ID = "0x61248137952b4ae1657fcc5e88464eba79315633eae9b01ff4d7331fa3706d50"
 JACKET_FEE_PACKAGE_ID = "0xc91aafec24a289ffff75a1e325137b8aec8a4708d19383df821c3418b59758ef"
 JACKET_ALLOWLIST_PACKAGE_ID = "0x41fa2f2453c5416091ee5d7d704cd8bf2755f092ba8d9486a405890d4b37b288"
@@ -50,8 +50,22 @@ JACKET_RATE_LIMIT_PACKAGE_ID = "0x82126c5ed40f5daf4f3f74a6c9ccefa73193efcc622e10
 JACKET_FEE_OBJECT_ID = "0x3961518f5fd71ff6ac3d221ed20e13f8ce7159912a4b00b0d6bbbe33fb706f37"
 # JACKET_ALLOWLIST_OBJECT_ID = ""
 # JACKET_RATE_LIMIT_OBJECT_ID = ""
+DECAY_AUCTION_PACKAGE_ID = "0x7f4c0c75556cfbc2dd934d4248d725392c3fa057a0d784220ce03fec77684f62"
+BLACK_DIAMOND_PACKAGE_ID = "0xdf88c0a49d63999034c488dad1e22e6250f8b6a9f709bdfe2b8e4ed6dfde0754"
+# BRAVE_SEARCH_API_KEY set via `wrangler secret put BRAVE_SEARCH_API_KEY`
+# INDEXER_API_KEY set via `wrangler secret put INDEXER_API_KEY`
 
 # KV namespace for caching resolved names
 [[kv_namespaces]]
 binding = "CACHE"
 id = "c0054cf22c6a4daa99cb36347fa5229c"
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "WALLET_SESSIONS"
+class_name = "WalletSession"
+script_name = "sui-ski-gateway"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WalletSession"]

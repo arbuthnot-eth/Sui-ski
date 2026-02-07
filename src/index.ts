@@ -1,18 +1,34 @@
 import { Hono } from 'hono'
+import { WalletSession } from './durable-objects/wallet-session'
 import { handleAppRequest } from './handlers/app'
+// import { blackDiamondRoutes } from './handlers/black-diamond'
+import { generateDashboardPage } from './handlers/dashboard'
 import { apiRoutes, landingPageHTML } from './handlers/landing'
 import { generateProfilePage } from './handlers/profile'
 import { agentSubnameCapRoutes, subnameCapRoutes } from './handlers/subnamecap'
 import { generateSubnameCapPage } from './handlers/subnamecap-ui'
+import {
+	handleWalletCheck,
+	handleWalletConnect,
+	handleWalletDisconnect,
+} from './handlers/wallet-api'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
 import type { Env, ParsedSubdomain, SuiNSRecord } from './types'
-import { generateBrandOgSvg, generateFaviconSvg, generateProfileOgSvg } from './utils/og-image'
+import {
+	generateBrandOgPng,
+	generateBrandOgSvg,
+	generateFaviconSvg,
+	generateProfileOgSvg,
+} from './utils/og-image'
 import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils/response'
 import { ensureRpcEnv } from './utils/rpc'
 import { isTwitterPreviewBot } from './utils/social'
 import { parseSubdomain } from './utils/subdomain'
+import { clearWalletCookieHeader, walletCookieHeader } from './utils/wallet-cookie'
+
+export { WalletSession }
 
 type AppEnv = {
 	Bindings: Env
@@ -56,6 +72,34 @@ app.use('*', async (c, next) => {
 	await next()
 })
 
+app.post('/api/wallet/connect', async (c) => {
+	return handleWalletConnect(c.req.raw, c.env)
+})
+
+app.get('/api/wallet/check', async (c) => {
+	return handleWalletCheck(c.req.raw, c.env)
+})
+
+app.post('/api/wallet/disconnect', async (c) => {
+	return handleWalletDisconnect(c.req.raw, c.env)
+})
+
+app.post('/_wallet', async (c) => {
+	try {
+		const { walletName, address } = await c.req.json()
+		if (!walletName || !address) return jsonResponse({ ok: false, error: 'Missing fields' }, 400)
+		return jsonResponse({ ok: true }, 200, {
+			'Set-Cookie': walletCookieHeader(walletName, address),
+		})
+	} catch {
+		return jsonResponse({ ok: false, error: 'Invalid request' }, 400)
+	}
+})
+
+app.delete('/_wallet', () => {
+	return jsonResponse({ ok: true }, 200, { 'Set-Cookie': clearWalletCookieHeader() })
+})
+
 app.use('*', async (c, next) => {
 	const parsed = c.get('parsed')
 	const env = c.get('env')
@@ -65,6 +109,8 @@ app.use('*', async (c, next) => {
 			return handleRPCRequest(c.req.raw, env)
 		case 'app':
 			return handleAppRequest(c.req.raw, env)
+		case 'dashboard':
+			return htmlResponse(generateDashboardPage(env))
 		case 'content': {
 			const result = await resolveDirectContent(parsed.subdomain, env)
 			if (!result.found) return errorResponse(result.error || 'Content not found', 'NOT_FOUND', 404)
@@ -95,6 +141,7 @@ app.all('/api/ika/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
 app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
 
 app.route('/api/subnamecap', subnameCapRoutes)
+// app.route('/api/black-diamond', blackDiamondRoutes)
 app.route('/api', apiRoutes)
 
 const SVG_HEADERS = { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=604800' }
@@ -102,6 +149,10 @@ const SVG_HEADERS = { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public,
 app.get('/favicon.svg', () => new Response(generateFaviconSvg(), { headers: SVG_HEADERS }))
 
 app.get('/og-image.svg', () => new Response(generateBrandOgSvg(), { headers: SVG_HEADERS }))
+
+const PNG_HEADERS = { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800' }
+
+app.get('/og-image.png', () => new Response(generateBrandOgPng(), { headers: PNG_HEADERS }))
 
 app.get('/og/:name{.+\\.svg}', (c) => {
 	const rawName = c.req.param('name').replace(/\.svg$/, '')
@@ -150,7 +201,6 @@ app.all('*', async (c) => {
 		return htmlResponse(
 			landingPageHTML(env.SUI_NETWORK, {
 				canonicalUrl,
-				serviceFeeName: env.SERVICE_FEE_NAME,
 				rpcUrl: env.SUI_RPC_URL,
 				network: env.SUI_NETWORK,
 			}),

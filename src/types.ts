@@ -1,10 +1,12 @@
-import type { KVNamespace } from '@cloudflare/workers-types'
+import type { KVNamespace, DurableObjectNamespace } from '@cloudflare/workers-types'
+import type { WalletSession } from './durable-objects/wallet-session'
 
 export interface Env {
 	SUI_NETWORK: 'mainnet' | 'testnet' | 'devnet'
 	SUI_RPC_URL: string
 	WALRUS_NETWORK: 'mainnet' | 'testnet'
 	CACHE: KVNamespace
+	WALLET_SESSIONS: DurableObjectNamespace<WalletSession>
 	SERVICE_FEE_NAME?: string
 	MESSAGING_CONTRACT_ADDRESS?: string
 	MOVE_REGISTRY_PARENT_ID?: string
@@ -19,7 +21,6 @@ export interface Env {
 	WALRUS_AGGREGATOR_URL?: string
 	BOUNTY_ESCROW_MVR_ALIAS?: string
 	SURFLUX_API_KEY?: string
-	SUBNAMECAP_RPC_URL?: string
 	SUBNAMECAP_SUINS_PACKAGE_ID?: string
 	SUBNAMECAP_SUBDOMAINS_PACKAGE_ID?: string
 	SUBNAMECAP_SUINS_OBJECT_ID?: string
@@ -30,9 +31,59 @@ export interface Env {
 	JACKET_ALLOWLIST_OBJECT_ID?: string
 	JACKET_RATE_LIMIT_OBJECT_ID?: string
 	JACKET_SINGLE_USE_PACKAGE_ID?: string
+	DECAY_AUCTION_PACKAGE_ID?: string
+	BLACK_DIAMOND_PACKAGE_ID?: string
+	BRAVE_SEARCH_API_KEY?: string
+	OPENROUTER_API_KEY?: string
+	INDEXER_API_KEY?: string
+	TRADEPORT_USER?: string
+	TRADEPORT_API_KEY?: string
 }
 
-export type RouteType = 'suins' | 'content' | 'rpc' | 'root' | 'mvr' | 'messaging' | 'app'
+export interface X402PaymentRequirements {
+	scheme: 'exact-sui'
+	network: string
+	amount: string
+	asset: string
+	payTo: string
+	maxTimeoutSeconds: number
+	extra: { verificationMethod: 'pre-executed' }
+}
+
+export interface X402PaymentRequired {
+	x402Version: number
+	resource: {
+		url: string
+		description: string
+		mimeType: string
+	}
+	accepts: X402PaymentRequirements[]
+}
+
+export interface X402SuiPaymentPayload {
+	x402Version: number
+	accepted: X402PaymentRequirements
+	payload: {
+		digest: string
+	}
+}
+
+export interface X402SettlementResponse {
+	success: boolean
+	transaction: string
+	network: string
+	payer: string
+}
+
+export type RouteType =
+	| 'suins'
+	| 'content'
+	| 'rpc'
+	| 'root'
+	| 'mvr'
+	| 'messaging'
+	| 'app'
+	| 'dashboard'
 
 export interface MVRInfo {
 	/** Package name (e.g., "private" from "private--iousd.sui.ski") */
@@ -258,6 +309,12 @@ export interface Conversation {
 		type: SealPolicyType
 		packageId: string
 	}
+}
+
+export interface UserConversationStore {
+	conversations: Conversation[]
+	totalUnread: number
+	updatedAt: number
 }
 
 /** User's read state across conversations */
