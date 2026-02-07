@@ -45,7 +45,6 @@ export type {
 } from './mvr-resolver'
 // MVR Compatibility Layer
 export { createMVRResolver, MVRResolver } from './mvr-resolver'
-export { PrivateProtocol } from './protocol/private-protocol'
 export type {
 	Commitment,
 	DepositParams,
