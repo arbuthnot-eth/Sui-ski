@@ -31,11 +31,18 @@ import type {
 	SealEncryptedEnvelope,
 	SealPolicyType,
 	StoredMessage,
+	UserConversationStore,
 } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
+import { generateWalletCookieJs } from '../utils/wallet-cookie'
 
 const NONCE_EXPIRY_MS = 5 * 60 * 1000
 const MAX_MESSAGE_SIZE_BYTES = 1024 * 1024
+const NONCE_MAP_MAX_SIZE = 500
+
+const usedNonces = new Map<string, number>()
+
+const llmRateLimits = new Map<string, { count: number; resetAt: number }>()
 
 /**
  * Compute SHA-256 hash of data
@@ -178,21 +185,28 @@ async function verifyContentIntegrity(
 	return { valid: true }
 }
 
-/**
- * Check if nonce has been used (replay protection)
- */
-async function isNonceUsed(env: Env, nonce: string): Promise<boolean> {
-	const key = `nonce_${nonce}`
-	const existing = await env.CACHE.get(key)
-	return existing !== null
+function isNonceUsed(nonce: string): boolean {
+	const expiry = usedNonces.get(nonce)
+	if (expiry === undefined) return false
+	if (Date.now() > expiry) {
+		usedNonces.delete(nonce)
+		return false
+	}
+	return true
 }
 
-/**
- * Mark nonce as used
- */
-async function markNonceUsed(env: Env, nonce: string): Promise<void> {
-	const key = `nonce_${nonce}`
-	await env.CACHE.put(key, '1', { expirationTtl: Math.ceil(NONCE_EXPIRY_MS / 1000) })
+function markNonceUsed(nonce: string): void {
+	if (usedNonces.size >= NONCE_MAP_MAX_SIZE) {
+		const now = Date.now()
+		for (const [key, exp] of usedNonces) {
+			if (now > exp) usedNonces.delete(key)
+		}
+		if (usedNonces.size >= NONCE_MAP_MAX_SIZE) {
+			const firstKey = usedNonces.keys().next().value
+			if (firstKey) usedNonces.delete(firstKey)
+		}
+	}
+	usedNonces.set(nonce, Date.now() + NONCE_EXPIRY_MS)
 }
 
 /**
@@ -268,57 +282,46 @@ function stripSuiSuffix(name: string | null): string | null {
 	return name.replace(/\.sui$/i, '')
 }
 
-/**
- * Get or create a conversation between two addresses
- */
-async function getOrCreateConversation(
-	env: Env,
-	addr1: string,
-	addr2: string,
-	name1: string | null,
-	name2: string | null,
-): Promise<Conversation> {
-	const conversationId = await computeConversationId(addr1, addr2)
-	const key = `conv_data_${conversationId}`
+const CONV_STORE_TTL = 60 * 60 * 24 * 90
 
-	const existing = await env.CACHE.get(key)
-	if (existing) {
+async function getUserConvStore(env: Env, address: string): Promise<UserConversationStore> {
+	const key = `user_convs_${address}`
+	const data = await env.CACHE.get(key)
+	if (data) {
 		try {
-			return JSON.parse(existing) as Conversation
+			return JSON.parse(data) as UserConversationStore
 		} catch {
-			// Fall through to create new
+			// Fall through
 		}
 	}
-
-	const cleanName1 = stripSuiSuffix(name1)
-	const cleanName2 = stripSuiSuffix(name2)
-
-	const now = Date.now()
-	const conversation: Conversation = {
-		id: conversationId,
-		participants: [addr1, addr2],
-		participantNames: {
-			[addr1]: cleanName1,
-			[addr2]: cleanName2,
-		},
-		lastMessage: {
-			preview: '',
-			timestamp: now,
-			sender: addr1,
-			senderName: cleanName1,
-		},
-		unreadCount: 0,
-		createdAt: now,
-		updatedAt: now,
-	}
-
-	await env.CACHE.put(key, JSON.stringify(conversation), { expirationTtl: 60 * 60 * 24 * 90 })
-	return conversation
+	return { conversations: [], totalUnread: 0, updatedAt: 0 }
 }
 
-/**
- * Update conversation with new message
- */
+async function saveUserConvStore(
+	env: Env,
+	address: string,
+	store: UserConversationStore,
+): Promise<void> {
+	const key = `user_convs_${address}`
+	await env.CACHE.put(key, JSON.stringify(store), { expirationTtl: CONV_STORE_TTL })
+}
+
+function upsertConversation(store: UserConversationStore, conv: Conversation): void {
+	const idx = store.conversations.findIndex((c) => c.id === conv.id)
+	if (idx >= 0) {
+		store.conversations[idx] = conv
+	} else {
+		store.conversations.push(conv)
+	}
+	store.updatedAt = Date.now()
+}
+
+function recomputeTotalUnread(store: UserConversationStore): void {
+	let total = 0
+	for (const c of store.conversations) total += c.unreadCount
+	store.totalUnread = total
+}
+
 async function updateConversationWithMessage(
 	env: Env,
 	sender: string,
@@ -329,54 +332,199 @@ async function updateConversationWithMessage(
 	timestamp: number,
 ): Promise<string> {
 	const conversationId = await computeConversationId(sender, recipient)
-	const conversation = await getOrCreateConversation(
-		env,
-		sender,
-		recipient,
-		senderName,
-		recipientName,
-	)
 
-	conversation.lastMessage = {
-		preview: messagePreview.slice(0, 100),
-		timestamp,
-		sender,
-		senderName: stripSuiSuffix(senderName),
+	const cleanSenderName = stripSuiSuffix(senderName)
+	const cleanRecipientName = stripSuiSuffix(recipientName)
+
+	const [recipientStore, senderStore] = await Promise.all([
+		getUserConvStore(env, recipient),
+		getUserConvStore(env, sender),
+	])
+
+	const existingRecipient = recipientStore.conversations.find((c) => c.id === conversationId)
+	const existingSender = senderStore.conversations.find((c) => c.id === conversationId)
+
+	const baseConv: Conversation = existingRecipient ||
+		existingSender || {
+			id: conversationId,
+			participants: [sender, recipient],
+			participantNames: {
+				[sender]: cleanSenderName,
+				[recipient]: cleanRecipientName,
+			},
+			lastMessage: {
+				preview: '',
+				timestamp,
+				sender,
+				senderName: cleanSenderName,
+			},
+			unreadCount: 0,
+			createdAt: timestamp,
+			updatedAt: timestamp,
+		}
+
+	const recipientConv: Conversation = {
+		...baseConv,
+		lastMessage: {
+			preview: messagePreview.slice(0, 100),
+			timestamp,
+			sender,
+			senderName: cleanSenderName,
+		},
+		updatedAt: timestamp,
+		unreadCount: (existingRecipient?.unreadCount ?? 0) + 1,
 	}
-	conversation.updatedAt = timestamp
-	conversation.unreadCount += 1
 
-	// Update conversation data
-	await env.CACHE.put(`conv_data_${conversationId}`, JSON.stringify(conversation), {
-		expirationTtl: 60 * 60 * 24 * 90,
-	})
+	const senderConv: Conversation = {
+		...baseConv,
+		lastMessage: {
+			preview: messagePreview.slice(0, 100),
+			timestamp,
+			sender,
+			senderName: cleanSenderName,
+		},
+		updatedAt: timestamp,
+		unreadCount: existingSender?.unreadCount ?? 0,
+	}
 
-	// Add to recipient's conversation index
-	await env.CACHE.put(
-		`conv_index_${recipient}_${conversationId}`,
-		JSON.stringify({ conversationId, updatedAt: timestamp }),
-		{ expirationTtl: 60 * 60 * 24 * 90 },
-	)
+	upsertConversation(recipientStore, recipientConv)
+	recomputeTotalUnread(recipientStore)
 
-	// Add to sender's conversation index
-	await env.CACHE.put(
-		`conv_index_${sender}_${conversationId}`,
-		JSON.stringify({ conversationId, updatedAt: timestamp }),
-		{ expirationTtl: 60 * 60 * 24 * 90 },
-	)
+	upsertConversation(senderStore, senderConv)
+	recomputeTotalUnread(senderStore)
 
-	// Update recipient's unread count
-	const unreadKey = `unread_count_${recipient}`
-	const currentUnread = await env.CACHE.get(unreadKey)
-	const newCount = (currentUnread ? Number.parseInt(currentUnread, 10) : 0) + 1
-	await env.CACHE.put(unreadKey, String(newCount), { expirationTtl: 60 * 60 * 24 * 30 })
+	await Promise.all([
+		saveUserConvStore(env, recipient, recipientStore),
+		saveUserConvStore(env, sender, senderStore),
+	])
 
 	return conversationId
 }
 
-/**
- * Handle all /app requests
- */
+const CONV_MSGS_TTL = 60 * 60 * 24 * 90
+
+async function getConversationMessages(env: Env, conversationId: string): Promise<StoredMessage[]> {
+	const key = `conv_msgs_${conversationId}`
+	const data = await env.CACHE.get(key)
+	if (!data) return []
+	try {
+		return JSON.parse(data) as StoredMessage[]
+	} catch {
+		return []
+	}
+}
+
+async function appendConversationMessage(
+	env: Env,
+	conversationId: string,
+	message: StoredMessage,
+): Promise<void> {
+	const key = `conv_msgs_${conversationId}`
+	const existing = await getConversationMessages(env, conversationId)
+	existing.push(message)
+	await env.CACHE.put(key, JSON.stringify(existing), { expirationTtl: CONV_MSGS_TTL })
+}
+
+async function migrateLegacyConversations(
+	env: Env,
+	address: string,
+): Promise<UserConversationStore> {
+	try {
+		const prefix = `conv_index_${address}_`
+		const keys = await env.CACHE.list({ prefix, limit: 50 })
+
+		const conversationIds = new Set<string>()
+		for (const key of keys.keys) {
+			const data = await env.CACHE.get(key.name)
+			if (data) {
+				try {
+					const parsed = JSON.parse(data) as { conversationId: string }
+					conversationIds.add(parsed.conversationId)
+				} catch {
+					// Skip
+				}
+			}
+		}
+
+		const conversations: Conversation[] = []
+		for (const convId of conversationIds) {
+			const convData = await env.CACHE.get(`conv_data_${convId}`)
+			if (convData) {
+				try {
+					conversations.push(JSON.parse(convData) as Conversation)
+				} catch {
+					// Skip
+				}
+			}
+		}
+
+		if (conversations.length === 0) {
+			return { conversations: [], totalUnread: 0, updatedAt: 0 }
+		}
+
+		const store: UserConversationStore = {
+			conversations,
+			totalUnread: 0,
+			updatedAt: Date.now(),
+		}
+		recomputeTotalUnread(store)
+		await saveUserConvStore(env, address, store)
+		return store
+	} catch {
+		return { conversations: [], totalUnread: 0, updatedAt: 0 }
+	}
+}
+
+async function migrateLegacyMessages(
+	env: Env,
+	conversationId: string,
+	conversation: Conversation,
+	address: string,
+): Promise<StoredMessage[]> {
+	try {
+		const otherParticipant =
+			conversation.participants.find((p) => p !== address) || conversation.participants[0]
+
+		const messages: StoredMessage[] = []
+		const [inboxKeys, sentKeys] = await Promise.all([
+			env.CACHE.list({ prefix: `msg_inbox_${address}_`, limit: 100 }),
+			env.CACHE.list({ prefix: `msg_inbox_${otherParticipant}_`, limit: 100 }),
+		])
+
+		const allKeys = [...inboxKeys.keys, ...sentKeys.keys]
+		const fetches = await Promise.all(allKeys.map((key) => env.CACHE.get(key.name)))
+
+		for (const data of fetches) {
+			if (!data) continue
+			try {
+				const msg = JSON.parse(data) as StoredMessage
+				const isRelevant =
+					msg.sender === otherParticipant ||
+					msg.recipient === otherParticipant ||
+					msg.sender === address ||
+					msg.recipient === address
+				if (isRelevant) messages.push(msg)
+			} catch {
+				// Skip
+			}
+		}
+
+		const uniqueMessages = Array.from(
+			new Map(messages.map((m) => [m.id || `${m.sender}_${m.timestamp}`, m])).values(),
+		)
+
+		if (uniqueMessages.length > 0) {
+			await env.CACHE.put(`conv_msgs_${conversationId}`, JSON.stringify(uniqueMessages), {
+				expirationTtl: CONV_MSGS_TTL,
+			})
+		}
+
+		return uniqueMessages
+	} catch {
+		return []
+	}
+}
+
 export async function handleAppRequest(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url)
 	let path = url.pathname
@@ -482,44 +630,19 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 		}
 
 		try {
-			const prefix = `conv_index_${address}_`
-			const keys = await env.CACHE.list({ prefix, limit: 50 })
+			let store = await getUserConvStore(env, address)
 
-			const conversationIds = new Set<string>()
-			for (const key of keys.keys) {
-				const data = await env.CACHE.get(key.name)
-				if (data) {
-					try {
-						const parsed = JSON.parse(data) as { conversationId: string }
-						conversationIds.add(parsed.conversationId)
-					} catch {
-						// Skip invalid entries
-					}
-				}
+			if (store.conversations.length === 0) {
+				store = await migrateLegacyConversations(env, address)
 			}
 
-			const conversations: Conversation[] = []
-			for (const convId of conversationIds) {
-				const convData = await env.CACHE.get(`conv_data_${convId}`)
-				if (convData) {
-					try {
-						const conv = JSON.parse(convData) as Conversation
-						conversations.push(conv)
-					} catch {
-						// Skip invalid entries
-					}
-				}
-			}
-
+			const conversations = [...store.conversations]
 			conversations.sort((a, b) => b.updatedAt - a.updatedAt)
-
-			const unreadCountStr = await env.CACHE.get(`unread_count_${address}`)
-			const totalUnread = unreadCountStr ? Number.parseInt(unreadCountStr, 10) : 0
 
 			return jsonResponse({
 				address,
 				conversations,
-				totalUnread,
+				totalUnread: store.totalUnread,
 				count: conversations.length,
 			})
 		} catch (error) {
@@ -539,62 +662,29 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 		}
 
 		try {
-			const convData = await env.CACHE.get(`conv_data_${conversationId}`)
-			if (!convData) {
+			const store = await getUserConvStore(env, address)
+			const conversation = store.conversations.find((c) => c.id === conversationId)
+
+			if (!conversation) {
 				return jsonResponse({ error: 'Conversation not found' }, 404)
 			}
-
-			const conversation = JSON.parse(convData) as Conversation
 
 			if (!conversation.participants.includes(address)) {
 				return jsonResponse({ error: 'Not a participant' }, 403)
 			}
 
-			const otherParticipant =
-				conversation.participants.find((p) => p !== address) || conversation.participants[0]
+			let messages = await getConversationMessages(env, conversationId)
 
-			const messages: StoredMessage[] = []
-			const inboxPrefix = `msg_inbox_${address}_`
-			const inboxKeys = await env.CACHE.list({ prefix: inboxPrefix, limit: 100 })
-			for (const key of inboxKeys.keys) {
-				const data = await env.CACHE.get(key.name)
-				if (data) {
-					try {
-						const msg = JSON.parse(data) as StoredMessage
-						if (msg.sender === otherParticipant || msg.recipient === otherParticipant) {
-							messages.push(msg)
-						}
-					} catch {
-						// Skip
-					}
-				}
+			if (messages.length === 0) {
+				messages = await migrateLegacyMessages(env, conversationId, conversation, address)
 			}
 
-			const sentPrefix = `msg_inbox_${otherParticipant}_`
-			const sentKeys = await env.CACHE.list({ prefix: sentPrefix, limit: 100 })
-			for (const key of sentKeys.keys) {
-				const data = await env.CACHE.get(key.name)
-				if (data) {
-					try {
-						const msg = JSON.parse(data) as StoredMessage
-						if (msg.sender === address) {
-							messages.push(msg)
-						}
-					} catch {
-						// Skip
-					}
-				}
-			}
-
-			const uniqueMessages = Array.from(
-				new Map(messages.map((m) => [m.id || `${m.sender}_${m.timestamp}`, m])).values(),
-			)
-			uniqueMessages.sort((a, b) => a.timestamp - b.timestamp)
+			messages.sort((a, b) => a.timestamp - b.timestamp)
 
 			return jsonResponse({
 				conversation,
-				messages: uniqueMessages,
-				count: uniqueMessages.length,
+				messages,
+				count: messages.length,
 			})
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Unknown error'
@@ -614,12 +704,12 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				return jsonResponse({ error: 'Conversation ID and address required' }, 400)
 			}
 
-			const convData = await env.CACHE.get(`conv_data_${body.conversationId}`)
-			if (!convData) {
+			const store = await getUserConvStore(env, body.address)
+			const conversation = store.conversations.find((c) => c.id === body.conversationId)
+
+			if (!conversation) {
 				return jsonResponse({ error: 'Conversation not found' }, 404)
 			}
-
-			const conversation = JSON.parse(convData) as Conversation
 
 			if (!conversation.participants.includes(body.address)) {
 				return jsonResponse({ error: 'Not a participant' }, 403)
@@ -627,20 +717,9 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 
 			const previousUnread = conversation.unreadCount
 			conversation.unreadCount = 0
+			recomputeTotalUnread(store)
 
-			await env.CACHE.put(`conv_data_${body.conversationId}`, JSON.stringify(conversation), {
-				expirationTtl: 60 * 60 * 24 * 90,
-			})
-
-			if (previousUnread > 0) {
-				const unreadKey = `unread_count_${body.address}`
-				const currentUnread = await env.CACHE.get(unreadKey)
-				const newCount = Math.max(
-					0,
-					(currentUnread ? Number.parseInt(currentUnread, 10) : 0) - previousUnread,
-				)
-				await env.CACHE.put(unreadKey, String(newCount), { expirationTtl: 60 * 60 * 24 * 30 })
-			}
+			await saveUserConvStore(env, body.address, store)
 
 			return jsonResponse({
 				success: true,
@@ -660,12 +739,11 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 		}
 
 		try {
-			const unreadCountStr = await env.CACHE.get(`unread_count_${address}`)
-			const unreadCount = unreadCountStr ? Number.parseInt(unreadCountStr, 10) : 0
+			const store = await getUserConvStore(env, address)
 
 			return jsonResponse({
 				address,
-				unreadCount,
+				unreadCount: store.totalUnread,
 				timestamp: Date.now(),
 			})
 		} catch {
@@ -1194,7 +1272,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 			}
 
 			// Check for replay attacks (nonce reuse)
-			if (await isNonceUsed(env, nonce)) {
+			if (isNonceUsed(nonce)) {
 				return jsonResponse({ error: 'Nonce already used (replay attack prevented)' }, 400)
 			}
 
@@ -1222,7 +1300,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 			}
 
 			// Mark nonce as used (after all validations pass)
-			await markNonceUsed(env, nonce)
+			markNonceUsed(nonce)
 
 			// Generate unique message ID
 			const messageId = await generateMessageId(integrity.contentHash, timestamp, nonce)
@@ -1276,7 +1354,6 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				timestamp,
 			)
 
-			const indexKey = `msg_inbox_${recipient}_${timestamp}`
 			const storedMessage: StoredMessage = {
 				id: messageId,
 				blobId,
@@ -1293,9 +1370,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				contentHash: integrity.contentHash,
 			}
 
-			await env.CACHE.put(indexKey, JSON.stringify(storedMessage), {
-				expirationTtl: 60 * 60 * 24 * 30,
-			})
+			await appendConversationMessage(env, conversationId, storedMessage)
 
 			const response: MessageSendResponse = {
 				success: true,
@@ -1345,22 +1420,28 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				return jsonResponse({ error: 'Failed to store on Walrus' }, 500)
 			}
 
-			// Store message index in KV (for inbox lookup)
-			const indexKey = `msg_inbox_${body.recipient}_${Date.now()}`
-			await env.CACHE.put(
-				indexKey,
-				JSON.stringify({
-					blobId: walrusResponse.blobId,
-					sender: body.sender,
-					recipient: body.recipient,
-					timestamp: Date.now(),
-				}),
-				{ expirationTtl: 60 * 60 * 24 * 30 }, // 30 days
-			)
+			const now = Date.now()
+			const conversationId = await computeConversationId(body.sender, body.recipient)
+			const messageId = `msg_${now}`
+
+			const storedMsg: StoredMessage = {
+				id: messageId,
+				blobId: walrusResponse.blobId,
+				storage: 'walrus',
+				sender: body.sender,
+				senderName: null,
+				recipient: body.recipient,
+				recipientName: null,
+				timestamp: now,
+				signed: false,
+				conversationId,
+			}
+
+			await appendConversationMessage(env, conversationId, storedMsg)
 
 			return jsonResponse({
 				success: true,
-				messageId: indexKey,
+				messageId,
 				blobId: walrusResponse.blobId,
 				storage: 'walrus',
 				encryption: 'seal',
@@ -1380,30 +1461,25 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 		}
 
 		try {
-			// List messages for this recipient from KV index
-			const prefix = `msg_inbox_${address}_`
-			const keys = await env.CACHE.list({ prefix, limit: 100 })
+			const store = await getUserConvStore(env, address)
+			const allMessages: StoredMessage[] = []
 
-			const messages = await Promise.all(
-				keys.keys.map(async (key) => {
-					const data = await env.CACHE.get(key.name)
-					if (data) {
-						try {
-							return JSON.parse(data)
-						} catch {
-							return null
-						}
+			const fetches = store.conversations.map((conv) => getConversationMessages(env, conv.id))
+			const results = await Promise.all(fetches)
+			for (const msgs of results) {
+				for (const msg of msgs) {
+					if (msg.recipient === address) {
+						allMessages.push(msg)
 					}
-					return null
-				}),
-			)
+				}
+			}
 
-			const validMessages = messages.filter(Boolean)
+			allMessages.sort((a, b) => b.timestamp - a.timestamp)
 
 			return jsonResponse({
 				address,
-				messages: validMessages,
-				count: validMessages.length,
+				messages: allMessages,
+				count: allMessages.length,
 				encryption: {
 					method: 'seal',
 					note: 'Messages are Seal-encrypted. Decrypt client-side with your wallet.',
@@ -1603,25 +1679,24 @@ async function handleLlmApi(request: Request, env: Env, url: URL): Promise<Respo
 		)
 	}
 
-	// Rate limiting check (simple implementation)
 	const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown'
-	const rateLimitKey = `llm:ratelimit:${clientIP}`
-	const rateLimit = await env.CACHE.get(rateLimitKey)
-	const currentCount = rateLimit ? Number.parseInt(rateLimit, 10) : 0
+	const now = Date.now()
+	const entry = llmRateLimits.get(clientIP)
 
-	if (currentCount >= 10) {
-		// 10 requests per minute
-		return jsonResponse(
-			{
-				error: 'Rate limit exceeded',
-				retryAfter: 60,
-			},
-			429,
-		)
+	if (entry && now < entry.resetAt) {
+		if (entry.count >= 10) {
+			return jsonResponse(
+				{
+					error: 'Rate limit exceeded',
+					retryAfter: Math.ceil((entry.resetAt - now) / 1000),
+				},
+				429,
+			)
+		}
+		entry.count++
+	} else {
+		llmRateLimits.set(clientIP, { count: 1, resetAt: now + 60_000 })
 	}
-
-	// Increment rate limit counter
-	await env.CACHE.put(rateLimitKey, String(currentCount + 1), { expirationTtl: 60 })
 
 	// POST /api/llm/complete - Completion endpoint
 	if (path === 'complete' && request.method === 'POST') {
@@ -1726,7 +1801,7 @@ function generateAppShell(env: Env, currentPath: string): string {
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 	<title>${title} | sui.ski</title>
 	<meta name="description" content="Secure, decentralized communications on Sui blockchain">
-	<meta name="theme-color" content="#0a0a0f">
+	<meta name="theme-color" content="#000">
 	
 	<style>
 		${getAppStyles()}
@@ -1759,7 +1834,7 @@ function getAppStyles(): string {
 		* { margin: 0; padding: 0; box-sizing: border-box; }
 
 		:root {
-			--bg-primary: #0a0a0f;
+			--bg-primary: #000;
 			--bg-secondary: #12121a;
 			--bg-tertiary: #1a1a24;
 			--text-primary: #e4e4e7;
@@ -2420,9 +2495,9 @@ function generateSettingsPage(env: Env): string {
 	`
 }
 
-function getAppScript(env: Env): string {
+function getAppScript(_env: Env): string {
 	return `
-		// Wallet connection state
+		${generateWalletCookieJs()}
 		let connectedAddress = null;
 		let suiWallet = null;
 
@@ -2431,11 +2506,11 @@ function getAppScript(env: Env): string {
 			const text = document.getElementById('wallet-text');
 
 			if (connectedAddress) {
-				// Disconnect
 				connectedAddress = null;
 				suiWallet = null;
 				text.textContent = 'Connect';
 				btn.classList.remove('wallet-connected');
+				clearWalletCookie();
 				return;
 			}
 
@@ -2454,7 +2529,7 @@ function getAppScript(env: Env): string {
 				if (connectedAddress) {
 					text.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
 					btn.classList.add('wallet-connected');
-					console.log('Connected:', connectedAddress);
+					setWalletCookie('Sui Wallet', connectedAddress);
 				}
 			} catch (error) {
 				console.error('Wallet connection failed:', error);
@@ -2486,16 +2561,51 @@ function getAppScript(env: Env): string {
 					window.sui.getAccounts().then((accounts) => {
 						if (accounts?.length > 0) {
 							connectedAddress = accounts[0].address;
+							suiWallet = window.sui;
 							const text = document.getElementById('wallet-text');
 							const btn = document.getElementById('connect-wallet');
 							text.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
 							btn.classList.add('wallet-connected');
+							setWalletCookie('Sui Wallet', connectedAddress);
 						}
 					});
+				} else {
+					const hint = getWalletCookie();
+					if (hint) {
+						window.sui.connect().then((response) => {
+							const addr = response.accounts?.[0]?.address;
+							if (addr) {
+								connectedAddress = addr;
+								suiWallet = window.sui;
+								const text = document.getElementById('wallet-text');
+								const btn = document.getElementById('connect-wallet');
+								text.textContent = addr.slice(0, 6) + '...' + addr.slice(-4);
+								btn.classList.add('wallet-connected');
+								setWalletCookie('Sui Wallet', addr);
+							}
+						}).catch(() => {});
+					}
 				}
 			});
+		} else {
+			const hint = getWalletCookie();
+			if (hint) {
+				setTimeout(() => {
+					if (typeof window.sui !== 'undefined') {
+						window.sui.connect().then((response) => {
+							const addr = response.accounts?.[0]?.address;
+							if (addr) {
+								connectedAddress = addr;
+								suiWallet = window.sui;
+								const text = document.getElementById('wallet-text');
+								const btn = document.getElementById('connect-wallet');
+								text.textContent = addr.slice(0, 6) + '...' + addr.slice(-4);
+								btn.classList.add('wallet-connected');
+							}
+						}).catch(() => {});
+					}
+				}, 500);
+			}
 		}
-
-		console.log('sui.ski Signal app loaded - Network: ${env.SUI_NETWORK}');
 	`
 }

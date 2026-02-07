@@ -1,0 +1,8 @@
+[package]
+name = "decay_auction"
+edition = "2024.beta"
+
+[dependencies]
+
+[addresses]
+decay_auction = "0x0"

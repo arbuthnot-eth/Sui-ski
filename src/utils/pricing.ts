@@ -1,9 +1,8 @@
 import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import { mainPackage, SuinsClient } from '@mysten/suins'
-import { getSUIPrice } from '../handlers/landing'
 import type { Env } from '../types'
 import { cacheKey, getCached, setCache } from './cache'
-import { getNSSuiPrice, NS_SCALE } from './ns-price'
+import { getNSSuiPrice, getUSDCSuiPrice, NS_SCALE } from './ns-price'
 import { calculatePremium } from './premium'
 import { getPythPriceInfoObjectId } from './pyth-price-info'
 import { getDefaultRpcUrl } from './rpc'
@@ -49,23 +48,29 @@ export async function calculateRegistrationPrice(
 	const cleanDomain = `${domain.toLowerCase().replace(/\.sui$/i, '')}.sui`
 
 	const key = cacheKey('reg-price-v3', cleanDomain, String(years), String(expirationMs || 0))
-	const cached = await getCached<Record<string, unknown>>(env, key)
+	const cached = await getCached<Record<string, unknown>>(key)
 	if (cached) {
 		return deserializePricingResult(cached)
 	}
 
-	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
+	const client = new SuiClient({
+		url: env.SUI_RPC_URL || getDefaultRpcUrl(env.SUI_NETWORK),
+		network: env.SUI_NETWORK,
+	})
 	const network = env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
 	const suinsClient = new SuinsClient({ client: client as never, network })
 
 	const nsFeedId =
 		network === 'mainnet' ? mainPackage.mainnet.coins.NS.feed : mainPackage.testnet.coins.NS.feed
-	const [basePriceUnits, suiPriceUsd, nsPriceResult, priceInfoObjectId] = await Promise.all([
+	const [basePriceUnits, usdcResult, nsPriceResult, priceInfoObjectId] = await Promise.all([
 		suinsClient.calculatePrice({ name: cleanDomain, years }),
-		getSUIPrice({ CACHE: env.CACHE }),
+		getUSDCSuiPrice(env),
 		getNSSuiPrice(env),
-		nsFeedId ? getPythPriceInfoObjectId(client, network, nsFeedId) : Promise.resolve(undefined),
+		nsFeedId
+			? getPythPriceInfoObjectId(client, network, nsFeedId).catch(() => undefined)
+			: Promise.resolve(undefined),
 	])
+	const suiPriceUsd = usdcResult.usdcPerSui
 
 	const basePriceUsd = Number(basePriceUnits) / 1e6
 
@@ -123,7 +128,7 @@ export async function calculateRegistrationPrice(
 		},
 	}
 
-	await setCache(env, key, serializablePricingResult(result), PRICING_CACHE_TTL)
+	await setCache(key, serializablePricingResult(result), PRICING_CACHE_TTL)
 
 	return result
 }
@@ -171,23 +176,29 @@ export async function calculateRenewalPrice(params: CalculatePriceParams): Promi
 	const cleanDomain = `${domain.toLowerCase().replace(/\.sui$/i, '')}.sui`
 
 	const key = cacheKey('renew-price-v1', cleanDomain, String(years))
-	const cached = await getCached<Record<string, unknown>>(env, key)
+	const cached = await getCached<Record<string, unknown>>(key)
 	if (cached) {
 		return deserializePricingResult(cached)
 	}
 
-	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
+	const client = new SuiClient({
+		url: env.SUI_RPC_URL || getDefaultRpcUrl(env.SUI_NETWORK),
+		network: env.SUI_NETWORK,
+	})
 	const network = env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
 	const suinsClient = new SuinsClient({ client: client as never, network })
 
 	const nsFeedId =
 		network === 'mainnet' ? mainPackage.mainnet.coins.NS.feed : mainPackage.testnet.coins.NS.feed
-	const [basePriceUnits, suiPriceUsd, nsPriceResult, priceInfoObjectId] = await Promise.all([
+	const [basePriceUnits, usdcResult, nsPriceResult, priceInfoObjectId] = await Promise.all([
 		suinsClient.calculatePrice({ name: cleanDomain, years, isRegistration: false }),
-		getSUIPrice({ CACHE: env.CACHE }),
+		getUSDCSuiPrice(env),
 		getNSSuiPrice(env),
-		nsFeedId ? getPythPriceInfoObjectId(client, network, nsFeedId) : Promise.resolve(undefined),
+		nsFeedId
+			? getPythPriceInfoObjectId(client, network, nsFeedId).catch(() => undefined)
+			: Promise.resolve(undefined),
 	])
+	const suiPriceUsd = usdcResult.usdcPerSui
 
 	const basePriceUsd = Number(basePriceUnits) / 1e6
 	const discountedPriceUsd = basePriceUsd * (1 - NS_DISCOUNT_PERCENT / 100)
@@ -226,21 +237,25 @@ export async function calculateRenewalPrice(params: CalculatePriceParams): Promi
 		},
 	}
 
-	await setCache(env, key, serializablePricingResult(result), PRICING_CACHE_TTL)
+	await setCache(key, serializablePricingResult(result), PRICING_CACHE_TTL)
 
 	return result
 }
 
 export async function getBasePricing(env: Env): Promise<Record<string, unknown>> {
-	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
+	const client = new SuiClient({
+		url: env.SUI_RPC_URL || getDefaultRpcUrl(env.SUI_NETWORK),
+		network: env.SUI_NETWORK,
+	})
 	const network = env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
 	const suinsClient = new SuinsClient({ client: client as never, network })
 
-	const [priceList, suiPriceUsd, nsPriceResult] = await Promise.all([
+	const [priceList, usdcResult, nsPriceResult] = await Promise.all([
 		suinsClient.getPriceList(),
-		getSUIPrice({ CACHE: env.CACHE }),
+		getUSDCSuiPrice(env),
 		getNSSuiPrice(env),
 	])
+	const suiPriceUsd = usdcResult.usdcPerSui
 
 	const pricing: Record<string, unknown> = {
 		suiPriceUsd,

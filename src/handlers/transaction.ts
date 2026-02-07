@@ -298,6 +298,16 @@ export async function handleTransaction(request: Request, env: Env): Promise<Res
 function transactionPageHTML(tx: TransactionData, network: string): string {
 	const suiscanUrl = `https://suiscan.xyz/${network}/tx/${tx.digest}`
 	const explorerUrl = `https://suiexplorer.com/txblock/${tx.digest}?network=${network}`
+	const explorerLinks = [
+		{ label: 'View on Suiscan', url: suiscanUrl },
+		{ label: 'View on SuiExplorer', url: explorerUrl },
+	]
+	if (network === 'mainnet') {
+		explorerLinks.push({
+			label: 'View on Suivision',
+			url: `https://suivision.xyz/txblock/${tx.digest}`,
+		})
+	}
 
 	const suinsSection = tx.suinsRegistration
 		? `
@@ -357,7 +367,7 @@ function transactionPageHTML(tx: TransactionData, network: string): string {
 	<title>Transaction ${tx.digest.slice(0, 8)}... | sui.ski</title>
 	<style>
 		:root {
-			--bg-gradient-start: #0a0a0f;
+			--bg-gradient-start: #000;
 			--bg-gradient-end: #12121a;
 			--card-bg: rgba(22, 22, 30, 0.9);
 			--card-bg-solid: #16161e;
@@ -588,8 +598,7 @@ function transactionPageHTML(tx: TransactionData, network: string): string {
 			<h1>Transaction <span class="status-badge success">${tx.status}</span></h1>
 			<div class="digest">${tx.digest}</div>
 			<div class="links">
-				<a href="${suiscanUrl}" target="_blank" class="link-btn">View on Suiscan</a>
-				<a href="${explorerUrl}" target="_blank" class="link-btn">View on SuiExplorer</a>
+				${explorerLinks.map((link) => `<a href="${link.url}" target="_blank" class="link-btn">${link.label}</a>`).join('\n\t\t\t\t')}
 				<a href="?format=json" class="link-btn">JSON</a>
 			</div>
 		</div>
@@ -715,7 +724,7 @@ function transactionNotFoundHTML(digest: string): string {
 	<style>
 		body {
 			font-family: 'Inter', system-ui, -apple-system, sans-serif;
-			background: linear-gradient(145deg, #0a0a0f 0%, #12121a 50%, #0d0d14 100%);
+			background: #000;
 			background-attachment: fixed;
 			color: #e4e4e7;
 			min-height: 100vh;

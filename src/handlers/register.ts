@@ -1,6 +1,8 @@
 import type { Env } from '../types'
+import { generateLogoSvg } from '../utils/og-image'
 import { jsonResponse } from '../utils/response'
 import { relaySignedTransaction } from '../utils/transactions'
+import { generateWalletCookieJs } from '../utils/wallet-cookie'
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -21,9 +23,10 @@ export function generateRegistrationPage(name: string, env: Env): string {
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>${escapeHtml(cleanName)}.sui available | sui.ski</title>
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 	<style>
 		:root {
-			--bg: #05060c;
+			--bg: #000;
 			--card: rgba(15, 18, 32, 0.9);
 			--border: rgba(255, 255, 255, 0.08);
 			--text: #e4e6f1;
@@ -36,10 +39,11 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		* { box-sizing: border-box; margin: 0; padding: 0; }
 		body {
 			font-family: 'Inter', system-ui, -apple-system, sans-serif;
-			background: radial-gradient(circle at top, rgba(96,165,250,0.12), transparent 40%), linear-gradient(180deg, #05060c, #090d1a 60%, #05060c);
+			background: #000;
 			min-height: 100vh;
 			color: var(--text);
 			padding: 32px 16px 64px;
+			position: relative;
 		}
 		.container {
 			max-width: 880px;
@@ -329,6 +333,31 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			top: 16px;
 			right: 16px;
 			z-index: 9999;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.global-wallet-profile-btn {
+			width: 36px;
+			height: 36px;
+			border-radius: 10px;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			background: rgba(96, 165, 250, 0.12);
+			border: 1px solid rgba(96, 165, 250, 0.35);
+			cursor: pointer;
+			transition: all 0.2s ease;
+			padding: 0;
+		}
+		.global-wallet-profile-btn svg {
+			width: 18px;
+			height: 18px;
+		}
+		.global-wallet-profile-btn:hover {
+			background: rgba(96, 165, 250, 0.2);
+			border-color: rgba(96, 165, 250, 0.55);
+			transform: translateY(-1px);
 		}
 		.global-wallet-btn {
 			display: flex;
@@ -359,7 +388,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			border-radius: 50%;
 			position: absolute;
 			top: -2px;
-			left: -2px;
+			right: -2px;
 			z-index: 1;
 		}
 		.network-indicator.mainnet {
@@ -519,7 +548,13 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 		.register-hero {
 			text-align: left;
-			padding: 0 0 8px;
+			padding: 0 0 4px;
+		}
+		.register-price-row {
+			display: flex;
+			align-items: baseline;
+			gap: 10px;
+			flex-wrap: wrap;
 		}
 		.register-price {
 			font-size: 2rem;
@@ -759,43 +794,33 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			color: var(--success);
 		}
 
-		/* Savings Banner */
-		.savings-banner {
-			display: flex;
+		.savings-badge {
+			display: inline-flex;
 			align-items: center;
-			gap: 8px;
-			padding: 8px 12px;
-			background: linear-gradient(135deg, rgba(52, 211, 153, 0.12), rgba(96, 165, 250, 0.08));
-			border: 1px solid rgba(52, 211, 153, 0.25);
-			border-radius: 10px;
-			margin-bottom: 8px;
-			font-size: 0.82rem;
-			color: var(--text);
-		}
-		.savings-banner svg {
+			padding: 4px 10px;
+			border-radius: 999px;
+			background: rgba(52, 211, 153, 0.18);
+			border: 1px solid rgba(52, 211, 153, 0.35);
 			color: var(--success);
-			flex-shrink: 0;
-		}
-		.savings-banner strong {
-			color: var(--success);
-		}
-		.strikethrough {
-			text-decoration: line-through;
-			opacity: 0.6;
+			font-size: 0.78rem;
+			font-weight: 700;
+			letter-spacing: 0.02em;
+			white-space: nowrap;
 		}
 
 		/* Price Breakdown */
 		.price-breakdown {
-			background: rgba(0, 0, 0, 0.2);
+			background: rgba(0, 0, 0, 0.24);
 			border-radius: 12px;
-			padding: 16px;
-			margin: 12px 0 16px;
+			padding: 14px 16px;
+			margin: 8px 0 12px;
 		}
 		.price-row {
 			display: flex;
 			justify-content: space-between;
-			padding: 6px 0;
-			font-size: 0.9rem;
+			align-items: center;
+			padding: 5px 0;
+			font-size: 0.88rem;
 		}
 		.price-row .price-label {
 			color: var(--muted);
@@ -803,22 +828,140 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		.price-row .price-value {
 			font-family: ui-monospace, monospace;
 			font-weight: 600;
-		}
-		.price-row.premium .price-value {
-			color: var(--warning);
+			text-align: right;
 		}
 		.price-row.discount .price-value {
 			color: var(--success);
 		}
+		.price-row.premium .price-value {
+			color: var(--warning);
+		}
 		.price-row.total {
 			border-top: 1px solid var(--border);
-			margin-top: 8px;
-			padding-top: 12px;
-			font-weight: 700;
-			font-size: 1rem;
+			margin-top: 6px;
+			padding-top: 8px;
+		}
+		.price-row.total .price-label {
+			color: var(--text);
+			font-weight: 600;
 		}
 		.price-row.total .price-value {
-			font-size: 1.1rem;
+			color: var(--text);
+			font-size: 1rem;
+			font-weight: 700;
+		}
+		.strikethrough {
+			text-decoration: line-through;
+			opacity: 0.6;
+		}
+
+		/* Nav Bar */
+		.nav-bar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 0 16px;
+			margin-bottom: 8px;
+			max-width: 880px;
+			margin-left: auto;
+			margin-right: auto;
+		}
+		.nav-logo {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			text-decoration: none;
+			color: var(--text);
+			font-size: 1.3rem;
+			font-weight: 800;
+			letter-spacing: -0.02em;
+		}
+		.nav-logo:hover { opacity: 0.85; }
+		.nav-logo svg { filter: drop-shadow(0 2px 8px rgba(96, 165, 250, 0.3)); }
+		.nav-badge {
+			font-size: 0.65rem;
+			padding: 2px 8px;
+			border-radius: 999px;
+			background: rgba(96, 165, 250, 0.12);
+			border: 1px solid rgba(96, 165, 250, 0.2);
+			color: var(--accent);
+			font-weight: 600;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+		}
+
+		/* Background Watermark */
+		.brand-watermark {
+			position: fixed;
+			inset: 0;
+			z-index: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			pointer-events: none;
+			opacity: 0.035;
+		}
+		.brand-watermark svg {
+			width: min(70vw, 520px);
+			height: min(70vw, 520px);
+		}
+
+		/* Footer */
+		.footer-brand {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 10px;
+			padding: 48px 16px 24px;
+			max-width: 880px;
+			margin: 0 auto;
+		}
+		.footer-logo {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			text-decoration: none;
+			color: var(--muted);
+			font-size: 0.95rem;
+			font-weight: 700;
+			transition: color 0.2s;
+		}
+		.footer-logo:hover { color: var(--text); }
+		.footer-logo svg { opacity: 0.6; }
+		.footer-tagline {
+			font-size: 0.78rem;
+			color: var(--muted);
+			opacity: 0.6;
+			text-align: center;
+		}
+		.footer-links {
+			display: flex;
+			gap: 16px;
+			margin-top: 4px;
+		}
+		.footer-links a {
+			font-size: 0.75rem;
+			color: var(--muted);
+			text-decoration: none;
+			opacity: 0.5;
+			transition: opacity 0.2s;
+		}
+		.footer-links a:hover { opacity: 1; }
+
+		/* Card header logo accent */
+		.card-brand-row {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			margin-bottom: 6px;
+			opacity: 0.5;
+		}
+		.card-brand-row span {
+			font-size: 0.72rem;
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+			color: var(--muted);
+			font-weight: 700;
 		}
 
 		/* NS Rate Info */
@@ -847,25 +990,247 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			font-size: 0.75rem;
 		}
 
-		@media (max-width: 640px) {
-			.card { padding: 20px; }
-			.register-layout { grid-template-columns: 1fr; gap: 20px; }
-			.register-left { text-align: center; align-items: center; }
-			.header { text-align: center; }
+		.options-panel {
+			display: flex;
+			flex-direction: column;
+			gap: 14px;
+			padding: 16px;
+			background: rgba(0, 0, 0, 0.2);
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			margin: 4px 0 12px;
+		}
+		.options-title {
+			font-size: 0.82rem;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: var(--muted);
+		}
+		.option-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			min-height: 36px;
+		}
+		.option-label {
+			font-size: 0.88rem;
+			color: var(--text);
+			font-weight: 500;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+		.option-label .hint {
+			font-size: 0.75rem;
+			color: var(--muted);
+			font-weight: 400;
+		}
+		.duration-pills {
+			display: flex;
+			gap: 4px;
+			background: rgba(255, 255, 255, 0.04);
+			border-radius: 10px;
+			padding: 3px;
+			border: 1px solid var(--border);
+		}
+		.duration-pill {
+			padding: 6px 14px;
+			border-radius: 8px;
+			border: none;
+			background: transparent;
+			color: var(--muted);
+			font-size: 0.82rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.15s;
+		}
+		.duration-pill.active {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.25), rgba(139, 92, 246, 0.2));
+			color: var(--text);
+			box-shadow: 0 2px 8px rgba(96, 165, 250, 0.15);
+		}
+		.duration-pill:hover:not(.active) {
+			color: var(--text);
+			background: rgba(255, 255, 255, 0.06);
+		}
+		.option-toggle {
+			position: relative;
+			width: 40px;
+			height: 22px;
+			flex-shrink: 0;
+		}
+		.option-toggle input {
+			opacity: 0;
+			width: 0;
+			height: 0;
+			position: absolute;
+		}
+		.option-toggle .slider {
+			position: absolute;
+			inset: 0;
+			background: rgba(255, 255, 255, 0.1);
+			border-radius: 11px;
+			cursor: pointer;
+			transition: background 0.2s;
+		}
+		.option-toggle .slider::before {
+			content: '';
+			position: absolute;
+			width: 16px;
+			height: 16px;
+			left: 3px;
+			top: 3px;
+			background: var(--text);
+			border-radius: 50%;
+			transition: transform 0.2s;
+		}
+		.option-toggle input:checked + .slider {
+			background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+		}
+		.option-toggle input:checked + .slider::before {
+			transform: translateX(18px);
+		}
+		.option-toggle input:disabled + .slider {
+			opacity: 0.4;
+			cursor: not-allowed;
+		}
+		.option-input-row {
+			display: none;
+			margin-top: -6px;
+		}
+		.option-input-row.visible {
+			display: block;
+		}
+		.option-input {
+			width: 100%;
+			padding: 8px 12px;
+			background: rgba(255, 255, 255, 0.04);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			color: var(--text);
+			font-size: 0.85rem;
+			font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		}
+		.option-input:focus {
+			outline: none;
+			border-color: var(--accent);
+			box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+		}
+		.option-input::placeholder {
+			color: var(--muted);
+			opacity: 0.6;
+		}
+		.subname-cap-section {
+			border-top: 1px solid var(--border);
+			padding-top: 14px;
+			margin-top: 4px;
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+		.jacket-type-pills {
+			display: flex;
+			gap: 4px;
+			background: rgba(255, 255, 255, 0.04);
+			border-radius: 10px;
+			padding: 3px;
+			border: 1px solid var(--border);
+		}
+		.jacket-pill {
+			padding: 6px 14px;
+			border-radius: 8px;
+			border: none;
+			background: transparent;
+			color: var(--muted);
+			font-size: 0.82rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.15s;
+		}
+		.jacket-pill.active {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.25), rgba(139, 92, 246, 0.2));
+			color: var(--text);
+			box-shadow: 0 2px 8px rgba(96, 165, 250, 0.15);
+		}
+		.jacket-pill:hover:not(.active) {
+			color: var(--text);
+			background: rgba(255, 255, 255, 0.06);
+		}
+		.jacket-config {
+			display: none;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.jacket-config.visible {
+			display: flex;
+		}
+		.fee-input-row {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+		.fee-input-row input {
+			flex: 1;
+			padding: 8px 12px;
+			background: rgba(255, 255, 255, 0.04);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			color: var(--text);
+			font-size: 0.85rem;
+			font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		}
+		.fee-input-row input:focus {
+			outline: none;
+			border-color: var(--accent);
+			box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+		}
+		.fee-input-row .unit-label {
+			font-size: 0.82rem;
+			color: var(--muted);
+			font-weight: 600;
+			flex-shrink: 0;
+		}
+
+			@media (max-width: 640px) {
+				.card { padding: 20px; }
+				.register-layout { grid-template-columns: 1fr; gap: 20px; }
+				.register-left { text-align: center; align-items: center; }
+				.header { text-align: center; }
 			.register-hero { text-align: center; }
 			.register-features { justify-content: center; }
-			.bid-main { grid-template-columns: 1fr; }
-			.bid-list li { font-size: 0.8rem; }
-			.global-wallet-widget { top: 12px; right: 12px; }
-			.global-wallet-btn { padding: 8px 12px; font-size: 0.85rem; }
-			.gear-panel { width: calc(100vw - 32px); right: 16px; bottom: 76px; }
-			.gear-fab { bottom: 16px; right: 16px; }
+				.bid-main { grid-template-columns: 1fr; }
+				.bid-list li { font-size: 0.8rem; }
+				.global-wallet-widget { top: 12px; right: 12px; }
+				.global-wallet-profile-btn { width: 34px; height: 34px; }
+				.global-wallet-btn { padding: 8px 12px; font-size: 0.85rem; }
+				.gear-panel { width: calc(100vw - 32px); right: 16px; bottom: 76px; }
+				.gear-fab { bottom: 16px; right: 16px; }
+				.nav-bar { padding: 0 8px; }
+				.nav-logo { font-size: 1.1rem; }
+			.card-brand-row { justify-content: center; }
 		}
 	</style>
 </head>
 <body>
+	<!-- Background Watermark -->
+	<div class="brand-watermark" aria-hidden="true">${generateLogoSvg(520)}</div>
+
+	<!-- Nav Bar -->
+	<nav class="nav-bar">
+		<a href="https://sui.ski" class="nav-logo">
+			${generateLogoSvg(32)}
+			sui.ski
+		</a>
+		<span class="nav-badge">${escapeHtml(network)}</span>
+	</nav>
+
 	<!-- Global Wallet Widget -->
 	<div class="global-wallet-widget" id="global-wallet-widget">
+		<button class="global-wallet-profile-btn" id="global-wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile">
+			${generateLogoSvg(18)}
+		</button>
 		<div class="network-indicator ${network === 'mainnet' ? 'mainnet' : 'testnet'}" title="${escapeHtml(network)}"></div>
 		<button class="global-wallet-btn" id="global-wallet-btn">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
@@ -884,7 +1249,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 	<div class="wallet-modal" id="wallet-modal">
 		<div class="wallet-modal-content">
 			<div class="wallet-modal-header">
-				<h3>Connect Wallet</h3>
+				<h3>${generateLogoSvg(20)} Connect Wallet</h3>
 				<button class="wallet-modal-close" id="wallet-modal-close">&times;</button>
 			</div>
 			<div class="wallet-list" id="wallet-list">
@@ -897,7 +1262,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 	<div class="tx-preview-modal" id="tx-preview-modal">
 		<div class="tx-preview-content">
 			<div class="tx-preview-header">
-				<h3>Confirm Transaction</h3>
+				<h3>${generateLogoSvg(22)} Confirm Transaction</h3>
 				<p id="tx-preview-subtitle">Review before signing</p>
 			</div>
 			<div class="tx-preview-body">
@@ -916,7 +1281,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					</div>
 					<div class="tx-action-details">
 						<h4>Register <span id="tx-domain-name">name</span>.sui</h4>
-						<p>Pay <span id="tx-payment-amount">-- SUI</span> • 1 year via SuiNS</p>
+						<p>Pay <span id="tx-payment-amount">-- SUI</span> • <span id="tx-duration">1 year</span> via SuiNS</p>
 					</div>
 				</div>
 				<div class="tx-action">
@@ -926,6 +1291,42 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					<div class="tx-action-details">
 						<h4>Receive SuiNS NFT</h4>
 						<p>Sent to <code id="tx-recipient">0x...</code></p>
+					</div>
+				</div>
+				<div class="tx-action" id="tx-primary-row" style="display: none;">
+					<div class="tx-action-icon register">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+					</div>
+					<div class="tx-action-details">
+						<h4>Set as Primary Name</h4>
+						<p>Your address will resolve to <span id="tx-primary-name">name</span>.sui</p>
+					</div>
+				</div>
+				<div class="tx-action" id="tx-avatar-row" style="display: none;">
+					<div class="tx-action-icon swap">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+					</div>
+					<div class="tx-action-details">
+						<h4>Set Avatar</h4>
+						<p id="tx-avatar-url">...</p>
+					</div>
+				</div>
+				<div class="tx-action" id="tx-content-row" style="display: none;">
+					<div class="tx-action-icon swap">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+					</div>
+					<div class="tx-action-details">
+						<h4>Set Content Hash</h4>
+						<p id="tx-content-value">...</p>
+					</div>
+				</div>
+				<div class="tx-action" id="tx-subnamecap-row" style="display: none;">
+					<div class="tx-action-icon register">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+					</div>
+					<div class="tx-action-details">
+						<h4>Create SubnameCap</h4>
+						<p id="tx-subnamecap-desc">Allows creating subnames</p>
 					</div>
 				</div>
 				<div class="tx-summary">
@@ -962,6 +1363,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		<div class="card register-card">
 			<div class="register-layout">
 				<div class="register-left">
+					<div class="card-brand-row">${generateLogoSvg(16)} <span>via sui.ski</span></div>
 					<div class="header">
 						<h1>${escapeHtml(cleanName)}<span>.sui</span></h1>
 						<div class="badge success">Available</div>
@@ -983,31 +1385,101 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				</div>
 				<div class="register-right">
 					<div class="register-hero">
-						<div class="register-price" id="register-price">-- SUI</div>
+						<div class="register-price-row">
+							<div class="register-price" id="register-price">-- SUI</div>
+							<span class="savings-badge" id="savings-badge" style="display: none;">Save <span id="savings-percent">~25%</span></span>
+						</div>
 						<div class="register-price-label" id="register-price-usd">1 year registration</div>
-					</div>
-					<div class="savings-banner" id="savings-banner" style="display: none;">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
-							<path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path>
-						</svg>
-						<span>Save <strong id="savings-percent">~25%</strong> via DeepBook</span>
 					</div>
 					<div class="price-breakdown" id="price-breakdown">
 						<div class="price-row">
-							<span class="price-label" id="standard-price-label">Standard SuiNS Price</span>
+							<span class="price-label" id="standard-price-label">List price</span>
 							<span class="price-value strikethrough" id="direct-price">-- SUI</span>
 						</div>
-						<div class="price-row discount">
-							<span class="price-label">Sui.Ski Discount</span>
-							<span class="price-value" id="discounted-price">--.-- SUI</span>
+						<div class="price-row discount" id="discount-row">
+							<span class="price-label">DeepBook discount</span>
+							<span class="price-value" id="discounted-price">-- SUI</span>
 						</div>
 						<div class="price-row premium" id="premium-row" style="display: none;">
-							<span class="price-label">Grace Period Premium</span>
+							<span class="price-label">Grace period premium</span>
 							<span class="price-value" id="premium-price">+0 SUI</span>
 						</div>
 						<div class="price-row total">
-							<span class="price-label">Total</span>
+							<span class="price-label">You pay</span>
 							<span class="price-value" id="total-price">-- SUI</span>
+						</div>
+					</div>
+					<div class="options-panel" id="options-panel">
+						<div class="options-title">Registration Options</div>
+						<div class="option-row">
+							<span class="option-label">Duration</span>
+							<div class="duration-pills" id="duration-pills">
+								<button class="duration-pill active" data-years="1">1 yr</button>
+								<button class="duration-pill" data-years="2">2 yr</button>
+								<button class="duration-pill" data-years="3">3 yr</button>
+								<button class="duration-pill" data-years="5">5 yr</button>
+							</div>
+						</div>
+						<div class="option-row">
+							<span class="option-label">Set as Primary</span>
+							<label class="option-toggle">
+								<input type="checkbox" id="opt-primary" checked>
+								<span class="slider"></span>
+							</label>
+						</div>
+						<div class="option-row">
+							<span class="option-label">Register for someone else</span>
+							<label class="option-toggle">
+								<input type="checkbox" id="opt-custom-target">
+								<span class="slider"></span>
+							</label>
+						</div>
+						<div class="option-input-row" id="custom-target-row">
+							<input class="option-input" id="opt-target-address" type="text" placeholder="0x... address or name.sui">
+						</div>
+						<div class="option-row">
+							<span class="option-label">Avatar URL <span class="hint">(optional)</span></span>
+						</div>
+						<div class="option-input-row visible">
+							<input class="option-input" id="opt-avatar" type="text" placeholder="https://example.com/avatar.png">
+						</div>
+						<div class="option-row">
+							<span class="option-label">Content Hash <span class="hint">(optional)</span></span>
+						</div>
+						<div class="option-input-row visible">
+							<input class="option-input" id="opt-content-hash" type="text" placeholder="ipfs://Qm... or walrus blob ID">
+						</div>
+						<div class="subname-cap-section" id="subname-cap-section" style="display: none;">
+							<div class="option-row">
+								<span class="option-label">Create SubnameCap</span>
+								<label class="option-toggle">
+									<input type="checkbox" id="opt-subname-cap">
+									<span class="slider"></span>
+								</label>
+							</div>
+							<div id="jacket-options" style="display: none;">
+								<div class="option-row" style="margin-bottom: 8px;">
+									<span class="option-label">Jacket Type</span>
+									<div class="jacket-type-pills" id="jacket-type-pills">
+										<button class="jacket-pill active" data-jacket="none">None</button>
+										<button class="jacket-pill" data-jacket="fee">Fee</button>
+										<button class="jacket-pill" data-jacket="single-use">Single-Use</button>
+									</div>
+								</div>
+								<div class="jacket-config" id="jacket-fee-config">
+									<label style="margin-bottom: 0;">Leaf Fee</label>
+									<div class="fee-input-row">
+										<input type="number" id="opt-leaf-fee" step="0.001" min="0" placeholder="0.1">
+										<span class="unit-label">SUI</span>
+									</div>
+									<label style="margin-bottom: 0;">Fee Recipient <span class="hint">(defaults to you)</span></label>
+									<input class="option-input" id="opt-fee-recipient" type="text" placeholder="0x... address (optional)">
+								</div>
+								<div class="jacket-config" id="jacket-single-use-config">
+									<label style="margin-bottom: 0;">Send Voucher To</label>
+									<input class="option-input" id="opt-single-use-recipient" type="text" placeholder="0x... address or name.sui">
+								</div>
+							</div>
 						</div>
 					</div>
 					<button class="register-btn compact" id="register-btn">
@@ -1020,6 +1492,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		`
 				: `
 		<div class="card">
+			<div class="card-brand-row" style="justify-content: center;">${generateLogoSvg(16)} <span>via sui.ski</span></div>
 			<div class="header" style="text-align: center;">
 				<h1>${escapeHtml(cleanName)}<span>.sui</span></h1>
 				<div class="badge warning">Minimum length is 3 characters</div>
@@ -1028,6 +1501,20 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		`
 		}
 	</div>
+
+	<!-- Footer -->
+	<footer class="footer-brand">
+		<a href="https://sui.ski" class="footer-logo">
+			${generateLogoSvg(20)}
+			sui.ski
+		</a>
+		<div class="footer-tagline">SuiNS name gateway &middot; powered by DeepBook</div>
+		<div class="footer-links">
+			<a href="https://sui.ski">Home</a>
+			<a href="https://docs.suins.io" target="_blank" rel="noopener">SuiNS Docs</a>
+			<a href="https://suiscan.xyz" target="_blank" rel="noopener">Suiscan</a>
+		</div>
+	</footer>
 
 	<!-- Gear FAB for advanced relay -->
 	<button class="gear-fab" id="gear-fab" title="Advanced options">
@@ -1062,11 +1549,124 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		</div>
 	</div>
 
-	<script type="module">
-		import { getWallets } from 'https://esm.sh/@wallet-standard/app@1.1.0';
-		import { getJsonRpcFullnodeUrl, SuiJsonRpcClient } from 'https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle';
-		import { Transaction } from 'https://esm.sh/@mysten/sui@2.2.0/transactions?bundle';
-		import { SuinsClient, SuinsTransaction } from 'https://esm.sh/@mysten/suins@1.0.0?bundle';
+		<script>
+			(function() {
+				var NAME = ${serializeJson(cleanName)};
+				var NAME_LENGTH = NAME.length;
+				var selectedYears = 1;
+				window.__suiskiModuleLoaded = false;
+				window.__suiskiPricingData = null;
+
+				function isValidPricingPayload(pd) {
+					var suiPerNs = pd && typeof pd.suiPerNs === 'string' ? Number(pd.suiPerNs) : pd && pd.suiPerNs;
+					return !!pd &&
+						typeof pd === 'object' &&
+						pd.directSuiMist != null &&
+						pd.discountedSuiMist != null &&
+						pd.nsNeededMist != null &&
+						Number.isFinite(suiPerNs) &&
+						suiPerNs > 0;
+				}
+
+				window.__suiskiIsValidPricingPayload = isValidPricingPayload;
+
+				function fallbackUpdatePriceDisplay(pd) {
+					if (!isValidPricingPayload(pd)) return;
+					var directMist = Number(pd.directSuiMist);
+					var discountedMist = Number(pd.discountedSuiMist);
+					if (!Number.isFinite(directMist) || !Number.isFinite(discountedMist)) return;
+					var directSui = directMist / 1e9;
+					var discountedSui = discountedMist / 1e9;
+					var savingsPercent = pd.savingsPercent || 25;
+					var suiPriceUsd = (pd.breakdown && pd.breakdown.suiPriceUsd) || 1;
+					var premiumUsd = (pd.breakdown && pd.breakdown.premiumUsd) || 0;
+
+				var el = function(id) { return document.getElementById(id); };
+				var standardLabelEl = el('standard-price-label');
+				if (standardLabelEl) standardLabelEl.textContent = NAME_LENGTH + '-char list price';
+				var directPriceEl = el('direct-price');
+				if (directPriceEl) { directPriceEl.textContent = directSui.toFixed(2) + ' SUI'; directPriceEl.classList.add('strikethrough'); }
+				var savingsBadge = el('savings-badge');
+				if (savingsBadge) savingsBadge.style.display = 'inline-flex';
+				var savingsPercentEl = el('savings-percent');
+				if (savingsPercentEl) savingsPercentEl.textContent = '~' + Math.round(savingsPercent) + '%';
+				var discountedPriceEl = el('discounted-price');
+				if (discountedPriceEl) discountedPriceEl.textContent = '-' + (directSui - discountedSui).toFixed(2) + ' SUI';
+				var premiumRowEl = el('premium-row');
+				var premiumPriceEl = el('premium-price');
+				if (premiumUsd > 0 && premiumRowEl && premiumPriceEl) {
+					premiumRowEl.style.display = 'flex';
+					premiumPriceEl.textContent = '+' + (premiumUsd / suiPriceUsd).toFixed(2) + ' SUI';
+				} else if (premiumRowEl) { premiumRowEl.style.display = 'none'; }
+				var totalPriceEl = el('total-price');
+				if (totalPriceEl) totalPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
+				var registerPriceEl = el('register-price');
+				if (registerPriceEl) registerPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
+				var priceUsdEl = el('register-price-usd');
+				if (priceUsdEl) {
+					var yearLabel = selectedYears === 1 ? '1 year' : selectedYears + ' years';
+					priceUsdEl.textContent = '~$' + (discountedSui * suiPriceUsd).toFixed(2) + ' USD \\u00b7 ' + yearLabel;
+				}
+			}
+
+				function fallbackFetchPricing() {
+					fetch('/api/pricing?domain=' + encodeURIComponent(NAME) + '&years=' + selectedYears)
+						.then(function(r) {
+							if (!r.ok) throw new Error('Pricing request failed (' + r.status + ')');
+							return r.json();
+						})
+						.then(function(data) {
+							if (!isValidPricingPayload(data)) throw new Error('Invalid pricing payload');
+							window.__suiskiPricingData = data;
+							fallbackUpdatePriceDisplay(data);
+						})
+						.catch(function(error) { console.warn('Fallback pricing fetch failed:', error); });
+				}
+
+			var durationPills = document.getElementById('duration-pills');
+			if (durationPills) {
+				durationPills.addEventListener('click', function(e) {
+					var pill = e.target.closest && e.target.closest('.duration-pill');
+					if (!pill) return;
+					var years = parseInt(pill.dataset.years, 10);
+					if (years === selectedYears) return;
+					selectedYears = years;
+					durationPills.querySelectorAll('.duration-pill').forEach(function(p) { p.classList.remove('active'); });
+					pill.classList.add('active');
+					if (!window.__suiskiModuleLoaded) fallbackFetchPricing();
+				});
+			}
+
+			setTimeout(function() {
+				if (!window.__suiskiModuleLoaded) fallbackFetchPricing();
+			}, 2000);
+
+			fallbackFetchPricing();
+		})();
+	</script>
+		<script type="module">
+		let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, Transaction, ALLOWED_METADATA, SuinsClient, SuinsTransaction;
+		{
+			const SDK_TIMEOUT = 15000;
+			const timedImport = (url) => Promise.race([
+				import(url),
+				new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
+			]);
+			const results = await Promise.allSettled([
+				timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
+				timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
+				timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
+				timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
+			]);
+			if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
+			if (results[1].status === 'fulfilled') ({ getJsonRpcFullnodeUrl, SuiJsonRpcClient } = results[1].value);
+			if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value);
+			if (results[3].status === 'fulfilled') ({ ALLOWED_METADATA, SuinsClient, SuinsTransaction } = results[3].value);
+			const failed = results.filter(r => r.status === 'rejected');
+			if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
+		}
+		${generateWalletCookieJs()}
+		window.__suiskiModuleLoaded = true;
 
 		const NAME = ${serializeJson(cleanName)};
 		const NETWORK = ${serializeJson(network)};
@@ -1074,6 +1674,10 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
 		const RPC_URL = RPC_URLS[NETWORK] || RPC_URLS.mainnet;
 		const SERVICE_FEE_NAME = ${serializeJson(env.SERVICE_FEE_NAME || null)};
+		const SUBDOMAINS_PACKAGE = ${serializeJson(env.SUBNAMECAP_SUBDOMAINS_PACKAGE_ID || null)};
+		const SUINS_OBJECT = ${serializeJson(env.SUBNAMECAP_SUINS_OBJECT_ID || null)};
+		const FEE_JACKET_PACKAGE = ${serializeJson(env.JACKET_FEE_PACKAGE_ID || null)};
+		const SINGLE_USE_JACKET_PACKAGE = ${serializeJson(env.JACKET_SINGLE_USE_PACKAGE_ID || null)};
 		const NAME_LENGTH = NAME.length;
 
 		// ========== PRICING ==========
@@ -1084,10 +1688,34 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		const premiumRowEl = document.getElementById('premium-row');
 		const totalPriceEl = document.getElementById('total-price');
 
+			function isValidPricingPayload(pd) {
+				const sharedValidator = window.__suiskiIsValidPricingPayload;
+				if (typeof sharedValidator === 'function') {
+					return sharedValidator(pd);
+				}
+				const suiPerNs =
+					pd && typeof pd.suiPerNs === 'string' ? Number(pd.suiPerNs) : pd && pd.suiPerNs;
+				return !!pd &&
+					typeof pd === 'object' &&
+					pd.directSuiMist != null &&
+					pd.discountedSuiMist != null &&
+					pd.nsNeededMist != null &&
+					Number.isFinite(suiPerNs) &&
+					suiPerNs > 0;
+			}
+
 		async function fetchEnhancedPricing() {
 			try {
-				const pricingRes = await fetch('/api/pricing?domain=' + encodeURIComponent(NAME) + '&years=1');
-				pricingData = await pricingRes.json();
+				const pricingRes = await fetch('/api/pricing?domain=' + encodeURIComponent(NAME) + '&years=' + selectedYears);
+				if (!pricingRes.ok) {
+					throw new Error('Pricing request failed (' + pricingRes.status + ')');
+				}
+				const data = await pricingRes.json();
+				if (!isValidPricingPayload(data)) {
+					throw new Error('Invalid pricing payload');
+				}
+				pricingData = data;
+				window.__suiskiPricingData = data;
 				console.log('Pricing data:', pricingData);
 				updatePriceDisplay();
 				updateRegisterButton();
@@ -1102,13 +1730,20 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				const client = new SuiJsonRpcClient({ url: RPC_URL });
 				const suinsClient = new SuinsClient({ client, network: NETWORK });
 				const domain = NAME + '.sui';
-				const priceInMist = await suinsClient.calculatePrice({ domain, years: 1 });
+				let priceInMist;
+				try {
+					priceInMist = await suinsClient.calculatePrice({ name: domain, years: selectedYears });
+				} catch {
+					priceInMist = await suinsClient.calculatePrice({ domain, years: selectedYears });
+				}
+				const normalizedPriceInMist =
+					typeof priceInMist === 'bigint' ? priceInMist : BigInt(priceInMist);
 
 				pricingData = {
-					directSuiMist: String(priceInMist),
-					discountedSuiMist: String(BigInt(priceInMist) * 80n / 100n),
-					nsNeededMist: String(BigInt(priceInMist) * 75n * 50n / 1000n),
-					savingsMist: String(BigInt(priceInMist) * 20n / 100n),
+					directSuiMist: String(normalizedPriceInMist),
+					discountedSuiMist: String((normalizedPriceInMist * 80n) / 100n),
+					nsNeededMist: String((normalizedPriceInMist * 75n * 50n) / 1000n),
+					savingsMist: String((normalizedPriceInMist * 20n) / 100n),
 					savingsPercent: 20,
 					nsPerSui: 50,
 					suiPerNs: 0.02,
@@ -1122,78 +1757,207 @@ export function generateRegistrationPage(name: string, env: Env): string {
 						swapSlippageBps: 100
 					}
 				};
+				window.__suiskiPricingData = pricingData;
 
 				updatePriceDisplay();
 				updateRegisterButton();
 			} catch (e2) {
 				console.error('SDK pricing also failed:', e2);
-				if (registerPriceEl) registerPriceEl.textContent = '-- SUI';
+				if (!isValidPricingPayload(pricingData) && registerPriceEl) registerPriceEl.textContent = '-- SUI';
 			}
 		}
 
 		function updatePriceDisplay() {
-			if (!pricingData) return;
+				if (!isValidPricingPayload(pricingData)) return;
 
-			const directSui = Number(pricingData.directSuiMist) / 1e9;
-			const discountedSui = Number(pricingData.discountedSuiMist) / 1e9;
-			const savingsPercent = pricingData.savingsPercent || 25;
-			const premiumUsd = pricingData.breakdown?.premiumUsd || 0;
-			const suiPriceUsd = pricingData.breakdown?.suiPriceUsd || 1;
+				const directMist = Number(pricingData.directSuiMist);
+				const discountedMist = Number(pricingData.discountedSuiMist);
+				if (!Number.isFinite(directMist) || !Number.isFinite(discountedMist)) return;
+				const directSui = directMist / 1e9;
+				const discountedSui = discountedMist / 1e9;
+				const savingsPercent = pricingData.savingsPercent || 25;
+				const premiumUsd = pricingData.breakdown?.premiumUsd || 0;
+				const suiPriceUsd = pricingData.breakdown?.suiPriceUsd || 1;
 
-			const savingsBanner = document.getElementById('savings-banner');
-			const savingsPercentEl = document.getElementById('savings-percent');
-			const discountedPriceEl = document.getElementById('discounted-price');
-			const discountRow = discountedPriceEl?.parentElement;
-			const priceUsdEl = document.getElementById('register-price-usd');
-			const standardLabelEl = document.getElementById('standard-price-label');
+				const savingsBadge = document.getElementById('savings-badge');
+				const savingsPercentEl = document.getElementById('savings-percent');
+				const discountedPriceEl = document.getElementById('discounted-price');
+				const priceUsdEl = document.getElementById('register-price-usd');
+				const standardLabelEl = document.getElementById('standard-price-label');
 
-			if (standardLabelEl) {
-				standardLabelEl.textContent = 'Standard ' + NAME_LENGTH + '-character SuiNS Price';
+				if (standardLabelEl) {
+					standardLabelEl.textContent = NAME_LENGTH + '-char list price';
+				}
+
+				if (directPriceEl) {
+					directPriceEl.textContent = directSui.toFixed(2) + ' SUI';
+					directPriceEl.classList.add('strikethrough');
+				}
+
+				if (savingsBadge) savingsBadge.style.display = 'inline-flex';
+				if (savingsPercentEl) savingsPercentEl.textContent = '~' + Math.round(savingsPercent) + '%';
+
+				const savingsSui = directSui - discountedSui;
+				if (discountedPriceEl) discountedPriceEl.textContent = '-' + savingsSui.toFixed(2) + ' SUI';
+
+				if (premiumUsd > 0 && premiumRowEl && premiumPriceEl) {
+					const premiumSui = premiumUsd / suiPriceUsd;
+					premiumRowEl.style.display = 'flex';
+					premiumPriceEl.textContent = '+' + premiumSui.toFixed(2) + ' SUI';
+				} else if (premiumRowEl) {
+					premiumRowEl.style.display = 'none';
+				}
+
+				if (totalPriceEl) totalPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
+				if (registerPriceEl) registerPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
+
+				const discountedUsd = discountedSui * suiPriceUsd;
+				const yearLabel = selectedYears === 1 ? '1 year' : selectedYears + ' years';
+				if (priceUsdEl) priceUsdEl.textContent = '~$' + discountedUsd.toFixed(2) + ' USD \u00b7 ' + yearLabel;
 			}
 
-			if (directPriceEl) {
-				directPriceEl.textContent = directSui.toFixed(2) + ' SUI';
-				directPriceEl.classList.add('strikethrough');
-			}
+		// ========== REGISTRATION OPTIONS ==========
+		let selectedYears = 1;
+		let setPrimary = true;
+		let customTarget = null;
+		let avatarUrl = null;
+		let contentHash = null;
+		var createSubnameCap = false;
+		var jacketType = 'none';
+		var leafFee = null;
+		var feeRecipient = null;
+		var singleUseRecipient = null;
 
-			if (savingsBanner) savingsBanner.style.display = 'flex';
-			if (savingsPercentEl) savingsPercentEl.textContent = '~' + Math.round(savingsPercent) + '%';
-			if (discountRow) discountRow.style.display = 'flex';
-			const savingsSui = directSui - discountedSui;
-			if (discountedPriceEl) discountedPriceEl.textContent = '-' + savingsSui.toFixed(2) + ' SUI';
+		if (isValidPricingPayload(window.__suiskiPricingData)) {
+			pricingData = window.__suiskiPricingData;
+			updatePriceDisplay();
+		}
 
-			if (premiumUsd > 0 && premiumRowEl && premiumPriceEl) {
-				const premiumSui = premiumUsd / suiPriceUsd;
-				premiumRowEl.style.display = 'flex';
-				premiumPriceEl.textContent = '+' + premiumSui.toFixed(2) + ' SUI';
-			} else if (premiumRowEl) {
-				premiumRowEl.style.display = 'none';
-			}
+		const durationPills = document.getElementById('duration-pills');
+		const optPrimary = document.getElementById('opt-primary');
+		const optCustomTarget = document.getElementById('opt-custom-target');
+		const customTargetRow = document.getElementById('custom-target-row');
+		const optTargetAddress = document.getElementById('opt-target-address');
+		const optAvatar = document.getElementById('opt-avatar');
+		const optContentHash = document.getElementById('opt-content-hash');
 
-			if (totalPriceEl) totalPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
-			if (registerPriceEl) registerPriceEl.textContent = discountedSui.toFixed(2) + ' SUI';
+		if (durationPills) {
+			durationPills.addEventListener('click', (e) => {
+				const pill = e.target.closest('.duration-pill');
+				if (!pill) return;
+				const years = parseInt(pill.dataset.years, 10);
+				if (years === selectedYears) return;
+				selectedYears = years;
+				durationPills.querySelectorAll('.duration-pill').forEach(p => p.classList.remove('active'));
+				pill.classList.add('active');
+				fetchEnhancedPricing();
+			});
+		}
 
-			const discountedUsd = discountedSui * suiPriceUsd;
-			if (priceUsdEl) priceUsdEl.textContent = '~$' + discountedUsd.toFixed(2) + ' USD \u00b7 1 year';
+		if (optPrimary) {
+			optPrimary.addEventListener('change', () => {
+				setPrimary = optPrimary.checked;
+			});
+		}
+
+		if (optCustomTarget) {
+			optCustomTarget.addEventListener('change', () => {
+				const isCustom = optCustomTarget.checked;
+				if (customTargetRow) customTargetRow.classList.toggle('visible', isCustom);
+				if (isCustom) {
+					setPrimary = false;
+					if (optPrimary) { optPrimary.checked = false; optPrimary.disabled = true; }
+				} else {
+					customTarget = null;
+					if (optTargetAddress) optTargetAddress.value = '';
+					if (optPrimary) { optPrimary.disabled = false; }
+				}
+			});
+		}
+
+		if (optTargetAddress) {
+			optTargetAddress.addEventListener('input', () => {
+				const val = optTargetAddress.value.trim();
+				customTarget = val || null;
+			});
+		}
+
+		if (optAvatar) {
+			optAvatar.addEventListener('input', () => {
+				const val = optAvatar.value.trim();
+				avatarUrl = val || null;
+			});
+		}
+
+		if (optContentHash) {
+			optContentHash.addEventListener('input', () => {
+				const val = optContentHash.value.trim();
+				contentHash = val || null;
+			});
+		}
+
+		const subnameCapSection = document.getElementById('subname-cap-section');
+		const optSubnameCap = document.getElementById('opt-subname-cap');
+		const jacketOptions = document.getElementById('jacket-options');
+		const jacketTypePills = document.getElementById('jacket-type-pills');
+		const jacketFeeConfig = document.getElementById('jacket-fee-config');
+		const jacketSingleUseConfig = document.getElementById('jacket-single-use-config');
+		const optLeafFee = document.getElementById('opt-leaf-fee');
+		const optFeeRecipient = document.getElementById('opt-fee-recipient');
+		const optSingleUseRecipient = document.getElementById('opt-single-use-recipient');
+
+		if (SUBDOMAINS_PACKAGE && SUINS_OBJECT && subnameCapSection) {
+			subnameCapSection.style.display = 'flex';
+		}
+
+		if (optSubnameCap) {
+			optSubnameCap.addEventListener('change', () => {
+				createSubnameCap = optSubnameCap.checked;
+				if (jacketOptions) jacketOptions.style.display = createSubnameCap ? 'block' : 'none';
+			});
+		}
+
+		if (jacketTypePills) {
+			jacketTypePills.addEventListener('click', (e) => {
+				const pill = e.target.closest('.jacket-pill');
+				if (!pill) return;
+				jacketType = pill.dataset.jacket;
+				jacketTypePills.querySelectorAll('.jacket-pill').forEach(p => p.classList.remove('active'));
+				pill.classList.add('active');
+				if (jacketFeeConfig) jacketFeeConfig.classList.toggle('visible', jacketType === 'fee');
+				if (jacketSingleUseConfig) jacketSingleUseConfig.classList.toggle('visible', jacketType === 'single-use');
+			});
+		}
+
+		if (optLeafFee) {
+			optLeafFee.addEventListener('input', () => { leafFee = optLeafFee.value.trim() || null; });
+		}
+		if (optFeeRecipient) {
+			optFeeRecipient.addEventListener('input', () => { feeRecipient = optFeeRecipient.value.trim() || null; });
+		}
+		if (optSingleUseRecipient) {
+			optSingleUseRecipient.addEventListener('input', () => { singleUseRecipient = optSingleUseRecipient.value.trim() || null; });
 		}
 
 		fetchEnhancedPricing();
 
 		// ========== WALLET CONNECTION ==========
-		const globalWalletWidget = document.getElementById('global-wallet-widget');
-		const globalWalletBtn = document.getElementById('global-wallet-btn');
-		const globalWalletText = document.getElementById('global-wallet-text');
-		const globalWalletDropdown = document.getElementById('global-wallet-dropdown');
-		const walletModal = document.getElementById('wallet-modal');
-		const walletModalClose = document.getElementById('wallet-modal-close');
-		const walletList = document.getElementById('wallet-list');
+			const globalWalletWidget = document.getElementById('global-wallet-widget');
+			const globalWalletBtn = document.getElementById('global-wallet-btn');
+			const globalWalletProfileBtn = document.getElementById('global-wallet-profile-btn');
+			const globalWalletText = document.getElementById('global-wallet-text');
+			const globalWalletDropdown = document.getElementById('global-wallet-dropdown');
+			const walletModal = document.getElementById('wallet-modal');
+			const walletModalClose = document.getElementById('wallet-modal-close');
+			const walletList = document.getElementById('wallet-list');
 		const registerBtn = document.getElementById('register-btn');
 		const registerBtnText = document.getElementById('register-btn-text');
 		const registerStatus = document.getElementById('register-status');
 
-		let connectedWallet = null;
-		let connectedAccount = null;
-		let connectedAddress = null;
+			let connectedWallet = null;
+			let connectedAccount = null;
+			let connectedAddress = null;
+			let resolvedPrimaryName = null;
 
 		// Wallet Standard API (proper implementation)
 		let walletsApi = null;
@@ -1216,13 +1980,28 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		function getSuiWallets() {
 			const wallets = [];
 			const seenNames = new Set();
+			const isSuiCapableWallet = (wallet) => {
+				if (!wallet) return false;
+				const features = wallet.features || {};
+				const hasSuiChain = Array.isArray(wallet.chains) && wallet.chains.some(chain => chain.startsWith('sui:'));
+				const hasConnect = !!(features['standard:connect'] || wallet.connect);
+				const hasSuiTxFeature = !!(
+					features['sui:signAndExecuteTransactionBlock'] ||
+					features['sui:signAndExecuteTransaction'] ||
+					features['sui:signTransaction'] ||
+					wallet.signAndExecuteTransactionBlock ||
+					wallet.signAndExecuteTransaction ||
+					wallet.signTransaction
+				);
+				return hasSuiChain || (hasConnect && hasSuiTxFeature);
+			};
 
 			// First, try wallet-standard registry
 			if (walletsApi) {
 				try {
 					const standardWallets = walletsApi.get();
 					for (const wallet of standardWallets) {
-						if (wallet.chains?.some(chain => chain.startsWith('sui:'))) {
+						if (isSuiCapableWallet(wallet)) {
 							wallets.push(wallet);
 							seenNames.add(wallet.name);
 						}
@@ -1232,16 +2011,32 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				}
 			}
 
+			// Fallback: scan registry exposed by some wallet injectors
+			const injectedWallets = Array.isArray(window.__sui_wallets__) ? window.__sui_wallets__ : [];
+			for (const wallet of injectedWallets) {
+				if (!wallet || !isSuiCapableWallet(wallet)) continue;
+				const walletName = wallet.name || 'Sui Wallet';
+				if (seenNames.has(walletName)) continue;
+				wallets.push(wallet);
+				seenNames.add(walletName);
+			}
+
 			// Fallback: check window globals for common Sui wallets
 			const windowWallets = [
 				{ check: () => window.phantom?.sui, name: 'Phantom', icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4Ij48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjNTM0QkI1Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNTUxQkY5Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjEyOCIgaGVpZ2h0PSIxMjgiIGZpbGw9InVybCgjYSkiIHJ4PSIyNCIvPjxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0xMTAuNCw2NC4xYy0uMy0xNS44LTEyLjQtMjguMi0yNy4zLTI4LjVIMjcuNmMtMy4yLDAtNS44LDIuNi01LjgsNS44djg1LjRjMCwxLjQuNCwyLjguNiw0LjIuMi40LjQsLjguNSwxLjNsMCwwYy4xLjMuMi43LjQsMS4xLjIuNS41LDEsLjgsMS41LjMuNi43LDEuMSwxLjEsMS43bDAsMGMuNS43LDEuMSwxLjMsMS43LDEuOWwwLDBjLjcuNywxLjUsMS4zLDIuMywxLjhsLjEuMWMuOC41LDEuNiwuOSwyLjUsMS4yLjMuMS42LjIuOS4zaDBoMC4xYy42LjIsMS4yLjMsMS44LjRoMGMuMSwwLC4yLDAsLjMsMCwuNS4xLDEuMS4xLDEuNi4xaDYxLjljMy4yLDAsNS44LTIuNiw1LjgtNS44VjY0LjFoMFoiLz48L3N2Zz4=' },
 				{ check: () => window.suiWallet, name: 'Sui Wallet', icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cmVjdCB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIGZpbGw9IiM2RkJDRjAiIHJ4PSI4Ii8+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTI4LjYsMTUuM2MtLjktMy4yLTQuNi01LjUtOS4yLTUuNXMtOC4zLDIuMy05LjIsNS41Yy0uMi44LS4zLDEuNi0uMywyLjRzLjEsMS43LjMsMi41Yy45LDMuMiw0LjYsNS41LDkuMiw1LjVzOC4zLTIuMyw5LjItNS41Yy4yLS44LjMtMS42LjMtMi41cy0uMS0xLjYtLjMtMi40WiIvPjxwYXRoIGZpbGw9IiM2RkJDRjAiIGQ9Ik0xOS40LDE0LjVjLTIuNCwwLTQuMywxLjQtNC4zLDMuMXMxLjksMy4xLDQuMywzLjEsNC4zLTEuNCw0LjMtMy4xLTEuOS0zLjEtNC4zLTMuMVoiLz48L3N2Zz4=' },
+				{ check: () => window.slush, name: 'Slush', icon: 'https://slush.app/favicon.ico' },
+				{ check: () => window.suiet, name: 'Suiet', icon: 'https://suiet.app/favicon.ico' },
+				{ check: () => window.martian?.sui, name: 'Martian', icon: 'https://martianwallet.xyz/favicon.ico' },
+				{ check: () => window.ethos, name: 'Ethos', icon: 'https://ethoswallet.xyz/favicon.ico' },
+				{ check: () => window.okxwallet?.sui, name: 'OKX Wallet', icon: 'https://static.okx.com/cdn/assets/imgs/226/EB771A4D4E5CC234.png' },
 			];
 
 			for (const wc of windowWallets) {
 				try {
 					const wallet = wc.check();
 					if (wallet && !seenNames.has(wc.name)) {
+						if (!isSuiCapableWallet(wallet)) continue;
 						// Wrap window wallet to match wallet-standard interface
 						wallets.push({
 							name: wc.name,
@@ -1337,6 +2132,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				connectedWallet = wallet;
 				connectedAccount = accounts[0];
 				connectedAddress = accounts[0].address;
+				setWalletCookie(wallet.name, connectedAddress);
 
 				walletModal.classList.remove('open');
 				updateWalletUI();
@@ -1354,15 +2150,16 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			connectedWallet = null;
 			connectedAccount = null;
 			connectedAddress = null;
+			clearWalletCookie();
 			updateWalletUI();
 			updateRegisterButton();
 		}
 
 		const nameCache = new Map();
 
-		async function fetchPrimaryName(address) {
-			if (!address) return null;
-			if (nameCache.has(address)) return nameCache.get(address);
+			async function fetchPrimaryName(address) {
+				if (!address) return null;
+				if (nameCache.has(address)) return nameCache.get(address);
 			try {
 				const suiClient = new SuiJsonRpcClient({ url: RPC_URL });
 				const result = await suiClient.resolveNameServiceNames({ address, limit: 1 });
@@ -1372,24 +2169,47 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			} catch (e) {
 				console.error('Failed to fetch primary name:', e);
 				return null;
+				}
 			}
-		}
 
-		function updateWalletUI() {
-			if (!connectedAddress) {
-				globalWalletBtn.classList.remove('connected');
-				globalWalletText.textContent = 'Connect';
-				globalWalletDropdown.innerHTML = '';
-			} else {
-				const shortAddr = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
-				globalWalletBtn.classList.add('connected');
-				globalWalletText.textContent = shortAddr;
+			function getWalletProfileHref() {
+				if (resolvedPrimaryName) {
+					return 'https://' + encodeURIComponent(resolvedPrimaryName) + '.sui.ski';
+				}
+				return 'https://sui.ski';
+			}
 
-				fetchPrimaryName(connectedAddress).then(name => {
-					if (name && connectedAddress) {
-						globalWalletText.textContent = '@' + name.replace(/\\.sui$/, '');
-					}
-				});
+			function updateWalletProfileButton() {
+				if (!globalWalletProfileBtn) return;
+				const href = getWalletProfileHref();
+				globalWalletProfileBtn.dataset.href = href;
+				globalWalletProfileBtn.title = resolvedPrimaryName
+					? 'View my primary profile'
+					: 'Go to sui.ski';
+			}
+
+			function updateWalletUI() {
+				if (!connectedAddress) {
+					resolvedPrimaryName = null;
+					globalWalletBtn.classList.remove('connected');
+					globalWalletText.textContent = 'Connect';
+					globalWalletDropdown.innerHTML = '';
+					updateWalletProfileButton();
+				} else {
+					const shortAddr = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
+					const lookupAddress = connectedAddress;
+					resolvedPrimaryName = null;
+					globalWalletBtn.classList.add('connected');
+					globalWalletText.textContent = shortAddr;
+					updateWalletProfileButton();
+
+						fetchPrimaryName(lookupAddress).then(name => {
+							if (name && connectedAddress && connectedAddress === lookupAddress) {
+								resolvedPrimaryName = name.replace(/\\.sui$/i, '');
+								globalWalletText.textContent = '@' + name.replace(/\\.sui$/, '');
+								updateWalletProfileButton();
+							}
+						});
 
 				globalWalletDropdown.innerHTML =
 					'<div class="global-wallet-dropdown-addr">' + connectedAddress + '</div>' +
@@ -1407,22 +2227,23 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					disconnectWallet();
 					setTimeout(() => openWalletModal(), 100);
 				});
-				document.getElementById('gw-disconnect')?.addEventListener('click', () => {
-					globalWalletWidget.classList.remove('open');
-					disconnectWallet();
-				});
+					document.getElementById('gw-disconnect')?.addEventListener('click', () => {
+						globalWalletWidget.classList.remove('open');
+						disconnectWallet();
+					});
+				}
 			}
-		}
 
 		function updateRegisterButton() {
 			if (!registerBtn || !registerBtnText) return;
 			if (connectedAddress) {
 				let priceText = '...';
-				if (pricingData) {
+				if (isValidPricingPayload(pricingData)) {
 					const discountedSui = Number(pricingData.discountedSuiMist) / 1e9;
 					priceText = discountedSui.toFixed(2) + ' SUI';
 				}
-				registerBtnText.textContent = 'Register ' + NAME + '.sui for ' + priceText;
+				const yearSuffix = selectedYears === 1 ? ' · 1 yr' : ' · ' + selectedYears + ' yrs';
+				registerBtnText.textContent = 'Register ' + NAME + '.sui for ' + priceText + yearSuffix;
 				registerBtn.classList.remove('compact');
 			} else {
 				registerBtnText.textContent = 'Connect Wallet';
@@ -1448,6 +2269,38 @@ export function generateRegistrationPage(name: string, env: Env): string {
 
 		function hideRegisterStatus() {
 			if (registerStatus) registerStatus.className = 'register-status';
+		}
+
+		function renderTxExplorerChoices(digest) {
+			const encodedDigest = encodeURIComponent(String(digest || ''));
+			if (!encodedDigest) return '';
+
+			const explorerLinks = [
+				{
+					label: 'Suiscan',
+					url: 'https://suiscan.xyz/' + NETWORK + '/tx/' + encodedDigest,
+				},
+				{
+					label: 'Sui Explorer',
+					url: 'https://suiexplorer.com/txblock/' + encodedDigest + '?network=' + NETWORK,
+				},
+			];
+
+			if (NETWORK === 'mainnet') {
+				explorerLinks.push({
+					label: 'Suivision',
+					url: 'https://suivision.xyz/txblock/' + encodedDigest,
+				});
+			}
+
+			return '<div style="margin: 12px 0 8px; text-align: center;">' +
+				'<div style="color: var(--muted); font-size: 0.85rem; margin-bottom: 6px;">Choose explorer:</div>' +
+				'<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center;">' +
+				explorerLinks.map((link) =>
+					'<a href="' + link.url + '" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;">View on ' + link.label + '</a>'
+				).join('<span style="color: var(--muted);">•</span>') +
+				'</div>' +
+			'</div>';
 		}
 
 		// ========== REGISTRATION ==========
@@ -1646,16 +2499,6 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			pendingTransaction = null;
 			pendingTxBytes = null;
 		}
-		function wrapTxBytes(bytes) {
-			return {
-				serialize() {
-					return bytes;
-				},
-				toJSON() {
-					return btoa(String.fromCharCode.apply(null, Array.from(bytes)));
-				}
-			};
-		}
 		function bytesToBase64(bytes) {
 			return btoa(String.fromCharCode.apply(null, Array.from(bytes)));
 		}
@@ -1663,10 +2506,104 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			const provider = window.phantom?.sui;
 			return provider?.isPhantom ? provider : null;
 		}
+		async function executeWalletTx(tx, client) {
+			const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+			const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
+			const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+
+			const txBytes = await tx.build({ client });
+
+			if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+				return await signExecBlockFeature.signAndExecuteTransactionBlock({
+					transactionBlock: txBytes,
+					account: connectedAccount,
+					chain,
+				});
+			}
+
+			if (signExecFeature?.signAndExecuteTransaction) {
+				return await signExecFeature.signAndExecuteTransaction({
+					transaction: Transaction.from(txBytes),
+					account: connectedAccount,
+					chain,
+				});
+			}
+
+			const phantomProvider = getPhantomProvider();
+			if (phantomProvider?.signAndExecuteTransactionBlock) {
+				try {
+					return await phantomProvider.signAndExecuteTransactionBlock({
+						transactionBlock: txBytes,
+					});
+				} catch (e) {
+					return await phantomProvider.signAndExecuteTransactionBlock({
+						transactionBlock: bytesToBase64(txBytes),
+					});
+				}
+			}
+
+			if (window.suiWallet?.signAndExecuteTransactionBlock) {
+				return await window.suiWallet.signAndExecuteTransactionBlock({
+					transactionBlock: txBytes,
+				});
+			}
+
+			throw new Error('No compatible Sui wallet found');
+		}
+		async function executeWalletTxFromBytes(txBytes) {
+			const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+			const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
+			const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+
+			if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+				return await signExecBlockFeature.signAndExecuteTransactionBlock({
+					transactionBlock: txBytes,
+					account: connectedAccount,
+					chain,
+				});
+			}
+
+			if (signExecFeature?.signAndExecuteTransaction) {
+				return await signExecFeature.signAndExecuteTransaction({
+					transaction: Transaction.from(txBytes),
+					account: connectedAccount,
+					chain,
+				});
+			}
+
+			const phantomProvider = getPhantomProvider();
+			if (phantomProvider?.signAndExecuteTransactionBlock) {
+				try {
+					return await phantomProvider.signAndExecuteTransactionBlock({
+						transactionBlock: txBytes,
+					});
+				} catch (e) {
+					return await phantomProvider.signAndExecuteTransactionBlock({
+						transactionBlock: bytesToBase64(txBytes),
+					});
+				}
+			}
+
+			if (window.suiWallet?.signAndExecuteTransactionBlock) {
+				return await window.suiWallet.signAndExecuteTransactionBlock({
+					transactionBlock: txBytes,
+				});
+			}
+
+			throw new Error('No compatible Sui wallet found');
+		}
 
 		function updateTxPreviewUI({ suiAmount, nsAmount, domain, recipient, gasFee, simulationOk, error }) {
 			const txSwapRow = document.getElementById('tx-swap-row');
 			const txPaymentAmount = document.getElementById('tx-payment-amount');
+			const txDurationEl = document.getElementById('tx-duration');
+			const txPrimaryRow = document.getElementById('tx-primary-row');
+			const txPrimaryName = document.getElementById('tx-primary-name');
+			const txAvatarRow = document.getElementById('tx-avatar-row');
+			const txAvatarUrl = document.getElementById('tx-avatar-url');
+			const txContentRow = document.getElementById('tx-content-row');
+			const txContentValue = document.getElementById('tx-content-value');
+
 			if (nsAmount && txSwapAmount && txNsAmount && txSwapRow) {
 				txSwapAmount.textContent = suiAmount;
 				txNsAmount.textContent = nsAmount;
@@ -1676,10 +2613,41 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			}
 			if (txPaymentAmount) txPaymentAmount.textContent = suiAmount;
 			if (txDomainName) txDomainName.textContent = domain;
+			if (txDurationEl) txDurationEl.textContent = selectedYears === 1 ? '1 year' : selectedYears + ' years';
 			if (txRecipient) txRecipient.textContent = recipient.slice(0, 8) + '...' + recipient.slice(-6);
 			if (txTotalSui) txTotalSui.textContent = suiAmount;
 			if (txGasFee) txGasFee.textContent = gasFee;
 			if (txReceiveNft) txReceiveNft.textContent = domain + '.sui NFT';
+
+			if (txPrimaryRow) {
+				const showPrimary = setPrimary && !customTarget;
+				txPrimaryRow.style.display = showPrimary ? 'flex' : 'none';
+				if (txPrimaryName) txPrimaryName.textContent = domain;
+			}
+			if (txAvatarRow) {
+				txAvatarRow.style.display = avatarUrl ? 'flex' : 'none';
+				if (txAvatarUrl && avatarUrl) txAvatarUrl.textContent = avatarUrl.length > 40 ? avatarUrl.slice(0, 37) + '...' : avatarUrl;
+			}
+			if (txContentRow) {
+				txContentRow.style.display = contentHash ? 'flex' : 'none';
+				if (txContentValue && contentHash) txContentValue.textContent = contentHash.length > 40 ? contentHash.slice(0, 37) + '...' : contentHash;
+			}
+
+			const txSubnameCapRow = document.getElementById('tx-subnamecap-row');
+			const txSubnameCapDesc = document.getElementById('tx-subnamecap-desc');
+			if (txSubnameCapRow) {
+				txSubnameCapRow.style.display = createSubnameCap ? 'flex' : 'none';
+				if (txSubnameCapDesc && createSubnameCap) {
+					if (jacketType === 'fee') {
+						txSubnameCapDesc.textContent = 'Fee Jacket (' + (leafFee || '0') + ' SUI per subname) \u2192 you';
+					} else if (jacketType === 'single-use') {
+						const target = singleUseRecipient || 'you';
+						txSubnameCapDesc.textContent = 'Single-use voucher \u2192 ' + (target.length > 20 ? target.slice(0, 17) + '...' : target);
+					} else {
+						txSubnameCapDesc.textContent = 'Raw SubnameCap \u2192 you';
+					}
+				}
+			}
 
 			if (simulationOk) {
 				if (txSimulationStatus) {
@@ -1733,10 +2701,10 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				return;
 			}
 
-			if (!pricingData) {
+			if (!isValidPricingPayload(pricingData)) {
 				showRegisterStatus('Loading pricing...', 'info');
 				await fetchEnhancedPricing();
-				if (!pricingData) {
+				if (!isValidPricingPayload(pricingData)) {
 					showRegisterStatus('Failed to load pricing. Please refresh.', 'error');
 					return;
 				}
@@ -1827,101 +2795,141 @@ export function generateRegistrationPage(name: string, env: Env): string {
 
 				tx.transferObjects([nsLeftoverSui, nsLeftoverDeep], connectedAddress);
 
+				let recipientAddress = connectedAddress;
+				if (customTarget) {
+					registerBtnText.textContent = 'Resolving recipient...';
+					if (customTarget.startsWith('0x') && customTarget.length >= 42) {
+						recipientAddress = customTarget;
+					} else {
+						const targetName = customTarget.endsWith('.sui') ? customTarget : customTarget + '.sui';
+						const nameRecord = await suinsClient.getNameRecord(targetName);
+						if (!nameRecord?.targetAddress) throw new Error('Could not resolve ' + targetName);
+						recipientAddress = nameRecord.targetAddress;
+					}
+					registerBtnText.textContent = 'Building transaction...';
+				}
+
 				const suinsTx = new SuinsTransaction(suinsClient, tx);
 				const nft = suinsTx.register({
 					domain,
-					years: 1,
+					years: selectedYears,
 					coinConfig: nsCoinConfig,
 					coin: nsCoin,
 					priceInfoObjectId,
 				});
 				suinsTx.setTargetAddress({
 					nft,
-					address: connectedAddress,
+					address: recipientAddress,
 					isSubname: domain.replace(/\\.sui$/i, '').includes('.'),
 				});
-				tx.transferObjects([nft], connectedAddress);
 
-				let feeRecipient = connectedAddress;
+				if (setPrimary && !customTarget) {
+					suinsTx.setDefault(domain);
+				}
+
+				if (avatarUrl) {
+					suinsTx.setUserData({
+						nft,
+						key: ALLOWED_METADATA.avatar,
+						value: avatarUrl,
+						isSubname: false,
+					});
+				}
+
+				if (contentHash) {
+					suinsTx.setUserData({
+						nft,
+						key: ALLOWED_METADATA.contentHash,
+						value: contentHash,
+						isSubname: false,
+					});
+				}
+
+				if (createSubnameCap && SUBDOMAINS_PACKAGE && SUINS_OBJECT) {
+					const capResult = tx.moveCall({
+						target: SUBDOMAINS_PACKAGE + '::subdomains::create_subname_cap',
+						arguments: [
+							tx.object(SUINS_OBJECT),
+							nft,
+							tx.object(CLOCK_OBJECT),
+							tx.pure.bool(true),
+							tx.pure.bool(false),
+							tx.pure.bool(true),
+							tx.pure.bool(false),
+							tx.pure.option('u64', null),
+							tx.pure.option('u64', null),
+							tx.pure.option('u64', null),
+						],
+					});
+
+					if (jacketType === 'fee' && FEE_JACKET_PACKAGE) {
+						const feeMist = Math.round(parseFloat(leafFee || '0') * 1e9);
+						const adminCap = tx.moveCall({
+							target: FEE_JACKET_PACKAGE + '::fee_jacket::create',
+							arguments: [
+								capResult,
+								tx.pure.u64(feeMist),
+								tx.pure.u64(0),
+								tx.pure.address(feeRecipient || recipientAddress),
+							],
+						});
+						tx.transferObjects([adminCap], recipientAddress);
+					} else if (jacketType === 'single-use' && SINGLE_USE_JACKET_PACKAGE) {
+						const jacket = tx.moveCall({
+							target: SINGLE_USE_JACKET_PACKAGE + '::single_use_jacket::create',
+							arguments: [capResult],
+						});
+						let resolvedSingleUseRecipient = recipientAddress;
+						if (singleUseRecipient) {
+							if (singleUseRecipient.startsWith('0x') && singleUseRecipient.length >= 42) {
+								resolvedSingleUseRecipient = singleUseRecipient;
+							} else {
+								const singleUseName = singleUseRecipient.endsWith('.sui') ? singleUseRecipient : singleUseRecipient + '.sui';
+								const singleUseRecord = await suinsClient.getNameRecord(singleUseName);
+								if (!singleUseRecord?.targetAddress) throw new Error('Could not resolve ' + singleUseName);
+								resolvedSingleUseRecipient = singleUseRecord.targetAddress;
+							}
+						}
+						tx.transferObjects([jacket], resolvedSingleUseRecipient);
+					} else {
+						tx.transferObjects([capResult], recipientAddress);
+					}
+				}
+
+				tx.transferObjects([nft], recipientAddress);
+
+				let serviceFeeRecipient = connectedAddress;
 				if (SERVICE_FEE_NAME) {
 					try {
 						const feeRecord = await suinsClient.getNameRecord(SERVICE_FEE_NAME);
-						if (feeRecord?.targetAddress) feeRecipient = feeRecord.targetAddress;
+						if (feeRecord?.targetAddress) serviceFeeRecipient = feeRecord.targetAddress;
 					} catch {}
 				}
-				tx.transferObjects([nsCoin], feeRecipient);
+				tx.transferObjects([nsCoin], serviceFeeRecipient);
 
 				tx.setGasBudget(100000000);
 
 				registerBtnText.textContent = 'Waiting for wallet...';
 
 				try {
-					const phantomProvider = getPhantomProvider();
-					let result;
-					const signExecFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction'];
-					const signExecBlockFeature = connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
-
-					// Wallet-standard features expect Transaction object directly (wallet handles serialization)
-					if (signExecFeature?.signAndExecuteTransaction) {
-						result = await signExecFeature.signAndExecuteTransaction({
-							transaction: tx,
-							account: connectedAccount,
-							chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-							options: { showEffects: true },
-						});
-					} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-						result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-							transactionBlock: tx,
-							account: connectedAccount,
-							chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-							options: { showEffects: true },
-						});
-					} else {
-						// Legacy/direct wallet access needs pre-built bytes
-						const txBytes = await tx.build({ client: suiClient });
-						if (phantomProvider?.signAndExecuteTransactionBlock) {
-							try {
-								result = await phantomProvider.signAndExecuteTransactionBlock({
-									transactionBlock: txBytes,
-									options: { showEffects: true }
-								});
-							} catch (e) {}
-							if (!result) {
-								result = await phantomProvider.signAndExecuteTransactionBlock({
-									transactionBlock: bytesToBase64(txBytes),
-									options: { showEffects: true }
-								});
-							}
-						} else if (window.phantom?.sui?.signAndExecuteTransactionBlock) {
-							result = await window.phantom.sui.signAndExecuteTransactionBlock({
-								transactionBlock: txBytes,
-								options: { showEffects: true }
-							});
-						} else if (window.suiWallet?.signAndExecuteTransactionBlock) {
-							result = await window.suiWallet.signAndExecuteTransactionBlock({
-								transactionBlock: tx,
-							});
-						} else {
-							throw new Error('No compatible Sui wallet found');
-						}
-					}
-
+					const result = await executeWalletTx(tx, suiClient);
 					console.log('Transaction result:', result);
 					const digest = result.digest || '';
-					const suiscanUrl = 'https://suiscan.xyz/' + NETWORK + '/tx/' + digest;
-					const txsenseUrl = 'https://txsense.netlify.app/?digest=' + digest;
+
+					const yearLabel = selectedYears === 1 ? '1 year' : selectedYears + ' years';
+					const primaryNote = (setPrimary && !customTarget) ? ' Primary name set.' : '';
+					const recipientNote = customTarget ? ' Sent to ' + escapeHtml(recipientAddress.slice(0, 8)) + '...' : '';
+
 					showRegisterStatus(
 						'<div style="text-align: center; margin-bottom: 12px;">' +
 						'<strong style="font-size: 1.1rem;">🎉 ' + NAME + '.sui is yours!</strong>' +
+						'<div style="color: var(--muted); font-size: 0.85rem; margin-top: 4px;">' + yearLabel + ' registration.' + primaryNote + recipientNote + '</div>' +
 						'</div>' +
-						'<iframe src="' + txsenseUrl + '" style="width: 100%; height: 300px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); margin: 12px 0;"></iframe>' +
+						renderTxExplorerChoices(digest) +
 						'<div style="display: flex; gap: 12px; justify-content: center; align-items: center; margin-top: 8px;">' +
-						'<a href="' + suiscanUrl + '" target="_blank" style="color: var(--accent); text-decoration: underline;">View on Suiscan</a>' +
-						'<button id="set-primary-after-register" style="background: linear-gradient(135deg, #60a5fa, #a78bfa); border: none; color: white; padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">Set as Primary Name</button>' +
 						'<a href="https://' + NAME + '.sui.ski" style="color: var(--success); text-decoration: underline; font-weight: 600;">Go to ' + NAME + '.sui →</a>' +
 						'</div>',
 						'success', true);
-					attachSetPrimaryHandler();
 					registerBtnText.textContent = 'Registered!';
 					registerBtn.disabled = true;
 
@@ -1952,45 +2960,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			}
 
 			try {
-				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
-
-				if (!signExecFeature && !signExecBlockFeature) {
-					const phantomProvider = getPhantomProvider();
-					if (!phantomProvider?.signAndExecuteTransactionBlock) {
-						throw new Error('Wallet does not support transaction signing');
-					}
-				}
-
-				const txWrapper = wrapTxBytes(pendingTxBytes);
-				const phantomProvider = getPhantomProvider();
-				let result;
-				if (signExecFeature?.signAndExecuteTransaction) {
-					result = await signExecFeature.signAndExecuteTransaction({
-						transaction: txWrapper,
-						account: connectedAccount,
-						chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-					});
-				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-						transactionBlock: txWrapper,
-						account: connectedAccount,
-						chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-					});
-				} else if (phantomProvider?.signAndExecuteTransactionBlock) {
-					try {
-						result = await phantomProvider.signAndExecuteTransactionBlock({
-							transactionBlock: pendingTxBytes,
-							options: { showEffects: true }
-						});
-					} catch (e) {}
-					if (!result) {
-						result = await phantomProvider.signAndExecuteTransactionBlock({
-							transactionBlock: bytesToBase64(pendingTxBytes),
-							options: { showEffects: true }
-						});
-					}
-				}
+				const result = await executeWalletTxFromBytes(pendingTxBytes);
 
 				hideTxPreview();
 
@@ -2002,18 +2972,18 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					}
 
 					const digest = result.digest;
-					const suiscanUrl = 'https://suiscan.xyz/' + NETWORK + '/tx/' + digest;
+					const confirmYearLabel = selectedYears === 1 ? '1 year' : selectedYears + ' years';
+					const confirmPrimaryNote = (setPrimary && !customTarget) ? ' Primary name set.' : '';
 					showRegisterStatus(
 						'<div style="text-align: center; margin-bottom: 12px;">' +
 						'<strong style="font-size: 1.1rem;">🎉 ' + NAME + '.sui is yours!</strong>' +
+						'<div style="color: var(--muted); font-size: 0.85rem; margin-top: 4px;">' + confirmYearLabel + ' registration.' + confirmPrimaryNote + '</div>' +
 						'</div>' +
+						renderTxExplorerChoices(digest) +
 						'<div style="display: flex; gap: 12px; justify-content: center; align-items: center; margin-top: 8px;">' +
-						'<a href="' + suiscanUrl + '" target="_blank" style="color: var(--accent); text-decoration: underline;">View on Suiscan</a>' +
-						'<button id="set-primary-after-register" style="background: linear-gradient(135deg, #60a5fa, #a78bfa); border: none; color: white; padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">Set as Primary Name</button>' +
 						'<a href="https://' + NAME + '.sui.ski" style="color: var(--success); text-decoration: underline; font-weight: 600;">Go to ' + NAME + '.sui →</a>' +
 						'</div>',
 						'success', true);
-					attachSetPrimaryHandler();
 				}
 
 			} catch (error) {
@@ -2033,81 +3003,6 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			}
 		}
 
-		async function setPrimaryName() {
-			if (!connectedAddress || !connectedWallet || !connectedAccount) return;
-
-			const btn = document.getElementById('set-primary-after-register');
-			if (!btn) return;
-
-			try {
-				btn.disabled = true;
-				btn.textContent = 'Setting primary...';
-
-				const suiClient = new SuiJsonRpcClient({ url: RPC_URL });
-				const suinsClient = new SuinsClient({ client: suiClient, network: NETWORK });
-				const fullName = NAME + '.sui';
-
-				const tx = new Transaction();
-				const suinsTx = new SuinsTransaction(suinsClient, tx);
-				suinsTx.setDefault(fullName);
-
-				tx.setSender(connectedAddress);
-				tx.setGasBudget(50000000);
-
-				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
-
-				let result;
-				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
-
-				if (signExecFeature?.signAndExecuteTransaction) {
-					result = await signExecFeature.signAndExecuteTransaction({
-						transaction: tx,
-						account: connectedAccount,
-						chain,
-						options: { showEffects: true }
-					});
-				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-						transactionBlock: tx,
-						account: connectedAccount,
-						chain,
-						options: { showEffects: true }
-					});
-				} else {
-					const txBytes = await tx.build({ client: suiClient });
-					const phantomProvider = getPhantomProvider();
-					if (phantomProvider?.signAndExecuteTransactionBlock) {
-						result = await phantomProvider.signAndExecuteTransactionBlock({
-							transactionBlock: txBytes,
-							options: { showEffects: true }
-						});
-					} else {
-						throw new Error('Wallet does not support transaction signing');
-					}
-				}
-
-				btn.textContent = 'Primary Set ✓';
-				btn.style.background = 'rgba(52, 211, 153, 0.15)';
-				btn.style.color = 'var(--success)';
-				btn.style.cursor = 'default';
-
-			} catch (error) {
-				console.error('Set primary failed:', error);
-				btn.disabled = false;
-				btn.textContent = 'Set as Primary Name';
-				const errorMsg = error?.message || 'Unknown error';
-				if (!errorMsg.includes('rejected') && !errorMsg.includes('cancelled')) {
-					showRegisterStatus('Failed to set primary: ' + errorMsg, 'error');
-				}
-			}
-		}
-
-		function attachSetPrimaryHandler() {
-			const btn = document.getElementById('set-primary-after-register');
-			if (btn) btn.addEventListener('click', setPrimaryName);
-		}
-
 		if (txCancelBtn) txCancelBtn.addEventListener('click', hideTxPreview);
 		if (txConfirmBtn) txConfirmBtn.addEventListener('click', confirmTransaction);
 		if (txPreviewModal) {
@@ -2117,16 +3012,22 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 
 		// Event listeners
-		if (globalWalletBtn) {
-			globalWalletBtn.addEventListener('click', (e) => {
-				e.stopPropagation();
-				if (!connectedAddress) {
-					openWalletModal();
-				} else {
-					globalWalletWidget.classList.toggle('open');
-				}
-			});
-		}
+			if (globalWalletBtn) {
+				globalWalletBtn.addEventListener('click', (e) => {
+					e.stopPropagation();
+					if (!connectedAddress) {
+						openWalletModal();
+					} else {
+						globalWalletWidget.classList.toggle('open');
+					}
+				});
+			}
+			if (globalWalletProfileBtn) {
+				globalWalletProfileBtn.addEventListener('click', (e) => {
+					e.stopPropagation();
+					window.location.href = globalWalletProfileBtn.dataset.href || 'https://sui.ski';
+				});
+			}
 
 		if (walletModalClose) {
 			walletModalClose.addEventListener('click', () => walletModal.classList.remove('open'));
@@ -2148,9 +3049,19 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			registerBtn.addEventListener('click', registerName);
 		}
 
-		// Initialize
-		updateWalletUI();
-		updateRegisterButton();
+			// Initialize
+			updateWalletProfileButton();
+			updateWalletUI();
+			updateRegisterButton();
+
+		(async () => {
+			const hint = getWalletCookie();
+			if (!hint) return;
+			await new Promise(r => setTimeout(r, 300));
+			const wallets = getSuiWallets();
+			const match = wallets.find(w => w.name === hint.walletName);
+			if (match) selectWallet(match);
+		})();
 
 		// ========== GEAR FAB ==========
 		const gearFab = document.getElementById('gear-fab');

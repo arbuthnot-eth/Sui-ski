@@ -1,5 +1,4 @@
 import { Hono } from 'hono'
-import { WalletSession } from './durable-objects/wallet-session'
 import { handleAppRequest } from './handlers/app'
 // import { blackDiamondRoutes } from './handlers/black-diamond'
 import { generateDashboardPage } from './handlers/dashboard'
@@ -7,11 +6,6 @@ import { apiRoutes, landingPageHTML } from './handlers/landing'
 import { generateProfilePage } from './handlers/profile'
 import { agentSubnameCapRoutes, subnameCapRoutes } from './handlers/subnamecap'
 import { generateSubnameCapPage } from './handlers/subnamecap-ui'
-import {
-	handleWalletCheck,
-	handleWalletConnect,
-	handleWalletDisconnect,
-} from './handlers/wallet-api'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
@@ -27,8 +21,6 @@ import { ensureRpcEnv } from './utils/rpc'
 import { isTwitterPreviewBot } from './utils/social'
 import { parseSubdomain } from './utils/subdomain'
 import { clearWalletCookieHeader, walletCookieHeader } from './utils/wallet-cookie'
-
-export { WalletSession }
 
 type AppEnv = {
 	Bindings: Env
@@ -70,18 +62,6 @@ app.use('*', async (c, next) => {
 	c.set('parsed', parsed)
 	c.set('hostname', hostname)
 	await next()
-})
-
-app.post('/api/wallet/connect', async (c) => {
-	return handleWalletConnect(c.req.raw, c.env)
-})
-
-app.get('/api/wallet/check', async (c) => {
-	return handleWalletCheck(c.req.raw, c.env)
-})
-
-app.post('/api/wallet/disconnect', async (c) => {
-	return handleWalletDisconnect(c.req.raw, c.env)
 })
 
 app.post('/_wallet', async (c) => {

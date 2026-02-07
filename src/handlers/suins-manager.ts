@@ -7,29 +7,33 @@
  * - Coupon redemption
  * - Discount eligibility checking
  */
+import { mainPackage } from '@mysten/suins'
 import type { Env } from '../types'
 import { getNSSuiPrice } from '../utils/ns-price'
 import { errorResponse, jsonResponse } from '../utils/response'
 
-// SuiNS Contract addresses (mainnet)
+const MAINNET_NS_PACKAGE = mainPackage.mainnet.coins.NS.type.split('::')[0]
+const TESTNET_NS_PACKAGE = mainPackage.testnet.coins.NS.type.split('::')[0]
+
+// SuiNS contract addresses by network.
 const SUINS_CONTRACTS = {
 	mainnet: {
-		suins: '0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871',
-		payments: '0xd5f2c5e55e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c',
-		discounts: '0x6a9cf9a1c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5',
-		coupons: '0x7b8cf9a1c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5',
-		subdomains: '0x8c9cf9a1c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5',
-		nsToken: '0x5145494a5f5100e645e4b797a6eeafa55fc0e089d400be81a68c0e8f952f9a39',
-		dayOneNft: '0x1c3147c05ad5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5c5e5',
+		suins: mainPackage.mainnet.suins,
+		payments: mainPackage.mainnet.payments.packageId,
+		discounts: mainPackage.mainnet.discountsPackage.packageId,
+		coupons: mainPackage.mainnet.coupons.packageId,
+		subdomains: mainPackage.mainnet.subNamesPackageId,
+		nsToken: MAINNET_NS_PACKAGE,
+		dayOneNft: '',
 	},
 	testnet: {
-		suins: '0x22fa05f21b1ad71442571f63c41c3a64c3e67f7a4c8c0e43c4b4c5e5c5e5c5e5',
-		payments: '0x22fa05f21b1ad71442571f63c41c3a64c3e67f7a4c8c0e43c4b4c5e5c5e5c5e5',
-		discounts: '0x22fa05f21b1ad71442571f63c41c3a64c3e67f7a4c8c0e43c4b4c5e5c5e5c5e5',
-		coupons: '0x22fa05f21b1ad71442571f63c41c3a64c3e67f7a4c8c0e43c4b4c5e5c5e5c5e5',
-		subdomains: '0x22fa05f21b1ad71442571f63c41c3a64c3e67f7a4c8c0e43c4b4c5e5c5e5c5e5',
-		nsToken: '0x22fa05f21b1ad71442571f63c41c3a64c3e67f7a4c8c0e43c4b4c5e5c5e5c5e5',
-		dayOneNft: '0x22fa05f21b1ad71442571f63c41c3a64c3e67f7a4c8c0e43c4b4c5e5c5e5c5e5',
+		suins: mainPackage.testnet.suins,
+		payments: mainPackage.testnet.payments.packageId,
+		discounts: mainPackage.testnet.discountsPackage.packageId,
+		coupons: mainPackage.testnet.coupons.packageId,
+		subdomains: mainPackage.testnet.subNamesPackageId,
+		nsToken: TESTNET_NS_PACKAGE,
+		dayOneNft: '',
 	},
 }
 
@@ -170,12 +174,13 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>SuiNS Manager | sui.ski</title>
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 	<style>
 		:root {
-			--bg: #05060c;
+			--bg: #000;
 			--card: rgba(15, 18, 32, 0.95);
 			--border: rgba(255, 255, 255, 0.08);
 			--text: #e4e6f1;
@@ -191,9 +196,7 @@ export function generateSuinsManagerPage(env: Env, name?: string): string {
 		* { box-sizing: border-box; margin: 0; padding: 0; }
 		body {
 			font-family: 'Inter', system-ui, -apple-system, sans-serif;
-			background: radial-gradient(ellipse at top, rgba(77,162,255,0.08), transparent 50%),
-						radial-gradient(ellipse at bottom right, rgba(96,165,250,0.06), transparent 50%),
-						linear-gradient(180deg, #05060c, #090d1a 50%, #05060c);
+			background: #000;
 			min-height: 100vh;
 			color: var(--text);
 			padding: 24px 16px 64px;

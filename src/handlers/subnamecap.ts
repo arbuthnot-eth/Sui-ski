@@ -33,11 +33,14 @@ import {
 	buildUseSingleUseJacketNodeTx,
 	serializeTransaction,
 } from '../utils/subnamecap-transactions'
+import { x402PaymentMiddleware } from '../utils/x402-middleware'
+import { resolveX402Recipient } from '../utils/x402-sui'
 
 type SubnameCapEnv = {
 	Bindings: Env
 	Variables: {
 		env: Env
+		x402Payment?: { digest: string; payer: string }
 	}
 }
 
@@ -45,6 +48,70 @@ const SUBNAME_FEE_MIST = BigInt(1_000_000_000)
 const SUBNAME_FEE_SUI = 1
 
 export const subnameCapRoutes = new Hono<SubnameCapEnv>()
+
+function normalizeSuinsName(value: string): string {
+	const trimmed = value.trim().toLowerCase()
+	if (!trimmed) return ''
+	return trimmed.endsWith('.sui') ? trimmed : `${trimmed}.sui`
+}
+
+function isValidSuiAddress(value: string): boolean {
+	return /^0x[a-fA-F0-9]{64}$/.test(value.trim())
+}
+
+async function resolveSuinsTargetAddress(name: string, env: Env): Promise<string | null> {
+	const normalizedName = normalizeSuinsName(name)
+	if (!normalizedName) return null
+
+	const { SuinsClient } = await import('@mysten/suins')
+	const suiClient = new SuiClient({
+		url: getDefaultRpcUrl(env.SUI_NETWORK),
+		network: env.SUI_NETWORK,
+	})
+	const suinsClient = new SuinsClient({
+		client: suiClient as never,
+		network: env.SUI_NETWORK as 'mainnet' | 'testnet',
+	})
+
+	try {
+		const nameRecord = await suinsClient.getNameRecord(normalizedName)
+		if (nameRecord?.targetAddress && isValidSuiAddress(nameRecord.targetAddress)) {
+			return nameRecord.targetAddress
+		}
+	} catch {
+		// Fallback below
+	}
+
+	try {
+		const resolved = await suiClient.resolveNameServiceAddress({ name: normalizedName })
+		if (resolved && isValidSuiAddress(resolved)) {
+			return resolved
+		}
+	} catch {
+		// Ignore and return null
+	}
+
+	return null
+}
+
+subnameCapRoutes.get('/resolve-target', async (c) => {
+	const env = c.get('env')
+	const name = c.req.query('name')?.trim() || ''
+	if (!name) {
+		return jsonResponse({ error: 'name query parameter is required' }, 400)
+	}
+	try {
+		const normalizedName = normalizeSuinsName(name)
+		const targetAddress = await resolveSuinsTargetAddress(normalizedName, env)
+		if (!targetAddress) {
+			return jsonResponse({ error: `No target address found for ${normalizedName}` }, 404)
+		}
+		return jsonResponse({ name: normalizedName, targetAddress })
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to resolve target address'
+		return jsonResponse({ error: message }, 500)
+	}
+})
 
 subnameCapRoutes.get('/caps/owned/:address', async (c) => {
 	const address = c.req.param('address')
@@ -90,6 +157,11 @@ subnameCapRoutes.post('/create-cap', async (c) => {
 			parentNftId: string
 			allowLeafCreation: boolean
 			allowNodeCreation: boolean
+			defaultNodeAllowCreation?: boolean
+			defaultNodeAllowExtension?: boolean
+			maxUses?: number
+			maxDurationMs?: number
+			capExpirationMs?: number
 			senderAddress: string
 		}>()
 
@@ -102,6 +174,11 @@ subnameCapRoutes.post('/create-cap', async (c) => {
 				parentNftId: body.parentNftId,
 				allowLeafCreation: body.allowLeafCreation ?? true,
 				allowNodeCreation: body.allowNodeCreation ?? false,
+				defaultNodeAllowCreation: body.defaultNodeAllowCreation,
+				defaultNodeAllowExtension: body.defaultNodeAllowExtension,
+				maxUses: body.maxUses ?? null,
+				maxDurationMs: body.maxDurationMs ?? null,
+				capExpirationMs: body.capExpirationMs ?? null,
 				senderAddress: body.senderAddress,
 			},
 			env,
@@ -212,8 +289,6 @@ subnameCapRoutes.post('/create-node', async (c) => {
 			capObjectId: string
 			subdomainName: string
 			expirationTimestampMs: number
-			allowCreation: boolean
-			allowTimeExtension: boolean
 			senderAddress: string
 		}>()
 
@@ -232,14 +307,7 @@ subnameCapRoutes.post('/create-node', async (c) => {
 			)
 		}
 
-		const tx = buildNewNodeWithCapTx(
-			{
-				...body,
-				allowCreation: body.allowCreation ?? true,
-				allowTimeExtension: body.allowTimeExtension ?? false,
-			},
-			env,
-		)
+		const tx = buildNewNodeWithCapTx(body, env)
 
 		const result = await serializeTransaction(tx, env)
 		return jsonResponse(result)
@@ -272,7 +340,7 @@ subnameCapRoutes.post('/relay', async (c) => {
 subnameCapRoutes.get('/info', async (c) => {
 	const env = c.get('env')
 	return jsonResponse({
-		network: 'testnet',
+		network: env.SUI_NETWORK,
 		configured: !!(
 			env.SUBNAMECAP_SUINS_PACKAGE_ID &&
 			env.SUBNAMECAP_SUBDOMAINS_PACKAGE_ID &&
@@ -307,8 +375,12 @@ subnameCapRoutes.post('/jacket/single-use/create', async (c) => {
 	try {
 		const body = await c.req.json<{
 			parentNftId: string
-			recipientAddress: string
+			recipientAddress?: string
+			recipientName?: string
 			allowNodeCreation: boolean
+			maxUses?: number
+			maxDurationMs?: number
+			capExpirationMs?: number
 			senderAddress: string
 		}>()
 
@@ -316,15 +388,57 @@ subnameCapRoutes.post('/jacket/single-use/create', async (c) => {
 			return jsonResponse({ error: 'parentNftId and senderAddress are required' }, 400)
 		}
 
-		const tx = buildCreateSingleUseJacketTx({
-			parentNftId: body.parentNftId,
-			recipientAddress: body.recipientAddress || body.senderAddress,
-			allowNodeCreation: body.allowNodeCreation ?? false,
-			senderAddress: body.senderAddress,
-		}, env)
+		let recipientAddress = body.recipientAddress?.trim() || ''
+		let recipientName: string | null = null
+		let usedSelfFallbackForUnresolvedName = false
+		if (!recipientAddress && body.recipientName?.trim()) {
+			recipientName = normalizeSuinsName(body.recipientName)
+		} else if (recipientAddress && !isValidSuiAddress(recipientAddress)) {
+			recipientName = normalizeSuinsName(recipientAddress)
+			recipientAddress = ''
+		}
+
+		if (!recipientAddress && recipientName) {
+			const resolved = await resolveSuinsTargetAddress(recipientName, env)
+			if (resolved) {
+				recipientAddress = resolved
+			} else {
+				recipientAddress = body.senderAddress
+				usedSelfFallbackForUnresolvedName = true
+			}
+		}
+
+		recipientAddress = recipientAddress || body.senderAddress
+		if (!isValidSuiAddress(recipientAddress)) {
+			return jsonResponse(
+				{ error: 'recipientAddress must be a valid Sui address or .sui name' },
+				400,
+			)
+		}
+
+		const tx = buildCreateSingleUseJacketTx(
+			{
+				parentNftId: body.parentNftId,
+				recipientAddress,
+				allowNodeCreation: body.allowNodeCreation ?? false,
+				maxUses: body.maxUses ?? null,
+				maxDurationMs: body.maxDurationMs ?? null,
+				capExpirationMs: body.capExpirationMs ?? null,
+				senderAddress: body.senderAddress,
+			},
+			env,
+		)
 
 		const result = await serializeTransaction(tx, env)
-		return jsonResponse(result)
+		return jsonResponse({
+			...result,
+			recipientAddress,
+			recipientName: recipientName || null,
+			requiresRecipientFallbackConfirmation: usedSelfFallbackForUnresolvedName,
+			recipientFallbackMessage: usedSelfFallbackForUnresolvedName
+				? `No target address found for ${recipientName}. Voucher will default to sender ${body.senderAddress}.`
+				: null,
+		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to build transaction'
 		return jsonResponse({ error: message }, 500)
@@ -342,7 +456,10 @@ subnameCapRoutes.post('/jacket/single-use/use-leaf', async (c) => {
 		}>()
 
 		if (!body.jacketObjectId || !body.subdomainName || !body.targetAddress || !body.senderAddress) {
-			return jsonResponse({ error: 'jacketObjectId, subdomainName, targetAddress, and senderAddress are required' }, 400)
+			return jsonResponse(
+				{ error: 'jacketObjectId, subdomainName, targetAddress, and senderAddress are required' },
+				400,
+			)
 		}
 
 		const tx = buildUseSingleUseJacketLeafTx(body, env)
@@ -361,26 +478,28 @@ subnameCapRoutes.post('/jacket/single-use/use-node', async (c) => {
 			jacketObjectId: string
 			subdomainName: string
 			expirationDays: number
-			allowCreation: boolean
-			allowTimeExtension: boolean
 			senderAddress: string
 		}>()
 
 		if (!body.jacketObjectId || !body.subdomainName || !body.senderAddress) {
-			return jsonResponse({ error: 'jacketObjectId, subdomainName, and senderAddress are required' }, 400)
+			return jsonResponse(
+				{ error: 'jacketObjectId, subdomainName, and senderAddress are required' },
+				400,
+			)
 		}
 
 		const days = body.expirationDays ?? 365
 		const expirationTimestampMs = Date.now() + days * 86_400_000
 
-		const tx = buildUseSingleUseJacketNodeTx({
-			jacketObjectId: body.jacketObjectId,
-			subdomainName: body.subdomainName,
-			expirationTimestampMs,
-			allowCreation: body.allowCreation ?? true,
-			allowTimeExtension: body.allowTimeExtension ?? false,
-			senderAddress: body.senderAddress,
-		}, env)
+		const tx = buildUseSingleUseJacketNodeTx(
+			{
+				jacketObjectId: body.jacketObjectId,
+				subdomainName: body.subdomainName,
+				expirationTimestampMs,
+				senderAddress: body.senderAddress,
+			},
+			env,
+		)
 
 		const result = await serializeTransaction(tx, env)
 		return jsonResponse(result)
@@ -411,20 +530,32 @@ subnameCapRoutes.post('/jacket/fee/create', async (c) => {
 			leafFee: number
 			nodeFee: number
 			feeRecipient: string
+			maxUses?: number
+			maxDurationMs?: number
+			capExpirationMs?: number
 			senderAddress: string
 		}>()
 
 		if (!body.parentNftId || !body.feeRecipient || !body.senderAddress) {
-			return jsonResponse({ error: 'parentNftId, feeRecipient, and senderAddress are required' }, 400)
+			return jsonResponse(
+				{ error: 'parentNftId, feeRecipient, and senderAddress are required' },
+				400,
+			)
 		}
 
-		const tx = buildCreateFeeJacketTx({
-			parentNftId: body.parentNftId,
-			leafFee: body.leafFee ?? 1_000_000_000,
-			nodeFee: body.nodeFee ?? 5_000_000_000,
-			feeRecipient: body.feeRecipient,
-			senderAddress: body.senderAddress,
-		}, env)
+		const tx = buildCreateFeeJacketTx(
+			{
+				parentNftId: body.parentNftId,
+				leafFee: body.leafFee ?? 1_000_000_000,
+				nodeFee: body.nodeFee ?? 5_000_000_000,
+				feeRecipient: body.feeRecipient,
+				maxUses: body.maxUses ?? null,
+				maxDurationMs: body.maxDurationMs ?? null,
+				capExpirationMs: body.capExpirationMs ?? null,
+				senderAddress: body.senderAddress,
+			},
+			env,
+		)
 
 		const result = await serializeTransaction(tx, env)
 		return jsonResponse(result)
@@ -446,16 +577,22 @@ subnameCapRoutes.post('/jacket/fee/create-leaf', async (c) => {
 		}>()
 
 		if (!body.jacketObjectId || !body.subdomainName || !body.targetAddress || !body.senderAddress) {
-			return jsonResponse({ error: 'jacketObjectId, subdomainName, targetAddress, and senderAddress are required' }, 400)
+			return jsonResponse(
+				{ error: 'jacketObjectId, subdomainName, targetAddress, and senderAddress are required' },
+				400,
+			)
 		}
 
-		const tx = buildNewLeafWithFeeTx({
-			jacketObjectId: body.jacketObjectId,
-			feeMist: body.feeMist ?? 1_000_000_000,
-			subdomainName: body.subdomainName,
-			targetAddress: body.targetAddress,
-			senderAddress: body.senderAddress,
-		}, env)
+		const tx = buildNewLeafWithFeeTx(
+			{
+				jacketObjectId: body.jacketObjectId,
+				feeMist: body.feeMist ?? 1_000_000_000,
+				subdomainName: body.subdomainName,
+				targetAddress: body.targetAddress,
+				senderAddress: body.senderAddress,
+			},
+			env,
+		)
 
 		const result = await serializeTransaction(tx, env)
 		return jsonResponse(result)
@@ -477,7 +614,10 @@ subnameCapRoutes.post('/jacket/fee/update-fees', async (c) => {
 		}>()
 
 		if (!body.adminCapId || !body.jacketObjectId || !body.senderAddress) {
-			return jsonResponse({ error: 'adminCapId, jacketObjectId, and senderAddress are required' }, 400)
+			return jsonResponse(
+				{ error: 'adminCapId, jacketObjectId, and senderAddress are required' },
+				400,
+			)
 		}
 
 		const tx = buildUpdateFeesTx(body, env)
@@ -507,6 +647,9 @@ subnameCapRoutes.post('/jacket/allowlist/create', async (c) => {
 	try {
 		const body = await c.req.json<{
 			parentNftId: string
+			maxUses?: number
+			maxDurationMs?: number
+			capExpirationMs?: number
 			senderAddress: string
 		}>()
 
@@ -514,10 +657,16 @@ subnameCapRoutes.post('/jacket/allowlist/create', async (c) => {
 			return jsonResponse({ error: 'parentNftId and senderAddress are required' }, 400)
 		}
 
-		const tx = buildCreateAllowlistJacketTx({
-			parentNftId: body.parentNftId,
-			senderAddress: body.senderAddress,
-		}, env)
+		const tx = buildCreateAllowlistJacketTx(
+			{
+				parentNftId: body.parentNftId,
+				maxUses: body.maxUses ?? null,
+				maxDurationMs: body.maxDurationMs ?? null,
+				capExpirationMs: body.capExpirationMs ?? null,
+				senderAddress: body.senderAddress,
+			},
+			env,
+		)
 
 		const result = await serializeTransaction(tx, env)
 		return jsonResponse(result)
@@ -537,8 +686,16 @@ subnameCapRoutes.post('/jacket/allowlist/add', async (c) => {
 			senderAddress: string
 		}>()
 
-		if (!body.adminCapId || !body.jacketObjectId || !body.addresses?.length || !body.senderAddress) {
-			return jsonResponse({ error: 'adminCapId, jacketObjectId, addresses, and senderAddress are required' }, 400)
+		if (
+			!body.adminCapId ||
+			!body.jacketObjectId ||
+			!body.addresses?.length ||
+			!body.senderAddress
+		) {
+			return jsonResponse(
+				{ error: 'adminCapId, jacketObjectId, addresses, and senderAddress are required' },
+				400,
+			)
 		}
 
 		const tx = buildAddToAllowlistTx(body, env)
@@ -561,7 +718,10 @@ subnameCapRoutes.post('/jacket/allowlist/create-leaf', async (c) => {
 		}>()
 
 		if (!body.jacketObjectId || !body.subdomainName || !body.targetAddress || !body.senderAddress) {
-			return jsonResponse({ error: 'jacketObjectId, subdomainName, targetAddress, and senderAddress are required' }, 400)
+			return jsonResponse(
+				{ error: 'jacketObjectId, subdomainName, targetAddress, and senderAddress are required' },
+				400,
+			)
 		}
 
 		const tx = buildNewLeafAllowedTx(body, env)
@@ -593,6 +753,9 @@ subnameCapRoutes.post('/jacket/ratelimit/create', async (c) => {
 			parentNftId: string
 			maxPerWindow: number
 			windowDurationMs: number
+			maxUses?: number
+			maxDurationMs?: number
+			capExpirationMs?: number
 			senderAddress: string
 		}>()
 
@@ -600,12 +763,18 @@ subnameCapRoutes.post('/jacket/ratelimit/create', async (c) => {
 			return jsonResponse({ error: 'parentNftId and senderAddress are required' }, 400)
 		}
 
-		const tx = buildCreateRateLimitJacketTx({
-			parentNftId: body.parentNftId,
-			maxPerWindow: body.maxPerWindow ?? 10,
-			windowDurationMs: body.windowDurationMs ?? 3_600_000,
-			senderAddress: body.senderAddress,
-		}, env)
+		const tx = buildCreateRateLimitJacketTx(
+			{
+				parentNftId: body.parentNftId,
+				maxPerWindow: body.maxPerWindow ?? 10,
+				windowDurationMs: body.windowDurationMs ?? 3_600_000,
+				maxUses: body.maxUses ?? null,
+				maxDurationMs: body.maxDurationMs ?? null,
+				capExpirationMs: body.capExpirationMs ?? null,
+				senderAddress: body.senderAddress,
+			},
+			env,
+		)
 
 		const result = await serializeTransaction(tx, env)
 		return jsonResponse(result)
@@ -626,7 +795,10 @@ subnameCapRoutes.post('/jacket/ratelimit/create-leaf', async (c) => {
 		}>()
 
 		if (!body.jacketObjectId || !body.subdomainName || !body.targetAddress || !body.senderAddress) {
-			return jsonResponse({ error: 'jacketObjectId, subdomainName, targetAddress, and senderAddress are required' }, 400)
+			return jsonResponse(
+				{ error: 'jacketObjectId, subdomainName, targetAddress, and senderAddress are required' },
+				400,
+			)
 		}
 
 		const tx = buildNewLeafRateLimitedTx(body, env)
@@ -650,7 +822,10 @@ subnameCapRoutes.post('/jacket/ratelimit/update', async (c) => {
 		}>()
 
 		if (!body.adminCapId || !body.jacketObjectId || !body.senderAddress) {
-			return jsonResponse({ error: 'adminCapId, jacketObjectId, and senderAddress are required' }, 400)
+			return jsonResponse(
+				{ error: 'adminCapId, jacketObjectId, and senderAddress are required' },
+				400,
+			)
 		}
 
 		const tx = buildUpdateRateLimitTx(body, env)
@@ -663,7 +838,7 @@ subnameCapRoutes.post('/jacket/ratelimit/update', async (c) => {
 })
 
 function getSubnameCapRpcUrl(env: Env): string {
-	return env.SUBNAMECAP_RPC_URL || getDefaultRpcUrl('testnet')
+	return env.SUI_RPC_URL || getDefaultRpcUrl(env.SUI_NETWORK)
 }
 
 async function getAgentRelayAddress(env: Env): Promise<string | null> {
@@ -693,7 +868,7 @@ async function verifyAgentPayment(
 	try {
 		const suiClient = new SuiClient({
 			url: getSubnameCapRpcUrl(env),
-			network: 'testnet',
+			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
 		})
 
 		const txResponse = await suiClient.getTransactionBlock({
@@ -742,7 +917,10 @@ export const agentSubnameCapRoutes = new Hono<SubnameCapEnv>()
 
 agentSubnameCapRoutes.get('/info', async (c) => {
 	const env = c.get('env')
-	const relayAddress = await getAgentRelayAddress(env)
+	const [relayAddress, x402Address] = await Promise.all([
+		getAgentRelayAddress(env),
+		resolveX402Recipient(env),
+	])
 
 	return jsonResponse({
 		service: 'SubnameCap Agent API',
@@ -752,10 +930,21 @@ agentSubnameCapRoutes.get('/info', async (c) => {
 				amount: SUBNAME_FEE_MIST.toString(),
 				amountSui: SUBNAME_FEE_SUI,
 				currency: 'SUI',
-				chain: 'testnet',
+				chain: env.SUI_NETWORK,
 			},
 		},
 		paymentRecipient: relayAddress,
+		paymentMethods: x402Address ? ['x402', 'legacy'] : ['legacy'],
+		x402: x402Address
+			? {
+					scheme: 'exact-sui',
+					network: `sui:${env.SUI_NETWORK}`,
+					version: 2,
+					asset: '0x2::sui::SUI',
+					payTo: x402Address,
+					verificationMethod: 'pre-executed',
+				}
+			: null,
 		endpoints: {
 			register: 'POST /api/agents/subnamecap/register',
 			info: 'GET /api/agents/subnamecap/info',
@@ -764,110 +953,134 @@ agentSubnameCapRoutes.get('/info', async (c) => {
 	})
 })
 
-agentSubnameCapRoutes.post('/register', async (c) => {
-	const env = c.get('env')
+agentSubnameCapRoutes.post(
+	'/register',
+	x402PaymentMiddleware({ description: 'Register a leaf subname under a delegated SuiNS domain' }),
+	async (c) => {
+		const env = c.get('env')
 
-	let payload: {
-		parentDomain?: string
-		subname?: string
-		target?: string
-	}
-	try {
-		payload = await c.req.json()
-	} catch {
-		return jsonResponse({ error: 'Invalid JSON body' }, 400)
-	}
+		let payload: {
+			parentDomain?: string
+			subname?: string
+			target?: string
+		}
+		try {
+			payload = await c.req.json()
+		} catch {
+			return jsonResponse({ error: 'Invalid JSON body' }, 400)
+		}
 
-	const parentDomain = payload.parentDomain?.trim()
-	const subname = payload.subname?.trim()
-	const target = payload.target?.trim()
+		const parentDomain = payload.parentDomain?.trim()
+		const subname = payload.subname?.trim()
+		const target = payload.target?.trim()
 
-	if (!parentDomain || !subname || !target) {
-		return jsonResponse({ error: 'parentDomain, subname, and target are required' }, 400)
-	}
+		if (!parentDomain || !subname || !target) {
+			return jsonResponse({ error: 'parentDomain, subname, and target are required' }, 400)
+		}
 
-	if (!/^0x[a-fA-F0-9]{64}$/.test(target)) {
-		return jsonResponse({ error: 'Invalid target address format' }, 400)
-	}
+		if (!/^0x[a-fA-F0-9]{64}$/.test(target)) {
+			return jsonResponse({ error: 'Invalid target address format' }, 400)
+		}
 
-	const relayAddress = await getAgentRelayAddress(env)
-	if (!relayAddress) {
-		return jsonResponse({ error: 'Payment relay service unavailable' }, 503)
-	}
+		const x402Payment = c.get('x402Payment')
+		let paymentDigest: string
+		let paymentMethod: 'x402' | 'legacy'
 
-	const paymentDigest = c.req.header('X-Payment-Tx-Digest')
+		if (x402Payment) {
+			paymentDigest = x402Payment.digest
+			paymentMethod = 'x402'
+		} else {
+			const legacyDigest = c.req.header('X-Payment-Tx-Digest')
 
-	if (!paymentDigest) {
-		return jsonResponse(
-			{
-				error: 'Payment required',
-				code: 'PAYMENT_REQUIRED',
-				payment: {
-					amount: SUBNAME_FEE_MIST.toString(),
-					amountSui: SUBNAME_FEE_SUI,
-					recipient: relayAddress,
-					chain: 'testnet',
-					currency: 'SUI',
-					description: `Register ${subname}.${parentDomain} as a leaf subname`,
-				},
-				instructions: {
-					step1: 'Send the specified SUI amount to the recipient address',
-					step2: 'Execute the transaction and obtain the digest',
-					step3: 'Retry this request with X-Payment-Tx-Digest header',
-				},
-			},
-			402,
-		)
-	}
+			if (!legacyDigest) {
+				const relayAddress = await getAgentRelayAddress(env)
+				return jsonResponse(
+					{
+						error: 'Payment required',
+						code: 'PAYMENT_REQUIRED',
+						payment: {
+							amount: SUBNAME_FEE_MIST.toString(),
+							amountSui: SUBNAME_FEE_SUI,
+							recipient: relayAddress,
+							chain: env.SUI_NETWORK,
+							currency: 'SUI',
+							description: `Register ${subname}.${parentDomain} as a leaf subname`,
+						},
+						instructions: {
+							step1: 'Send the specified SUI amount to the recipient address',
+							step2: 'Execute the transaction and obtain the digest',
+							step3: 'Retry this request with X-Payment-Tx-Digest header',
+						},
+					},
+					402,
+				)
+			}
 
-	const verification = await verifyAgentPayment(env, paymentDigest, relayAddress, SUBNAME_FEE_MIST)
-	if (!verification.valid) {
-		return jsonResponse(
-			{
-				error: 'Payment verification failed',
-				code: 'INVALID_PAYMENT',
-				details: verification.error,
-				payment: {
-					amount: SUBNAME_FEE_MIST.toString(),
-					amountSui: SUBNAME_FEE_SUI,
-					recipient: relayAddress,
-					chain: 'testnet',
-					currency: 'SUI',
-				},
-			},
-			402,
-		)
-	}
+			const relayAddress = await getAgentRelayAddress(env)
+			if (!relayAddress) {
+				return jsonResponse({ error: 'Payment relay service unavailable' }, 503)
+			}
 
-	const requestId = generateAgentRequestId()
+			const verification = await verifyAgentPayment(
+				env,
+				legacyDigest,
+				relayAddress,
+				SUBNAME_FEE_MIST,
+			)
+			if (!verification.valid) {
+				return jsonResponse(
+					{
+						error: 'Payment verification failed',
+						code: 'INVALID_PAYMENT',
+						details: verification.error,
+						payment: {
+							amount: SUBNAME_FEE_MIST.toString(),
+							amountSui: SUBNAME_FEE_SUI,
+							recipient: relayAddress,
+							chain: env.SUI_NETWORK,
+							currency: 'SUI',
+						},
+					},
+					402,
+				)
+			}
 
-	try {
-		await env.CACHE.put(
-			`subnamecap:agent:${requestId}`,
-			JSON.stringify({
-				id: requestId,
-				parentDomain,
-				subname,
-				target,
-				paymentDigest,
+			paymentDigest = legacyDigest
+			paymentMethod = 'legacy'
+		}
+
+		const requestId = generateAgentRequestId()
+
+		try {
+			await env.CACHE.put(
+				`subnamecap:agent:${requestId}`,
+				JSON.stringify({
+					id: requestId,
+					parentDomain,
+					subname,
+					target,
+					paymentDigest,
+					paymentMethod,
+					status: 'pending',
+					createdAt: Date.now(),
+				}),
+				{ expirationTtl: 86400 },
+			)
+
+			return jsonResponse({
+				success: true,
+				requestId,
 				status: 'pending',
-				createdAt: Date.now(),
-			}),
-			{ expirationTtl: 86400 },
-		)
-
-		return jsonResponse({
-			success: true,
-			requestId,
-			status: 'pending',
-			message: `Subname registration queued: ${subname}.${parentDomain}`,
-			statusUrl: `/api/agents/subnamecap/status/${requestId}`,
-		})
-	} catch (error) {
-		console.error('Failed to queue subname registration:', error)
-		return jsonResponse({ error: 'Failed to queue registration' }, 500)
-	}
-})
+				message: `Subname registration queued: ${subname}.${parentDomain}`,
+				statusUrl: `/api/agents/subnamecap/status/${requestId}`,
+				paymentMethod,
+			})
+		} catch (error) {
+			console.error('Failed to queue subname registration:', error)
+			return jsonResponse({ error: 'Failed to queue registration' }, 500)
+		}
+	},
+)
 
 agentSubnameCapRoutes.get('/status/:id', async (c) => {
 	const requestId = c.req.param('id')

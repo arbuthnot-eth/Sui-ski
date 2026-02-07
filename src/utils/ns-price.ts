@@ -86,15 +86,6 @@ export async function getNSSuiPrice(env: Env, skipCache = false): Promise<NSPric
 		return nsPriceMemCache.data
 	}
 
-	const key = cacheKey('ns-sui-price-v4', network)
-	if (!skipCache) {
-		const cached = await getCached<NSPriceResult>(env, key)
-		if (cached) {
-			nsPriceMemCache = { data: cached, exp: Date.now() + NS_PRICE_CACHE_TTL * 1000 }
-			return cached
-		}
-	}
-
 	if (!poolAddress || !indexerUrl) {
 		return createFallbackResult()
 	}
@@ -142,7 +133,6 @@ export async function getNSSuiPrice(env: Env, skipCache = false): Promise<NSPric
 		}
 
 		nsPriceMemCache = { data: result, exp: Date.now() + NS_PRICE_CACHE_TTL * 1000 }
-		await setCache(env, key, result, NS_PRICE_CACHE_TTL)
 		return result
 	} catch (error) {
 		console.error('Failed to fetch NS/SUI price from DeepBook indexer:', error)
@@ -280,15 +270,6 @@ export async function getUSDCSuiPrice(env: Env, skipCache = false): Promise<USDC
 		return usdcPriceMemCache.data
 	}
 
-	const key = cacheKey('usdc-sui-price-v1', network)
-	if (!skipCache) {
-		const cached = await getCached<USDCPriceResult>(env, key)
-		if (cached) {
-			usdcPriceMemCache = { data: cached, exp: Date.now() + USDC_PRICE_CACHE_TTL * 1000 }
-			return cached
-		}
-	}
-
 	if (!poolAddress || !indexerUrl) {
 		return createUSDCFallbackResult()
 	}
@@ -334,7 +315,6 @@ export async function getUSDCSuiPrice(env: Env, skipCache = false): Promise<USDC
 		}
 
 		usdcPriceMemCache = { data: result, exp: Date.now() + USDC_PRICE_CACHE_TTL * 1000 }
-		await setCache(env, key, result, USDC_PRICE_CACHE_TTL)
 		return result
 	} catch (error) {
 		console.error('Failed to fetch USDC/SUI price from DeepBook indexer:', error)
@@ -399,7 +379,7 @@ export async function getDeepBookSuiPools(env: Env): Promise<SwappablePool[]> {
 	}
 
 	const key = cacheKey('deepbook-pools-v1', network)
-	const cached = await getCached<SwappablePool[]>(env, key)
+	const cached = await getCached<SwappablePool[]>(key)
 	if (cached) {
 		poolsMemCache = { data: cached, exp: Date.now() + POOLS_MEM_CACHE_TTL }
 		return cached
@@ -553,7 +533,7 @@ export async function getDeepBookSuiPools(env: Env): Promise<SwappablePool[]> {
 		})
 
 		poolsMemCache = { data: results, exp: Date.now() + POOLS_MEM_CACHE_TTL }
-		await setCache(env, key, results, POOLS_CACHE_TTL)
+		await setCache(key, results, POOLS_CACHE_TTL)
 		return results
 	} catch (error) {
 		console.error('Failed to fetch DeepBook pools:', error)

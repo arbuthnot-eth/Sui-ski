@@ -509,7 +509,7 @@ export function generateGrpcProxyPage(env: Env): string {
 	<title>gRPC Proxy | sui.ski</title>
 	<style>
 		:root {
-			--bg: #05060c;
+			--bg: #000;
 			--card: rgba(15, 18, 32, 0.95);
 			--border: rgba(255, 255, 255, 0.08);
 			--text: #e4e6f1;
@@ -522,7 +522,7 @@ export function generateGrpcProxyPage(env: Env): string {
 		* { box-sizing: border-box; margin: 0; padding: 0; }
 		body {
 			font-family: 'Inter', system-ui, sans-serif;
-			background: linear-gradient(180deg, #05060c, #090d1a);
+			background: #000;
 			min-height: 100vh;
 			color: var(--text);
 			padding: 32px 16px;

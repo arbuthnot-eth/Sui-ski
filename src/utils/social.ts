@@ -9,7 +9,19 @@ const HTML_ESCAPE_LOOKUP: Record<string, string> = {
 const DEFAULT_DOMAIN = 'sui.ski'
 const STAGING_SUFFIX = 'staging.sui.ski'
 
-const TWITTER_BOT_PATTERNS = [/twitterbot/i, /xbot/i, /x-twitterbot/i]
+const SOCIAL_PREVIEW_BOT_PATTERNS = [
+	/twitterbot/i,
+	/xbot/i,
+	/x-twitterbot/i,
+	/facebookexternalhit/i,
+	/facebot/i,
+	/slackbot/i,
+	/discordbot/i,
+	/linkedinbot/i,
+	/telegrambot/i,
+	/whatsapp/i,
+	/skypeuripreview/i,
+]
 
 export interface SocialMetaOptions {
 	title: string
@@ -136,5 +148,5 @@ export function isTwitterPreviewBot(userAgent: string | null): boolean {
 	if (!userAgent) {
 		return false
 	}
-	return TWITTER_BOT_PATTERNS.some((pattern) => pattern.test(userAgent))
+	return SOCIAL_PREVIEW_BOT_PATTERNS.some((pattern) => pattern.test(userAgent))
 }

@@ -1,4 +1,5 @@
 import type { Env } from '../types'
+import { generateWalletCookieJs } from '../utils/wallet-cookie'
 import { subnameCapStyles } from './subnamecap-ui.css'
 
 export function generateSubnameCapPage(env: Env): string {
@@ -29,7 +30,7 @@ export function generateSubnameCapPage(env: Env): string {
 		</div>
 
 		<div class="info-banner" id="config-banner" style="${subdomainsPackageId ? 'display:none' : ''}">
-			SubnameCap contracts are not yet deployed. Configure SUBNAMECAP_* environment variables after deploying contracts to testnet.
+			SubnameCap contracts are not configured. Set SUBNAMECAP_* environment variables for the active Sui network.
 		</div>
 
 		<div class="tabs">
@@ -79,6 +80,31 @@ export function generateSubnameCapPage(env: Env): string {
 							<input type="checkbox" id="allow-node">
 							<label for="allow-node">Allow node creation</label>
 						</div>
+					</div>
+					<div class="form-row">
+						<div class="checkbox-group">
+							<input type="checkbox" id="default-node-allow-creation" checked>
+							<label for="default-node-allow-creation">Default: nodes allow sub-creation</label>
+						</div>
+						<div class="checkbox-group">
+							<input type="checkbox" id="default-node-allow-extension">
+							<label for="default-node-allow-extension">Default: nodes allow time extension</label>
+						</div>
+					</div>
+					<div class="form-group">
+						<label class="form-label" for="cap-max-uses">Max Uses (optional)</label>
+						<input type="number" id="cap-max-uses" class="form-input"
+							placeholder="Unlimited" min="1">
+					</div>
+					<div class="form-group">
+						<label class="form-label" for="cap-max-duration">Max Duration per Subname (ms, optional)</label>
+						<input type="number" id="cap-max-duration" class="form-input"
+							placeholder="Unlimited" min="1">
+					</div>
+					<div class="form-group">
+						<label class="form-label" for="cap-expiration">Cap Expiration (ms timestamp, optional)</label>
+						<input type="number" id="cap-expiration" class="form-input"
+							placeholder="Never expires" min="1">
 					</div>
 					<button type="submit" class="btn btn-primary" id="create-cap-btn">Create SubnameCap</button>
 				</form>
@@ -133,16 +159,9 @@ export function generateSubnameCapPage(env: Env): string {
 						<input type="number" id="node-expiration" class="form-input"
 							value="365" min="1" required>
 					</div>
-					<div class="form-row">
-						<div class="checkbox-group">
-							<input type="checkbox" id="node-allow-creation" checked>
-							<label for="node-allow-creation">Allow subdomain creation</label>
-						</div>
-						<div class="checkbox-group">
-							<input type="checkbox" id="node-allow-extension">
-							<label for="node-allow-extension">Allow time extension</label>
-						</div>
-					</div>
+					<p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 12px;">
+						Node permissions (allow creation, allow extension) are inherited from the SubnameCap defaults.
+					</p>
 					<button type="submit" class="btn btn-primary" id="create-node-btn">Create Node Subname</button>
 				</form>
 			</div>
@@ -202,14 +221,14 @@ export function generateSubnameCapPage(env: Env): string {
 						<label class="form-label" for="jacket-parent-nft">Parent NFT Object ID</label>
 						<input type="text" id="jacket-parent-nft" class="form-input" placeholder="0x..." required>
 					</div>
-					<div id="single-use-jacket-fields">
-						<div class="form-group">
-							<label class="form-label" for="jacket-recipient">Recipient Address (who receives the voucher)</label>
-							<input type="text" id="jacket-recipient" class="form-input" placeholder="0x... (defaults to you)">
-						</div>
-						<div class="form-group">
-							<label class="form-label" for="jacket-subname-type">Subname Type</label>
-							<select id="jacket-subname-type" class="form-input">
+						<div id="single-use-jacket-fields">
+							<div class="form-group">
+								<label class="form-label" for="jacket-recipient">Recipient Address or SuiNS Name (who receives the voucher)</label>
+								<input type="text" id="jacket-recipient" class="form-input" placeholder="0x... or alice.sui (defaults to you)">
+							</div>
+							<div class="form-group">
+								<label class="form-label" for="jacket-subname-type">Subname Type</label>
+								<select id="jacket-subname-type" class="form-input">
 								<option value="leaf">Leaf (permanent, no sub-subdomains)</option>
 								<option value="node">Node (has expiration, can have sub-subdomains)</option>
 							</select>
@@ -340,6 +359,7 @@ export function generateSubnameCapPage(env: Env): string {
 	</div>
 
 	<script type="module">
+		${generateWalletCookieJs()}
 		const API_BASE = '/api/subnamecap';
 		let connectedAddress = null;
 		let currentWallet = null;
@@ -396,6 +416,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 				connectedAddress = accounts[0].address;
 				currentWallet = wallet;
+				setWalletCookie(wallet.name, connectedAddress);
 
 				const btn = document.getElementById('wallet-btn');
 				btn.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
@@ -462,6 +483,9 @@ export function generateSubnameCapPage(env: Env): string {
 			const badges = [];
 			if (cap.allowLeafCreation) badges.push('<span class="badge badge-leaf">Leaf</span>');
 			if (cap.allowNodeCreation) badges.push('<span class="badge badge-node">Node</span>');
+			if (cap.maxUses != null) badges.push('<span class="badge" style="background:var(--text-muted);color:white;">Uses: ' + (cap.usesCount || 0) + '/' + cap.maxUses + '</span>');
+			if (cap.maxDurationMs != null) badges.push('<span class="badge" style="background:var(--text-muted);color:white;">Max ' + (cap.maxDurationMs / 86400000).toFixed(0) + 'd</span>');
+			if (cap.capExpirationMs != null) badges.push('<span class="badge" style="background:var(--text-muted);color:white;">Exp ' + new Date(cap.capExpirationMs).toLocaleDateString() + '</span>');
 
 			return '<div class="cap-item">' +
 				'<div class="cap-info">' +
@@ -520,6 +544,9 @@ export function generateSubnameCapPage(env: Env): string {
 			btn.innerHTML = '<div class="spinner"></div> Building...';
 
 			try {
+				const capMaxUses = document.getElementById('cap-max-uses').value;
+				const capMaxDuration = document.getElementById('cap-max-duration').value;
+				const capExpiration = document.getElementById('cap-expiration').value;
 				const res = await fetch(API_BASE + '/create-cap', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -527,6 +554,11 @@ export function generateSubnameCapPage(env: Env): string {
 						parentNftId: document.getElementById('parent-nft-id').value.trim(),
 						allowLeafCreation: document.getElementById('allow-leaf').checked,
 						allowNodeCreation: document.getElementById('allow-node').checked,
+						defaultNodeAllowCreation: document.getElementById('default-node-allow-creation').checked,
+						defaultNodeAllowExtension: document.getElementById('default-node-allow-extension').checked,
+						maxUses: capMaxUses ? parseInt(capMaxUses) : undefined,
+						maxDurationMs: capMaxDuration ? parseInt(capMaxDuration) : undefined,
+						capExpirationMs: capExpiration ? parseInt(capExpiration) : undefined,
 						senderAddress: connectedAddress,
 					}),
 				});
@@ -601,8 +633,6 @@ export function generateSubnameCapPage(env: Env): string {
 						capObjectId: document.getElementById('node-cap-id').value.trim(),
 						subdomainName: document.getElementById('node-subdomain-name').value.trim(),
 						expirationTimestampMs,
-						allowCreation: document.getElementById('node-allow-creation').checked,
-						allowTimeExtension: document.getElementById('node-allow-extension').checked,
 						senderAddress: connectedAddress,
 					}),
 				});
@@ -705,6 +735,9 @@ export function generateSubnameCapPage(env: Env): string {
 					const badges = [];
 					if (cap.allowLeaf) badges.push('<span class="badge badge-leaf">Leaf</span>');
 					if (cap.allowNode) badges.push('<span class="badge badge-node">Node</span>');
+					if (cap.maxUses != null) badges.push('<span class="badge" style="background:var(--text-muted);color:white;">Max ' + cap.maxUses + ' uses</span>');
+					if (cap.maxDurationMs != null) badges.push('<span class="badge" style="background:var(--text-muted);color:white;">Max ' + (cap.maxDurationMs / 86400000).toFixed(0) + 'd</span>');
+					if (cap.capExpirationMs != null) badges.push('<span class="badge" style="background:var(--text-muted);color:white;">Exp ' + new Date(cap.capExpirationMs).toLocaleDateString() + '</span>');
 
 					html += '<div class="cap-item">' +
 						'<div class="cap-info">' +
@@ -750,18 +783,25 @@ export function generateSubnameCapPage(env: Env): string {
 				const parentNftId = document.getElementById('jacket-parent-nft').value.trim();
 				let endpoint, body;
 
-				if (type === 'single-use') {
-					endpoint = '/jacket/single-use/create';
-					const subnameType = document.getElementById('jacket-subname-type').value;
-					body = {
-						parentNftId,
-						recipientAddress: document.getElementById('jacket-recipient').value.trim() || connectedAddress,
-						allowNodeCreation: subnameType === 'node',
-						senderAddress: connectedAddress,
-					};
-				} else if (type === 'fee') {
-					endpoint = '/jacket/fee/create';
-					body = {
+					if (type === 'single-use') {
+						endpoint = '/jacket/single-use/create';
+						const subnameType = document.getElementById('jacket-subname-type').value;
+						const recipientInput = document.getElementById('jacket-recipient').value.trim();
+						body = {
+							parentNftId,
+							allowNodeCreation: subnameType === 'node',
+							senderAddress: connectedAddress,
+						};
+						if (recipientInput) {
+							if (recipientInput.startsWith('0x')) {
+								body.recipientAddress = recipientInput;
+							} else {
+								body.recipientName = recipientInput;
+							}
+						}
+					} else if (type === 'fee') {
+						endpoint = '/jacket/fee/create';
+						body = {
 						parentNftId,
 						leafFee: parseInt(document.getElementById('jacket-leaf-fee').value),
 						nodeFee: parseInt(document.getElementById('jacket-node-fee').value),
@@ -787,15 +827,31 @@ export function generateSubnameCapPage(env: Env): string {
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(body),
 				});
-				const data = await res.json();
+					const data = await res.json();
 
-				if (data.error) { showToast(data.error, 'error'); return; }
+					if (data.error) { showToast(data.error, 'error'); return; }
 
-				const result = await signAndExecute(data.txBytes);
-				if (result) { showToast('Jacket created successfully!'); }
-			} catch (err) {
-				showToast('Failed: ' + err.message, 'error');
-			} finally {
+					if (data.requiresRecipientFallbackConfirmation) {
+						const warning =
+							data.recipientFallbackMessage ||
+							'No target address found for the provided SuiNS name. Default recipient is your connected wallet.';
+						const proceed = window.confirm(warning + '\n\nContinue with self as recipient?');
+						if (!proceed) {
+							showToast('Cancelled jacket creation', 'error');
+							return;
+						}
+					}
+
+						const result = await signAndExecute(data.txBytes);
+						if (result) {
+							const recipientSummary = data.recipientAddress
+								? ' Voucher recipient: ' + data.recipientAddress.slice(0, 6) + '...' + data.recipientAddress.slice(-4)
+							: '';
+						showToast('Jacket created successfully!' + recipientSummary);
+					}
+				} catch (err) {
+					showToast('Failed: ' + err.message, 'error');
+				} finally {
 				btn.disabled = false;
 				btn.textContent = 'Create Jacket';
 			}
@@ -923,6 +979,27 @@ export function generateSubnameCapPage(env: Env): string {
 				listEl.innerHTML = '<div class="empty-state"><p>Failed to resolve domain</p></div>';
 			}
 		};
+
+		(async () => {
+			const hint = getWalletCookie();
+			if (!hint) return;
+			await new Promise(r => setTimeout(r, 300));
+			const wallets = await detectWallets();
+			const match = wallets.find(w => w.name === hint.walletName);
+			if (match) {
+				const feat = match.features['standard:connect'];
+				const result = await feat.connect();
+				const accounts = result.accounts || [];
+				if (accounts.length > 0) {
+					connectedAddress = accounts[0].address;
+					currentWallet = match;
+					const btn = document.getElementById('wallet-btn');
+					btn.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
+					btn.classList.add('connected');
+					loadMyCaps();
+				}
+			}
+		})();
 	</script>
 </body>
 </html>`

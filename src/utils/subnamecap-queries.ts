@@ -7,6 +7,12 @@ export interface SubnameCapInfo {
 	parentNftId: string
 	allowLeafCreation: boolean
 	allowNodeCreation: boolean
+	defaultNodeAllowCreation: boolean
+	defaultNodeAllowExtension: boolean
+	maxUses: number | null
+	usesCount: number
+	maxDurationMs: number | null
+	capExpirationMs: number | null
 	owner: string
 }
 
@@ -15,6 +21,9 @@ export interface CapEntryInfo {
 	createdAtMs: number
 	allowLeaf: boolean
 	allowNode: boolean
+	maxUses: number | null
+	maxDurationMs: number | null
+	capExpirationMs: number | null
 }
 
 export interface SubnameInfo {
@@ -32,7 +41,7 @@ interface RpcResponse<T> {
 }
 
 function getSubnameCapRpcUrl(env: Env): string {
-	return env.SUBNAMECAP_RPC_URL || getDefaultRpcUrl('testnet')
+	return env.SUI_RPC_URL || getDefaultRpcUrl(env.SUI_NETWORK)
 }
 
 async function rpcCall<T>(env: Env, method: string, params: unknown[]): Promise<T> {
@@ -90,6 +99,12 @@ export async function getSubnameCapById(capId: string, env: Env): Promise<Subnam
 		parentNftId: fields.parent_nft_id as string,
 		allowLeafCreation: fields.allow_leaf_creation as boolean,
 		allowNodeCreation: fields.allow_node_creation as boolean,
+		defaultNodeAllowCreation: (fields.default_node_allow_creation as boolean) ?? true,
+		defaultNodeAllowExtension: (fields.default_node_allow_extension as boolean) ?? false,
+		maxUses: fields.max_uses != null ? Number(fields.max_uses) : null,
+		usesCount: Number(fields.uses_count ?? 0),
+		maxDurationMs: fields.max_duration_ms != null ? Number(fields.max_duration_ms) : null,
+		capExpirationMs: fields.cap_expiration_ms != null ? Number(fields.cap_expiration_ms) : null,
 		owner: result.data.owner?.AddressOwner || result.data.owner?.ObjectOwner || '',
 	}
 }
@@ -141,6 +156,12 @@ export async function getSubnameCapsOwnedBy(
 			parentNftId: fields.parent_nft_id as string,
 			allowLeafCreation: fields.allow_leaf_creation as boolean,
 			allowNodeCreation: fields.allow_node_creation as boolean,
+			defaultNodeAllowCreation: (fields.default_node_allow_creation as boolean) ?? true,
+			defaultNodeAllowExtension: (fields.default_node_allow_extension as boolean) ?? false,
+			maxUses: fields.max_uses != null ? Number(fields.max_uses) : null,
+			usesCount: Number(fields.uses_count ?? 0),
+			maxDurationMs: fields.max_duration_ms != null ? Number(fields.max_duration_ms) : null,
+			capExpirationMs: fields.cap_expiration_ms != null ? Number(fields.cap_expiration_ms) : null,
 			owner: item.data.owner?.AddressOwner || ownerAddress,
 		})
 	}
@@ -160,6 +181,9 @@ interface DynamicFieldResult {
 								created_at_ms: string
 								allow_leaf: boolean
 								allow_node: boolean
+								max_uses?: string | null
+								max_duration_ms?: string | null
+								cap_expiration_ms?: string | null
 							}
 						}>
 					}
@@ -198,6 +222,10 @@ export async function getActiveCapsForDomain(domain: string, env: Env): Promise<
 			createdAtMs: Number(cap.fields.created_at_ms),
 			allowLeaf: cap.fields.allow_leaf,
 			allowNode: cap.fields.allow_node,
+			maxUses: cap.fields.max_uses != null ? Number(cap.fields.max_uses) : null,
+			maxDurationMs: cap.fields.max_duration_ms != null ? Number(cap.fields.max_duration_ms) : null,
+			capExpirationMs:
+				cap.fields.cap_expiration_ms != null ? Number(cap.fields.cap_expiration_ms) : null,
 		}))
 	} catch {
 		return []
@@ -238,10 +266,7 @@ export interface FeeJacketInfo {
 }
 
 export async function getFeeJacketById(jacketId: string, env: Env): Promise<FeeJacketInfo | null> {
-	const result = await rpcCall<ObjectData>(env, 'sui_getObject', [
-		jacketId,
-		{ showContent: true },
-	])
+	const result = await rpcCall<ObjectData>(env, 'sui_getObject', [jacketId, { showContent: true }])
 
 	if (!result?.data?.content?.fields) return null
 
@@ -261,11 +286,11 @@ export interface AllowlistJacketInfo {
 	paused: boolean
 }
 
-export async function getAllowlistJacketById(jacketId: string, env: Env): Promise<AllowlistJacketInfo | null> {
-	const result = await rpcCall<ObjectData>(env, 'sui_getObject', [
-		jacketId,
-		{ showContent: true },
-	])
+export async function getAllowlistJacketById(
+	jacketId: string,
+	env: Env,
+): Promise<AllowlistJacketInfo | null> {
+	const result = await rpcCall<ObjectData>(env, 'sui_getObject', [jacketId, { showContent: true }])
 
 	if (!result?.data?.content?.fields) return null
 
@@ -284,11 +309,11 @@ export interface RateLimitJacketInfo {
 	paused: boolean
 }
 
-export async function getRateLimitJacketById(jacketId: string, env: Env): Promise<RateLimitJacketInfo | null> {
-	const result = await rpcCall<ObjectData>(env, 'sui_getObject', [
-		jacketId,
-		{ showContent: true },
-	])
+export async function getRateLimitJacketById(
+	jacketId: string,
+	env: Env,
+): Promise<RateLimitJacketInfo | null> {
+	const result = await rpcCall<ObjectData>(env, 'sui_getObject', [jacketId, { showContent: true }])
 
 	if (!result?.data?.content?.fields) return null
 

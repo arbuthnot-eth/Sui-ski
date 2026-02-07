@@ -8,17 +8,15 @@ const CORS_HEADERS = {
 	'Access-Control-Allow-Headers': 'Content-Type',
 }
 
-/**
- * Handle view tracking requests
- * GET /api/views/:name - Get view count/score for a name
- * POST /api/views/:name - Increment view count/score for a name
- */
+const FLUSH_THRESHOLD = 10
+
+const viewCounters = new Map<string, { pending: number; flushed: number }>()
+
 export async function handleViewsRequest(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url)
 	const pathParts = url.pathname.replace('/api/views', '').split('/').filter(Boolean)
 	const name = pathParts[0]?.toLowerCase()
 
-	// Handle CORS preflight
 	if (request.method === 'OPTIONS') {
 		return new Response(null, { headers: CORS_HEADERS })
 	}
@@ -43,58 +41,56 @@ export async function handleViewsRequest(request: Request, env: Env): Promise<Re
 	}
 }
 
-/**
- * Get view count/score for a name
- */
 async function handleGetViews(name: string, env: Env): Promise<Response> {
 	const viewKey = cacheKey('views', env.SUI_NETWORK, name)
+	const counter = viewCounters.get(viewKey)
 
 	try {
-		const cached = await env.CACHE.get(viewKey, 'text')
-		const score = cached ? parseInt(cached, 10) : 0
+		let flushed = counter?.flushed ?? 0
+		if (!counter) {
+			const cached = await env.CACHE.get(viewKey, 'text')
+			flushed = cached ? parseInt(cached, 10) : 0
+			viewCounters.set(viewKey, { pending: 0, flushed })
+		}
+		const score = flushed + (counter?.pending ?? 0)
 
-		return jsonResponse(
-			{
-				name,
-				score,
-			},
-			200,
-			CORS_HEADERS,
-		)
+		return jsonResponse({ name, score }, 200, CORS_HEADERS)
 	} catch (error) {
 		console.error('Failed to get views:', error)
 		return jsonResponse({ name, score: 0 }, 200, CORS_HEADERS)
 	}
 }
 
-/**
- * Increment view count/score for a name
- */
 async function handleIncrementViews(name: string, env: Env): Promise<Response> {
 	const viewKey = cacheKey('views', env.SUI_NETWORK, name)
 
-	try {
-		// Get current score
-		const cached = await env.CACHE.get(viewKey, 'text')
-		const currentScore = cached ? parseInt(cached, 10) : 0
-
-		// Increment score
-		const newScore = currentScore + 1
-
-		// Store in KV (no expiration - permanent storage)
-		await env.CACHE.put(viewKey, String(newScore))
-
-		return jsonResponse(
-			{
-				name,
-				score: newScore,
-				incremented: true,
-			},
-			200,
-			CORS_HEADERS,
-		)
-	} catch (error) {
-		console.error('Failed to increment views:', error)
-		return jsonResponse({ error: 'Failed to increment views' }, 500, CORS_HEADERS)
+	let counter = viewCounters.get(viewKey)
+	if (!counter) {
+		try {
+			const cached = await env.CACHE.get(viewKey, 'text')
+			const flushed = cached ? parseInt(cached, 10) : 0
+			counter = { pending: 0, flushed }
+			viewCounters.set(viewKey, counter)
+		} catch {
+			counter = { pending: 0, flushed: 0 }
+			viewCounters.set(viewKey, counter)
+		}
 	}
+
+	counter.pending++
+
+	if (counter.pending >= FLUSH_THRESHOLD) {
+		const newTotal = counter.flushed + counter.pending
+		try {
+			await env.CACHE.put(viewKey, String(newTotal))
+			counter.flushed = newTotal
+			counter.pending = 0
+		} catch (error) {
+			console.error('Failed to flush views:', error)
+		}
+	}
+
+	const score = counter.flushed + counter.pending
+
+	return jsonResponse({ name, score, incremented: true }, 200, CORS_HEADERS)
 }

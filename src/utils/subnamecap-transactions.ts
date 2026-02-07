@@ -1,5 +1,5 @@
 import { Transaction } from '@mysten/sui/transactions'
-import { CLOCK_OBJECT } from '../config/testnet-subnamecap'
+import { CLOCK_OBJECT } from '../config/subnamecap'
 import type { Env } from '../types'
 
 interface SubnameCapEnv {
@@ -27,11 +27,29 @@ export interface TransactionResult {
 	estimatedGas: number
 }
 
-export interface CreateSubnameCapArgs {
+export interface CapLimitArgs {
+	defaultNodeAllowCreation?: boolean
+	defaultNodeAllowExtension?: boolean
+	maxUses?: number | null
+	maxDurationMs?: number | null
+	capExpirationMs?: number | null
+}
+
+export interface CreateSubnameCapArgs extends CapLimitArgs {
 	parentNftId: string
 	allowLeafCreation: boolean
 	allowNodeCreation: boolean
 	senderAddress: string
+}
+
+function capLimitArguments(tx: Transaction, args: CapLimitArgs) {
+	return [
+		tx.pure.bool(args.defaultNodeAllowCreation ?? true),
+		tx.pure.bool(args.defaultNodeAllowExtension ?? false),
+		tx.pure.option('u64', args.maxUses ?? null),
+		tx.pure.option('u64', args.maxDurationMs ?? null),
+		tx.pure.option('u64', args.capExpirationMs ?? null),
+	]
 }
 
 export function buildCreateSubnameCapTx(args: CreateSubnameCapArgs, env: Env): Transaction {
@@ -47,6 +65,7 @@ export function buildCreateSubnameCapTx(args: CreateSubnameCapArgs, env: Env): T
 			tx.object(CLOCK_OBJECT),
 			tx.pure.bool(args.allowLeafCreation),
 			tx.pure.bool(args.allowNodeCreation),
+			...capLimitArguments(tx, args),
 		],
 	})
 
@@ -144,8 +163,6 @@ export interface NewNodeWithCapArgs {
 	capObjectId: string
 	subdomainName: string
 	expirationTimestampMs: number
-	allowCreation: boolean
-	allowTimeExtension: boolean
 	senderAddress: string
 }
 
@@ -162,8 +179,6 @@ export function buildNewNodeWithCapTx(args: NewNodeWithCapArgs, env: Env): Trans
 			tx.object(CLOCK_OBJECT),
 			tx.pure.string(args.subdomainName),
 			tx.pure.u64(args.expirationTimestampMs),
-			tx.pure.bool(args.allowCreation),
-			tx.pure.bool(args.allowTimeExtension),
 		],
 	})
 
@@ -268,7 +283,7 @@ export function buildNewLeafRateLimitedTx(args: NewLeafRateLimitedArgs, env: Env
 	return tx
 }
 
-export interface CreateFeeJacketArgs {
+export interface CreateFeeJacketArgs extends CapLimitArgs {
 	parentNftId: string
 	leafFee: number
 	nodeFee: number
@@ -294,6 +309,7 @@ export function buildCreateFeeJacketTx(args: CreateFeeJacketArgs, env: Env): Tra
 			tx.object(CLOCK_OBJECT),
 			tx.pure.bool(true),
 			tx.pure.bool(true),
+			...capLimitArguments(tx, args),
 		],
 	})
 
@@ -311,13 +327,16 @@ export function buildCreateFeeJacketTx(args: CreateFeeJacketArgs, env: Env): Tra
 	return tx
 }
 
-export interface CreateAllowlistJacketArgs {
+export interface CreateAllowlistJacketArgs extends CapLimitArgs {
 	parentNftId: string
 	initialAddresses?: string[]
 	senderAddress: string
 }
 
-export function buildCreateAllowlistJacketTx(args: CreateAllowlistJacketArgs, env: Env): Transaction {
+export function buildCreateAllowlistJacketTx(
+	args: CreateAllowlistJacketArgs,
+	env: Env,
+): Transaction {
 	const { subdomainsPackageId, suinsObjectId } = getSubnameCapEnv(env)
 	const allowlistJacketPackageId = env.JACKET_ALLOWLIST_PACKAGE_ID
 	if (!allowlistJacketPackageId) {
@@ -335,6 +354,7 @@ export function buildCreateAllowlistJacketTx(args: CreateAllowlistJacketArgs, en
 			tx.object(CLOCK_OBJECT),
 			tx.pure.bool(true),
 			tx.pure.bool(true),
+			...capLimitArguments(tx, args),
 		],
 	})
 
@@ -347,14 +367,17 @@ export function buildCreateAllowlistJacketTx(args: CreateAllowlistJacketArgs, en
 	return tx
 }
 
-export interface CreateRateLimitJacketArgs {
+export interface CreateRateLimitJacketArgs extends CapLimitArgs {
 	parentNftId: string
 	maxPerWindow: number
 	windowDurationMs: number
 	senderAddress: string
 }
 
-export function buildCreateRateLimitJacketTx(args: CreateRateLimitJacketArgs, env: Env): Transaction {
+export function buildCreateRateLimitJacketTx(
+	args: CreateRateLimitJacketArgs,
+	env: Env,
+): Transaction {
 	const { subdomainsPackageId, suinsObjectId } = getSubnameCapEnv(env)
 	const rateLimitJacketPackageId = env.JACKET_RATE_LIMIT_PACKAGE_ID
 	if (!rateLimitJacketPackageId) {
@@ -372,6 +395,7 @@ export function buildCreateRateLimitJacketTx(args: CreateRateLimitJacketArgs, en
 			tx.object(CLOCK_OBJECT),
 			tx.pure.bool(true),
 			tx.pure.bool(true),
+			...capLimitArguments(tx, args),
 		],
 	})
 
@@ -472,14 +496,17 @@ export function buildUpdateRateLimitTx(args: UpdateRateLimitArgs, env: Env): Tra
 	return tx
 }
 
-export interface CreateSingleUseJacketArgs {
+export interface CreateSingleUseJacketArgs extends CapLimitArgs {
 	parentNftId: string
 	recipientAddress: string
 	allowNodeCreation?: boolean
 	senderAddress: string
 }
 
-export function buildCreateSingleUseJacketTx(args: CreateSingleUseJacketArgs, env: Env): Transaction {
+export function buildCreateSingleUseJacketTx(
+	args: CreateSingleUseJacketArgs,
+	env: Env,
+): Transaction {
 	const { subdomainsPackageId, suinsObjectId } = getSubnameCapEnv(env)
 	const singleUsePackageId = env.JACKET_SINGLE_USE_PACKAGE_ID
 	if (!singleUsePackageId) {
@@ -497,6 +524,7 @@ export function buildCreateSingleUseJacketTx(args: CreateSingleUseJacketArgs, en
 			tx.object(CLOCK_OBJECT),
 			tx.pure.bool(true),
 			tx.pure.bool(args.allowNodeCreation ?? false),
+			...capLimitArguments(tx, args),
 		],
 	})
 
@@ -516,7 +544,10 @@ export interface UseSingleUseJacketLeafArgs {
 	senderAddress: string
 }
 
-export function buildUseSingleUseJacketLeafTx(args: UseSingleUseJacketLeafArgs, env: Env): Transaction {
+export function buildUseSingleUseJacketLeafTx(
+	args: UseSingleUseJacketLeafArgs,
+	env: Env,
+): Transaction {
 	const { suinsObjectId } = getSubnameCapEnv(env)
 	const singleUsePackageId = env.JACKET_SINGLE_USE_PACKAGE_ID
 	if (!singleUsePackageId) {
@@ -544,12 +575,13 @@ export interface UseSingleUseJacketNodeArgs {
 	jacketObjectId: string
 	subdomainName: string
 	expirationTimestampMs: number
-	allowCreation: boolean
-	allowTimeExtension: boolean
 	senderAddress: string
 }
 
-export function buildUseSingleUseJacketNodeTx(args: UseSingleUseJacketNodeArgs, env: Env): Transaction {
+export function buildUseSingleUseJacketNodeTx(
+	args: UseSingleUseJacketNodeArgs,
+	env: Env,
+): Transaction {
 	const { suinsObjectId } = getSubnameCapEnv(env)
 	const singleUsePackageId = env.JACKET_SINGLE_USE_PACKAGE_ID
 	if (!singleUsePackageId) {
@@ -567,8 +599,6 @@ export function buildUseSingleUseJacketNodeTx(args: UseSingleUseJacketNodeArgs, 
 			tx.object(CLOCK_OBJECT),
 			tx.pure.string(args.subdomainName),
 			tx.pure.u64(args.expirationTimestampMs),
-			tx.pure.bool(args.allowCreation),
-			tx.pure.bool(args.allowTimeExtension),
 		],
 	})
 

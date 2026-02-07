@@ -87,7 +87,7 @@ export function notFoundPage(name: string, env?: Env, available?: boolean) {
 		* { box-sizing: border-box; margin: 0; padding: 0; }
 		body {
 			font-family: 'Inter', system-ui, -apple-system, sans-serif;
-			background: linear-gradient(145deg, #0a0a0f 0%, #12121a 50%, #0d0d14 100%);
+			background: #000;
 			background-attachment: fixed;
 			color: #e4e4e7;
 			min-height: 100vh;

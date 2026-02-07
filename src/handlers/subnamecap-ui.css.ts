@@ -1,8 +1,8 @@
 export const subnameCapStyles = `
 	:root {
-		--bg-void: #020204;
-		--bg-dark: #050507;
-		--bg-subtle: #0a0a0e;
+		--bg-void: #000;
+		--bg-dark: #000;
+		--bg-subtle: #050505;
 		--card-bg: rgba(12, 12, 18, 0.95);
 		--card-bg-solid: #0c0c12;
 		--card-bg-elevated: rgba(16, 16, 24, 0.98);

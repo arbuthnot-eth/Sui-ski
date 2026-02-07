@@ -74,6 +74,10 @@ export function parseSubdomain(hostname: string): ParsedSubdomain {
 		return { type: 'app', subdomain, hostname: host, networkOverride }
 	}
 
+	if (subdomain === 'my') {
+		return { type: 'dashboard', subdomain, hostname: host, networkOverride }
+	}
+
 	if (subdomain.startsWith('ipfs-')) {
 		return { type: 'content', subdomain, hostname: host, networkOverride }
 	}

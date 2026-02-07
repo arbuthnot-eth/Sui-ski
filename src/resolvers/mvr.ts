@@ -44,7 +44,7 @@ export async function resolveMVRPackage(
 	)
 
 	// Check cache first
-	const cached = await getCached<MVRPackageInfo>(env, key)
+	const cached = await getCached<MVRPackageInfo>(key)
 	if (cached) {
 		return { found: true, data: cached, cacheTtl: CACHE_TTL }
 	}
@@ -102,7 +102,7 @@ export async function resolveMVRPackage(
 		}
 
 		// Cache the result
-		await setCache(env, key, packageInfo, CACHE_TTL)
+		await setCache(key, packageInfo, CACHE_TTL)
 
 		return { found: true, data: packageInfo, cacheTtl: CACHE_TTL }
 	} catch (error) {
