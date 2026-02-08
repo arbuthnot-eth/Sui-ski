@@ -550,14 +550,14 @@ export function generateDashboardPage(env: Env): string {
 				<div class="section-header">
 					<h2>
 						<svg viewBox="0 0 24 24" style="width:20px;height:20px;vertical-align:middle;margin-right:8px">
-							<path d="M12 2L22 12L12 22L2 12Z" fill="#0a0a0a" stroke="#333" stroke-width="2"/>
+							<path d="M12 2L22 12L12 22L2 12Z" fill="#60a5fa" stroke="#60a5fa" stroke-width="2"/>
 						</svg>
-						Watching
+						Vault
 					</h2>
 				</div>
 				<div id="watching-grid" class="names-grid"></div>
 				<div id="watching-empty" class="empty-hint" style="display:none">
-					Click &#9670; on any profile to start watching
+					Click &#9670; on any profile to save it to your private vault
 				</div>
 			</div>
 
@@ -606,15 +606,25 @@ export function generateDashboardPage(env: Env): string {
 	</div>
 
 	<script type="module">
-		let getWallets;
-		try {
-			const m = await Promise.race([
-				import('https://esm.sh/@wallet-standard/app@1.1.0'),
-				new Promise((_, r) => setTimeout(() => r(new Error('SDK load timeout')), 15000)),
+		let getWallets, SealClient, SessionKey, fromHex, toHex, SuiJsonRpcClient, Transaction;
+		{
+			const SDK_TIMEOUT = 15000;
+			const timedImport = (url) => Promise.race([
+				import(url),
+				new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
 			]);
-			({ getWallets } = m);
-		} catch (e) {
-			console.warn('Wallet SDK failed to load:', e.message);
+			const results = await Promise.allSettled([
+				timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
+				timedImport('https://esm.sh/@mysten/seal@0.9.6'),
+				timedImport('https://esm.sh/@mysten/bcs@1.3.0'),
+				timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
+				timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
+			]);
+			if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
+			if (results[1].status === 'fulfilled') ({ SealClient, SessionKey } = results[1].value);
+			if (results[2].status === 'fulfilled') ({ fromHex, toHex } = results[2].value);
+			if (results[3].status === 'fulfilled') ({ SuiJsonRpcClient } = results[3].value);
+			if (results[4].status === 'fulfilled') ({ Transaction } = results[4].value);
 		}
 
 		${generateWalletSessionJs()}
@@ -1034,17 +1044,34 @@ export function generateDashboardPage(env: Env): string {
 			} catch {}
 		}
 
-		async function loadWatchedNames() {
+		async function loadVaultBookmarks() {
 			if (!connectedAddress) return;
 			const watchingSection = document.getElementById('watching-section');
 			const watchingGrid = document.getElementById('watching-grid');
 			const watchingEmpty = document.getElementById('watching-empty');
 
 			try {
-				const res = await fetch(API_BASE + '/api/black-diamond/watchlist?address=' + encodeURIComponent(connectedAddress));
-				const data = await res.json();
+				const VAULT_STORAGE_KEY = 'sui_ski_vault';
+				let vault = null;
+				try { vault = JSON.parse(localStorage.getItem(VAULT_STORAGE_KEY) || 'null'); } catch {}
 
-				if (!data.names || data.names.length === 0) {
+				const metaRes = await fetch(API_BASE + '/api/vault/meta?address=' + encodeURIComponent(connectedAddress));
+				const metaData = await metaRes.json();
+
+				if (metaData.found && metaData.count > 0) {
+					const vaultRes = await fetch(API_BASE + '/api/vault?address=' + encodeURIComponent(connectedAddress));
+					const vaultData = await vaultRes.json();
+
+					if (vaultData.found && vaultData.encryptedBlob) {
+						try {
+							const decoded = decodeURIComponent(escape(atob(vaultData.encryptedBlob)));
+							vault = JSON.parse(decoded);
+							localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(vault));
+						} catch {}
+					}
+				}
+
+				if (!vault || !vault.bookmarks || vault.bookmarks.length === 0) {
 					watchingSection.style.display = '';
 					watchingGrid.style.display = 'none';
 					watchingEmpty.style.display = '';
@@ -1055,24 +1082,24 @@ export function generateDashboardPage(env: Env): string {
 				watchingGrid.style.display = '';
 				watchingEmpty.style.display = 'none';
 
-				watchingGrid.innerHTML = data.names.map(function(name) {
-					const cleanName = name.replace(/\\.sui$/i, '');
+				watchingGrid.innerHTML = vault.bookmarks.map(function(bookmark) {
+					const cleanName = bookmark.name.replace(/\\.sui$/i, '');
 					return '<a href="https://' + encodeURIComponent(cleanName) + '.' + PROFILE_BASE + '" class="name-card" style="text-decoration:none">' +
 						'<div class="name-card-header">' +
-							'<svg viewBox="0 0 24 24" style="width:16px;height:16px;flex-shrink:0"><path d="M12 2L22 12L12 22L2 12Z" fill="#0a0a0a" stroke="#333" stroke-width="2"/></svg>' +
+							'<svg viewBox="0 0 24 24" style="width:16px;height:16px;flex-shrink:0"><path d="M12 2L22 12L12 22L2 12Z" fill="#60a5fa" stroke="#60a5fa" stroke-width="2"/></svg>' +
 							'<div class="name-card-title">' + cleanName + '<span style="color:#52525b">.sui</span></div>' +
 						'</div>' +
 					'</a>';
 				}).join('');
 			} catch (e) {
-				console.error('Failed to load watched names:', e);
+				console.error('Failed to load vault bookmarks:', e);
 			}
 		}
 
 		function onWalletConnected() {
 			updateWalletDropdown();
 			loadNames();
-			// loadWatchedNames();
+			loadVaultBookmarks();
 			fetchSuiPrice();
 		}
 

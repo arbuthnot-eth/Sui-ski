@@ -173,6 +173,9 @@ export function generateProfilePage(
 						<button class="identity-action-btn" id="identity-restore-btn" title="Restore NFT visual">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.5 9A9 9 0 0 1 18.9 5.3L23 10"></path><path d="M20.5 15a9 9 0 0 1-15.4 3.7L1 14"></path></svg>
 						</button>
+						<button class="identity-action-btn" id="vault-diamond-btn" title="Save to vault" style="display:none">
+							<svg viewBox="0 0 24 24"><path d="M12 2L22 12L12 22L2 12Z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+						</button>
 					</div>
 				</div>
 				<div class="hero-main">
@@ -508,7 +511,7 @@ export function generateProfilePage(
 					<div class="marketplace-activity" id="marketplace-activity" style="display:none;">
 						<div class="marketplace-activity-header">
 							<span>Activity</span>
-							<a href="${record.nftId ? `https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=${escapeHtml(record.nftId)}&modalSlug=suins&nav=1` : `https://www.tradeport.xyz/sui/collection/suins?search=${escapeHtml(cleanName)}`}" target="_blank" id="marketplace-activity-link" class="marketplace-activity-link">TradePort</a>
+							<a href="${record.nftId ? `https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=${escapeHtml(record.nftId)}&modalSlug=suins&nav=1` : `https://www.tradeport.xyz/sui/collection/suins?search=${escapeHtml(cleanName)}`}" target="_blank" id="marketplace-activity-link" class="marketplace-activity-link">${escapeHtml(cleanName)}.sui</a>
 						</div>
 						<div class="marketplace-activity-list" id="marketplace-activity-list">
 							<div class="marketplace-activity-empty">Loading activity...</div>
@@ -1911,6 +1914,16 @@ export function generateProfilePage(
 				if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
 				if (typeof updateRenewalButton === 'function') updateRenewalButton();
 				if (typeof updateMarketplaceButton === 'function') updateMarketplaceButton();
+
+				const vaultBtn = document.getElementById('vault-diamond-btn');
+				if (vaultBtn) {
+					if (connectedAddress && connectedAddress !== TARGET_ADDRESS && connectedAddress !== OWNER_ADDRESS) {
+						vaultBtn.style.display = '';
+						if (typeof updateDiamondState === 'function') updateDiamondState();
+					} else {
+						vaultBtn.style.display = 'none';
+					}
+				}
 
 				if (connectedAddress && typeof pendingBidAmount !== 'undefined' && pendingBidAmount !== null) {
 					setTimeout(() => {
@@ -7919,8 +7932,12 @@ export function generateProfilePage(
 						let expirySummary = '';
 							if (hasExpiry) {
 								const nowMs = Date.now();
-								const daysUntilAvailable = Math.ceil((AVAILABLE_AT - nowMs) / dayMs);
-								expirySummary = Math.max(0, daysUntilAvailable) + 'd';
+								const totalDays = Math.max(0, Math.ceil((AVAILABLE_AT - nowMs) / dayMs));
+								const years = Math.floor(totalDays / 365);
+								const remainDays = totalDays - years * 365;
+								expirySummary = years > 0
+									? years + 'y ' + remainDays + 'd'
+									: totalDays + 'd';
 							}
 						const syntheticExpiryAction = expirySummary
 							? {
@@ -7977,29 +7994,36 @@ export function generateProfilePage(
 							return '';
 						}
 
-						function formatTimeAgo(blockTime) {
+						function formatActivityDate(blockTime) {
 							try {
 								const date = new Date(blockTime);
-								const now = new Date();
-								const diffMs = now - date;
-								const diffSec = Math.floor(diffMs / 1000);
-								const diffMin = Math.floor(diffSec / 60);
-								const diffHour = Math.floor(diffMin / 60);
-								const diffDay = Math.floor(diffHour / 24);
-
-								if (diffDay > 0) return diffDay + 'd ago';
-								if (diffHour > 0) return diffHour + 'h ago';
-								if (diffMin > 0) return diffMin + 'm ago';
-								return 'Just now';
+								const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+								return months[date.getMonth()] + ' ' + date.getDate();
 							} catch {
 								return '';
 							}
 						}
 
+						function getActivityYear(blockTime) {
+							try {
+								return new Date(blockTime).getFullYear();
+							} catch {
+								return 0;
+							}
+						}
+
 						marketplaceActivity.style.display = 'block';
+						let lastYear = 0;
 						marketplaceActivityList.innerHTML = displayActions
 							.slice(0, 10)
 							.map((action) => {
+								let yearHeader = '';
+								const year = getActivityYear(action.blockTime);
+								if (year && year !== lastYear) {
+									lastYear = year;
+									yearHeader = '<div class="marketplace-activity-year">' + year + '</div>';
+								}
+
 								const label = getActionLabel(action.type);
 								const addr = getActionAddress(action);
 								const fallbackActor = addr ? getBidderFallback(addr) : '--';
@@ -8022,10 +8046,11 @@ export function generateProfilePage(
 										: '';
 								const priceDisplay = '<span class="marketplace-activity-amount">' + amountContent + '</span>';
 
-								const timeAgo = customAmount ? '' : formatTimeAgo(action.blockTime);
-								const timeDisplay = '<span class="marketplace-activity-time">' + (timeAgo ? escapeHtmlJs(timeAgo) : '') + '</span>';
+								const dateStr = customAmount ? '' : formatActivityDate(action.blockTime);
+								const timeDisplay = '<span class="marketplace-activity-time">' + (dateStr ? escapeHtmlJs(dateStr) : '') + '</span>';
 
 								return (
+									yearHeader +
 									'<div class="marketplace-activity-item ' + escapeHtmlJs(action.type) + '">' +
 										'<span class="marketplace-activity-kind">' + escapeHtmlJs(label) + '</span>' +
 										activityActorHtml +
@@ -9341,11 +9366,11 @@ export function generateProfilePage(
 	</div>
 
 	<script>
-		// Config (duplicated from module script for this non-module context)
 		const NETWORK = ${serializeJson(network)};
 		const NAME = ${serializeJson(cleanName)};
+		const TARGET_ADDRESS = ${serializeJson(record.address || '')};
+		const OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
 
-		// Feature flags (disabled until fully implemented)
 		const ENABLE_UPLOAD = false;
 		const ENABLE_BOUNTIES = false;
 		const ENABLE_VORTEX = false;
@@ -9543,7 +9568,93 @@ export function generateProfilePage(
 			saveLocalSubscriptions(subs);
 		}
 
-		// Initialize Seal on page load
+		const VAULT_STORAGE_KEY = 'sui_ski_vault';
+		const VAULT_API_BASE = '${escapeHtml(rootOrigin)}';
+
+		function getLocalVault() {
+			try {
+				return JSON.parse(localStorage.getItem(VAULT_STORAGE_KEY) || '{"bookmarks":[],"version":1}');
+			} catch {
+				return { bookmarks: [], version: 1 };
+			}
+		}
+
+		function saveLocalVault(vault) {
+			localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(vault));
+		}
+
+		function isVaultBookmarked(name) {
+			return getLocalVault().bookmarks.some(function(b) { return b.name === name; });
+		}
+
+		function updateDiamondState() {
+			const btn = document.getElementById('vault-diamond-btn');
+			if (!btn) return;
+			if (isVaultBookmarked(NAME)) {
+				btn.classList.add('bookmarked');
+				btn.title = 'Remove from vault';
+			} else {
+				btn.classList.remove('bookmarked');
+				btn.title = 'Save to vault';
+			}
+		}
+
+		async function syncVaultToServer(vault) {
+			try {
+				const data = JSON.stringify(vault);
+				const plaintext = new TextEncoder().encode(data);
+				let encryptedBlob;
+
+				if (window.sealClient && window.sealConfig?.seal?.packageId) {
+					const packageId = window.sealConfig.seal.packageId;
+					const policyId = getConnectedAddress().startsWith('0x') ? getConnectedAddress().slice(2) : getConnectedAddress();
+					const { encryptedObject } = await window.sealClient.encrypt({
+						threshold: 2,
+						packageId: window.fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
+						id: window.fromHex(policyId),
+						data: plaintext,
+					});
+					encryptedBlob = btoa(String.fromCharCode.apply(null, encryptedObject.data));
+				} else {
+					encryptedBlob = btoa(unescape(encodeURIComponent(data)));
+				}
+
+				await fetch(VAULT_API_BASE + '/api/vault/sync', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						encryptedBlob: encryptedBlob,
+						ownerAddress: getConnectedAddress(),
+						meta: { version: vault.version, updatedAt: vault.updatedAt, count: vault.bookmarks.length },
+					}),
+				});
+			} catch (err) {
+				console.error('Vault sync failed:', err);
+			}
+		}
+
+		async function toggleVaultBookmark() {
+			const addr = getConnectedAddress();
+			if (!addr) return;
+			const vault = getLocalVault();
+			const idx = vault.bookmarks.findIndex(function(b) { return b.name === NAME; });
+			if (idx >= 0) {
+				vault.bookmarks.splice(idx, 1);
+			} else {
+				if (vault.bookmarks.length >= 100) return;
+				vault.bookmarks.push({ name: NAME, address: TARGET_ADDRESS, addedAt: Date.now() });
+			}
+			vault.ownerAddress = addr;
+			vault.updatedAt = Date.now();
+			vault.version = (vault.version || 0) + 1;
+			saveLocalVault(vault);
+			updateDiamondState();
+			syncVaultToServer(vault);
+		}
+
+		const vaultDiamondBtn = document.getElementById('vault-diamond-btn');
+		if (vaultDiamondBtn) vaultDiamondBtn.addEventListener('click', toggleVaultBookmark);
+
 		initSealSdk();
 
 		// ========================================

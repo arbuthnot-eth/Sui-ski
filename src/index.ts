@@ -7,6 +7,7 @@ import { apiRoutes, landingPageHTML } from './handlers/landing'
 import { generateProfilePage } from './handlers/profile'
 import { agentSubnameCapRoutes, subnameCapRoutes } from './handlers/subnamecap'
 import { generateSubnameCapPage } from './handlers/subnamecap-ui'
+import { vaultRoutes } from './handlers/vault'
 import {
 	handleWalletCheck,
 	handleWalletConnect,
@@ -125,6 +126,7 @@ app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
 
 app.route('/api/subnamecap', subnameCapRoutes)
 app.route('/api/black-diamond', blackDiamondRoutes)
+app.route('/api/vault', vaultRoutes)
 app.route('/api', apiRoutes)
 
 const SVG_HEADERS = { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=604800' }
