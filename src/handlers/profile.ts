@@ -1830,6 +1830,22 @@ export function generateProfilePage(
 			disconnectWalletSession();
 		}
 
+		const PHANTOM_POLL_MAX_ATTEMPTS = 10;
+		const PHANTOM_POLL_INTERVAL_MS = 150;
+		const PHANTOM_ERROR_POLL_ATTEMPTS = 8;
+		const PHANTOM_ERROR_POLL_INTERVAL_MS = 200;
+		const IN_APP_BROWSER_POLL_ATTEMPTS = 5;
+		const IN_APP_BROWSER_POLL_INTERVAL_MS = 300;
+
+		async function pollPhantomAccounts(getAccountsFn, maxAttempts, intervalMs) {
+			for (let attempt = 0; attempt < maxAttempts; attempt++) {
+				const accounts = getAccountsFn();
+				if (accounts.length > 0) return accounts;
+				await new Promise(r => setTimeout(r, intervalMs));
+			}
+			return [];
+		}
+
 		async function restoreWalletConnection() {
 			try {
 				const saved = localStorage.getItem(STORAGE_KEY);
@@ -1854,12 +1870,17 @@ export function generateProfilePage(
 						if (accounts.length === 0 && typeof phantomProvider.connect === 'function') {
 							try {
 								await phantomProvider.connect();
-								for (let pollAttempt = 0; pollAttempt < 10; pollAttempt++) {
-									accounts = filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []);
-									if (accounts.length > 0) break;
-									await new Promise(r => setTimeout(r, 150));
+								accounts = await pollPhantomAccounts(
+									() => filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []),
+									PHANTOM_POLL_MAX_ATTEMPTS,
+									PHANTOM_POLL_INTERVAL_MS,
+								);
+							} catch (connectErr) {
+								const msg = connectErr?.message || '';
+								if (!msg.includes('rejected') && !msg.includes('cancelled')) {
+									console.error('Phantom restore connect failed:', msg);
 								}
-							} catch {}
+							}
 						}
 					} else {
 						const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
@@ -1934,19 +1955,15 @@ export function generateProfilePage(
 						return;
 					}
 					if (typeof phantomProvider.connect === 'function') {
-						const connectResult = await phantomProvider.connect();
-						for (let pollAttempt = 0; pollAttempt < 10; pollAttempt++) {
-							const resultAccounts = connectResult?.accounts || connectResult;
-							const accounts = filterSuiAccounts(
-								Array.isArray(resultAccounts) && resultAccounts.length > 0
-									? resultAccounts
-									: phantomProvider.accounts || wallet.accounts || []
-							);
-							if (accounts.length > 0) {
-								finishConnect(accounts, 'Phantom');
-								return;
-							}
-							await new Promise(r => setTimeout(r, 150));
+						await phantomProvider.connect();
+						const accounts = await pollPhantomAccounts(
+							() => filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []),
+							PHANTOM_POLL_MAX_ATTEMPTS,
+							PHANTOM_POLL_INTERVAL_MS,
+						);
+						if (accounts.length > 0) {
+							finishConnect(accounts, 'Phantom');
+							return;
 						}
 					}
 					throw new Error('Phantom connected but no Sui accounts found. Switch your wallet to Sui and try again.');
@@ -1977,13 +1994,14 @@ export function generateProfilePage(
 				const phantomProvider = window.phantom?.sui;
 				if (phantomProvider) {
 					walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Checking wallet...</div>';
-					for (let pollAttempt = 0; pollAttempt < 8; pollAttempt++) {
-						const existing = filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []);
-						if (existing.length > 0) {
-							finishConnect(existing, 'Phantom');
-							return;
-						}
-						await new Promise(r => setTimeout(r, 200));
+					const recovered = await pollPhantomAccounts(
+						() => filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []),
+						PHANTOM_ERROR_POLL_ATTEMPTS,
+						PHANTOM_ERROR_POLL_INTERVAL_MS,
+					);
+					if (recovered.length > 0) {
+						finishConnect(recovered, 'Phantom');
+						return;
 					}
 				}
 
@@ -1993,9 +2011,11 @@ export function generateProfilePage(
 				if (!isUserAction && !errorMsg.includes('authorized')) {
 					console.error('Wallet error:', errorMsg);
 				}
-				const userMessage = isUserAction
-					? 'Connection cancelled.'
-					: 'Connection failed. Please try again.';
+				const userMessage = errorMsg.includes('authorized')
+					? 'Tap Connect again to approve the connection.'
+					: isUserAction
+						? 'Connection cancelled.'
+						: 'Connection failed: ' + errorMsg;
 				walletList.innerHTML = '<div class="wallet-no-wallets" style="color: var(--error);">' +
 					userMessage +
 					'<br><br>' +
@@ -2017,13 +2037,13 @@ export function generateProfilePage(
 
 			// In-app browser: auto-connect to the single available wallet
 			if (isInAppBrowser()) {
-				for (let attempt = 0; attempt < 5; attempt++) {
+				for (let attempt = 0; attempt < IN_APP_BROWSER_POLL_ATTEMPTS; attempt++) {
 					const wallets = getSuiWallets();
 					if (wallets.length > 0) {
 						connectToWallet(wallets[0]);
 						return;
 					}
-					await new Promise(r => setTimeout(r, 300));
+					await new Promise(r => setTimeout(r, IN_APP_BROWSER_POLL_INTERVAL_MS));
 				}
 			}
 
