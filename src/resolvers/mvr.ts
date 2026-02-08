@@ -5,10 +5,10 @@ import { getDefaultRpcUrl } from '../utils/rpc'
 
 const CACHE_TTL = 300 // 5 minutes
 
-// Move Registry object IDs
+// Move Registry object IDs (fallbacks - prefer MOVE_REGISTRY_PARENT_ID env var)
 const MVR_REGISTRY_OBJECT_ID = {
 	mainnet: '0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727',
-	testnet: '', // TODO: Set testnet registry object ID when available
+	testnet: null,
 } as const
 
 /**

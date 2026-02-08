@@ -40,9 +40,13 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		body {
 			font-family: 'Inter', system-ui, -apple-system, sans-serif;
 			background: #000;
-			min-height: 100vh;
+			height: 100vh;
+			overflow: hidden;
 			color: var(--text);
-			padding: 32px 16px 64px;
+			padding: 16px 16px 8px;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
 			position: relative;
 		}
 		.container {
@@ -50,13 +54,13 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			margin: 0 auto;
 			display: flex;
 			flex-direction: column;
-			gap: 20px;
+			gap: 12px;
 		}
 		.card {
 			background: var(--card);
 			border: 1px solid var(--border);
 			border-radius: 20px;
-			padding: 28px;
+			padding: 20px;
 			box-shadow: 0 25px 60px rgba(5,6,12,0.7);
 		}
 		.header {
@@ -64,8 +68,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			margin-bottom: 0;
 		}
 		.header h1 {
-			font-size: clamp(1.8rem, 3vw, 2.8rem);
-			margin-bottom: 6px;
+			font-size: clamp(1.4rem, 2.5vw, 2rem);
+			margin-bottom: 4px;
 			font-weight: 800;
 		}
 		.header h1 span {
@@ -74,19 +78,19 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		.register-layout {
 			display: grid;
 			grid-template-columns: 1fr 1fr;
-			gap: 32px;
+			gap: 20px;
 			align-items: start;
 		}
 		.register-left {
 			display: flex;
 			flex-direction: column;
-			gap: 12px;
-			padding-top: 8px;
+			gap: 8px;
+			padding-top: 4px;
 		}
 		.register-right {
 			display: flex;
 			flex-direction: column;
-			gap: 12px;
+			gap: 8px;
 		}
 		.gear-fab {
 			position: fixed;
@@ -548,16 +552,16 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 		.register-hero {
 			text-align: left;
-			padding: 0 0 4px;
+			padding: 0;
 		}
 		.register-price-row {
 			display: flex;
-			align-items: baseline;
+			align-items: center;
 			gap: 10px;
 			flex-wrap: wrap;
 		}
 		.register-price {
-			font-size: 2rem;
+			font-size: 1.6rem;
 			font-weight: 800;
 			background: linear-gradient(135deg, #34d399, #60a5fa);
 			-webkit-background-clip: text;
@@ -566,18 +570,18 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 		.register-price-label {
 			color: var(--muted);
-			font-size: 0.85rem;
-			margin-top: 2px;
+			font-size: 0.8rem;
+			margin-top: 1px;
 		}
 		.register-btn {
 			width: 100%;
-			padding: 16px 24px;
-			font-size: 1.1rem;
+			padding: 12px 20px;
+			font-size: 0.95rem;
 			font-weight: 700;
 			background: linear-gradient(135deg, #10b981, #3b82f6);
 			color: white;
 			border: none;
-			border-radius: 14px;
+			border-radius: 12px;
 			cursor: pointer;
 			display: flex;
 			align-items: center;
@@ -589,8 +593,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		.register-btn.compact {
 			width: auto;
 			margin: 0 auto;
-			padding: 10px 32px;
-			font-size: 0.95rem;
+			padding: 8px 28px;
+			font-size: 0.9rem;
 			border-radius: 10px;
 			box-shadow: 0 4px 16px rgba(16, 185, 129, 0.25);
 		}
@@ -607,10 +611,10 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			height: 20px;
 		}
 		.register-status {
-			margin-top: 16px;
-			padding: 16px;
-			border-radius: 12px;
-			font-size: 0.9rem;
+			margin-top: 8px;
+			padding: 12px;
+			border-radius: 10px;
+			font-size: 0.85rem;
 			display: none;
 		}
 		.register-status.show {
@@ -777,20 +781,20 @@ export function generateRegistrationPage(name: string, env: Env): string {
 
 		.register-features {
 			display: flex;
-			gap: 16px;
-			margin-top: 12px;
+			gap: 12px;
+			margin-top: 4px;
 			flex-wrap: wrap;
 		}
 		.register-feature {
 			display: flex;
 			align-items: center;
-			gap: 6px;
-			font-size: 0.85rem;
+			gap: 4px;
+			font-size: 0.78rem;
 			color: var(--muted);
 		}
 		.register-feature svg {
-			width: 16px;
-			height: 16px;
+			width: 14px;
+			height: 14px;
 			color: var(--success);
 		}
 
@@ -801,26 +805,37 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			border-radius: 999px;
 			background: rgba(52, 211, 153, 0.18);
 			border: 1px solid rgba(52, 211, 153, 0.35);
-			color: var(--success);
+			color: #fff;
 			font-size: 0.78rem;
 			font-weight: 700;
 			letter-spacing: 0.02em;
 			white-space: nowrap;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.savings-badge:hover {
+			background: rgba(52, 211, 153, 0.28);
+			border-color: rgba(52, 211, 153, 0.5);
+		}
+		.savings-badge.active {
+			background: rgba(52, 211, 153, 0.35);
+			border-color: rgba(52, 211, 153, 0.7);
+			box-shadow: 0 0 12px rgba(52, 211, 153, 0.25);
 		}
 
 		/* Price Breakdown */
 		.price-breakdown {
 			background: rgba(0, 0, 0, 0.24);
-			border-radius: 12px;
-			padding: 14px 16px;
-			margin: 8px 0 12px;
+			border-radius: 10px;
+			padding: 10px 14px;
+			margin: 4px 0 8px;
 		}
 		.price-row {
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
-			padding: 5px 0;
-			font-size: 0.88rem;
+			padding: 3px 0;
+			font-size: 0.82rem;
 		}
 		.price-row .price-label {
 			color: var(--muted);
@@ -861,7 +876,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			align-items: center;
 			justify-content: space-between;
 			padding: 0 16px;
-			margin-bottom: 8px;
+			margin-bottom: 4px;
 			max-width: 880px;
 			margin-left: auto;
 			margin-right: auto;
@@ -869,10 +884,10 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		.nav-logo {
 			display: flex;
 			align-items: center;
-			gap: 10px;
+			gap: 8px;
 			text-decoration: none;
 			color: var(--text);
-			font-size: 1.3rem;
+			font-size: 1.1rem;
 			font-weight: 800;
 			letter-spacing: -0.02em;
 		}
@@ -909,10 +924,9 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		/* Footer */
 		.footer-brand {
 			display: flex;
-			flex-direction: column;
 			align-items: center;
-			gap: 10px;
-			padding: 48px 16px 24px;
+			justify-content: center;
+			padding: 6px 0 0;
 			max-width: 880px;
 			margin: 0 auto;
 		}
@@ -952,8 +966,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		.card-brand-row {
 			display: flex;
 			align-items: center;
-			gap: 8px;
-			margin-bottom: 6px;
+			gap: 6px;
+			margin-bottom: 2px;
 			opacity: 0.5;
 		}
 		.card-brand-row span {
@@ -970,12 +984,12 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			align-items: center;
 			justify-content: center;
 			gap: 8px;
-			padding: 8px 12px;
+			padding: 6px 10px;
 			background: rgba(77, 162, 255, 0.08);
 			border: 1px solid rgba(77, 162, 255, 0.15);
 			border-radius: 8px;
-			margin-bottom: 16px;
-			font-size: 0.8rem;
+			margin-bottom: 8px;
+			font-size: 0.75rem;
 		}
 		.ns-rate-label {
 			color: var(--muted);
@@ -993,12 +1007,12 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		.options-panel {
 			display: flex;
 			flex-direction: column;
-			gap: 14px;
-			padding: 16px;
+			gap: 6px;
+			padding: 12px;
 			background: rgba(0, 0, 0, 0.2);
 			border: 1px solid var(--border);
-			border-radius: 14px;
-			margin: 4px 0 12px;
+			border-radius: 12px;
+			margin: 2px 0 6px;
 		}
 		.options-title {
 			font-size: 0.82rem;
@@ -1011,8 +1025,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			gap: 12px;
-			min-height: 36px;
+			gap: 10px;
+			min-height: 30px;
 		}
 		.option-label {
 			font-size: 0.88rem;
@@ -1194,8 +1208,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 
 			@media (max-width: 640px) {
-				.card { padding: 20px; }
-				.register-layout { grid-template-columns: 1fr; gap: 20px; }
+				.card { padding: 16px; }
+				.register-layout { grid-template-columns: 1fr; gap: 12px; }
 				.register-left { text-align: center; align-items: center; }
 				.header { text-align: center; }
 			.register-hero { text-align: center; }
@@ -1220,7 +1234,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 	<!-- Nav Bar -->
 	<nav class="nav-bar">
 		<a href="https://sui.ski" class="nav-logo">
-			${generateLogoSvg(32)}
+			${generateLogoSvg(24)}
 			sui.ski
 		</a>
 		<span class="nav-badge">${escapeHtml(network)}</span>
@@ -1387,7 +1401,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					<div class="register-hero">
 						<div class="register-price-row">
 							<div class="register-price" id="register-price">-- SUI</div>
-							<span class="savings-badge" id="savings-badge" style="display: none;">Save <span id="savings-percent">~25%</span></span>
+							<span class="savings-badge" id="savings-badge" style="display: none;" title="Click to send savings to facilitator"><span id="savings-percent">-25%</span> <span id="savings-sui-amount"></span></span>
 						</div>
 						<div class="register-price-label" id="register-price-usd">1 year registration</div>
 					</div>
@@ -1438,15 +1452,15 @@ export function generateRegistrationPage(name: string, env: Env): string {
 							<input class="option-input" id="opt-target-address" type="text" placeholder="0x... address or name.sui">
 						</div>
 						<div class="option-row">
-							<span class="option-label">Avatar URL <span class="hint">(optional)</span></span>
+							<span class="option-label" id="avatar-toggle" style="cursor: pointer;">Avatar URL <span class="hint">(optional)</span></span>
 						</div>
-						<div class="option-input-row visible">
+						<div class="option-input-row" id="avatar-input-row">
 							<input class="option-input" id="opt-avatar" type="text" placeholder="https://example.com/avatar.png">
 						</div>
 						<div class="option-row">
-							<span class="option-label">Content Hash <span class="hint">(optional)</span></span>
+							<span class="option-label" id="content-hash-toggle" style="cursor: pointer;">Content Hash <span class="hint">(optional)</span></span>
 						</div>
-						<div class="option-input-row visible">
+						<div class="option-input-row" id="content-hash-input-row">
 							<input class="option-input" id="opt-content-hash" type="text" placeholder="ipfs://Qm... or walrus blob ID">
 						</div>
 						<div class="subname-cap-section" id="subname-cap-section" style="display: none;">
@@ -1502,18 +1516,11 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 	</div>
 
-	<!-- Footer -->
 	<footer class="footer-brand">
 		<a href="https://sui.ski" class="footer-logo">
-			${generateLogoSvg(20)}
+			${generateLogoSvg(16)}
 			sui.ski
 		</a>
-		<div class="footer-tagline">SuiNS name gateway &middot; powered by DeepBook</div>
-		<div class="footer-links">
-			<a href="https://sui.ski">Home</a>
-			<a href="https://docs.suins.io" target="_blank" rel="noopener">SuiNS Docs</a>
-			<a href="https://suiscan.xyz" target="_blank" rel="noopener">Suiscan</a>
-		</div>
 	</footer>
 
 	<!-- Gear FAB for advanced relay -->
@@ -1589,7 +1596,9 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				var savingsBadge = el('savings-badge');
 				if (savingsBadge) savingsBadge.style.display = 'inline-flex';
 				var savingsPercentEl = el('savings-percent');
-				if (savingsPercentEl) savingsPercentEl.textContent = '~' + Math.round(savingsPercent) + '%';
+				if (savingsPercentEl) savingsPercentEl.textContent = '-' + Math.round(savingsPercent) + '%';
+				var savingsSuiEl = el('savings-sui-amount');
+				if (savingsSuiEl) savingsSuiEl.textContent = (directSui - discountedSui).toFixed(2) + ' SUI';
 				var discountedPriceEl = el('discounted-price');
 				if (discountedPriceEl) discountedPriceEl.textContent = '-' + (directSui - discountedSui).toFixed(2) + ' SUI';
 				var premiumRowEl = el('premium-row');
@@ -1674,6 +1683,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
 		const RPC_URL = RPC_URLS[NETWORK] || RPC_URLS.mainnet;
 		const SERVICE_FEE_NAME = ${serializeJson(env.SERVICE_FEE_NAME || null)};
+		const FACILITATOR_NAME = ${serializeJson(env.DISCOUNT_RECIPIENT_NAME || 'extra.sui')};
 		const SUBDOMAINS_PACKAGE = ${serializeJson(env.SUBNAMECAP_SUBDOMAINS_PACKAGE_ID || null)};
 		const SUINS_OBJECT = ${serializeJson(env.SUBNAMECAP_SUINS_OBJECT_ID || null)};
 		const FEE_JACKET_PACKAGE = ${serializeJson(env.JACKET_FEE_PACKAGE_ID || null)};
@@ -1795,9 +1805,11 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				}
 
 				if (savingsBadge) savingsBadge.style.display = 'inline-flex';
-				if (savingsPercentEl) savingsPercentEl.textContent = '~' + Math.round(savingsPercent) + '%';
+				if (savingsPercentEl) savingsPercentEl.textContent = '-' + Math.round(savingsPercent) + '%';
 
 				const savingsSui = directSui - discountedSui;
+				const savingsSuiEl = document.getElementById('savings-sui-amount');
+				if (savingsSuiEl) savingsSuiEl.textContent = savingsSui.toFixed(2) + ' SUI';
 				if (discountedPriceEl) discountedPriceEl.textContent = '-' + savingsSui.toFixed(2) + ' SUI';
 
 				if (premiumUsd > 0 && premiumRowEl && premiumPriceEl) {
@@ -1939,6 +1951,32 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			optSingleUseRecipient.addEventListener('input', () => { singleUseRecipient = optSingleUseRecipient.value.trim() || null; });
 		}
 
+		const avatarToggle = document.getElementById('avatar-toggle');
+		const avatarInputRow = document.getElementById('avatar-input-row');
+		if (avatarToggle && avatarInputRow) {
+			avatarToggle.addEventListener('click', () => {
+				avatarInputRow.classList.toggle('visible');
+			});
+		}
+
+		const contentHashToggle = document.getElementById('content-hash-toggle');
+		const contentHashInputRow = document.getElementById('content-hash-input-row');
+		if (contentHashToggle && contentHashInputRow) {
+			contentHashToggle.addEventListener('click', () => {
+				contentHashInputRow.classList.toggle('visible');
+			});
+		}
+
+		const savingsBadgeEl = document.getElementById('savings-badge');
+		if (savingsBadgeEl) {
+			savingsBadgeEl.addEventListener('click', () => {
+				if (!connectedAddress) { openWalletModal(); return; }
+				includeDiscountTransfer = !includeDiscountTransfer;
+				savingsBadgeEl.classList.toggle('active', includeDiscountTransfer);
+				updateRegisterButton();
+			});
+		}
+
 		fetchEnhancedPricing();
 
 		// ========== WALLET CONNECTION ==========
@@ -1958,6 +1996,27 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			let connectedAccount = null;
 			let connectedAddress = null;
 			let resolvedPrimaryName = null;
+			let includeDiscountTransfer = false;
+			let facilitatorAddress = '';
+
+		function isLikelySuiAddress(address) {
+			return Boolean(address && typeof address === 'string' && address.startsWith('0x') && address.length >= 10);
+		}
+
+		async function resolveFacilitatorAddress(suinsClient) {
+			if (isLikelySuiAddress(facilitatorAddress)) return facilitatorAddress;
+			try {
+				const record = await suinsClient.getNameRecord(FACILITATOR_NAME);
+				const resolved = typeof record?.targetAddress === 'string' ? record.targetAddress : '';
+				if (isLikelySuiAddress(resolved)) {
+					facilitatorAddress = resolved;
+					return resolved;
+				}
+			} catch (error) {
+				console.log('Failed to resolve facilitator address:', error?.message || error);
+			}
+			return connectedAddress || '';
+		}
 
 		// Wallet Standard API (proper implementation)
 		let walletsApi = null;
@@ -2741,8 +2800,16 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					throw new Error('Price info object ID required for NS registration');
 				}
 
-				// Check if user has enough SUI; if not, try USDC swap prepend
-				const totalSuiNeededForReg = suiForNsSwap + SUI_FOR_DEEP_SWAP + 50_000_000n;
+				const facilitator = await resolveFacilitatorAddress(suinsClient);
+				const facilitatorRecipient = isLikelySuiAddress(facilitator)
+					? facilitator
+					: connectedAddress;
+
+				const discountSuiMist = includeDiscountTransfer
+					? BigInt(pricingData.savingsMist || '0')
+					: 0n;
+
+				const totalSuiNeededForReg = suiForNsSwap + SUI_FOR_DEEP_SWAP + 50_000_000n + discountSuiMist;
 				const suiBalRes = await suiClient.getBalance({ owner: connectedAddress, coinType: SUI_TYPE });
 				const suiAvailableForReg = BigInt(suiBalRes.totalBalance);
 
@@ -2757,10 +2824,18 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					registerBtnText.textContent = 'Building transaction...';
 				}
 
-				const [suiCoinForNs, suiCoinForDeep] = tx.splitCoins(tx.gas, [
+				const splitAmounts = [
 					tx.pure.u64(suiForNsSwap),
 					tx.pure.u64(SUI_FOR_DEEP_SWAP),
-				]);
+				];
+				if (discountSuiMist > 0n) splitAmounts.push(tx.pure.u64(discountSuiMist));
+				const splitResults = tx.splitCoins(tx.gas, splitAmounts);
+				const suiCoinForNs = splitResults[0];
+				const suiCoinForDeep = splitResults[1];
+
+				if (discountSuiMist > 0n) {
+					tx.transferObjects([splitResults[2]], tx.pure.address(facilitatorRecipient));
+				}
 
 				const [zeroDeepCoin] = tx.moveCall({
 					target: '0x2::coin::zero',
@@ -2779,7 +2854,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					],
 				});
 
-				tx.transferObjects([deepLeftoverSui, deepLeftoverDeep], connectedAddress);
+				tx.transferObjects([deepLeftoverSui], tx.pure.address(facilitatorRecipient));
+				tx.transferObjects([deepLeftoverDeep], connectedAddress);
 
 				const [nsCoin, nsLeftoverSui, nsLeftoverDeep] = tx.moveCall({
 					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
@@ -2793,7 +2869,8 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					],
 				});
 
-				tx.transferObjects([nsLeftoverSui, nsLeftoverDeep], connectedAddress);
+				tx.transferObjects([nsLeftoverSui], tx.pure.address(facilitatorRecipient));
+				tx.transferObjects([nsLeftoverDeep], connectedAddress);
 
 				let recipientAddress = connectedAddress;
 				if (customTarget) {

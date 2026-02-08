@@ -1044,37 +1044,21 @@ export function generateDashboardPage(env: Env): string {
 			} catch {}
 		}
 
-		async function loadVaultBookmarks() {
+		async function loadWatchlist() {
 			if (!connectedAddress) return;
 			const watchingSection = document.getElementById('watching-section');
 			const watchingGrid = document.getElementById('watching-grid');
 			const watchingEmpty = document.getElementById('watching-empty');
 
 			try {
-				const VAULT_STORAGE_KEY = 'sui_ski_vault';
-				let vault = null;
-				try { vault = JSON.parse(localStorage.getItem(VAULT_STORAGE_KEY) || 'null'); } catch {}
+				const res = await fetch(API_BASE + '/api/black-diamond/watchlist?address=' + encodeURIComponent(connectedAddress));
+				const data = await res.json();
 
-				const metaRes = await fetch(API_BASE + '/api/vault/meta?address=' + encodeURIComponent(connectedAddress));
-				const metaData = await metaRes.json();
-
-				if (metaData.found && metaData.count > 0) {
-					const vaultRes = await fetch(API_BASE + '/api/vault?address=' + encodeURIComponent(connectedAddress));
-					const vaultData = await vaultRes.json();
-
-					if (vaultData.found && vaultData.encryptedBlob) {
-						try {
-							const decoded = decodeURIComponent(escape(atob(vaultData.encryptedBlob)));
-							vault = JSON.parse(decoded);
-							localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(vault));
-						} catch {}
-					}
-				}
-
-				if (!vault || !vault.bookmarks || vault.bookmarks.length === 0) {
+				if (!data.found || !data.names || data.names.length === 0) {
 					watchingSection.style.display = '';
 					watchingGrid.style.display = 'none';
 					watchingEmpty.style.display = '';
+					watchingEmpty.textContent = 'Click the diamond on any profile to watch it on-chain';
 					return;
 				}
 
@@ -1082,8 +1066,8 @@ export function generateDashboardPage(env: Env): string {
 				watchingGrid.style.display = '';
 				watchingEmpty.style.display = 'none';
 
-				watchingGrid.innerHTML = vault.bookmarks.map(function(bookmark) {
-					const cleanName = bookmark.name.replace(/\\.sui$/i, '');
+				watchingGrid.innerHTML = data.names.map(function(name) {
+					const cleanName = name.replace(/\\.sui$/i, '');
 					return '<a href="https://' + encodeURIComponent(cleanName) + '.' + PROFILE_BASE + '" class="name-card" style="text-decoration:none">' +
 						'<div class="name-card-header">' +
 							'<svg viewBox="0 0 24 24" style="width:16px;height:16px;flex-shrink:0"><path d="M12 2L22 12L12 22L2 12Z" fill="#60a5fa" stroke="#60a5fa" stroke-width="2"/></svg>' +
@@ -1092,14 +1076,14 @@ export function generateDashboardPage(env: Env): string {
 					'</a>';
 				}).join('');
 			} catch (e) {
-				console.error('Failed to load vault bookmarks:', e);
+				console.error('Failed to load watchlist:', e);
 			}
 		}
 
 		function onWalletConnected() {
 			updateWalletDropdown();
 			loadNames();
-			loadVaultBookmarks();
+			loadWatchlist();
 			fetchSuiPrice();
 		}
 

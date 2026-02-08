@@ -173,9 +173,6 @@ export function generateProfilePage(
 						<button class="identity-action-btn" id="identity-restore-btn" title="Restore NFT visual">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.5 9A9 9 0 0 1 18.9 5.3L23 10"></path><path d="M20.5 15a9 9 0 0 1-15.4 3.7L1 14"></path></svg>
 						</button>
-						<button class="identity-action-btn" id="vault-diamond-btn" title="Save to vault" style="display:none">
-							<svg viewBox="0 0 24 24"><path d="M12 2L22 12L12 22L2 12Z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-						</button>
 					</div>
 				</div>
 				<div class="hero-main">
@@ -194,7 +191,11 @@ export function generateProfilePage(
 					</div>
 						<div class="header">
 						<div class="header-top">
-							<div class="header-name-wrap">
+							<div class="header-name-wrap" id="header-name-wrap">
+								<button class="diamond-btn" id="vault-diamond-btn" title="Watch on-chain" style="display:none">
+									<svg viewBox="0 0 24 24"><path d="M12 2L22 12L12 22L2 12Z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+								</button>
+								<canvas class="diamond-tendril-canvas" id="diamond-tendril-canvas"></canvas>
 								<h1>${
 									record.walrusSiteId
 										? `<a href="/" class="name-site-link" title="View Walrus site">${escapeHtml(cleanName)}<span class="suffix">.sui</span><svg class="site-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></a>`
@@ -392,7 +393,7 @@ export function generateProfilePage(
 				<div class="overview-module side-rail-module">
 				<div class="renewal-module">
 			<!-- Renewal Card -->
-			<div class="card renewal-card" id="overview-renewal-card" data-expires-ms="${safeNumber(expiresMs)}" data-current-name="${escapeHtml(cleanName)}">
+			<div class="card renewal-card vantablack-overlay" id="overview-renewal-card" data-expires-ms="${safeNumber(expiresMs)}" data-current-name="${escapeHtml(cleanName)}">
 				<div class="renewal-card-header">
 					<div class="renewal-top-row">
 						<div class="renewal-card-title">
@@ -462,7 +463,6 @@ export function generateProfilePage(
 					</div>
 						<div class="marketplace-row" id="marketplace-bid-row" style="display:none;">
 							<span class="marketplace-bid-meta">
-								<span class="marketplace-label">Offer</span>
 								<a
 									class="marketplace-bidder"
 									id="marketplace-bidder"
@@ -489,18 +489,18 @@ export function generateProfilePage(
 								<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-up" aria-label="Increase bid by 1 SUI">+</button>
 							</div>
 							<button class="marketplace-bid-btn" id="marketplace-place-bid-btn" disabled>
-								<span class="marketplace-bid-text">Place Offer</span>
+								<span class="marketplace-bid-text">Offer SUI for ${escapeHtml(cleanName)}.sui</span>
 								<span class="marketplace-bid-loading hidden"><span class="loading"></span></span>
 							</button>
 						</div>
 						<div class="marketplace-list-input" id="marketplace-list-input" style="display:none;">
 							<div class="marketplace-list-top-row">
+								<div class="marketplace-list-estimate" id="marketplace-list-estimate"></div>
 								<div class="marketplace-list-price-control">
 										<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-down" aria-label="Decrease list price by 1 SUI">-</button>
 									<input type="text" id="marketplace-list-amount" placeholder="12" inputmode="numeric" pattern="[0-9]*">
 									<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-up" aria-label="Increase list price by 1 SUI">+</button>
 								</div>
-								<div class="marketplace-list-estimate" id="marketplace-list-estimate"></div>
 							</div>
 							<button class="marketplace-list-btn" id="marketplace-list-btn" style="display:none;" disabled>
 								<span class="marketplace-list-text">List ${escapeHtml(cleanName)}.sui</span>
@@ -621,18 +621,27 @@ export function generateProfilePage(
 	<!-- Send SUI Modal -->
 	<div class="send-modal" id="send-modal">
 		<div class="send-modal-content">
-			<h3>Send SUI</h3>
-			<p>Recipient is the target address for this profile.</p>
-			<div class="send-recipient-row">
-				<span class="send-recipient-label">To</span>
-				<code id="send-recipient-address">--</code>
+			<div class="send-modal-header">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="send-modal-icon"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+				<h3>Send SUI</h3>
 			</div>
-			<label for="send-amount" class="visually-hidden">Amount in SUI</label>
-			<input type="number" id="send-amount" placeholder="Amount (SUI)" min="0.000000001" step="0.001" />
+			<div class="send-recipient-card">
+				<span class="send-recipient-label">To</span>
+				<span class="send-recipient-name" id="send-recipient-name">${escapeHtml(cleanName)}.sui</span>
+				<code class="send-recipient-addr" id="send-recipient-address">--</code>
+			</div>
+			<div class="send-amount-row">
+				<button type="button" class="send-stepper-btn" id="send-amount-down" aria-label="Decrease by 1 SUI">-</button>
+				<label for="send-amount" class="visually-hidden">Amount in SUI</label>
+				<input type="text" id="send-amount" value="1" inputmode="decimal" placeholder="1" />
+				<span class="send-amount-currency">SUI</span>
+				<button type="button" class="send-stepper-btn" id="send-amount-up" aria-label="Increase by 1 SUI">+</button>
+			</div>
+			<div class="send-wallet-indicator" id="send-wallet-indicator"></div>
 			<div id="send-status" class="status hidden"></div>
 			<div class="send-modal-buttons">
 				<button class="cancel-btn" id="send-cancel-btn">Cancel</button>
-				<button class="save-btn" id="send-confirm-btn">Send</button>
+				<button class="save-btn" id="send-confirm-btn">Send to ${escapeHtml(cleanName)}.sui</button>
 			</div>
 		</div>
 	</div>
@@ -700,6 +709,7 @@ export function generateProfilePage(
 			const failed = results.filter(r => r.status === 'rejected');
 			if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
 		}
+		if (Transaction) window.Transaction = Transaction;
 
 		${generateWalletSessionJs()}
 
@@ -1919,7 +1929,7 @@ export function generateProfilePage(
 				if (vaultBtn) {
 					if (connectedAddress && connectedAddress !== TARGET_ADDRESS && connectedAddress !== OWNER_ADDRESS) {
 						vaultBtn.style.display = '';
-						if (typeof updateDiamondState === 'function') updateDiamondState();
+						if (typeof checkWatchingState === 'function') checkWatchingState();
 					} else {
 						vaultBtn.style.display = 'none';
 					}
@@ -2043,10 +2053,23 @@ export function generateProfilePage(
 				return;
 			}
 			if (sendRecipientAddressEl) {
-				sendRecipientAddressEl.textContent = recipient;
+				const truncated = recipient.length > 13
+					? recipient.slice(0, 6) + '...' + recipient.slice(-7)
+					: recipient;
+				sendRecipientAddressEl.textContent = truncated;
 				sendRecipientAddressEl.title = recipient;
 			}
-			if (sendAmountInput) sendAmountInput.value = '';
+			if (sendAmountInput) {
+				sendAmountInput.value = '1';
+				sendAmountInput.select();
+			}
+			const walletIndicator = document.getElementById('send-wallet-indicator');
+			if (walletIndicator && connectedWallet) {
+				const iconSrc = connectedWallet.icon || '';
+				walletIndicator.innerHTML = iconSrc
+					? '<img src="' + iconSrc + '" class="send-wallet-ball" alt="' + (connectedWallet.name || '') + '" onerror="this.style.display=\\'none\\'">'
+					: '<span class="send-wallet-ball send-wallet-ball-default"></span>';
+			}
 			if (sendStatus) hideStatus(sendStatus);
 			if (sendModal) sendModal.classList.add('open');
 		}
@@ -2126,6 +2149,13 @@ export function generateProfilePage(
 				}
 
 				showStatus(sendStatus, '<strong>Sent!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
+				try {
+					const scoreKey = 'sui_ski_send_scores';
+					const scores = JSON.parse(localStorage.getItem(scoreKey) || '{}');
+					const nameKey = NAME + '.sui';
+					scores[nameKey] = (scores[nameKey] || 0) + 1;
+					localStorage.setItem(scoreKey, JSON.stringify(scores));
+				} catch {}
 				setTimeout(() => closeSendModal(), 1400);
 			} catch (error) {
 				const msg = error?.message || 'Transaction failed';
@@ -4070,6 +4100,26 @@ export function generateProfilePage(
 					e.preventDefault();
 					sendSuiToProfile();
 				}
+			});
+			sendAmountInput.addEventListener('input', () => {
+				sendAmountInput.value = sendAmountInput.value.replace(/[^0-9.]/g, '');
+			});
+			sendAmountInput.addEventListener('focus', () => {
+				sendAmountInput.select();
+			});
+		}
+		const sendAmountDown = document.getElementById('send-amount-down');
+		const sendAmountUp = document.getElementById('send-amount-up');
+		if (sendAmountDown && sendAmountInput) {
+			sendAmountDown.addEventListener('click', () => {
+				const current = parseFloat(sendAmountInput.value) || 1;
+				sendAmountInput.value = String(Math.max(1, Math.floor(current - 1)));
+			});
+		}
+		if (sendAmountUp && sendAmountInput) {
+			sendAmountUp.addEventListener('click', () => {
+				const current = parseFloat(sendAmountInput.value) || 0;
+				sendAmountInput.value = String(Math.floor(current + 1));
 			});
 		}
 		if (sendModal) sendModal.addEventListener('click', (e) => {
@@ -7720,6 +7770,13 @@ export function generateProfilePage(
 				const estimatedCostSui = bidSui + tradeportFeeSui;
 				const usdEstimate = cachedSuiUsdPrice > 0 ? (estimatedCostSui * cachedSuiUsdPrice).toFixed(2) : null;
 				marketplaceBidEstimate.innerHTML = '<span class="marketplace-bid-usd">≈ $' + (usdEstimate || '--') + '</span>';
+				updateBidButtonLabel(bidSui);
+			}
+
+			function updateBidButtonLabel(bidSui) {
+				if (!marketplaceBidText) return;
+				if (!connectedAddress || marketplacePlaceBidBtn?.classList.contains('connect-wallet')) return;
+				marketplaceBidText.textContent = 'Offer ' + bidSui + ' SUI for ' + NAME + '.sui';
 			}
 
 			function setBidInputDefaultFromBestOffer(force = false) {
@@ -8047,12 +8104,17 @@ export function generateProfilePage(
 								const priceDisplay = '<span class="marketplace-activity-amount">' + amountContent + '</span>';
 
 								const dateStr = customAmount ? '' : formatActivityDate(action.blockTime);
+								const txDigest = action.txId || '';
 								const timeDisplay = '<span class="marketplace-activity-time">' + (dateStr ? escapeHtmlJs(dateStr) : '') + '</span>';
+
+								const kindHtml = txDigest
+									? '<a href="https://suiscan.xyz/' + NETWORK + '/tx/' + escapeHtmlJs(txDigest) + '" target="_blank" class="marketplace-activity-kind marketplace-activity-tx-link" title="' + escapeHtmlJs(txDigest) + '">' + escapeHtmlJs(label) + '</a>'
+									: '<span class="marketplace-activity-kind">' + escapeHtmlJs(label) + '</span>';
 
 								return (
 									yearHeader +
 									'<div class="marketplace-activity-item ' + escapeHtmlJs(action.type) + '">' +
-										'<span class="marketplace-activity-kind">' + escapeHtmlJs(label) + '</span>' +
+										kindHtml +
 										activityActorHtml +
 										priceDisplay +
 										timeDisplay +
@@ -8326,7 +8388,9 @@ export function generateProfilePage(
 						} else {
 							marketplacePlaceBidBtn.disabled = !connectedAddress || isOwner;
 							marketplacePlaceBidBtn.classList.remove('connect-wallet');
-							marketplaceBidText.textContent = 'Place Offer';
+							const currentBid = parseFloat(String(marketplaceBidAmountInput?.value || '').replace(/[^0-9.]/g, ''));
+							const bidVal = Number.isFinite(currentBid) && currentBid > 0 ? Math.ceil(currentBid) : getBidMinimumSui();
+							marketplaceBidText.textContent = 'Offer ' + bidVal + ' SUI for ' + NAME + '.sui';
 						}
 				}
 				updateBidEstimateDisplay();
@@ -9568,92 +9632,309 @@ export function generateProfilePage(
 			saveLocalSubscriptions(subs);
 		}
 
-		const VAULT_STORAGE_KEY = 'sui_ski_vault';
-		const VAULT_API_BASE = '${escapeHtml(rootOrigin)}';
+		const WATCHLIST_ID_KEY = 'sui_ski_watchlist_id';
+		const SEAL_TAG_KEY = 'sui_ski_diamond_tag_';
+		let diamondWatching = false;
+		let diamondBusy = false;
+		let tendrilAnimId = null;
 
-		function getLocalVault() {
-			try {
-				return JSON.parse(localStorage.getItem(VAULT_STORAGE_KEY) || '{"bookmarks":[],"version":1}');
-			} catch {
-				return { bookmarks: [], version: 1 };
+		function getCachedWatchlistId() {
+			return localStorage.getItem(WATCHLIST_ID_KEY) || null;
+		}
+
+		function setCachedWatchlistId(id) {
+			localStorage.setItem(WATCHLIST_ID_KEY, id);
+		}
+
+		function drawTendrils(canvas, progress) {
+			const ctx = canvas.getContext('2d');
+			const w = canvas.width;
+			const h = canvas.height;
+			ctx.clearRect(0, 0, w, h);
+			if (progress <= 0) return;
+
+			const tendrilCount = 5;
+			const maxLen = w * progress;
+			ctx.lineCap = 'round';
+
+			for (let i = 0; i < tendrilCount; i++) {
+				const yBase = (h / (tendrilCount + 1)) * (i + 1);
+				const amplitude = 3 + Math.sin(i * 1.7) * 2;
+				const freq = 0.04 + i * 0.008;
+				const phase = i * 2.1;
+
+				ctx.beginPath();
+				ctx.moveTo(0, yBase);
+				const steps = Math.floor(maxLen / 2);
+				for (let s = 0; s <= steps; s++) {
+					const x = (s / steps) * maxLen;
+					const y = yBase + Math.sin(x * freq + phase + performance.now() * 0.002) * amplitude;
+					ctx.lineTo(x, y);
+				}
+				const alpha = 0.15 + (progress * 0.4) - (i * 0.03);
+				ctx.strokeStyle = 'rgba(0, 0, 0, ' + Math.max(0, Math.min(1, alpha)) + ')';
+				ctx.lineWidth = 1.5 - i * 0.15;
+				ctx.stroke();
 			}
 		}
 
-		function saveLocalVault(vault) {
-			localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(vault));
+		function startTendrilAnimation() {
+			const canvas = document.getElementById('diamond-tendril-canvas');
+			const wrap = document.getElementById('header-name-wrap');
+			if (!canvas || !wrap) return;
+
+			canvas.width = wrap.offsetWidth;
+			canvas.height = wrap.offsetHeight;
+
+			const startTime = performance.now();
+			const duration = 1200;
+
+			function animate() {
+				const elapsed = performance.now() - startTime;
+				const progress = Math.min(1, elapsed / duration);
+				drawTendrils(canvas, progress);
+				if (progress < 1) {
+					tendrilAnimId = requestAnimationFrame(animate);
+				} else {
+					tendrilAnimId = requestAnimationFrame(function loop() {
+						drawTendrils(canvas, 1);
+						tendrilAnimId = requestAnimationFrame(loop);
+					});
+				}
+			}
+			tendrilAnimId = requestAnimationFrame(animate);
 		}
 
-		function isVaultBookmarked(name) {
-			return getLocalVault().bookmarks.some(function(b) { return b.name === name; });
+		function stopTendrilAnimation() {
+			const canvas = document.getElementById('diamond-tendril-canvas');
+			if (tendrilAnimId) {
+				cancelAnimationFrame(tendrilAnimId);
+				tendrilAnimId = null;
+			}
+
+			if (!canvas) return;
+			const ctx = canvas.getContext('2d');
+			const startTime = performance.now();
+			const duration = 800;
+			const w = canvas.width;
+			const h = canvas.height;
+
+			function fadeOut() {
+				const elapsed = performance.now() - startTime;
+				const progress = 1 - Math.min(1, elapsed / duration);
+				drawTendrils(canvas, progress);
+				if (progress > 0) {
+					tendrilAnimId = requestAnimationFrame(fadeOut);
+				} else {
+					ctx.clearRect(0, 0, w, h);
+					tendrilAnimId = null;
+				}
+			}
+			tendrilAnimId = requestAnimationFrame(fadeOut);
 		}
 
-		function updateDiamondState() {
+		function applyDiamondInfection(active) {
+			const wrap = document.getElementById('header-name-wrap');
+			const renewalCard = document.getElementById('overview-renewal-card');
+
+			if (!wrap) return;
+
+			if (active) {
+				wrap.classList.add('diamond-infected');
+				requestAnimationFrame(() => wrap.classList.add('tendrils-spreading'));
+				startTendrilAnimation();
+
+				if (renewalCard) renewalCard.classList.add('active');
+			} else {
+				wrap.classList.add('tendrils-receding');
+				wrap.classList.remove('tendrils-spreading');
+				stopTendrilAnimation();
+
+				setTimeout(() => {
+					wrap.classList.remove('diamond-infected', 'tendrils-receding');
+				}, 800);
+
+				if (renewalCard) renewalCard.classList.remove('active');
+			}
+		}
+
+		function updateDiamondState(watching) {
 			const btn = document.getElementById('vault-diamond-btn');
 			if (!btn) return;
-			if (isVaultBookmarked(NAME)) {
+			const wasWatching = diamondWatching;
+			diamondWatching = watching;
+			if (watching) {
 				btn.classList.add('bookmarked');
-				btn.title = 'Remove from vault';
+				btn.title = 'Unwatch on-chain';
 			} else {
 				btn.classList.remove('bookmarked');
-				btn.title = 'Save to vault';
+				btn.title = 'Watch on-chain';
+			}
+			if (watching !== wasWatching) {
+				applyDiamondInfection(watching);
 			}
 		}
 
-		async function syncVaultToServer(vault) {
+		async function sealTagNft(nftId, senderAddress) {
+			await initSealSdk();
+			if (!window.sealClient || !window.sealConfig?.seal?.packageId) return null;
+
 			try {
-				const data = JSON.stringify(vault);
-				const plaintext = new TextEncoder().encode(data);
-				let encryptedBlob;
-
-				if (window.sealClient && window.sealConfig?.seal?.packageId) {
-					const packageId = window.sealConfig.seal.packageId;
-					const policyId = getConnectedAddress().startsWith('0x') ? getConnectedAddress().slice(2) : getConnectedAddress();
-					const { encryptedObject } = await window.sealClient.encrypt({
-						threshold: 2,
-						packageId: window.fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
-						id: window.fromHex(policyId),
-						data: plaintext,
-					});
-					encryptedBlob = btoa(String.fromCharCode.apply(null, encryptedObject.data));
-				} else {
-					encryptedBlob = btoa(unescape(encodeURIComponent(data)));
-				}
-
-				await fetch(VAULT_API_BASE + '/api/vault/sync', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						encryptedBlob: encryptedBlob,
-						ownerAddress: getConnectedAddress(),
-						meta: { version: vault.version, updatedAt: vault.updatedAt, count: vault.bookmarks.length },
-					}),
+				const packageId = window.sealConfig.seal.packageId;
+				const tagData = JSON.stringify({
+					type: 'black_diamond_tag',
+					nftId: nftId,
+					tagger: senderAddress,
+					name: NAME,
+					taggedAt: Date.now(),
 				});
+				const plaintext = new TextEncoder().encode(tagData);
+				const policyId = senderAddress.startsWith('0x') ? senderAddress.slice(2) : senderAddress;
+
+				const { encryptedObject } = await window.sealClient.encrypt({
+					threshold: 2,
+					packageId: window.fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
+					id: window.fromHex(policyId),
+					data: plaintext,
+				});
+
+				const encoded = btoa(String.fromCharCode.apply(null, encryptedObject.data));
+				localStorage.setItem(SEAL_TAG_KEY + NAME, encoded);
+				return encoded;
 			} catch (err) {
-				console.error('Vault sync failed:', err);
+				console.error('Seal tag encryption failed:', err);
+				return null;
 			}
 		}
 
-		async function toggleVaultBookmark() {
-			const addr = getConnectedAddress();
+		function removeSealTag() {
+			localStorage.removeItem(SEAL_TAG_KEY + NAME);
+		}
+
+		async function checkWatchingState() {
+			const addr = connectedAddress;
 			if (!addr) return;
-			const vault = getLocalVault();
-			const idx = vault.bookmarks.findIndex(function(b) { return b.name === NAME; });
-			if (idx >= 0) {
-				vault.bookmarks.splice(idx, 1);
-			} else {
-				if (vault.bookmarks.length >= 100) return;
-				vault.bookmarks.push({ name: NAME, address: TARGET_ADDRESS, addedAt: Date.now() });
+			try {
+				if (!getCachedWatchlistId()) {
+					const listRes = await fetch('/api/black-diamond/watchlist?address=' + encodeURIComponent(addr));
+					const listData = await listRes.json();
+					if (listData.found && listData.watchlistId) {
+						setCachedWatchlistId(listData.watchlistId);
+					}
+				}
+				const res = await fetch('/api/black-diamond/watching?address=' + encodeURIComponent(addr) + '&name=' + encodeURIComponent(NAME));
+				const data = await res.json();
+				updateDiamondState(!!data.watching);
+			} catch (err) {
+				console.error('Failed to check watching state:', err);
 			}
-			vault.ownerAddress = addr;
-			vault.updatedAt = Date.now();
-			vault.version = (vault.version || 0) + 1;
-			saveLocalVault(vault);
-			updateDiamondState();
-			syncVaultToServer(vault);
+		}
+
+		async function signAndExecuteWatchlistTx(txBytes) {
+			if (!Transaction) throw new Error('Sui SDK not loaded. Please refresh the page.');
+			const tx = Transaction.from(txBytes);
+			const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
+			const txOptions = { showEffects: true, showObjectChanges: true };
+			const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
+			const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
+
+			if (signExecFeature?.signAndExecuteTransaction) {
+				return signExecFeature.signAndExecuteTransaction({ transaction: tx, account: connectedAccount, chain, options: txOptions });
+			}
+			if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
+				return signExecBlockFeature.signAndExecuteTransactionBlock({ transactionBlock: tx, account: connectedAccount, chain, options: txOptions });
+			}
+			const phantomProvider = window.phantom?.sui;
+			if (phantomProvider?.signAndExecuteTransactionBlock) {
+				const suiClient = getSuiClient();
+				const built = await tx.build({ client: suiClient });
+				return phantomProvider.signAndExecuteTransactionBlock({ transactionBlock: built, options: txOptions });
+			}
+			throw new Error('Wallet does not support transaction signing');
+		}
+
+		function extractCreatedWatchlistId(result) {
+			const changes = result.objectChanges || [];
+			for (const change of changes) {
+				if (change.type === 'created' && change.objectType && change.objectType.includes('::watchlist::Watchlist')) {
+					return change.objectId;
+				}
+			}
+			return null;
+		}
+
+		async function toggleBlackDiamond() {
+			if (diamondBusy) return;
+			if (!connectedAddress || !connectedWallet) return;
+
+			const btn = document.getElementById('vault-diamond-btn');
+			if (!btn) return;
+
+			diamondBusy = true;
+			btn.classList.add('diamond-loading');
+
+			try {
+				const sender = typeof connectedAccount.address === 'string'
+					? connectedAccount.address
+					: connectedAccount.address?.toString() || connectedAddress;
+
+				let watchlistId = getCachedWatchlistId();
+
+				if (diamondWatching) {
+					if (!watchlistId) throw new Error('No watchlist found to unwatch from');
+					const res = await fetch('/api/black-diamond/unwatch', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ sender, name: NAME, watchlistId }),
+					});
+					const data = await res.json();
+					if (data.error) throw new Error(data.error);
+					await signAndExecuteWatchlistTx(data.txBytes);
+					removeSealTag();
+					updateDiamondState(false);
+				} else {
+					if (!watchlistId) {
+						const createRes = await fetch('/api/black-diamond/watch', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ sender, name: NAME }),
+						});
+						const createData = await createRes.json();
+						if (createData.error) throw new Error(createData.error);
+						const createResult = await signAndExecuteWatchlistTx(createData.txBytes);
+
+						watchlistId = extractCreatedWatchlistId(createResult);
+						if (!watchlistId && createResult.digest) {
+							const suiClient = getSuiClient();
+							const txDetail = await suiClient.getTransactionBlock({ digest: createResult.digest, options: { showObjectChanges: true } });
+							watchlistId = extractCreatedWatchlistId(txDetail);
+						}
+						if (!watchlistId) throw new Error('Failed to find created watchlist object');
+						setCachedWatchlistId(watchlistId);
+					}
+
+					const watchRes = await fetch('/api/black-diamond/watch', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ sender, name: NAME, watchlistId }),
+					});
+					const watchData = await watchRes.json();
+					if (watchData.error) throw new Error(watchData.error);
+					await signAndExecuteWatchlistTx(watchData.txBytes);
+
+					if (NFT_ID) sealTagNft(NFT_ID, sender);
+					updateDiamondState(true);
+				}
+			} catch (err) {
+				console.error('Watchlist transaction failed:', err);
+			} finally {
+				diamondBusy = false;
+				if (btn) btn.classList.remove('diamond-loading');
+			}
 		}
 
 		const vaultDiamondBtn = document.getElementById('vault-diamond-btn');
-		if (vaultDiamondBtn) vaultDiamondBtn.addEventListener('click', toggleVaultBookmark);
+		if (vaultDiamondBtn) vaultDiamondBtn.addEventListener('click', toggleBlackDiamond);
 
 		initSealSdk();
 
