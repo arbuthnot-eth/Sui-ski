@@ -48,7 +48,7 @@ export function generateProfilePage(
 		? `https://www.tradeport.xyz/sui/${encodeURIComponent(initialPortfolioAddress)}?tab=items&bottomTab=trades&collectionFilter=suins`
 		: 'https://www.tradeport.xyz/sui?tab=items&bottomTab=trades&collectionFilter=suins'
 
-	const cleanName = name.replace(/\.sui$/i, '').toLowerCase()
+	const cleanName = name.replace(/\.sui$/i, '').replace(/^@+/, '').toLowerCase()
 	const fullName = `${cleanName}.sui`
 	const profileDomain = `${cleanName}.sui.ski`
 	const expiresMs = record.expirationTimestampMs
@@ -684,14 +684,23 @@ export function generateProfilePage(
 		</div>
 	</div>
 
-	<script type="module">
-		let getWallets, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction, SealClient, SessionKey, fromHex, toHex;
-		{
-			const SDK_TIMEOUT = 15000;
-			const timedImport = (url) => Promise.race([
-				import(url),
-				new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
-			]);
+		<script type="module">
+			let getWallets, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction, SealClient, SessionKey, fromHex, toHex;
+			{
+				const pickExport = (mod, name) => {
+					if (!mod || typeof mod !== 'object') return undefined;
+					if (name in mod) return mod[name];
+					if (mod.default && typeof mod.default === 'object' && name in mod.default) {
+						return mod.default[name];
+					}
+					if (name === 'SuinsClient' && typeof mod.default === 'function') return mod.default;
+					return undefined;
+				};
+				const SDK_TIMEOUT = 15000;
+				const timedImport = (url) => Promise.race([
+					import(url),
+					new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
+				]);
 			const results = await Promise.allSettled([
 				timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
 				timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
@@ -700,15 +709,20 @@ export function generateProfilePage(
 				timedImport('https://esm.sh/@mysten/seal@0.9.6'),
 				timedImport('https://esm.sh/@mysten/bcs@1.3.0'),
 			]);
-			if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
-			if (results[1].status === 'fulfilled') ({ SuiJsonRpcClient } = results[1].value);
-			if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value);
-			if (results[3].status === 'fulfilled') ({ SuinsClient, SuinsTransaction } = results[3].value);
-			if (results[4].status === 'fulfilled') ({ SealClient, SessionKey } = results[4].value);
-			if (results[5].status === 'fulfilled') ({ fromHex, toHex } = results[5].value);
-			const failed = results.filter(r => r.status === 'rejected');
-			if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
-		}
+				if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
+				if (results[1].status === 'fulfilled') ({ SuiJsonRpcClient } = results[1].value);
+				if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value);
+				if (results[3].status === 'fulfilled') {
+					const suinsModule = results[3].value;
+					SuinsClient = pickExport(suinsModule, 'SuinsClient');
+					SuinsTransaction = pickExport(suinsModule, 'SuinsTransaction');
+				}
+				if (results[4].status === 'fulfilled') ({ SealClient, SessionKey } = results[4].value);
+				if (results[5].status === 'fulfilled') ({ fromHex, toHex } = results[5].value);
+				const failed = results.filter(r => r.status === 'rejected');
+				if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
+				if (!SuinsClient) console.warn('SuinsClient export unavailable from @mysten/suins module');
+			}
 		if (Transaction) window.Transaction = Transaction;
 
 		${generateWalletSessionJs()}
@@ -727,6 +741,66 @@ export function generateProfilePage(
 			}
 			return cachedSuiClient;
 		};
+		let suinsModuleLoadingPromise = null;
+		function pickSuinsExport(mod, name) {
+			if (!mod || typeof mod !== 'object') return undefined;
+			if (name in mod) return mod[name];
+			if (mod.default && typeof mod.default === 'object' && name in mod.default) return mod.default[name];
+			if (name === 'SuinsClient' && typeof mod.default === 'function') return mod.default;
+			return undefined;
+		}
+		function getSuinsNetwork() {
+			if (NETWORK === 'mainnet') return 'mainnet';
+			if (NETWORK === 'testnet') return 'testnet';
+			return 'testnet';
+		}
+		async function ensureSuinsSdkLoaded(requireTransaction = false) {
+			const clientReady = typeof SuinsClient === 'function';
+			const txReady = !requireTransaction || typeof SuinsTransaction === 'function';
+			if (clientReady && txReady) return true;
+
+			if (!suinsModuleLoadingPromise) {
+				suinsModuleLoadingPromise = (async () => {
+					const timeoutMs = 12000;
+					const urls = [
+						'https://esm.sh/@mysten/suins@1.0.0?bundle',
+						'https://esm.sh/@mysten/suins?bundle',
+					];
+					for (const url of urls) {
+						try {
+							const suinsModule = await Promise.race([
+								import(url),
+								new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout: ' + url)), timeoutMs)),
+							]);
+							SuinsClient = pickSuinsExport(suinsModule, 'SuinsClient') || SuinsClient;
+							SuinsTransaction = pickSuinsExport(suinsModule, 'SuinsTransaction') || SuinsTransaction;
+							if (typeof SuinsClient === 'function') {
+								if (!requireTransaction || typeof SuinsTransaction === 'function') return;
+							}
+						} catch (error) {
+							console.warn('Failed loading SuiNS SDK from', url, error);
+						}
+					}
+				})().finally(() => {
+					suinsModuleLoadingPromise = null;
+				});
+			}
+
+			await suinsModuleLoadingPromise;
+			const loadedClient = typeof SuinsClient === 'function';
+			const loadedTx = !requireTransaction || typeof SuinsTransaction === 'function';
+			return loadedClient && loadedTx;
+		}
+		async function createSuinsClient(requireTransaction = false) {
+			const ready = await ensureSuinsSdkLoaded(requireTransaction);
+			if (!ready) {
+				throw new Error('SuiNS SDK unavailable. Reload and reconnect your Sui wallet.');
+			}
+			return new SuinsClient({
+				client: getSuiClient(),
+				network: getSuinsNetwork(),
+			});
+		}
 	const NFT_ID = ${serializeJson(record.nftId || '')};
 	const TARGET_ADDRESS = ${serializeJson(record.address)};
 	const OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
@@ -964,11 +1038,7 @@ export function generateProfilePage(
 
 		// Resolve a SuiNS name to its target address
 		async function resolveSuiNSName(name) {
-			const suiClient = getSuiClient();
-			const suinsClient = new SuinsClient({
-				client: suiClient,
-				network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
-			});
+			const suinsClient = await createSuinsClient();
 
 			const cleanedName = name.toLowerCase().replace(/\\.sui$/i, '') + '.sui';
 			const record = await suinsClient.getNameRecord(cleanedName);
@@ -1013,26 +1083,115 @@ export function generateProfilePage(
 			});
 		}
 
-		// Get available Sui wallets with fallbacks
-		function getSuiWallets() {
-			const wallets = [];
-			const seenNames = new Set();
-			const isSuiCapableWallet = (wallet) => {
-				if (!wallet) return false;
-				const features = wallet.features || {};
-				const hasSuiChain =
-					Array.isArray(wallet.chains) && wallet.chains.some(chain => chain.startsWith('sui:'));
-				const hasConnect = !!(features['standard:connect'] || wallet.connect);
-				const hasSuiTxFeature = !!(
-					features['sui:signAndExecuteTransactionBlock'] ||
-					features['sui:signAndExecuteTransaction'] ||
-					features['sui:signTransaction'] ||
-					wallet.signAndExecuteTransactionBlock ||
-					wallet.signAndExecuteTransaction ||
-					wallet.signTransaction
-				);
-				return hasSuiChain || (hasConnect && hasSuiTxFeature);
-			};
+			function isMobileDevice() {
+				try {
+					const ua = navigator.userAgent || '';
+					const uaDataMobile = navigator.userAgentData && navigator.userAgentData.mobile === true;
+					const uaMobile = /android|iphone|ipad|ipod|mobile/i.test(ua);
+					const touchLike = navigator.maxTouchPoints > 1;
+					const smallViewport = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
+					return Boolean(uaDataMobile || uaMobile || (touchLike && smallViewport));
+				} catch {
+					return false;
+				}
+			}
+
+			function getNoWalletsMessageHtml(message) {
+				const baseMessage = message || 'No Sui wallets detected.';
+				if (isMobileDevice()) {
+					return '<div class="wallet-no-wallets">'
+						+ baseMessage
+						+ '<br><br>'
+						+ 'Open this page in your wallet\\'s in-app browser:'
+						+ '<br>'
+						+ '<a href="https://slush.app" target="_blank" rel="noopener noreferrer">Open Slush (Mysten) →</a>'
+						+ '<br>'
+						+ '<a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer">Open Phantom →</a>'
+						+ '</div>';
+				}
+				return '<div class="wallet-no-wallets">'
+					+ baseMessage
+					+ '<br><br>'
+					+ '<a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer">Install Phantom →</a>'
+					+ '<br>'
+					+ '<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank" rel="noopener noreferrer">Install Sui Wallet →</a>'
+					+ '</div>';
+			}
+
+			function normalizeAccountAddress(account) {
+				if (!account) return '';
+				if (typeof account.address === 'string') return account.address.trim();
+				if (account.address && typeof account.address.toString === 'function') {
+					return String(account.address.toString()).trim();
+				}
+				return '';
+			}
+
+			function isSuiAccount(account) {
+				if (!account) return false;
+				const accountChains = Array.isArray(account.chains) ? account.chains : [];
+				if (accountChains.some((chain) => typeof chain === 'string' && chain.startsWith('sui:'))) {
+					return true;
+				}
+				const addr = normalizeAccountAddress(account);
+				return /^0x[0-9a-fA-F]{2,}$/.test(addr);
+			}
+
+			function filterSuiAccounts(accounts) {
+				if (!Array.isArray(accounts)) return [];
+				return accounts
+					.filter(isSuiAccount)
+					.map((account) => {
+						const normalizedAddress = normalizeAccountAddress(account);
+						if (!normalizedAddress) return account;
+						if (typeof account.address === 'string' && account.address === normalizedAddress) return account;
+						return { ...account, address: normalizedAddress };
+					});
+			}
+
+			function extractConnectedAccounts(connectResult, wallet) {
+				let accounts = [];
+				if (Array.isArray(connectResult)) {
+					accounts = connectResult;
+				} else if (connectResult && Array.isArray(connectResult.accounts)) {
+					accounts = connectResult.accounts;
+				} else if (connectResult && connectResult.account && connectResult.account.address) {
+					accounts = [connectResult.account];
+				}
+				if (accounts.length === 0) {
+					const walletAccounts = wallet?.accounts;
+					if (Array.isArray(walletAccounts) && walletAccounts.length > 0) {
+						accounts = walletAccounts;
+					}
+				}
+				if (accounts.length === 0) {
+					const rawAccounts = wallet?._raw?.accounts;
+					if (Array.isArray(rawAccounts) && rawAccounts.length > 0) {
+						accounts = rawAccounts;
+					}
+				}
+				return filterSuiAccounts(accounts);
+			}
+
+			// Get available Sui wallets with fallbacks
+			function getSuiWallets() {
+				const wallets = [];
+				const seenNames = new Set();
+				const isSuiCapableWallet = (wallet) => {
+					if (!wallet) return false;
+					const features = wallet.features || {};
+					const hasSuiChain =
+						Array.isArray(wallet.chains) && wallet.chains.some(chain => chain.startsWith('sui:'));
+					const hasConnect = !!(features['standard:connect'] || wallet.connect);
+					const hasSuiNamespaceFeature = Object.keys(features).some((key) => key.startsWith('sui:'));
+					const hasSuiTxMethod = !!(
+						features['sui:signAndExecuteTransactionBlock'] ||
+						features['sui:signAndExecuteTransaction'] ||
+						wallet.signAndExecuteTransactionBlock ||
+						wallet.signAndExecuteTransaction
+					);
+					return hasConnect && (hasSuiChain || hasSuiNamespaceFeature || hasSuiTxMethod);
+				};
 
 			// First, try wallet-standard registry
 			if (walletsApi) {
@@ -1060,12 +1219,15 @@ export function generateProfilePage(
 			}
 
 			// Fallback: check window globals for common Sui wallets
-			const windowWallets = [
-				{ check: () => window.phantom?.sui, name: 'Phantom', icon: 'https://phantom.app/img/phantom-icon-purple.svg' },
-				{ check: () => window.suiWallet, name: 'Sui Wallet', icon: 'https://sui.io/favicon.png' },
-				{ check: () => window.slush, name: 'Slush', icon: 'https://slush.app/favicon.ico' },
-				{ check: () => window.suiet, name: 'Suiet', icon: 'https://suiet.app/favicon.ico' },
-				{ check: () => window.martian?.sui, name: 'Martian', icon: 'https://martianwallet.xyz/favicon.ico' },
+				const windowWallets = [
+					{ check: () => window.sui, name: 'Sui Wallet', icon: 'https://sui.io/favicon.png' },
+					{ check: () => window.phantom?.sui, name: 'Phantom', icon: 'https://phantom.app/img/phantom-icon-purple.svg' },
+					{ check: () => window.suiWallet, name: 'Sui Wallet', icon: 'https://sui.io/favicon.png' },
+					{ check: () => window.mystenWallet?.sui || window.mystenWallet, name: 'Sui Wallet', icon: 'https://sui.io/favicon.png' },
+					{ check: () => window.mysten?.sui || window.mysten?.wallet, name: 'Sui Wallet', icon: 'https://sui.io/favicon.png' },
+					{ check: () => window.slush, name: 'Slush', icon: 'https://slush.app/favicon.ico' },
+					{ check: () => window.suiet, name: 'Suiet', icon: 'https://suiet.app/favicon.ico' },
+					{ check: () => window.martian?.sui, name: 'Martian', icon: 'https://martianwallet.xyz/favicon.ico' },
 				{ check: () => window.ethos, name: 'Ethos', icon: 'https://ethoswallet.xyz/favicon.ico' },
 				{ check: () => window.okxwallet?.sui, name: 'OKX Wallet', icon: 'https://static.okx.com/cdn/assets/imgs/226/EB771A4D4E5CC234.png' },
 			];
@@ -1076,20 +1238,22 @@ export function generateProfilePage(
 					if (wallet && !seenNames.has(name)) {
 						if (!isSuiCapableWallet(wallet)) continue;
 						// Wrap window wallet to match landing-page wallet features.
-						wallets.push({
-							name,
-							icon,
-							chains: ['sui:mainnet', 'sui:testnet'],
-							features: {
-								'standard:connect': wallet.connect ? { connect: wallet.connect.bind(wallet) } : undefined,
-								'standard:disconnect': wallet.disconnect ? { disconnect: wallet.disconnect.bind(wallet) } : undefined,
-								'sui:signAndExecuteTransaction': wallet.signAndExecuteTransaction
-									? { signAndExecuteTransaction: wallet.signAndExecuteTransaction.bind(wallet) } : undefined,
-								'sui:signAndExecuteTransactionBlock': wallet.signAndExecuteTransactionBlock
-									? { signAndExecuteTransactionBlock: wallet.signAndExecuteTransactionBlock.bind(wallet) } : undefined,
-							},
-							get accounts() { return wallet.accounts || []; },
-							_raw: wallet,
+							wallets.push({
+								name,
+								icon,
+								chains: ['sui:mainnet', 'sui:testnet'],
+								features: {
+									'standard:connect': wallet.connect ? { connect: wallet.connect.bind(wallet) } : undefined,
+									'standard:disconnect': wallet.disconnect ? { disconnect: wallet.disconnect.bind(wallet) } : undefined,
+									'sui:signAndExecuteTransaction': wallet.signAndExecuteTransaction
+										? { signAndExecuteTransaction: wallet.signAndExecuteTransaction.bind(wallet) } : undefined,
+									'sui:signAndExecuteTransactionBlock': wallet.signAndExecuteTransactionBlock
+										? { signAndExecuteTransactionBlock: wallet.signAndExecuteTransactionBlock.bind(wallet) } : undefined,
+									'sui:signTransaction': wallet.signTransaction
+										? { signTransaction: wallet.signTransaction.bind(wallet) } : undefined,
+								},
+								get accounts() { return wallet.accounts || []; },
+								_raw: wallet,
 						});
 						seenNames.add(name);
 					}
@@ -1592,20 +1756,20 @@ export function generateProfilePage(
 
 				// Per Sui docs: wallets auto-restore authorized accounts
 				// Check wallet.accounts first before calling connect()
-				let accounts = wallet.accounts || [];
+					let accounts = filterSuiAccounts(wallet.accounts || []);
 
 				if (accounts.length === 0) {
 					const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
 					if (typeof connectFeature === 'function') {
 						const result = await connectFeature();
-						accounts = result?.accounts || result || wallet.accounts || wallet._raw?.accounts || [];
+						accounts = extractConnectedAccounts(result, wallet);
 					} else if (connectFeature?.connect) {
 						const result = await connectFeature.connect();
-						accounts = result?.accounts || wallet.accounts || wallet._raw?.accounts || [];
+						accounts = extractConnectedAccounts(result, wallet);
 					}
 				}
 
-				if (accounts.length === 0) return false;
+					if (accounts.length === 0) return false;
 
 				connectedAccount = accounts[0];
 				connectedAddress = accounts[0].address;
@@ -1651,17 +1815,17 @@ export function generateProfilePage(
 				let accounts;
 				if (typeof connectFeature === 'function') {
 					const result = await connectFeature();
-					accounts = result?.accounts || result;
+					accounts = extractConnectedAccounts(result, wallet);
 				} else if (typeof connectFeature.connect === 'function') {
 					const result = await connectFeature.connect();
-					accounts = result?.accounts || result;
+					accounts = extractConnectedAccounts(result, wallet);
 				}
 
 				if (!accounts?.length) {
 					await new Promise(r => setTimeout(r, 200));
-					accounts = wallet.accounts || wallet._raw?.accounts;
+					accounts = extractConnectedAccounts(null, wallet);
 				}
-				if (!accounts?.length) throw new Error('No accounts. Please unlock your wallet.');
+					if (!accounts?.length) throw new Error('No Sui accounts. Switch your wallet to Sui and try again.');
 
 				connectedAccount = accounts[0];
 				connectedAddress = accounts[0].address;
@@ -1713,13 +1877,7 @@ export function generateProfilePage(
 			}
 
 			// If no immediate wallets, show install links and detect in background
-			walletList.innerHTML = '<div class="wallet-no-wallets">' +
-				'Detecting wallets...' +
-				'<br><br>' +
-				'<a href="https://phantom.app/download" target="_blank">Install Phantom →</a>' +
-				'<br>' +
-				'<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank">Install Sui Wallet →</a>' +
-				'</div>';
+			walletList.innerHTML = getNoWalletsMessageHtml('Detecting wallets...');
 
 			// Detect wallets in background without blocking
 			detectWallets().then(wallets => {
@@ -1732,13 +1890,7 @@ export function generateProfilePage(
 		// Render wallet list (helper function)
 		function renderWalletList(wallets) {
 			if (wallets.length === 0) {
-				walletList.innerHTML = '<div class="wallet-no-wallets">' +
-					'No Sui wallets detected.' +
-					'<br><br>' +
-					'<a href="https://phantom.app/download" target="_blank">Install Phantom →</a>' +
-					'<br>' +
-					'<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank">Install Sui Wallet →</a>' +
-					'</div>';
+				walletList.innerHTML = getNoWalletsMessageHtml('No Sui wallets detected.');
 				return;
 			}
 
@@ -1925,15 +2077,26 @@ export function generateProfilePage(
 				if (typeof updateRenewalButton === 'function') updateRenewalButton();
 				if (typeof updateMarketplaceButton === 'function') updateMarketplaceButton();
 
-				const vaultBtn = document.getElementById('vault-diamond-btn');
-				if (vaultBtn) {
-					if (connectedAddress && connectedAddress !== TARGET_ADDRESS && connectedAddress !== OWNER_ADDRESS) {
-						vaultBtn.style.display = '';
-						if (typeof checkWatchingState === 'function') checkWatchingState();
-					} else {
-						vaultBtn.style.display = 'none';
+					const vaultBtn = document.getElementById('vault-diamond-btn');
+					if (vaultBtn) {
+						if (connectedAddress && connectedAddress !== TARGET_ADDRESS && connectedAddress !== OWNER_ADDRESS) {
+							vaultBtn.style.display = '';
+							vaultBtn.classList.remove('bookmarked', 'diamond-transforming');
+							vaultBtn.title = 'Watch on-chain';
+							if (document.body) document.body.classList.remove('diamond-watch-active');
+							const identityCard = document.querySelector('.identity-card');
+							if (identityCard) identityCard.classList.remove('black-diamond-active');
+							try { diamondWatching = false; } catch {}
+						} else {
+							vaultBtn.style.display = 'none';
+							vaultBtn.classList.remove('bookmarked', 'diamond-transforming');
+							vaultBtn.title = 'Watch on-chain';
+							if (document.body) document.body.classList.remove('diamond-watch-active');
+							const identityCard = document.querySelector('.identity-card');
+							if (identityCard) identityCard.classList.remove('black-diamond-active');
+							try { diamondWatching = false; } catch {}
+						}
 					}
-				}
 
 				if (connectedAddress && typeof pendingBidAmount !== 'undefined' && pendingBidAmount !== null) {
 					setTimeout(() => {
@@ -2295,7 +2458,8 @@ export function generateProfilePage(
 				}
 			}
 
-				async function buildTaggedIdentityCanvas(preferQr = showingQr, listing = null, bestBid = null) {
+				async function buildTaggedIdentityCanvas(preferQr = showingQr, listing = null, bestBid = null, options = {}) {
+					const blackDiamondMode = options && options.blackDiamondMode === true;
 					const nftSource = rawIdentityNftImage || identityVisual?.querySelector('img') || null;
 					const qrSource = identityCanvas && identityCanvas.width > 0 ? identityCanvas : null;
 					// Prefer the SuiNS registration NFT visual for export; QR is fallback only.
@@ -2310,13 +2474,81 @@ export function generateProfilePage(
 					const ctx = canvas.getContext('2d');
 					if (!ctx) return null;
 
-					// Keep the exported image essentially the NFT itself.
-					ctx.drawImage(visualSource, 0, 0, srcWidth, srcHeight);
+					const clamp8 = (value) => Math.max(0, Math.min(255, Math.round(value)));
+					const inkCrushBackgroundPixels = () => {
+						let imageData;
+						try {
+							imageData = ctx.getImageData(0, 0, srcWidth, srcHeight);
+						} catch {
+							return;
+						}
+						const data = imageData.data;
+						for (let i = 0; i < data.length; i += 4) {
+							const r = data[i];
+							const g = data[i + 1];
+							const b = data[i + 2];
+							const max = Math.max(r, g, b);
+							const min = Math.min(r, g, b);
+							const sat = max === 0 ? 0 : (max - min) / max;
+							const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+							const blueBias = b - ((r + g) * 0.5);
+							const backgroundLike = sat < 0.48 || (blueBias > 8 && sat < 0.72);
+							if (!backgroundLike) continue;
+
+							const darkness = luma < 72 ? 0.1 : luma < 128 ? 0.16 : luma < 188 ? 0.24 : 0.32;
+							const blueLift = sat < 0.25 ? 1.16 : 1.08;
+							data[i] = clamp8(r * darkness * 0.9);
+							data[i + 1] = clamp8(g * darkness * 0.88);
+							data[i + 2] = clamp8(b * darkness * blueLift);
+						}
+						ctx.putImageData(imageData, 0, 0);
+					};
+
+					// Black-diamond mode: ink-crush only the base NFT pass, then draw overlays in normal color.
+					if (blackDiamondMode) {
+						ctx.filter = 'saturate(325%) contrast(132%) brightness(98%)';
+						ctx.drawImage(visualSource, 0, 0, srcWidth, srcHeight);
+						ctx.filter = 'none';
+						inkCrushBackgroundPixels();
+
+						const sideShadow = ctx.createLinearGradient(0, 0, srcWidth, 0);
+						sideShadow.addColorStop(0, 'rgba(0, 0, 0, 0.62)');
+						sideShadow.addColorStop(0.16, 'rgba(2, 6, 12, 0.22)');
+						sideShadow.addColorStop(0.5, 'rgba(3, 7, 14, 0.06)');
+						sideShadow.addColorStop(0.84, 'rgba(2, 6, 12, 0.24)');
+						sideShadow.addColorStop(1, 'rgba(0, 0, 0, 0.62)');
+						ctx.fillStyle = sideShadow;
+						ctx.fillRect(0, 0, srcWidth, srcHeight);
+
+						const deepVignette = ctx.createRadialGradient(
+							srcWidth * 0.5,
+							srcHeight * 0.44,
+							Math.min(srcWidth, srcHeight) * 0.2,
+							srcWidth * 0.5,
+							srcHeight * 0.52,
+							Math.max(srcWidth, srcHeight) * 0.76,
+						);
+						deepVignette.addColorStop(0, 'rgba(4, 10, 18, 0.08)');
+						deepVignette.addColorStop(0.62, 'rgba(2, 4, 8, 0.32)');
+						deepVignette.addColorStop(1, 'rgba(0, 0, 0, 0.84)');
+						ctx.save();
+						ctx.globalCompositeOperation = 'multiply';
+						ctx.fillStyle = deepVignette;
+						ctx.fillRect(0, 0, srcWidth, srcHeight);
+						ctx.restore();
+					} else {
+						ctx.drawImage(visualSource, 0, 0, srcWidth, srcHeight);
+					}
 
 					// Subtle contrast pass so logo implant reads on bright NFTs.
 					const topFade = ctx.createLinearGradient(0, 0, 0, srcHeight * 0.24);
-					topFade.addColorStop(0, 'rgba(5, 9, 20, 0.26)');
-					topFade.addColorStop(1, 'rgba(5, 9, 20, 0.0)');
+					if (blackDiamondMode) {
+						topFade.addColorStop(0, 'rgba(2, 8, 18, 0.34)');
+						topFade.addColorStop(1, 'rgba(2, 8, 18, 0.04)');
+					} else {
+						topFade.addColorStop(0, 'rgba(5, 9, 20, 0.26)');
+						topFade.addColorStop(1, 'rgba(5, 9, 20, 0.0)');
+					}
 					ctx.fillStyle = topFade;
 					ctx.fillRect(0, 0, srcWidth, srcHeight * 0.24);
 
@@ -2493,18 +2725,22 @@ export function generateProfilePage(
 					return canvas;
 				}
 
-			async function applyTaggedIdentityToProfile() {
-				if (!identityVisual || !rawIdentityNftImage) return;
-				try {
-					const taggedCanvas = await buildTaggedIdentityCanvas(false, currentListing, currentBestBid);
-					if (!taggedCanvas) return;
-					const taggedImg = new Image();
-					taggedImg.onload = () => {
-						const existingImg = identityVisual.querySelector('img');
-						if (existingImg) existingImg.remove();
-						taggedImg.style.width = '90%';
-						taggedImg.style.height = '90%';
-						taggedImg.style.objectFit = 'cover';
+				async function applyTaggedIdentityToProfile() {
+					if (!identityVisual || !rawIdentityNftImage) return;
+					try {
+						const blackDiamondMode =
+							Boolean(document.body && document.body.classList.contains('diamond-watch-active')) ||
+							Boolean(typeof diamondWatching !== 'undefined' && diamondWatching);
+						const taggedCanvas = await buildTaggedIdentityCanvas(false, currentListing, currentBestBid, { blackDiamondMode });
+						if (!taggedCanvas) return;
+						const taggedImg = new Image();
+						taggedImg.onload = () => {
+							const existingImg = identityVisual.querySelector('img');
+							if (existingImg) existingImg.remove();
+							taggedImg.className = 'identity-tagged-image';
+							taggedImg.style.width = '90%';
+							taggedImg.style.height = '90%';
+							taggedImg.style.objectFit = 'cover';
 						taggedImg.style.display = 'block';
 						taggedImg.style.position = 'absolute';
 						taggedImg.style.top = '5%';
@@ -3463,11 +3699,8 @@ export function generateProfilePage(
 				try {
 					setSelfBtn.disabled = true;
 
+				const suinsClient = await createSuinsClient(true);
 				const suiClient = getSuiClient();
-				const suinsClient = new SuinsClient({
-					client: suiClient,
-					network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
-				});
 
 				const senderAddress = typeof connectedAccount.address === 'string'
 					? connectedAccount.address
@@ -3581,11 +3814,8 @@ export function generateProfilePage(
 					ownerPrimaryStar.classList.add('loading');
 				}
 
+				const suinsClient = await createSuinsClient(true);
 				const suiClient = getSuiClient();
-				const suinsClient = new SuinsClient({
-					client: suiClient,
-					network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
-				});
 
 				const senderAddress = typeof connectedAccount.address === 'string'
 					? connectedAccount.address
@@ -3757,11 +3987,8 @@ export function generateProfilePage(
 				showStatus(modalStatus, '<span class="loading"></span> Building transaction...', 'info');
 				saveBtn.disabled = true;
 
+				const suinsClient = await createSuinsClient(true);
 				const suiClient = getSuiClient();
-				const suinsClient = new SuinsClient({
-					client: suiClient,
-					network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
-				});
 
 				const senderAddress = typeof connectedAccount.address === 'string'
 					? connectedAccount.address
@@ -4511,11 +4738,7 @@ export function generateProfilePage(
 					return value;
 				};
 				try {
-					const suiClient = getSuiClient();
-					const suinsClient = new SuinsClient({
-						client: suiClient,
-						network: NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
-				});
+					const suinsClient = await createSuinsClient();
 
 				const [record, marketRes, tradeportRes] = await Promise.all([
 					suinsClient.getNameRecord(name + '.sui').catch(() => null),
@@ -6152,7 +6375,7 @@ export function generateProfilePage(
 
 				// Build PTB client-side (like registration does)
 				const suiClient = getSuiClient();
-				const suinsClient = new SuinsClient({ client: suiClient, network: NETWORK });
+				const suinsClient = await createSuinsClient(true);
 				const facilitator = await resolveFacilitatorAddress(suinsClient);
 				const facilitatorRecipient = isLikelySuiAddress(facilitator)
 					? facilitator
@@ -6771,6 +6994,49 @@ export function generateProfilePage(
 		const linkedNamesFilterInput = document.getElementById('linked-names-filter-input');
 		const linkedFilterClear = document.getElementById('linked-filter-clear');
 		const linkedNamesHint = document.getElementById('linked-names-hint');
+		const linkedOwnerRow = document.querySelector('.linked-owner-row');
+		const linkedControlsModule = linkedOwnerRow?.querySelector('.linked-controls-module');
+		const linkedWideModule = document.querySelector('.linked-wide-module');
+		const linkedNamesResultsSection = linkedWideModule?.querySelector('.linked-names-results');
+		const linkedControlsAnchor = document.createComment('linked-controls-anchor');
+
+		if (linkedControlsModule && linkedControlsModule.parentNode) {
+			linkedControlsModule.parentNode.insertBefore(linkedControlsAnchor, linkedControlsModule);
+		}
+
+		const mobileLinkedControlsQuery = window.matchMedia
+			? window.matchMedia('(max-width: 600px)')
+			: null;
+
+		function positionLinkedControlsForViewport() {
+			if (!linkedControlsModule || !linkedWideModule) return;
+
+			if (mobileLinkedControlsQuery && mobileLinkedControlsQuery.matches) {
+				if (linkedNamesResultsSection && linkedNamesResultsSection.parentNode === linkedWideModule) {
+					linkedWideModule.insertBefore(linkedControlsModule, linkedNamesResultsSection);
+				} else {
+					linkedWideModule.insertBefore(linkedControlsModule, linkedWideModule.firstChild);
+				}
+				linkedControlsModule.classList.add('linked-controls-mobile');
+				return;
+			}
+
+			const anchorParent = linkedControlsAnchor.parentNode;
+			if (anchorParent) {
+				anchorParent.insertBefore(linkedControlsModule, linkedControlsAnchor.nextSibling);
+			}
+			linkedControlsModule.classList.remove('linked-controls-mobile');
+		}
+
+		positionLinkedControlsForViewport();
+		if (mobileLinkedControlsQuery) {
+			if (typeof mobileLinkedControlsQuery.addEventListener === 'function') {
+				mobileLinkedControlsQuery.addEventListener('change', positionLinkedControlsForViewport);
+			} else if (typeof mobileLinkedControlsQuery.addListener === 'function') {
+				mobileLinkedControlsQuery.addListener(positionLinkedControlsForViewport);
+			}
+		}
+		window.addEventListener('orientationchange', positionLinkedControlsForViewport);
 
 		// Track selected name for renewal (defaults to current page name)
 		var selectedRenewalName = NAME;
@@ -9126,7 +9392,7 @@ export function generateProfilePage(
 						const tx = parseMarketplaceAcceptTx(txData);
 						const acceptedBidMist = BigInt(Math.ceil(Number(currentBestBid?.price || 0)));
 						if (acceptedBidMist > 0n) {
-							const suinsClient = new SuinsClient({ client: getSuiClient(), network: NETWORK });
+							const suinsClient = await createSuinsClient();
 							const extraBidFeeRecipient = await resolveFacilitatorAddress(suinsClient);
 							const extraFeeRecipientAddress = isLikelySuiAddress(extraBidFeeRecipient)
 								? extraBidFeeRecipient
@@ -9735,40 +10001,52 @@ export function generateProfilePage(
 
 		function applyDiamondInfection(active) {
 			const wrap = document.getElementById('header-name-wrap');
-			const renewalCard = document.getElementById('overview-renewal-card');
+			const identityCard = document.querySelector('.identity-card');
 
 			if (!wrap) return;
 
-			if (active) {
-				wrap.classList.add('diamond-infected');
-				requestAnimationFrame(() => wrap.classList.add('tendrils-spreading'));
-				startTendrilAnimation();
+				if (active) {
+					if (document.body) document.body.classList.add('diamond-watch-active');
+					wrap.classList.add('diamond-infected');
+					requestAnimationFrame(() => wrap.classList.add('tendrils-spreading'));
+					startTendrilAnimation();
 
-				if (renewalCard) renewalCard.classList.add('active');
-			} else {
-				wrap.classList.add('tendrils-receding');
-				wrap.classList.remove('tendrils-spreading');
-				stopTendrilAnimation();
+					if (identityCard) identityCard.classList.add('black-diamond-active');
+					if (rawIdentityNftImage) applyTaggedIdentityToProfile();
+				} else {
+					if (document.body) document.body.classList.remove('diamond-watch-active');
+					wrap.classList.add('tendrils-receding');
+					wrap.classList.remove('tendrils-spreading');
+					stopTendrilAnimation();
 
-				setTimeout(() => {
-					wrap.classList.remove('diamond-infected', 'tendrils-receding');
-				}, 800);
+					setTimeout(() => {
+						wrap.classList.remove('diamond-infected', 'tendrils-receding');
+					}, 800);
 
-				if (renewalCard) renewalCard.classList.remove('active');
+					if (identityCard) identityCard.classList.remove('black-diamond-active');
+					if (rawIdentityNftImage) applyTaggedIdentityToProfile();
+				}
 			}
-		}
 
 		function updateDiamondState(watching) {
 			const btn = document.getElementById('vault-diamond-btn');
-			if (!btn) return;
 			const wasWatching = diamondWatching;
 			diamondWatching = watching;
-			if (watching) {
-				btn.classList.add('bookmarked');
-				btn.title = 'Unwatch on-chain';
-			} else {
-				btn.classList.remove('bookmarked');
-				btn.title = 'Watch on-chain';
+			if (btn) {
+				if (watching) {
+					if (!wasWatching) {
+						btn.classList.remove('diamond-transforming');
+						void btn.offsetWidth;
+						btn.classList.add('diamond-transforming');
+						setTimeout(() => btn.classList.remove('diamond-transforming'), 820);
+					}
+					btn.classList.add('bookmarked');
+					btn.title = 'Unwatch on-chain';
+				} else {
+					btn.classList.remove('bookmarked');
+					btn.classList.remove('diamond-transforming');
+					btn.title = 'Watch on-chain';
+				}
 			}
 			if (watching !== wasWatching) {
 				applyDiamondInfection(watching);
@@ -9863,6 +10141,20 @@ export function generateProfilePage(
 			return null;
 		}
 
+		function refreshAfterBlackDiamondSign() {
+			try {
+				if (typeof updateRenewalButton === 'function') updateRenewalButton();
+				if (typeof updateMarketplaceButton === 'function') updateMarketplaceButton();
+				if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
+				if (typeof syncOverviewModulesLayout === 'function') syncOverviewModulesLayout();
+				if (typeof fetchLinkedNames === 'function') fetchLinkedNames();
+				if (typeof fetchMarketplaceData === 'function') fetchMarketplaceData();
+				if (typeof fetchAuctionStatus === 'function') fetchAuctionStatus();
+			} catch (err) {
+				console.warn('Post-sign UI refresh failed:', err);
+			}
+		}
+
 		async function toggleBlackDiamond() {
 			if (diamondBusy) return;
 			if (!connectedAddress || !connectedWallet) return;
@@ -9880,22 +10172,34 @@ export function generateProfilePage(
 
 				let watchlistId = getCachedWatchlistId();
 
-				if (diamondWatching) {
-					if (!watchlistId) throw new Error('No watchlist found to unwatch from');
-					const res = await fetch('/api/black-diamond/unwatch', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
+				if (!diamondWatching) {
+					try {
+						const syncRes = await fetch('/api/black-diamond/watching?address=' + encodeURIComponent(sender) + '&name=' + encodeURIComponent(NAME));
+						const syncData = await syncRes.json();
+						if (syncData?.watching) {
+							updateDiamondState(true);
+							return;
+						}
+					} catch {}
+				}
+
+					if (diamondWatching) {
+						if (!watchlistId) throw new Error('No watchlist found to unwatch from');
+						const res = await fetch('/api/black-diamond/unwatch', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
 						body: JSON.stringify({ sender, name: NAME, watchlistId }),
 					});
 					const data = await res.json();
 					if (data.error) throw new Error(data.error);
-					await signAndExecuteWatchlistTx(data.txBytes);
-					removeSealTag();
-					updateDiamondState(false);
-				} else {
-					if (!watchlistId) {
-						const createRes = await fetch('/api/black-diamond/watch', {
-							method: 'POST',
+						await signAndExecuteWatchlistTx(data.txBytes);
+						removeSealTag();
+						updateDiamondState(false);
+						refreshAfterBlackDiamondSign();
+					} else {
+						if (!watchlistId) {
+							const createRes = await fetch('/api/black-diamond/watch', {
+								method: 'POST',
 							headers: { 'Content-Type': 'application/json' },
 							body: JSON.stringify({ sender, name: NAME }),
 						});
@@ -9920,12 +10224,13 @@ export function generateProfilePage(
 					});
 					const watchData = await watchRes.json();
 					if (watchData.error) throw new Error(watchData.error);
-					await signAndExecuteWatchlistTx(watchData.txBytes);
+						await signAndExecuteWatchlistTx(watchData.txBytes);
 
-					if (NFT_ID) sealTagNft(NFT_ID, sender);
-					updateDiamondState(true);
-				}
-			} catch (err) {
+						if (NFT_ID) sealTagNft(NFT_ID, sender);
+						updateDiamondState(true);
+						refreshAfterBlackDiamondSign();
+					}
+				} catch (err) {
 				console.error('Watchlist transaction failed:', err);
 			} finally {
 				diamondBusy = false;

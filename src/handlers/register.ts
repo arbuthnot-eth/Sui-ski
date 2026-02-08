@@ -51,10 +51,12 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 		.container {
 			max-width: 880px;
+			width: 100%;
 			margin: 0 auto;
 			display: flex;
 			flex-direction: column;
 			gap: 12px;
+			overflow: hidden;
 		}
 		.card {
 			background: var(--card);
@@ -71,6 +73,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			font-size: clamp(1.4rem, 2.5vw, 2rem);
 			margin-bottom: 4px;
 			font-weight: 800;
+			overflow-wrap: anywhere;
 		}
 		.header h1 span {
 			color: var(--accent);
@@ -1208,12 +1211,32 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		}
 
 			@media (max-width: 640px) {
+				body {
+					height: auto;
+					min-height: 100vh;
+					min-height: 100dvh;
+					overflow: auto;
+					justify-content: flex-start;
+					padding-top: 56px;
+				}
 				.card { padding: 16px; }
 				.register-layout { grid-template-columns: 1fr; gap: 12px; }
 				.register-left { text-align: center; align-items: center; }
 				.header { text-align: center; }
-			.register-hero { text-align: center; }
-			.register-features { justify-content: center; }
+				.header h1 { font-size: clamp(1.1rem, 5vw, 1.6rem); }
+				.register-hero { text-align: center; }
+				.register-features { justify-content: center; }
+				.register-feature { font-size: 0.72rem; gap: 3px; }
+				.register-feature svg { width: 12px; height: 12px; }
+				.register-price-row { justify-content: center; }
+				.price-breakdown { padding: 10px 12px; }
+				.price-row .price-value { min-width: 0; font-size: 0.8rem; }
+				.price-row .price-label { font-size: 0.78rem; flex-shrink: 0; }
+				.options-panel { padding: 10px; }
+				.option-row { gap: 8px; }
+				.option-label { font-size: 0.82rem; }
+				.duration-pill { padding: 6px 10px; font-size: 0.78rem; }
+				.register-btn.compact { width: 100%; }
 				.bid-main { grid-template-columns: 1fr; }
 				.bid-list li { font-size: 0.8rem; }
 				.global-wallet-widget { top: 12px; right: 12px; }
@@ -1223,8 +1246,23 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				.gear-fab { bottom: 16px; right: 16px; }
 				.nav-bar { padding: 0 8px; }
 				.nav-logo { font-size: 1.1rem; }
-			.card-brand-row { justify-content: center; }
-		}
+				.card-brand-row { justify-content: center; }
+				.container { padding: 0 2px; }
+			}
+			@media (max-width: 390px) {
+				body { padding: 12px 8px 8px; padding-top: 52px; }
+				.card { padding: 14px 12px; }
+				.header h1 { font-size: 1.1rem; }
+				.register-price { font-size: 1.3rem; }
+				.savings-badge { font-size: 0.72rem; padding: 3px 8px; }
+				.register-features { gap: 8px; }
+				.register-feature { font-size: 0.7rem; }
+				.duration-pill { padding: 5px 8px; font-size: 0.75rem; }
+				.price-row .price-value { font-size: 0.78rem; }
+				.price-row .price-label { font-size: 0.75rem; }
+				.options-panel { padding: 8px; }
+				.option-label { font-size: 0.78rem; }
+			}
 	</style>
 </head>
 <body>
@@ -1654,26 +1692,41 @@ export function generateRegistrationPage(name: string, env: Env): string {
 		})();
 	</script>
 		<script type="module">
-		let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, Transaction, ALLOWED_METADATA, SuinsClient, SuinsTransaction;
-		{
-			const SDK_TIMEOUT = 15000;
-			const timedImport = (url) => Promise.race([
-				import(url),
-				new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
-			]);
+			let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, Transaction, ALLOWED_METADATA, SuinsClient, SuinsTransaction;
+			{
+				const pickExport = (mod, name) => {
+					if (!mod || typeof mod !== 'object') return undefined;
+					if (name in mod) return mod[name];
+					if (mod.default && typeof mod.default === 'object' && name in mod.default) {
+						return mod.default[name];
+					}
+					if (name === 'SuinsClient' && typeof mod.default === 'function') return mod.default;
+					return undefined;
+				};
+				const SDK_TIMEOUT = 15000;
+				const timedImport = (url) => Promise.race([
+					import(url),
+					new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
+				]);
 			const results = await Promise.allSettled([
 				timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
 				timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
 				timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
 				timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
 			]);
-			if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
-			if (results[1].status === 'fulfilled') ({ getJsonRpcFullnodeUrl, SuiJsonRpcClient } = results[1].value);
-			if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value);
-			if (results[3].status === 'fulfilled') ({ ALLOWED_METADATA, SuinsClient, SuinsTransaction } = results[3].value);
-			const failed = results.filter(r => r.status === 'rejected');
-			if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
-		}
+				if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
+				if (results[1].status === 'fulfilled') ({ getJsonRpcFullnodeUrl, SuiJsonRpcClient } = results[1].value);
+				if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value);
+				if (results[3].status === 'fulfilled') {
+					const suinsModule = results[3].value;
+					ALLOWED_METADATA = pickExport(suinsModule, 'ALLOWED_METADATA');
+					SuinsClient = pickExport(suinsModule, 'SuinsClient');
+					SuinsTransaction = pickExport(suinsModule, 'SuinsTransaction');
+				}
+				const failed = results.filter(r => r.status === 'rejected');
+				if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
+				if (!SuinsClient) console.warn('SuinsClient export unavailable from @mysten/suins module');
+			}
 		${generateWalletSessionJs()}
 		window.__suiskiModuleLoaded = true;
 
@@ -2036,6 +2089,37 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				.replace(/'/g, '&#39;');
 		}
 
+		function normalizeAccountAddress(account) {
+			if (!account) return '';
+			if (typeof account.address === 'string') return account.address.trim();
+			if (account.address && typeof account.address.toString === 'function') {
+				return String(account.address.toString()).trim();
+			}
+			return '';
+		}
+
+		function isSuiAccount(account) {
+			if (!account) return false;
+			const accountChains = Array.isArray(account.chains) ? account.chains : [];
+			if (accountChains.some((chain) => typeof chain === 'string' && chain.startsWith('sui:'))) {
+				return true;
+			}
+			const addr = normalizeAccountAddress(account);
+			return /^0x[0-9a-fA-F]{2,}$/.test(addr);
+		}
+
+		function filterSuiAccounts(accounts) {
+			if (!Array.isArray(accounts)) return [];
+			return accounts
+				.filter(isSuiAccount)
+				.map((account) => {
+					const normalizedAddress = normalizeAccountAddress(account);
+					if (!normalizedAddress) return account;
+					if (typeof account.address === 'string' && account.address === normalizedAddress) return account;
+					return { ...account, address: normalizedAddress };
+				});
+		}
+
 		function getSuiWallets() {
 			const wallets = [];
 			const seenNames = new Set();
@@ -2044,15 +2128,14 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				const features = wallet.features || {};
 				const hasSuiChain = Array.isArray(wallet.chains) && wallet.chains.some(chain => chain.startsWith('sui:'));
 				const hasConnect = !!(features['standard:connect'] || wallet.connect);
-				const hasSuiTxFeature = !!(
+				const hasSuiNamespaceFeature = Object.keys(features).some((key) => key.startsWith('sui:'));
+				const hasSuiTxMethod = !!(
 					features['sui:signAndExecuteTransactionBlock'] ||
 					features['sui:signAndExecuteTransaction'] ||
-					features['sui:signTransaction'] ||
 					wallet.signAndExecuteTransactionBlock ||
-					wallet.signAndExecuteTransaction ||
-					wallet.signTransaction
+					wallet.signAndExecuteTransaction
 				);
-				return hasSuiChain || (hasConnect && hasSuiTxFeature);
+				return hasConnect && (hasSuiChain || hasSuiNamespaceFeature || hasSuiTxMethod);
 			};
 
 			// First, try wallet-standard registry
@@ -2184,8 +2267,10 @@ export function generateRegistrationPage(name: string, env: Env): string {
 					accounts = result?.accounts || result;
 				}
 
+				accounts = filterSuiAccounts(accounts);
+
 				if (!accounts || accounts.length === 0) {
-					throw new Error('No accounts returned');
+					throw new Error('No Sui accounts returned. Switch your wallet to Sui and try again.');
 				}
 
 				connectedWallet = wallet;

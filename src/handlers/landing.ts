@@ -2614,27 +2614,39 @@ ${socialMeta}
 		<span>SUI <span class="price" id="sui-price">$--</span></span>
 	</div>
 
-	<script type="module">
-			let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, SuinsClient, Transaction;
-			{
-				const SDK_TIMEOUT = 15000;
-				const timedImport = (url) => Promise.race([
-					import(url),
-					new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
-				]);
+		<script type="module">
+				let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, SuinsClient, Transaction;
+				{
+					const pickExport = (mod, name) => {
+						if (!mod || typeof mod !== 'object') return undefined;
+						if (name in mod) return mod[name];
+						if (mod.default && typeof mod.default === 'object' && name in mod.default) {
+							return mod.default[name];
+						}
+						if (name === 'SuinsClient' && typeof mod.default === 'function') return mod.default;
+						return undefined;
+					};
+					const SDK_TIMEOUT = 15000;
+					const timedImport = (url) => Promise.race([
+						import(url),
+						new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
+					]);
 				const results = await Promise.allSettled([
 					timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
 					timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
 					timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
 					timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
 				]);
-				if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
-				if (results[1].status === 'fulfilled') ({ getJsonRpcFullnodeUrl, SuiJsonRpcClient } = results[1].value);
-				if (results[2].status === 'fulfilled') ({ SuinsClient } = results[2].value);
-				if (results[3].status === 'fulfilled') ({ Transaction } = results[3].value);
-				const failed = results.filter(r => r.status === 'rejected');
-				if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
-			}
+					if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
+					if (results[1].status === 'fulfilled') ({ getJsonRpcFullnodeUrl, SuiJsonRpcClient } = results[1].value);
+					if (results[2].status === 'fulfilled') {
+						SuinsClient = pickExport(results[2].value, 'SuinsClient');
+					}
+					if (results[3].status === 'fulfilled') ({ Transaction } = results[3].value);
+					const failed = results.filter(r => r.status === 'rejected');
+					if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
+					if (!SuinsClient) console.warn('SuinsClient export unavailable from @mysten/suins module');
+				}
 			${generateWalletSessionJs()}
 			const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
 			const NETWORK = ${JSON.stringify(options.network || 'mainnet')};
@@ -2712,20 +2724,50 @@ ${socialMeta}
 		let walletsApi = null;
 		try { walletsApi = getWallets(); } catch (e) { console.error('Wallet API init failed:', e); }
 
+		function normalizeAccountAddress(account) {
+			if (!account) return '';
+			if (typeof account.address === 'string') return account.address.trim();
+			if (account.address && typeof account.address.toString === 'function') {
+				return String(account.address.toString()).trim();
+			}
+			return '';
+		}
+
+		function isSuiAccount(account) {
+			if (!account) return false;
+			const accountChains = Array.isArray(account.chains) ? account.chains : [];
+			if (accountChains.some((chain) => typeof chain === 'string' && chain.startsWith('sui:'))) {
+				return true;
+			}
+			const addr = normalizeAccountAddress(account);
+			return /^0x[0-9a-fA-F]{2,}$/.test(addr);
+		}
+
+		function filterSuiAccounts(accounts) {
+			if (!Array.isArray(accounts)) return [];
+			return accounts
+				.filter(isSuiAccount)
+				.map((account) => {
+					const normalizedAddress = normalizeAccountAddress(account);
+					if (!normalizedAddress) return account;
+					if (typeof account.address === 'string' && account.address === normalizedAddress) return account;
+					return { ...account, address: normalizedAddress };
+				});
+		}
+
 		function isSuiCapableWallet(wallet) {
 			if (!wallet) return false;
 			const features = wallet.features || {};
 			const hasSuiChain = Array.isArray(wallet.chains) && wallet.chains.some(c => c.startsWith('sui:'));
 			const hasConnect = !!(features['standard:connect'] || wallet.connect);
-			const hasSuiTxFeature = !!(
+			const hasSuiNamespaceFeature = Object.keys(features).some((key) => key.startsWith('sui:'));
+			const hasSuiTxMethod = !!(
 				features['sui:signAndExecuteTransactionBlock'] ||
 				features['sui:signAndExecuteTransaction'] ||
-				features['sui:signTransaction'] ||
 				wallet.signAndExecuteTransactionBlock ||
-				wallet.signAndExecuteTransaction ||
-				wallet.signTransaction
+				wallet.signAndExecuteTransaction
 			);
-			return hasSuiChain || (hasConnect && hasSuiTxFeature);
+			return hasConnect && (hasSuiChain || hasSuiNamespaceFeature || hasSuiTxMethod);
 		}
 
 		function getSuiWallets() {
@@ -2812,12 +2854,14 @@ ${socialMeta}
 					accounts = result?.accounts || result;
 				}
 
+				accounts = filterSuiAccounts(accounts);
+
 				if (!accounts?.length) {
 					await new Promise(r => setTimeout(r, 200));
-					accounts = wallet.accounts || wallet._raw?.accounts;
+					accounts = filterSuiAccounts(wallet.accounts || wallet._raw?.accounts);
 				}
 
-				if (!accounts?.length) throw new Error('No accounts. Please unlock your wallet.');
+				if (!accounts?.length) throw new Error('No Sui accounts. Switch your wallet to Sui and try again.');
 
 				connectedWallet = wallet;
 				connectedAccount = accounts[0];

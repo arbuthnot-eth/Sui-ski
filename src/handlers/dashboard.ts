@@ -495,6 +495,23 @@ export function generateDashboardPage(env: Env): string {
 		@media (max-width: 680px) {
 			.names-grid { grid-template-columns: 1fr; }
 			.page-header h1 { font-size: 1.4rem; }
+			.container { padding-top: 64px; }
+			.page-header { margin-bottom: 28px; }
+			.empty-state { padding: 48px 16px; }
+			.name-card { padding: 16px; }
+			.name-card-actions { gap: 6px; }
+			.card-action { padding: 10px 10px; font-size: 0.82rem; min-height: 44px; }
+			.footer-bar { margin-top: 32px; padding: 16px 0; flex-wrap: wrap; gap: 4px; }
+		}
+		@media (max-width: 400px) {
+			body { padding: 16px 10px; }
+			.page-header h1 { font-size: 1.25rem; }
+			.page-header p { font-size: 0.88rem; }
+			.name-card-title { font-size: 1.05rem; }
+			.name-card-market { gap: 8px; }
+			.market-item { padding: 6px 8px; }
+			.card-action { padding: 10px 8px; font-size: 0.78rem; }
+			.footer-bar { font-size: 0.72rem; }
 		}
 	</style>
 </head>
@@ -663,13 +680,59 @@ export function generateDashboardPage(env: Env): string {
 			return addr.slice(0, 6) + '...' + addr.slice(-4);
 		}
 
+		function normalizeAccountAddress(account) {
+			if (!account) return '';
+			if (typeof account.address === 'string') return account.address.trim();
+			if (account.address && typeof account.address.toString === 'function') {
+				return String(account.address.toString()).trim();
+			}
+			return '';
+		}
+
+		function isSuiAccount(account) {
+			if (!account) return false;
+			const accountChains = Array.isArray(account.chains) ? account.chains : [];
+			if (accountChains.some((chain) => typeof chain === 'string' && chain.startsWith('sui:'))) {
+				return true;
+			}
+			const addr = normalizeAccountAddress(account);
+			return /^0x[0-9a-fA-F]{2,}$/.test(addr);
+		}
+
+		function filterSuiAccounts(accounts) {
+			if (!Array.isArray(accounts)) return [];
+			return accounts
+				.filter(isSuiAccount)
+				.map((account) => {
+					const normalizedAddress = normalizeAccountAddress(account);
+					if (!normalizedAddress) return account;
+					if (typeof account.address === 'string' && account.address === normalizedAddress) return account;
+					return { ...account, address: normalizedAddress };
+				});
+		}
+
+		function isSuiCapableWallet(wallet) {
+			if (!wallet) return false;
+			const features = wallet.features || {};
+			const hasSuiChain = Array.isArray(wallet.chains) && wallet.chains.some((c) => c.startsWith('sui:'));
+			const hasConnect = !!(features['standard:connect'] || wallet.connect);
+			const hasSuiNamespaceFeature = Object.keys(features).some((key) => key.startsWith('sui:'));
+			const hasSuiTxMethod = !!(
+				features['sui:signAndExecuteTransactionBlock'] ||
+				features['sui:signAndExecuteTransaction'] ||
+				wallet.signAndExecuteTransactionBlock ||
+				wallet.signAndExecuteTransaction
+			);
+			return hasConnect && (hasSuiChain || hasSuiNamespaceFeature || hasSuiTxMethod);
+		}
+
 		function getSuiWallets() {
 			const wallets = [];
 			const seenNames = new Set();
 			if (walletsApi) {
 				try {
 					for (const wallet of walletsApi.get()) {
-						if (wallet.chains?.some(c => c.startsWith('sui:'))) {
+						if (isSuiCapableWallet(wallet)) {
 							wallets.push(wallet);
 							seenNames.add(wallet.name);
 						}
@@ -677,20 +740,26 @@ export function generateDashboardPage(env: Env): string {
 				} catch {}
 			}
 			const wellKnown = [
-				{ global: 'phantom?.solana', name: 'Phantom' },
-				{ global: 'suiWallet', name: 'Sui Wallet' },
-				{ global: 'martian', name: 'Martian' },
+				{ check: () => window.phantom?.sui, name: 'Phantom' },
+				{ check: () => window.suiWallet, name: 'Sui Wallet' },
+				{ check: () => window.martian?.sui, name: 'Martian' },
 			];
-			for (const { global: globalPath, name } of wellKnown) {
+			for (const { check, name } of wellKnown) {
 				if (seenNames.has(name)) continue;
 				try {
-					const wallet = globalPath.split('.').reduce((o, k) => o?.[k], window);
-					if (wallet && typeof wallet === 'object') {
+					const wallet = check();
+					if (wallet && typeof wallet === 'object' && isSuiCapableWallet(wallet)) {
 						wallets.push({
 							name,
 							icon: wallet.icon || '',
 							chains: ['sui:mainnet'],
-							features: wallet.features || {},
+							features: wallet.features || {
+								'standard:connect': wallet.connect ? { connect: wallet.connect.bind(wallet) } : undefined,
+								'sui:signAndExecuteTransaction': wallet.signAndExecuteTransaction
+									? { signAndExecuteTransaction: wallet.signAndExecuteTransaction.bind(wallet) } : undefined,
+								'sui:signAndExecuteTransactionBlock': wallet.signAndExecuteTransactionBlock
+									? { signAndExecuteTransactionBlock: wallet.signAndExecuteTransactionBlock.bind(wallet) } : undefined,
+							},
 							accounts: wallet.accounts || [],
 						});
 						seenNames.add(name);
@@ -730,18 +799,18 @@ export function generateDashboardPage(env: Env): string {
 
 		async function connectToWallet(wallet) {
 			try {
-				let accounts = wallet.accounts || [];
+				let accounts = filterSuiAccounts(wallet.accounts || []);
 				if (accounts.length === 0) {
 					const connectFeature = wallet.features?.['standard:connect'];
 					if (!connectFeature?.connect) throw new Error('Wallet does not support connection');
 					const result = await connectFeature.connect();
-					accounts = result?.accounts || wallet.accounts || [];
+					accounts = filterSuiAccounts(result?.accounts || wallet.accounts || []);
 					if (accounts.length === 0) {
 						await new Promise(r => setTimeout(r, 150));
-						accounts = wallet.accounts || [];
+						accounts = filterSuiAccounts(wallet.accounts || []);
 					}
 				}
-				if (accounts.length === 0) throw new Error('No accounts. Please unlock your wallet.');
+				if (accounts.length === 0) throw new Error('No Sui accounts. Switch your wallet to Sui and try again.');
 				connectedAccount = accounts[0];
 				connectedAddress = accounts[0].address;
 				connectedWallet = wallet;
@@ -798,12 +867,12 @@ export function generateDashboardPage(env: Env): string {
 				const wallets = getSuiWallets();
 				const wallet = wallets.find(w => w.name === walletName);
 				if (!wallet) { localStorage.removeItem(STORAGE_KEY); return false; }
-				let accounts = wallet.accounts || [];
+				let accounts = filterSuiAccounts(wallet.accounts || []);
 				if (accounts.length === 0) {
 					const connectFeature = wallet.features?.['standard:connect'];
 					if (connectFeature?.connect) {
 						const result = await connectFeature.connect();
-						accounts = result?.accounts || wallet.accounts || [];
+						accounts = filterSuiAccounts(result?.accounts || wallet.accounts || []);
 					}
 				}
 				if (accounts.length === 0) return false;
