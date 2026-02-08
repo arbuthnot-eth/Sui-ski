@@ -13,6 +13,7 @@ dist/
 # IDE
 .vscode/
 .idea/
+docs/.obsidian/
 
 # OS
 .DS_Store

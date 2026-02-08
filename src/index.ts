@@ -1,11 +1,17 @@
 import { Hono } from 'hono'
+import { WalletSession } from './durable-objects/wallet-session'
 import { handleAppRequest } from './handlers/app'
-// import { blackDiamondRoutes } from './handlers/black-diamond'
+import { blackDiamondRoutes } from './handlers/black-diamond'
 import { generateDashboardPage } from './handlers/dashboard'
 import { apiRoutes, landingPageHTML } from './handlers/landing'
 import { generateProfilePage } from './handlers/profile'
 import { agentSubnameCapRoutes, subnameCapRoutes } from './handlers/subnamecap'
 import { generateSubnameCapPage } from './handlers/subnamecap-ui'
+import {
+	handleWalletCheck,
+	handleWalletConnect,
+	handleWalletDisconnect,
+} from './handlers/wallet-api'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
@@ -20,7 +26,8 @@ import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils
 import { ensureRpcEnv } from './utils/rpc'
 import { isTwitterPreviewBot } from './utils/social'
 import { parseSubdomain } from './utils/subdomain'
-import { clearWalletCookieHeader, walletCookieHeader } from './utils/wallet-cookie'
+
+export { WalletSession }
 
 type AppEnv = {
 	Bindings: Env
@@ -64,20 +71,16 @@ app.use('*', async (c, next) => {
 	await next()
 })
 
-app.post('/_wallet', async (c) => {
-	try {
-		const { walletName, address } = await c.req.json()
-		if (!walletName || !address) return jsonResponse({ ok: false, error: 'Missing fields' }, 400)
-		return jsonResponse({ ok: true }, 200, {
-			'Set-Cookie': walletCookieHeader(walletName, address),
-		})
-	} catch {
-		return jsonResponse({ ok: false, error: 'Invalid request' }, 400)
-	}
+app.post('/api/wallet/connect', async (c) => {
+	return handleWalletConnect(c.req.raw, c.env)
 })
 
-app.delete('/_wallet', () => {
-	return jsonResponse({ ok: true }, 200, { 'Set-Cookie': clearWalletCookieHeader() })
+app.get('/api/wallet/check', async (c) => {
+	return handleWalletCheck(c.req.raw, c.env)
+})
+
+app.post('/api/wallet/disconnect', async (c) => {
+	return handleWalletDisconnect(c.req.raw, c.env)
 })
 
 app.use('*', async (c, next) => {
@@ -121,7 +124,7 @@ app.all('/api/ika/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
 app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
 
 app.route('/api/subnamecap', subnameCapRoutes)
-// app.route('/api/black-diamond', blackDiamondRoutes)
+app.route('/api/black-diamond', blackDiamondRoutes)
 app.route('/api', apiRoutes)
 
 const SVG_HEADERS = { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=604800' }

@@ -15,6 +15,7 @@ const createMockEnv = (network: 'mainnet' | 'testnet' = 'mainnet'): Env => ({
 			: 'https://fullnode.testnet.sui.io:443',
 	WALRUS_NETWORK: 'mainnet',
 	CACHE: {} as never,
+	WALLET_SESSIONS: {} as Env['WALLET_SESSIONS'],
 	MOVE_REGISTRY_PARENT_ID: '0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727',
 })
 

@@ -1,4 +1,4 @@
-import type { KVNamespace, DurableObjectNamespace } from '@cloudflare/workers-types'
+import type { DurableObjectNamespace, KVNamespace } from '@cloudflare/workers-types'
 import type { WalletSession } from './durable-objects/wallet-session'
 
 export interface Env {

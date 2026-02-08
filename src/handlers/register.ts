@@ -2,7 +2,7 @@ import type { Env } from '../types'
 import { generateLogoSvg } from '../utils/og-image'
 import { jsonResponse } from '../utils/response'
 import { relaySignedTransaction } from '../utils/transactions'
-import { generateWalletCookieJs } from '../utils/wallet-cookie'
+import { generateWalletSessionJs } from '../utils/wallet-session-js'
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -1665,7 +1665,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			const failed = results.filter(r => r.status === 'rejected');
 			if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
 		}
-		${generateWalletCookieJs()}
+		${generateWalletSessionJs()}
 		window.__suiskiModuleLoaded = true;
 
 		const NAME = ${serializeJson(cleanName)};
@@ -2132,7 +2132,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 				connectedWallet = wallet;
 				connectedAccount = accounts[0];
 				connectedAddress = accounts[0].address;
-				setWalletCookie(wallet.name, connectedAddress);
+				connectWalletSession(wallet.name, connectedAddress);
 
 				walletModal.classList.remove('open');
 				updateWalletUI();
@@ -2150,7 +2150,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			connectedWallet = null;
 			connectedAccount = null;
 			connectedAddress = null;
-			clearWalletCookie();
+			disconnectWalletSession();
 			updateWalletUI();
 			updateRegisterButton();
 		}
@@ -3055,7 +3055,7 @@ export function generateRegistrationPage(name: string, env: Env): string {
 			updateRegisterButton();
 
 		(async () => {
-			const hint = getWalletCookie();
+			const hint = getWalletSession();
 			if (!hint) return;
 			await new Promise(r => setTimeout(r, 300));
 			const wallets = getSuiWallets();

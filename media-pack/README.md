@@ -19,6 +19,14 @@ Reusable brand assets for engineering, design, and social previews.
 - `sui-ski-logo-vertical.png`
   - Pre-rendered PNG of the vertical lockup (1024px wide).
 
+- `tradeport-logo-icon.svg`
+  - TradePort logo icon source file.
+  - Source URL: `https://www.tradeport.xyz/logo-icon.svg`.
+
+- `tradeport-logo-icon.png`
+  - True PNG export generated from `tradeport-logo-icon.svg`.
+  - Size: `99x61`.
+
 ## Notes
 
 - These are source-of-truth brand vectors for this repo.

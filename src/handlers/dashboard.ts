@@ -1,7 +1,7 @@
 import type { Env } from '../types'
 import { generateLogoSvg } from '../utils/og-image'
 import { renderSocialMeta } from '../utils/social'
-import { generateWalletCookieJs } from '../utils/wallet-cookie'
+import { generateWalletSessionJs } from '../utils/wallet-session-js'
 
 export function generateDashboardPage(env: Env): string {
 	const network = env.SUI_NETWORK || 'mainnet'
@@ -617,7 +617,7 @@ export function generateDashboardPage(env: Env): string {
 			console.warn('Wallet SDK failed to load:', e.message);
 		}
 
-		${generateWalletCookieJs()}
+		${generateWalletSessionJs()}
 
 		const API_BASE = ${JSON.stringify(apiBase)};
 		const PROFILE_BASE = ${JSON.stringify(profileBase)};
@@ -759,7 +759,7 @@ export function generateDashboardPage(env: Env): string {
 			connectedAddress = null;
 			connectedWalletName = null;
 			localStorage.removeItem(STORAGE_KEY);
-			clearWalletCookie();
+			disconnectWalletSession();
 			walletWidget.classList.remove('open');
 			walletBtn.classList.remove('connected');
 			walletText.textContent = 'Connect';
@@ -775,14 +775,14 @@ export function generateDashboardPage(env: Env): string {
 		function saveWalletConnection() {
 			if (connectedWalletName && connectedAddress) {
 				localStorage.setItem(STORAGE_KEY, JSON.stringify({ walletName: connectedWalletName, address: connectedAddress }));
-				setWalletCookie(connectedWalletName, connectedAddress);
+				connectWalletSession(connectedWalletName, connectedAddress);
 			}
 		}
 
 		async function restoreWalletConnection() {
 			try {
 				const saved = localStorage.getItem(STORAGE_KEY);
-				const cookieHint = getWalletCookie();
+				const cookieHint = getWalletSession();
 				const walletName = saved ? JSON.parse(saved).walletName : cookieHint?.walletName;
 				if (!walletName) return false;
 				const wallets = getSuiWallets();

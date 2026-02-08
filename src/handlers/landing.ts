@@ -11,7 +11,7 @@ import { jsonResponse } from '../utils/response'
 import { getDefaultRpcUrl } from '../utils/rpc'
 import { renderSocialMeta } from '../utils/social'
 import { getGatewayStatus } from '../utils/status'
-import { generateWalletCookieJs } from '../utils/wallet-cookie'
+import { generateWalletSessionJs } from '../utils/wallet-session-js'
 
 export interface LandingPageOptions {
 	canonicalUrl?: string
@@ -458,7 +458,8 @@ apiRoutes.get('/nft-details', async (c) => {
 apiRoutes.get('/marketplace/:name', async (c) => {
 	const name = c.req.param('name')
 	if (!name) return jsonResponse({ error: 'Name parameter required' }, 400)
-	return handleMarketplaceData(name, c.get('env'))
+	const tokenId = c.req.query('tokenId') || undefined
+	return handleMarketplaceData(name, c.get('env'), tokenId)
 })
 
 apiRoutes.post('/marketplace/accept-bid', async (c) => {
@@ -469,6 +470,23 @@ apiRoutes.post('/marketplace/accept-bid', async (c) => {
 			return jsonResponse({ error: 'Valid bidId and sellerAddress are required' }, 400)
 		}
 		return handleAcceptBidTransaction(bidId, sellerAddress, c.get('env'))
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Invalid request body'
+		return jsonResponse({ error: message }, 400)
+	}
+})
+
+apiRoutes.post('/marketplace/activity', async (c) => {
+	try {
+		const body = await c.req.json()
+		const { nftId, tokenId } = body as { nftId?: string; tokenId?: string }
+		if (tokenId) {
+			return handleNftActivityByTokenId(tokenId, c.get('env'))
+		}
+		if (nftId) {
+			return handleNftActivity(nftId, c.get('env'))
+		}
+		return jsonResponse({ error: 'nftId or tokenId parameter required' }, 400)
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Invalid request body'
 		return jsonResponse({ error: message }, 400)
@@ -848,6 +866,16 @@ interface MarketplaceBid {
 	tradeportUrl?: string
 }
 
+interface MarketplaceSale {
+	price: number
+	buyer: string
+	seller: string
+	blockTime: string
+	txHash: string
+	tokenId?: string
+	tradeportUrl?: string
+}
+
 interface MarketplaceNft {
 	id: string
 	name: string
@@ -862,6 +890,9 @@ interface MarketplaceData {
 	nfts: MarketplaceNft[]
 	bestListing: MarketplaceListing | null
 	bestBid: MarketplaceBid | null
+	sales: MarketplaceSale[]
+	floor: number | null
+	volume: number | null
 }
 
 const INDEXER_API_URL = 'https://api.indexer.xyz/graphql'
@@ -870,9 +901,10 @@ const SUINS_COLLECTION_ID = '060fe4fb-9a3e-4170-a494-a25e62aba689'
 const TRADEPORT_TX_API_URL = 'https://api.indexer.xyz/api/v1/tradeport'
 
 /**
- * Fetch marketplace data (listings, bids) for a SuiNS name
+ * Fetch marketplace data (listings, bids) for a SuiNS name.
+ * When tokenId is provided, queries by on-chain token_id for reliable results.
  */
-async function handleMarketplaceData(name: string, _env: Env): Promise<Response> {
+async function handleMarketplaceData(name: string, _env: Env, tokenId?: string): Promise<Response> {
 	const corsHeaders = {
 		'Access-Control-Allow-Origin': '*',
 		'Content-Type': 'application/json',
@@ -881,10 +913,18 @@ async function handleMarketplaceData(name: string, _env: Env): Promise<Response>
 	const normalizedName = name.endsWith('.sui') ? name : `${name}.sui`
 
 	try {
+		const nftFilter = tokenId
+			? `token_id: {_eq: $tokenId}, collection_id: {_eq: $collectionId}`
+			: `name: {_eq: $name}, collection_id: {_eq: $collectionId}`
+
+		const queryVarDecl = tokenId
+			? `$tokenId: String!, $collectionId: uuid!`
+			: `$name: String!, $collectionId: uuid!`
+
 		const query = `
-			query GetNftMarketplace($name: String!, $collectionId: uuid!) {
+			query GetNftMarketplace(${queryVarDecl}) {
 				sui {
-					nfts(where: {name: {_eq: $name}, collection_id: {_eq: $collectionId}}, limit: 10) {
+					nfts(where: {${nftFilter}}, limit: 10) {
 						id
 						name
 						token_id
@@ -902,9 +942,17 @@ async function handleMarketplaceData(name: string, _env: Env): Promise<Response>
 							bidder
 						}
 					}
+					collections(where: {id: {_eq: $collectionId}}) {
+						floor
+						volume
+					}
 				}
 			}
 		`
+
+		const variables = tokenId
+			? { tokenId, collectionId: SUINS_COLLECTION_ID }
+			: { name: normalizedName, collectionId: SUINS_COLLECTION_ID }
 
 		const response = await fetch(INDEXER_API_URL, {
 			method: 'POST',
@@ -913,10 +961,7 @@ async function handleMarketplaceData(name: string, _env: Env): Promise<Response>
 				'x-api-user': INDEXER_API_USER,
 				'x-api-key': _env.INDEXER_API_KEY || '',
 			},
-			body: JSON.stringify({
-				query,
-				variables: { name: normalizedName, collectionId: SUINS_COLLECTION_ID },
-			}),
+			body: JSON.stringify({ query, variables }),
 		})
 
 		if (!response.ok) {
@@ -940,6 +985,7 @@ async function handleMarketplaceData(name: string, _env: Env): Promise<Response>
 						}>
 						bids: Array<{ id: string; price: number; bidder: string }>
 					}>
+					collections?: Array<{ floor?: number; volume?: number }>
 				}
 			}
 			errors?: Array<{ message: string }>
@@ -950,6 +996,7 @@ async function handleMarketplaceData(name: string, _env: Env): Promise<Response>
 		}
 
 		const nfts = result.data?.sui?.nfts || []
+		const collection = result.data?.sui?.collections?.[0]
 
 		// Transform to our format
 		const marketplaceNfts: MarketplaceNft[] = nfts.map((nft) => ({
@@ -1009,11 +1056,86 @@ async function handleMarketplaceData(name: string, _env: Env): Promise<Response>
 			}
 		}
 
+		let sales: MarketplaceSale[] = []
+		if (marketplaceNfts.length > 0) {
+			const tokenIds = marketplaceNfts.map((nft) => nft.tokenId)
+			const salesQuery = `
+				query GetNftSales($tokenIds: [String!]!, $collectionId: uuid!) {
+					sui {
+						actions(
+							where: {
+								type: {_eq: "buy"}
+								token_id: {_in: $tokenIds}
+								collection_id: {_eq: $collectionId}
+							}
+							order_by: {block_time: desc}
+							limit: 10
+						) {
+							price
+							buyer
+							seller
+							block_time
+							tx_hash
+							token_id
+						}
+					}
+				}
+			`
+
+			try {
+				const salesResponse = await fetch(INDEXER_API_URL, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'x-api-user': INDEXER_API_USER,
+						'x-api-key': _env.INDEXER_API_KEY || '',
+					},
+					body: JSON.stringify({
+						query: salesQuery,
+						variables: { tokenIds, collectionId: SUINS_COLLECTION_ID },
+					}),
+				})
+
+				if (salesResponse.ok) {
+					const salesResult = (await salesResponse.json()) as {
+						data?: {
+							sui?: {
+								actions?: Array<{
+									price: number
+									buyer: string
+									seller: string
+									block_time: string
+									tx_hash: string
+									token_id: string
+								}>
+							}
+						}
+					}
+
+					const actions = salesResult.data?.sui?.actions || []
+					sales = actions.map((action) => ({
+						price: action.price,
+						buyer: action.buyer,
+						seller: action.seller,
+						blockTime: action.block_time,
+						txHash: action.tx_hash,
+						tokenId: action.token_id,
+						tradeportUrl: tradeportItemUrl(action.token_id),
+					}))
+				}
+			} catch {
+				// If sales fetch fails, continue without sales data
+			}
+		}
+
 		const data: MarketplaceData = {
 			name: normalizedName,
 			nfts: marketplaceNfts,
 			bestListing,
 			bestBid,
+			sales,
+			floor: collection?.floor ?? null,
+			volume: collection?.volume ?? null,
 		}
 
 		return new Response(JSON.stringify(data), {
@@ -1030,6 +1152,270 @@ async function handleMarketplaceData(name: string, _env: Env): Promise<Response>
 				nfts: [],
 				bestListing: null,
 				bestBid: null,
+				sales: [],
+				floor: null,
+				volume: null,
+			}),
+			{
+				status: 200,
+				headers: corsHeaders,
+			},
+		)
+	}
+}
+
+interface NftActivityAction {
+	id: string
+	type: string
+	price: number
+	priceCoin: string
+	sender: string
+	receiver: string
+	txId: string
+	blockTime: string
+	marketName: string
+	boughtOnTradeport: boolean
+	liquidBridgeId: string | null
+	nonce: string | null
+	listingNonce: string | null
+}
+
+async function handleNftActivity(nftId: string, _env: Env): Promise<Response> {
+	const corsHeaders = {
+		'Access-Control-Allow-Origin': '*',
+		'Content-Type': 'application/json',
+	}
+
+	try {
+		const query = `
+			query fetchNftActivity($nftId: uuid!, $offset: Int, $limit: Int!) {
+				sui {
+					actions(
+						where: {nft_id: {_eq: $nftId}}
+						order_by: [{block_time: desc}, {tx_index: desc}]
+						offset: $offset
+						limit: $limit
+					) {
+						id
+						type
+						price
+						price_coin
+						sender
+						receiver
+						tx_id
+						block_time
+						market_name
+						bought_on_tradeport
+						liquid_bridge_id
+						nonce
+						listing_nonce
+					}
+				}
+			}
+		`
+
+		const response = await fetch(INDEXER_API_URL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'x-api-user': INDEXER_API_USER,
+				'x-api-key': _env.INDEXER_API_KEY || '',
+			},
+			body: JSON.stringify({
+				query,
+				variables: {
+					nftId,
+					offset: 0,
+					limit: 20,
+				},
+			}),
+		})
+
+		if (!response.ok) {
+			throw new Error(`Indexer API error: ${response.status}`)
+		}
+
+		const result = (await response.json()) as {
+			data?: {
+				sui?: {
+					actions?: Array<{
+						id: string
+						type: string
+						price: number
+						price_coin: string
+						sender: string
+						receiver: string
+						tx_id: string
+						block_time: string
+						market_name: string
+						bought_on_tradeport: boolean
+						liquid_bridge_id: string | null
+						nonce: string | null
+						listing_nonce: string | null
+					}>
+				}
+			}
+			errors?: Array<{ message: string }>
+		}
+
+		if (result.errors) {
+			throw new Error(result.errors[0]?.message || 'GraphQL error')
+		}
+
+		const actions = result.data?.sui?.actions || []
+		const formattedActions: NftActivityAction[] = actions.map((action) => ({
+			id: action.id,
+			type: action.type,
+			price: action.price,
+			priceCoin: action.price_coin,
+			sender: action.sender,
+			receiver: action.receiver,
+			txId: action.tx_id,
+			blockTime: action.block_time,
+			marketName: action.market_name,
+			boughtOnTradeport: action.bought_on_tradeport,
+			liquidBridgeId: action.liquid_bridge_id,
+			nonce: action.nonce,
+			listingNonce: action.listing_nonce,
+		}))
+
+		return new Response(JSON.stringify({ actions: formattedActions }), {
+			status: 200,
+			headers: corsHeaders,
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch NFT activity'
+		return new Response(
+			JSON.stringify({
+				error: message,
+				actions: [],
+			}),
+			{
+				status: 200,
+				headers: corsHeaders,
+			},
+		)
+	}
+}
+
+async function handleNftActivityByTokenId(tokenId: string, _env: Env): Promise<Response> {
+	const corsHeaders = {
+		'Access-Control-Allow-Origin': '*',
+		'Content-Type': 'application/json',
+	}
+
+	try {
+		const query = `
+			query fetchNftTransactionHistory(
+				$collectionId: uuid!
+				$tokenId: String!
+				$offset: Int
+				$limit: Int!
+			) {
+				sui {
+					actions(
+						where: {
+							collection_id: { _eq: $collectionId }
+							nft: { token_id: { _eq: $tokenId } }
+						}
+						order_by: [{ block_time: desc }, { tx_index: desc }]
+						offset: $offset
+						limit: $limit
+					) {
+						id
+						type
+						price
+						price_coin
+						sender
+						receiver
+						tx_id
+						block_time
+						market_name
+						bought_on_tradeport
+						liquid_bridge_id
+						nonce
+						listing_nonce
+					}
+				}
+			}
+		`
+
+		const response = await fetch(INDEXER_API_URL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'x-api-user': INDEXER_API_USER,
+				'x-api-key': _env.INDEXER_API_KEY || '',
+			},
+			body: JSON.stringify({
+				query,
+				variables: {
+					collectionId: SUINS_COLLECTION_ID,
+					tokenId,
+					offset: 0,
+					limit: 20,
+				},
+			}),
+		})
+
+		if (!response.ok) {
+			throw new Error(`Indexer API error: ${response.status}`)
+		}
+
+		const result = (await response.json()) as {
+			data?: {
+				sui?: {
+					actions?: Array<{
+						id: string
+						type: string
+						price: number
+						price_coin: string
+						sender: string
+						receiver: string
+						tx_id: string
+						block_time: string
+						market_name: string
+						bought_on_tradeport: boolean
+						liquid_bridge_id: string | null
+						nonce: string | null
+						listing_nonce: string | null
+					}>
+				}
+			}
+			errors?: Array<{ message: string }>
+		}
+
+		if (result.errors) {
+			throw new Error(result.errors[0]?.message || 'GraphQL error')
+		}
+
+		const actions = result.data?.sui?.actions || []
+		const formattedActions: NftActivityAction[] = actions.map((action) => ({
+			id: action.id,
+			type: action.type,
+			price: action.price,
+			priceCoin: action.price_coin,
+			sender: action.sender,
+			receiver: action.receiver,
+			txId: action.tx_id,
+			blockTime: action.block_time,
+			marketName: action.market_name,
+			boughtOnTradeport: action.bought_on_tradeport,
+			liquidBridgeId: action.liquid_bridge_id,
+			nonce: action.nonce,
+			listingNonce: action.listing_nonce,
+		}))
+
+		return new Response(JSON.stringify({ actions: formattedActions }), {
+			status: 200,
+			headers: corsHeaders,
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch NFT activity'
+		return new Response(
+			JSON.stringify({
+				error: message,
+				actions: [],
 			}),
 			{
 				status: 200,
@@ -2249,7 +2635,7 @@ ${socialMeta}
 				const failed = results.filter(r => r.status === 'rejected');
 				if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
 			}
-			${generateWalletCookieJs()}
+			${generateWalletSessionJs()}
 			const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
 			const NETWORK = ${JSON.stringify(options.network || 'mainnet')};
 			const RPC_URL = RPC_URLS[NETWORK] || RPC_URLS.mainnet;
@@ -2261,11 +2647,11 @@ ${socialMeta}
 			const DEEPBOOK_DEEP_SUI_POOL = '0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22';
 		const DEEPBOOK_SUI_USDC_POOL = '0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407';
 		const CLOCK_OBJECT = '0x6';
-		const TRADEPORT_MULTI_BID_PACKAGE = '0x63ce6caee2ba264e92bca2d160036eb297d99b2d91d4db89d48a9bffca66e55b';
-		const TRADEPORT_MULTI_BID_STORE = '0x8aaed7e884343fb8b222c721d02eaac2c6ae2abbb4ddcdf16cb55cf8754ee860';
-		const TRADEPORT_MULTI_BID_STORE_VERSION = '572206387';
-		const TRADEPORT_BID_FEE_BPS = 300;
-		const SUINS_REGISTRATION_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration';
+			const TRADEPORT_MULTI_BID_PACKAGE = '0x63ce6caee2ba264e92bca2d160036eb297d99b2d91d4db89d48a9bffca66e55b';
+			const TRADEPORT_MULTI_BID_STORE = '0x8aaed7e884343fb8b222c721d02eaac2c6ae2abbb4ddcdf16cb55cf8754ee860';
+			const TRADEPORT_MULTI_BID_STORE_VERSION = '572206387';
+			const TRADEPORT_BID_FEE_BPS = 300;
+			const SUINS_REGISTRATION_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration';
 
 			let connectedWallet = null;
 			let connectedAccount = null;
@@ -2437,7 +2823,7 @@ ${socialMeta}
 				connectedAccount = accounts[0];
 				connectedAddress = connectedAccount.address;
 				resolvedPrimaryName = null;
-				setWalletCookie(wallet.name, connectedAddress);
+				connectWalletSession(wallet.name, connectedAddress);
 				walletBtn.classList.add('connected');
 				walletBtnText.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
 				walletModal.classList.remove('open');
@@ -2462,7 +2848,7 @@ ${socialMeta}
 			connectedAccount = null;
 				connectedAddress = null;
 				resolvedPrimaryName = null;
-				clearWalletCookie();
+				disconnectWalletSession();
 				walletBtn.classList.remove('connected');
 				walletBtnText.textContent = 'Connect';
 				walletMenu.classList.remove('open');
@@ -2609,7 +2995,7 @@ ${socialMeta}
 		initClients();
 
 		(async () => {
-			const hint = getWalletCookie();
+			const hint = getWalletSession();
 			if (!hint) return;
 			await new Promise(r => setTimeout(r, 300));
 			const wallets = getSuiWallets();
@@ -3064,9 +3450,14 @@ ${socialMeta}
 			});
 		}
 
-		async function buildUsdcSwapAndBid(tx, totalMist, bidMist, nftId) {
-			const usdcCoins = await suiClient.getCoins({ owner: connectedAddress, coinType: USDC_TYPE });
-			if (!usdcCoins.data.length) throw new Error('No USDC balance found');
+			async function buildUsdcSwapAndBid(
+				tx,
+				totalMist,
+				bidMist,
+				nftId,
+			) {
+				const usdcCoins = await suiClient.getCoins({ owner: connectedAddress, coinType: USDC_TYPE });
+				if (!usdcCoins.data.length) throw new Error('No USDC balance found');
 			const usdcIds = usdcCoins.data.map(c => c.coinObjectId);
 			let usdcCoin;
 			if (usdcIds.length === 1) {
@@ -3090,22 +3481,22 @@ ${socialMeta}
 				],
 			});
 
-			const [suiOut, usdcLeft, deepLeft2] = tx.moveCall({
-				target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
-				typeArguments: [SUI_TYPE, USDC_TYPE],
-				arguments: [
-					tx.object(DEEPBOOK_SUI_USDC_POOL),
-					usdcCoin,
-					deepOut,
-					tx.pure.u64(totalMist),
-					tx.object(CLOCK_OBJECT),
-				],
-			});
+				const [suiOut, usdcLeft, deepLeft2] = tx.moveCall({
+					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
+					typeArguments: [SUI_TYPE, USDC_TYPE],
+					arguments: [
+						tx.object(DEEPBOOK_SUI_USDC_POOL),
+						usdcCoin,
+						deepOut,
+						tx.pure.u64(totalMist),
+						tx.object(CLOCK_OBJECT),
+					],
+				});
 
-			const [bidPayment] = tx.splitCoins(suiOut, [tx.pure.u64(totalMist)]);
-			buildBidCall(tx, nftId, bidMist, bidPayment);
-			tx.transferObjects([suiOut, usdcLeft, deepLeft2, suiLeftDeep, deepLeft1], tx.pure.address(connectedAddress));
-		}
+				const [bidPayment] = tx.splitCoins(suiOut, [tx.pure.u64(totalMist)]);
+				buildBidCall(tx, nftId, bidMist, bidPayment);
+				tx.transferObjects([suiOut, usdcLeft, deepLeft2, suiLeftDeep, deepLeft1], tx.pure.address(connectedAddress));
+			}
 
 		async function placeOffer(name, item) {
 			const statusCol = item.querySelector('.col-status');
@@ -3128,24 +3519,24 @@ ${socialMeta}
 			offerBtn.disabled = true;
 			showOfferStatus(statusCol, 'Building...', 'info');
 
-			try {
-				const bidMist = BigInt(Math.ceil(offerUsd / cachedSuiPriceUsd * 1e9));
-				const feeMist = BigInt(Math.ceil(Number(bidMist) * TRADEPORT_BID_FEE_BPS / 10000));
-				const totalMist = bidMist + feeMist;
+				try {
+					const bidMist = BigInt(Math.ceil(offerUsd / cachedSuiPriceUsd * 1e9));
+					const feeMist = (bidMist * BigInt(TRADEPORT_BID_FEE_BPS) + 9999n) / 10000n;
+					const totalMist = bidMist + feeMist;
 
-				const tx = new Transaction();
-				tx.setSender(connectedAddress);
+					const tx = new Transaction();
+					tx.setSender(connectedAddress);
 
 				const suiBalance = await suiClient.getBalance({ owner: connectedAddress, coinType: SUI_TYPE });
 				const suiBal = BigInt(suiBalance.totalBalance);
 				const gasBuffer = 50_000_000n;
 
-				if (suiBal >= totalMist + gasBuffer) {
-					const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalMist)]);
-					buildBidCall(tx, nftId, bidMist, paymentCoin);
-				} else {
-					await buildUsdcSwapAndBid(tx, totalMist, bidMist, nftId);
-				}
+					if (suiBal >= totalMist + gasBuffer) {
+						const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalMist)]);
+						buildBidCall(tx, nftId, bidMist, paymentCoin);
+					} else {
+						await buildUsdcSwapAndBid(tx, totalMist, bidMist, nftId);
+					}
 
 				tx.setGasBudget(50_000_000);
 				showOfferStatus(statusCol, 'Confirm in wallet...', 'info');

@@ -1,5 +1,5 @@
 import type { Env } from '../types'
-import { generateWalletCookieJs } from '../utils/wallet-cookie'
+import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { subnameCapStyles } from './subnamecap-ui.css'
 
 export function generateSubnameCapPage(env: Env): string {
@@ -359,7 +359,7 @@ export function generateSubnameCapPage(env: Env): string {
 	</div>
 
 	<script type="module">
-		${generateWalletCookieJs()}
+		${generateWalletSessionJs()}
 		const API_BASE = '/api/subnamecap';
 		let connectedAddress = null;
 		let currentWallet = null;
@@ -416,7 +416,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 				connectedAddress = accounts[0].address;
 				currentWallet = wallet;
-				setWalletCookie(wallet.name, connectedAddress);
+				connectWalletSession(wallet.name, connectedAddress);
 
 				const btn = document.getElementById('wallet-btn');
 				btn.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
@@ -981,7 +981,7 @@ export function generateSubnameCapPage(env: Env): string {
 		};
 
 		(async () => {
-			const hint = getWalletCookie();
+			const hint = getWalletSession();
 			if (!hint) return;
 			await new Promise(r => setTimeout(r, 300));
 			const wallets = await detectWallets();

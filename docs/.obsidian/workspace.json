@@ -19,8 +19,21 @@
               "icon": "lucide-table",
               "title": "Untitled"
             }
+          },
+          {
+            "id": "4bdd5e4a16137a26",
+            "type": "leaf",
+            "state": {
+              "type": "release-notes",
+              "state": {
+                "currentVersion": "1.11.7"
+              },
+              "icon": "lucide-book-up",
+              "title": "Release Notes 1.11.7"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -182,7 +195,7 @@
       "bases:Create new base": false
     }
   },
-  "active": "7e333c45b1ea1a7e",
+  "active": "4bdd5e4a16137a26",
   "lastOpenFiles": [
     "Coulson.txt",
     "Untitled.canvas",

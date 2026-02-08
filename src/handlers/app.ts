@@ -34,7 +34,7 @@ import type {
 	UserConversationStore,
 } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
-import { generateWalletCookieJs } from '../utils/wallet-cookie'
+import { generateWalletSessionJs } from '../utils/wallet-session-js'
 
 const NONCE_EXPIRY_MS = 5 * 60 * 1000
 const MAX_MESSAGE_SIZE_BYTES = 1024 * 1024
@@ -2497,7 +2497,7 @@ function generateSettingsPage(env: Env): string {
 
 function getAppScript(_env: Env): string {
 	return `
-		${generateWalletCookieJs()}
+		${generateWalletSessionJs()}
 		let connectedAddress = null;
 		let suiWallet = null;
 
@@ -2510,7 +2510,7 @@ function getAppScript(_env: Env): string {
 				suiWallet = null;
 				text.textContent = 'Connect';
 				btn.classList.remove('wallet-connected');
-				clearWalletCookie();
+				disconnectWalletSession();
 				return;
 			}
 
@@ -2529,7 +2529,7 @@ function getAppScript(_env: Env): string {
 				if (connectedAddress) {
 					text.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
 					btn.classList.add('wallet-connected');
-					setWalletCookie('Sui Wallet', connectedAddress);
+					connectWalletSession('Sui Wallet', connectedAddress);
 				}
 			} catch (error) {
 				console.error('Wallet connection failed:', error);
@@ -2566,11 +2566,11 @@ function getAppScript(_env: Env): string {
 							const btn = document.getElementById('connect-wallet');
 							text.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
 							btn.classList.add('wallet-connected');
-							setWalletCookie('Sui Wallet', connectedAddress);
+							connectWalletSession('Sui Wallet', connectedAddress);
 						}
 					});
 				} else {
-					const hint = getWalletCookie();
+					const hint = getWalletSession();
 					if (hint) {
 						window.sui.connect().then((response) => {
 							const addr = response.accounts?.[0]?.address;
@@ -2581,14 +2581,14 @@ function getAppScript(_env: Env): string {
 								const btn = document.getElementById('connect-wallet');
 								text.textContent = addr.slice(0, 6) + '...' + addr.slice(-4);
 								btn.classList.add('wallet-connected');
-								setWalletCookie('Sui Wallet', addr);
+								connectWalletSession('Sui Wallet', addr);
 							}
 						}).catch(() => {});
 					}
 				}
 			});
 		} else {
-			const hint = getWalletCookie();
+			const hint = getWalletSession();
 			if (hint) {
 				setTimeout(() => {
 					if (typeof window.sui !== 'undefined') {
