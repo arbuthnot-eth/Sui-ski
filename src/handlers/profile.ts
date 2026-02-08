@@ -922,6 +922,7 @@ export function generateProfilePage(
 		let currentTargetAddress = TARGET_ADDRESS || '';
 		let currentListing = null;
 		let currentSales = [];
+		let lastSoldPriceMist = null;
 		let pendingBidAmount = null;
 
 		if (typeof getWallets === 'function') {
@@ -2611,7 +2612,7 @@ export function generateProfilePage(
 					const taggedFilename = NAME.replace(/\\./g, '-') + '-sui.png';
 				const sealPayload = buildMetaSealPayload(preferQr);
 				try {
-					const taggedCanvas = await buildTaggedIdentityCanvas(preferQr, currentListing, currentBestBid, { sales: currentSales });
+					const taggedCanvas = await buildTaggedIdentityCanvas(preferQr, currentListing, currentBestBid, { sales: currentSales, soldPriceMist: lastSoldPriceMist });
 					if (taggedCanvas) {
 						triggerCanvasDownload(taggedCanvas, taggedFilename, feedbackBtn, sealPayload);
 						return;
@@ -2645,6 +2646,7 @@ export function generateProfilePage(
 
 				async function buildTaggedIdentityCanvas(preferQr = showingQr, listing = null, bestBid = null, options = {}) {
 					const sales = options.sales || [];
+					const soldPriceMist = options.soldPriceMist || null;
 					const wasOfferAccepted = sales.length > 0;
 					const blackDiamondMode = options && options.blackDiamondMode === true;
 					const taggedNftSource = identityVisual?.querySelector('img.identity-tagged-image') || null;
@@ -2917,7 +2919,8 @@ export function generateProfilePage(
 					// Draw TradePort market data badge if available
 					const hasListing = listing && listing.price;
 					const hasBestBid = bestBid && bestBid.price;
-					if (hasListing || hasBestBid) {
+					const hasSold = soldPriceMist && !hasListing;
+					if (hasListing || hasBestBid || hasSold) {
 						let tradeportLogo = null;
 						try {
 							const rawLogo = await loadImageForCanvas(TRADEPORT_LOGO_URL);
@@ -2961,11 +2964,19 @@ export function generateProfilePage(
 						const entries = [];
 						if (hasListing) {
 							const listPrice = formatSuiPrice(listing.price);
-							entries.push({ label: 'List:', suiValue: listPrice + ' SUI' });
+							entries.push({ label: 'List:', suiValue: listPrice + ' SUI', color: '#c084fc' });
 						}
 						if (hasBestBid) {
 							const bidPrice = formatSuiPrice(bestBid.price);
-							entries.push({ label: wasOfferAccepted ? 'Sale:' : 'Offer:', suiValue: bidPrice + ' SUI' });
+							entries.push({
+								label: wasOfferAccepted ? 'Sale:' : 'Offer:',
+								suiValue: bidPrice + ' SUI',
+								color: wasOfferAccepted ? '#4ade80' : '#fbbf24',
+							});
+						}
+						if (hasSold) {
+							const soldPrice = formatSuiPrice(soldPriceMist);
+							entries.push({ label: 'Sold:', suiValue: soldPrice + ' SUI', color: '#4ade80' });
 						}
 
 						ctx.font = '700 ' + priceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
@@ -2986,7 +2997,7 @@ export function generateProfilePage(
 
 						if (tradeportLogo) {
 							const logoX = badgeX + badgePadding;
-							const logoY = badgeY + badgePadding + 7;
+							const logoY = badgeY + (badgeHeight - logoSize) / 2;
 							ctx.drawImage(tradeportLogo, logoX, logoY, logoSize, logoSize);
 						}
 
@@ -2994,9 +3005,7 @@ export function generateProfilePage(
 						ctx.textBaseline = 'top';
 
 						const textX = badgeX + badgePadding + logoSize + badgePadding;
-						const logoBottomY = badgeY + badgePadding + 7 + logoSize;
-						const additionalOffset = Math.max(10, Math.round(badgePadding * 1.2));
-						const textStartY = logoBottomY - totalEntriesHeight + additionalOffset;
+						const textStartY = badgeY + (badgeHeight - totalEntriesHeight) / 2;
 
 						ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
 						ctx.lineWidth = Math.max(5, Math.round(priceTextSize * 0.4));
@@ -3013,14 +3022,14 @@ export function generateProfilePage(
 
 							ctx.font = '700 ' + labelTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
 							ctx.strokeText(entry.label, textX, currentY);
-							ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+							ctx.fillStyle = entry.color;
 							ctx.fillText(entry.label, textX, currentY);
 
 							currentY += labelLineHeight;
 
 							ctx.font = '800 ' + priceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
 							ctx.strokeText(entry.suiValue, textX, currentY);
-							ctx.fillStyle = '#FFFFFF';
+							ctx.fillStyle = entry.color;
 							ctx.fillText(entry.suiValue, textX, currentY);
 
 							currentY += valueLineHeight + 4;
@@ -3039,7 +3048,7 @@ export function generateProfilePage(
 						const blackDiamondMode =
 							Boolean(document.body && document.body.classList.contains('diamond-watch-active')) ||
 							Boolean(typeof diamondWatching !== 'undefined' && diamondWatching);
-						const taggedCanvas = await buildTaggedIdentityCanvas(false, currentListing, currentBestBid, { blackDiamondMode, sales: currentSales });
+						const taggedCanvas = await buildTaggedIdentityCanvas(false, currentListing, currentBestBid, { blackDiamondMode, sales: currentSales, soldPriceMist: lastSoldPriceMist });
 						if (!taggedCanvas) return;
 						const taggedImg = new Image();
 						taggedImg.onload = () => {
@@ -9198,6 +9207,7 @@ function shortAddr(addr) {
 						}
 					}
 
+				lastSoldPriceMist = null;
 				if (data.bestListing && data.bestListing.price) {
 					currentListing = data.bestListing;
 					const priceInSui = (data.bestListing.price / 1e9).toFixed(2);
@@ -9387,9 +9397,13 @@ function shortAddr(addr) {
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
+						lastSoldPriceMist = currentListing.price;
 						marketplaceStatus.innerHTML = 'Purchase successful! ' + renderTxExplorerLinks(digest, true);
 						marketplaceStatus.className = 'marketplace-status success';
 						marketplaceBuyBtn.style.display = 'none';
+						currentListing = null;
+						applyTaggedIdentityToProfile();
+						fetchMarketplaceData();
 					} else {
 						marketplaceStatus.textContent = 'Transaction submitted';
 						marketplaceStatus.className = 'marketplace-status success';
@@ -9515,6 +9529,7 @@ function shortAddr(addr) {
 							: 'List transaction submitted';
 						marketplaceStatus.className = 'marketplace-status success';
 					}
+					applyTaggedIdentityToProfile();
 				} catch (e) {
 					console.error('List transaction failed:', e);
 					const msg = e?.message || 'Transaction failed';
@@ -9646,6 +9661,7 @@ function shortAddr(addr) {
 						marketplaceStatus.textContent = 'Bid submitted';
 						marketplaceStatus.className = 'marketplace-status success';
 					}
+					applyTaggedIdentityToProfile();
 				} catch (e) {
 					console.error('Bid transaction failed:', e);
 					const msg = e.message || 'Transaction failed';
@@ -9906,12 +9922,15 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
+						lastSoldPriceMist = currentBestBid?.price || null;
 						marketplaceStatus.innerHTML =
 							'Bid accepted! ' + renderTxExplorerLinks(digest, true);
 						marketplaceStatus.className = 'marketplace-status success';
 						currentBestBid = null;
+						currentListing = null;
 						marketplaceBidRow.style.display = 'none';
 						updateMarketplaceButton();
+						applyTaggedIdentityToProfile();
 						setTimeout(() => {
 							fetchMarketplaceData();
 						}, 2000);
