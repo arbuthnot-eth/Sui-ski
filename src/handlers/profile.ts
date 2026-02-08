@@ -2647,7 +2647,8 @@ export function generateProfilePage(
 				async function buildTaggedIdentityCanvas(preferQr = showingQr, listing = null, bestBid = null, options = {}) {
 					const sales = options.sales || [];
 					const soldPriceMist = options.soldPriceMist || null;
-					const wasOfferAccepted = sales.length > 0;
+					const lastSale = sales.length > 0 ? sales[0] : null;
+					const lastSalePriceMist = soldPriceMist || (lastSale?.price ?? null);
 					const blackDiamondMode = options && options.blackDiamondMode === true;
 					const taggedNftSource = identityVisual?.querySelector('img.identity-tagged-image') || null;
 					const cleanNftSource =
@@ -2919,7 +2920,7 @@ export function generateProfilePage(
 					// Draw TradePort market data badge if available
 					const hasListing = listing && listing.price;
 					const hasBestBid = bestBid && bestBid.price;
-					const hasSold = soldPriceMist && !hasListing;
+					const hasSold = Boolean(lastSalePriceMist);
 					if (hasListing || hasBestBid || hasSold) {
 						let tradeportLogo = null;
 						try {
@@ -2966,17 +2967,12 @@ export function generateProfilePage(
 							const listPrice = formatSuiPrice(listing.price);
 							entries.push({ label: 'List:', suiValue: listPrice + ' SUI', color: '#c084fc' });
 						}
-						if (hasBestBid) {
-							const bidPrice = formatSuiPrice(bestBid.price);
-							entries.push({
-								label: wasOfferAccepted ? 'Sale:' : 'Offer:',
-								suiValue: bidPrice + ' SUI',
-								color: wasOfferAccepted ? '#4ade80' : '#fbbf24',
-							});
-						}
 						if (hasSold) {
-							const soldPrice = formatSuiPrice(soldPriceMist);
+							const soldPrice = formatSuiPrice(lastSalePriceMist);
 							entries.push({ label: 'Sold:', suiValue: soldPrice + ' SUI', color: '#4ade80' });
+						} else if (hasBestBid) {
+							const bidPrice = formatSuiPrice(bestBid.price);
+							entries.push({ label: 'Offer:', suiValue: bidPrice + ' SUI', color: '#fbbf24' });
 						}
 
 						ctx.font = '700 ' + priceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';

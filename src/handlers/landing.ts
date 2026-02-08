@@ -1064,7 +1064,7 @@ async function handleMarketplaceData(name: string, _env: Env, tokenId?: string):
 					sui {
 						actions(
 							where: {
-								type: {_eq: "buy"}
+								type: {_in: ["buy", "accept_bid"]}
 								token_id: {_in: $tokenIds}
 								collection_id: {_eq: $collectionId}
 							}
