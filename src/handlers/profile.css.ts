@@ -4049,6 +4049,12 @@ export const profileStyles = `
 			color: #f8fbff;
 			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 1px 5px rgba(148, 163, 184, 0.22);
 			white-space: nowrap;
+			cursor: pointer;
+			transition: background 0.15s, box-shadow 0.15s;
+		}
+		.renewal-savings-inline:hover {
+			background: linear-gradient(135deg, rgba(248, 251, 255, 0.38), rgba(226, 232, 240, 0.32));
+			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 8px rgba(148, 163, 184, 0.35);
 		}
 		.renewal-duration-stepper {
 			display: flex;

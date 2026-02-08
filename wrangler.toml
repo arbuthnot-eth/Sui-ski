@@ -35,6 +35,7 @@ SEAL_KEY_SERVERS = "0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e993
 
 # SuiNS name to receive leftover NS tokens from registrations (for LP accumulation)
 SERVICE_FEE_NAME = "brando.sui"
+DISCOUNT_RECIPIENT_NAME = "extra.sui"
 
 # Secrets (set via `wrangler secret put <NAME>`)
 # LLM_API_KEY - API key for LLM provider (Anthropic/OpenAI)

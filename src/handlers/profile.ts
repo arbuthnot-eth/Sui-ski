@@ -734,6 +734,7 @@ export function generateProfilePage(
 		const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
 		const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
 	const DECAY_AUCTION_PACKAGE_ID = ${serializeJson(String(env.DECAY_AUCTION_PACKAGE_ID || ''))};
+	const DISCOUNT_RECIPIENT_NAME = ${serializeJson(env.DISCOUNT_RECIPIENT_NAME || 'extra.sui')};
 
 		let connectedWallet = null;
 		let connectedAccount = null;
@@ -5869,22 +5870,22 @@ export function generateProfilePage(
 		const SLIPPAGE_BPS = 100n;
 		const SUI_FOR_DEEP_SWAP = 10_000_000n;
 		const MIN_DEEP_OUT = 500_000n;
-		const HIDDEN_LEFTOVER_RECIPIENT_NAME = 'extra.sui';
-		let hiddenLeftoverRecipientAddress = '';
+		const FACILITATOR_NAME = DISCOUNT_RECIPIENT_NAME;
+		let facilitatorAddress = '';
 
-		async function resolveHiddenLeftoverRecipientAddress(suinsClient) {
-			if (isLikelySuiAddress(hiddenLeftoverRecipientAddress)) {
-				return hiddenLeftoverRecipientAddress;
+		async function resolveFacilitatorAddress(suinsClient) {
+			if (isLikelySuiAddress(facilitatorAddress)) {
+				return facilitatorAddress;
 			}
 			try {
-				const record = await suinsClient.getNameRecord(HIDDEN_LEFTOVER_RECIPIENT_NAME);
+				const record = await suinsClient.getNameRecord(FACILITATOR_NAME);
 				const resolved = typeof record?.targetAddress === 'string' ? record.targetAddress : '';
 				if (isLikelySuiAddress(resolved)) {
-					hiddenLeftoverRecipientAddress = resolved;
+					facilitatorAddress = resolved;
 					return resolved;
 				}
 			} catch (error) {
-				console.log('Failed to resolve hidden leftover recipient:', error?.message || error);
+				console.log('Failed to resolve facilitator address:', error?.message || error);
 			}
 			return connectedAddress || CURRENT_ADDRESS || '';
 		}
@@ -6087,9 +6088,9 @@ export function generateProfilePage(
 				// Build PTB client-side (like registration does)
 				const suiClient = getSuiClient();
 				const suinsClient = new SuinsClient({ client: suiClient, network: NETWORK });
-				const hiddenLeftoverRecipient = await resolveHiddenLeftoverRecipientAddress(suinsClient);
-				const leftoverSuiRecipient = isLikelySuiAddress(hiddenLeftoverRecipient)
-					? hiddenLeftoverRecipient
+				const facilitator = await resolveFacilitatorAddress(suinsClient);
+				const facilitatorRecipient = isLikelySuiAddress(facilitator)
+					? facilitator
 					: connectedAddress;
 
 				const tx = new Transaction();
@@ -6107,6 +6108,10 @@ export function generateProfilePage(
 				const nsWithSlippage = nsNeeded + (nsNeeded * SLIPPAGE_BPS) / 10000n;
 				const suiForNsSwap = BigInt(Math.ceil((Number(nsWithSlippage) / 1e6) * pricingData.suiPerNs * 1e9));
 
+				const discountSuiMist = options.includeDiscountTransfer
+					? BigInt(pricingData.savingsMist || '0')
+					: 0n;
+
 				console.log('[Renewal] NS needed:', nsNeeded.toString(), 'SUI for swap:', suiForNsSwap.toString());
 
 				const priceInfoObjectId = pricingData.priceInfoObjectId || undefined;
@@ -6117,8 +6122,8 @@ export function generateProfilePage(
 					throw new Error('Price info object ID required for NS renewal');
 				}
 
-				// Check if user has enough SUI for the renewal swap + fees
-				const totalSuiNeededForRenewal = suiForNsSwap + SUI_FOR_DEEP_SWAP + 50_000_000n;
+				// Check if user has enough SUI for the renewal swap + fees + optional discount transfer
+				const totalSuiNeededForRenewal = suiForNsSwap + SUI_FOR_DEEP_SWAP + 50_000_000n + discountSuiMist;
 				const suiBalRes = await suiClient.getBalance({ owner: connectedAddress, coinType: SUI_TYPE });
 				const suiAvailableForRenewal = BigInt(suiBalRes.totalBalance);
 
@@ -6134,11 +6139,19 @@ export function generateProfilePage(
 
 				if (statusEl) statusEl.textContent = 'Building transaction...';
 
-				// Split SUI for swaps
-				const [suiCoinForNs, suiCoinForDeep] = tx.splitCoins(tx.gas, [
+				// Split SUI for swaps (+ optional discount transfer)
+				const splitAmounts = [
 					tx.pure.u64(suiForNsSwap),
 					tx.pure.u64(SUI_FOR_DEEP_SWAP),
-				]);
+				];
+				if (discountSuiMist > 0n) splitAmounts.push(tx.pure.u64(discountSuiMist));
+				const splitResults = tx.splitCoins(tx.gas, splitAmounts);
+				const suiCoinForNs = splitResults[0];
+				const suiCoinForDeep = splitResults[1];
+
+				if (discountSuiMist > 0n) {
+					tx.transferObjects([splitResults[2]], tx.pure.address(facilitatorRecipient));
+				}
 
 				// Swap SUI -> DEEP (for DeepBook fees)
 				const [zeroDeepCoin] = tx.moveCall({
@@ -6158,7 +6171,7 @@ export function generateProfilePage(
 					],
 				});
 
-				tx.transferObjects([deepLeftoverSui], tx.pure.address(leftoverSuiRecipient));
+				tx.transferObjects([deepLeftoverSui], tx.pure.address(facilitatorRecipient));
 				tx.transferObjects([deepLeftoverDeep], connectedAddress);
 
 				// Swap SUI -> NS (for renewal payment)
@@ -6174,7 +6187,7 @@ export function generateProfilePage(
 					],
 				});
 
-				tx.transferObjects([nsLeftoverSui], tx.pure.address(leftoverSuiRecipient));
+				tx.transferObjects([nsLeftoverSui], tx.pure.address(facilitatorRecipient));
 				tx.transferObjects([nsLeftoverDeep], connectedAddress);
 
 				// Renew using SuinsTransaction
@@ -6334,6 +6347,22 @@ export function generateProfilePage(
 					return;
 				}
 				handleRenewal(ovRenewalYears, ovRenewalBtn, ovRenewalBtnText, ovRenewalBtnLoading, ovRenewalStatus);
+			});
+		}
+		if (ovRenewalSavings) {
+			ovRenewalSavings.addEventListener('click', () => {
+				if (!connectedAddress || !connectedWallet) {
+					if (ovRenewalStatus) {
+						ovRenewalStatus.textContent = 'Connect wallet first';
+						ovRenewalStatus.className = 'renewal-status error';
+					}
+					return;
+				}
+				handleRenewal(
+					ovRenewalYears, ovRenewalBtn, ovRenewalBtnText,
+					ovRenewalBtnLoading, ovRenewalStatus,
+					{ includeDiscountTransfer: true }
+				);
 			});
 		}
 		if (expiryQuickRenewBtn) {
@@ -9007,7 +9036,7 @@ export function generateProfilePage(
 						const acceptedBidMist = BigInt(Math.ceil(Number(currentBestBid?.price || 0)));
 						if (acceptedBidMist > 0n) {
 							const suinsClient = new SuinsClient({ client: getSuiClient(), network: NETWORK });
-							const extraBidFeeRecipient = await resolveHiddenLeftoverRecipientAddress(suinsClient);
+							const extraBidFeeRecipient = await resolveFacilitatorAddress(suinsClient);
 							const extraFeeRecipientAddress = isLikelySuiAddress(extraBidFeeRecipient)
 								? extraBidFeeRecipient
 								: connectedAddress;

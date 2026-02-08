@@ -8,6 +8,7 @@ export interface Env {
 	CACHE: KVNamespace
 	WALLET_SESSIONS: DurableObjectNamespace<WalletSession>
 	SERVICE_FEE_NAME?: string
+	DISCOUNT_RECIPIENT_NAME?: string
 	MESSAGING_CONTRACT_ADDRESS?: string
 	MOVE_REGISTRY_PARENT_ID?: string
 	IKA_PACKAGE_ID?: string
