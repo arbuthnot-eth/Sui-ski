@@ -2022,7 +2022,7 @@ export function generateProfilePage(
 
 		function isInAppBrowser() {
 			const ua = navigator.userAgent || '';
-			return /Phantom/i.test(ua) || !!window.phantom?.sui || !!window.slush;
+			return /Phantom/i.test(ua) || /Slush/i.test(ua);
 		}
 
 		// Show wallet selection modal (non-blocking)
@@ -4790,17 +4790,17 @@ export function generateProfilePage(
 			if (!restored && isInAppBrowser()) {
 				const wallets = getSuiWallets();
 				if (wallets.length > 0) {
-					connectToWallet(wallets[0]);
+					connectToWallet(wallets[0]).catch(() => {});
 				} else {
 					setTimeout(() => {
 						if (!connectedAddress) {
 							const retryWallets = getSuiWallets();
-							if (retryWallets.length > 0) connectToWallet(retryWallets[0]);
+							if (retryWallets.length > 0) connectToWallet(retryWallets[0]).catch(() => {});
 						}
 					}, 500);
 				}
 			}
-		});
+		}).catch(() => {});
 		fetchAndDisplayOwnerInfo();
 		updateGracePeriodOwnerInfo();
 		updateGracePeriodCountdown();
