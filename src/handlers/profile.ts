@@ -8731,7 +8731,13 @@ function shortAddr(addr) {
 
 						function getActionAddress(action) {
 							const actionType = String(action?.type || '').toLowerCase();
-							const showRecipientTypes = new Set(['sale', 'accept_bid', 'buy', 'transfer', 'mint']);
+							const senderTypes = new Set(['bid', 'accept_bid']);
+							if (senderTypes.has(actionType)) {
+								const sender = typeof action.sender === 'string' ? action.sender.trim() : '';
+								if (sender && sender.startsWith('0x')) return sender;
+								return '';
+							}
+							const showRecipientTypes = new Set(['sale', 'buy', 'transfer', 'mint']);
 							if (!showRecipientTypes.has(actionType)) return '';
 							const receiver = typeof action.receiver === 'string' ? action.receiver.trim() : '';
 							if (receiver && receiver.startsWith('0x')) return receiver;

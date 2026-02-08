@@ -4170,8 +4170,10 @@ export const profileStyles = `
 		}
 		.marketplace-activity-item.listing .marketplace-activity-kind,
 		.marketplace-activity-item.list .marketplace-activity-kind { color: #a78bfa; }
-		.marketplace-activity-item.bid .marketplace-activity-kind,
+		.marketplace-activity-item.bid .marketplace-activity-kind { color: #fbbf24; }
+		.marketplace-activity-item.bid .marketplace-activity-actor { color: #fbbf24; }
 		.marketplace-activity-item.cancel_bid .marketplace-activity-kind { color: #f0f0f5; }
+		.marketplace-activity-item.accept_bid .marketplace-activity-actor { color: #34d399; }
 		.marketplace-activity-item.sale .marketplace-activity-kind,
 		.marketplace-activity-item.buy .marketplace-activity-kind,
 		.marketplace-activity-item.accept_bid .marketplace-activity-kind { color: #34d399; }
@@ -4228,6 +4230,10 @@ export const profileStyles = `
 		.marketplace-activity-actor-link:visited {
 			color: #f0f0f5;
 		}
+		.marketplace-activity-item.bid .marketplace-activity-actor-link,
+		.marketplace-activity-item.bid .marketplace-activity-actor-link:visited { color: #fbbf24; }
+		.marketplace-activity-item.accept_bid .marketplace-activity-actor-link,
+		.marketplace-activity-item.accept_bid .marketplace-activity-actor-link:visited { color: #34d399; }
 		.marketplace-activity-amount {
 			font-size: 0.7rem;
 			font-weight: 500;
