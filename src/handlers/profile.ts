@@ -1853,8 +1853,13 @@ export function generateProfilePage(
 						accounts = filterSuiAccounts(phantomProvider.accounts || []);
 						if (accounts.length === 0 && typeof phantomProvider.connect === 'function') {
 							try {
-								await phantomProvider.connect();
-								accounts = filterSuiAccounts(phantomProvider.accounts || []);
+								const connectResult = await phantomProvider.connect();
+								const resultAccounts = connectResult?.accounts || connectResult;
+								accounts = filterSuiAccounts(
+									Array.isArray(resultAccounts) && resultAccounts.length > 0
+										? resultAccounts
+										: phantomProvider.accounts || []
+								);
 							} catch {}
 						}
 					}
@@ -1932,8 +1937,13 @@ export function generateProfilePage(
 						return;
 					}
 					if (typeof phantomProvider.connect === 'function') {
-						await phantomProvider.connect();
-						const accounts = filterSuiAccounts(phantomProvider.accounts || []);
+						const connectResult = await phantomProvider.connect();
+						const resultAccounts = connectResult?.accounts || connectResult;
+						const accounts = filterSuiAccounts(
+							Array.isArray(resultAccounts) && resultAccounts.length > 0
+								? resultAccounts
+								: phantomProvider.accounts || []
+						);
 						if (accounts.length > 0) {
 							finishConnect(accounts, 'Phantom');
 							return;
@@ -1973,8 +1983,13 @@ export function generateProfilePage(
 					if (errorMsg.includes('authorized') && typeof phantomProvider.connect === 'function') {
 						try {
 							walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Requesting approval...</div>';
-							await phantomProvider.connect();
-							const accounts = filterSuiAccounts(phantomProvider.accounts || []);
+							const retryResult = await phantomProvider.connect();
+							const retryAccounts = retryResult?.accounts || retryResult;
+							const accounts = filterSuiAccounts(
+								Array.isArray(retryAccounts) && retryAccounts.length > 0
+									? retryAccounts
+									: phantomProvider.accounts || []
+							);
 							if (accounts.length > 0) {
 								finishConnect(accounts, 'Phantom');
 								return;
@@ -2005,10 +2020,30 @@ export function generateProfilePage(
 			}
 		}
 
+		function isInAppBrowser() {
+			const ua = navigator.userAgent || '';
+			return /Phantom/i.test(ua) || !!window.phantom?.sui || !!window.slush;
+		}
+
 		// Show wallet selection modal (non-blocking)
 		async function connectWallet() {
 			walletModal.classList.add('open');
 			walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Detecting wallets...</div>';
+
+			// In-app browser: auto-connect to the single available wallet
+			if (isInAppBrowser()) {
+				const wallets = getSuiWallets();
+				if (wallets.length > 0) {
+					connectToWallet(wallets[0]);
+					return;
+				}
+				await new Promise(r => setTimeout(r, 300));
+				const retryWallets = getSuiWallets();
+				if (retryWallets.length > 0) {
+					connectToWallet(retryWallets[0]);
+					return;
+				}
+			}
 
 			// Don't block - show immediate results and update as wallets are detected
 			const immediateWallets = getSuiWallets();
@@ -4751,7 +4786,21 @@ export function generateProfilePage(
 			renderWalletBar();
 		updateGlobalWalletWidget();
 		updateEditButton();
-		restoreWalletConnection();
+		restoreWalletConnection().then(restored => {
+			if (!restored && isInAppBrowser()) {
+				const wallets = getSuiWallets();
+				if (wallets.length > 0) {
+					connectToWallet(wallets[0]);
+				} else {
+					setTimeout(() => {
+						if (!connectedAddress) {
+							const retryWallets = getSuiWallets();
+							if (retryWallets.length > 0) connectToWallet(retryWallets[0]);
+						}
+					}, 500);
+				}
+			}
+		});
 		fetchAndDisplayOwnerInfo();
 		updateGracePeriodOwnerInfo();
 		updateGracePeriodCountdown();
