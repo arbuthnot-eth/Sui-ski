@@ -8707,22 +8707,27 @@ function shortAddr(addr) {
 
 						const renderNonce = ++marketplaceActivityRenderNonce;
 
+						function normalizeActionType(type) {
+							return String(type || '').replace(/-/g, '_');
+						}
+
 						function getActionLabel(type) {
+							const normalized = normalizeActionType(type);
 							const labels = {
 								sale: 'Buy',
 								list: 'Listed',
 								delist: 'Delisted',
 								bid: 'Offer',
 								cancel_bid: 'Offer Cancelled',
-								accept_bid: 'Offer Accepted',
+								accept_bid: 'Sale',
 								buy: 'Buy',
 								mint: 'Mint',
 								transfer: 'Transfer',
 								expire: 'Expire',
 								expired: 'Expire',
 							};
-							if (labels[type]) return labels[type];
-							return String(type || '')
+							if (labels[normalized]) return labels[normalized];
+							return String(normalized || '')
 								.split('_')
 								.filter(Boolean)
 								.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -8730,9 +8735,13 @@ function shortAddr(addr) {
 						}
 
 						function getActionAddress(action) {
-							const actionType = String(action?.type || '').toLowerCase();
-							const senderTypes = new Set(['bid', 'accept_bid']);
-							if (senderTypes.has(actionType)) {
+							const actionType = normalizeActionType(action?.type).toLowerCase();
+							if (actionType === 'bid') {
+								const receiver = typeof action.receiver === 'string' ? action.receiver.trim() : '';
+								if (receiver && receiver.startsWith('0x')) return receiver;
+								return '';
+							}
+							if (actionType === 'accept_bid') {
 								const sender = typeof action.sender === 'string' ? action.sender.trim() : '';
 								if (sender && sender.startsWith('0x')) return sender;
 								return '';
@@ -8804,9 +8813,10 @@ function shortAddr(addr) {
 									? '<a href="https://suiscan.xyz/' + NETWORK + '/tx/' + escapeHtmlJs(txDigest) + '" target="_blank" class="marketplace-activity-kind marketplace-activity-tx-link" title="' + escapeHtmlJs(txDigest) + '">' + escapeHtmlJs(label) + '</a>'
 									: '<span class="marketplace-activity-kind">' + escapeHtmlJs(label) + '</span>';
 
+								const normalizedType = normalizeActionType(action.type);
 								return (
 									yearHeader +
-									'<div class="marketplace-activity-item ' + escapeHtmlJs(action.type) + '">' +
+									'<div class="marketplace-activity-item ' + escapeHtmlJs(normalizedType) + '">' +
 										kindHtml +
 										activityActorHtml +
 										priceDisplay +
