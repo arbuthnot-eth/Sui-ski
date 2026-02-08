@@ -1853,26 +1853,23 @@ export function generateProfilePage(
 						accounts = filterSuiAccounts(phantomProvider.accounts || []);
 						if (accounts.length === 0 && typeof phantomProvider.connect === 'function') {
 							try {
-								const connectResult = await phantomProvider.connect();
-								const resultAccounts = connectResult?.accounts || connectResult;
-								accounts = filterSuiAccounts(
-									Array.isArray(resultAccounts) && resultAccounts.length > 0
-										? resultAccounts
-										: phantomProvider.accounts || []
-								);
+								await phantomProvider.connect();
+								for (let pollAttempt = 0; pollAttempt < 10; pollAttempt++) {
+									accounts = filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []);
+									if (accounts.length > 0) break;
+									await new Promise(r => setTimeout(r, 150));
+								}
 							} catch {}
 						}
-					}
-				}
-
-				if (accounts.length === 0) {
-					const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
-					if (typeof connectFeature === 'function') {
-						const result = await connectFeature();
-						accounts = extractConnectedAccounts(result, wallet);
-					} else if (connectFeature?.connect) {
-						const result = await connectFeature.connect();
-						accounts = extractConnectedAccounts(result, wallet);
+					} else {
+						const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
+						if (typeof connectFeature === 'function') {
+							const result = await connectFeature();
+							accounts = extractConnectedAccounts(result, wallet);
+						} else if (connectFeature?.connect) {
+							const result = await connectFeature.connect();
+							accounts = extractConnectedAccounts(result, wallet);
+						}
 					}
 				}
 
@@ -1938,17 +1935,21 @@ export function generateProfilePage(
 					}
 					if (typeof phantomProvider.connect === 'function') {
 						const connectResult = await phantomProvider.connect();
-						const resultAccounts = connectResult?.accounts || connectResult;
-						const accounts = filterSuiAccounts(
-							Array.isArray(resultAccounts) && resultAccounts.length > 0
-								? resultAccounts
-								: phantomProvider.accounts || []
-						);
-						if (accounts.length > 0) {
-							finishConnect(accounts, 'Phantom');
-							return;
+						for (let pollAttempt = 0; pollAttempt < 10; pollAttempt++) {
+							const resultAccounts = connectResult?.accounts || connectResult;
+							const accounts = filterSuiAccounts(
+								Array.isArray(resultAccounts) && resultAccounts.length > 0
+									? resultAccounts
+									: phantomProvider.accounts || wallet.accounts || []
+							);
+							if (accounts.length > 0) {
+								finishConnect(accounts, 'Phantom');
+								return;
+							}
+							await new Promise(r => setTimeout(r, 150));
 						}
 					}
+					throw new Error('Phantom connected but no Sui accounts found. Switch your wallet to Sui and try again.');
 				}
 
 				const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
@@ -1975,28 +1976,14 @@ export function generateProfilePage(
 
 				const phantomProvider = window.phantom?.sui;
 				if (phantomProvider) {
-					const existing = filterSuiAccounts(phantomProvider.accounts || []);
-					if (existing.length > 0) {
-						finishConnect(existing, 'Phantom');
-						return;
-					}
-					if (errorMsg.includes('authorized') && typeof phantomProvider.connect === 'function') {
-						try {
-							walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Requesting approval...</div>';
-							const retryResult = await phantomProvider.connect();
-							const retryAccounts = retryResult?.accounts || retryResult;
-							const accounts = filterSuiAccounts(
-								Array.isArray(retryAccounts) && retryAccounts.length > 0
-									? retryAccounts
-									: phantomProvider.accounts || []
-							);
-							if (accounts.length > 0) {
-								finishConnect(accounts, 'Phantom');
-								return;
-							}
-						} catch (retryErr) {
-							console.warn('Phantom direct connect retry failed:', retryErr.message);
+					walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Checking wallet...</div>';
+					for (let pollAttempt = 0; pollAttempt < 8; pollAttempt++) {
+						const existing = filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []);
+						if (existing.length > 0) {
+							finishConnect(existing, 'Phantom');
+							return;
 						}
+						await new Promise(r => setTimeout(r, 200));
 					}
 				}
 
@@ -2006,11 +1993,9 @@ export function generateProfilePage(
 				if (!isUserAction && !errorMsg.includes('authorized')) {
 					console.error('Wallet error:', errorMsg);
 				}
-				const userMessage = errorMsg.includes('authorized')
-					? 'Tap Connect again to approve the connection.'
-					: isUserAction
-						? 'Connection cancelled.'
-						: 'Connection failed: ' + errorMsg;
+				const userMessage = isUserAction
+					? 'Connection cancelled.'
+					: 'Connection failed. Please try again.';
 				walletList.innerHTML = '<div class="wallet-no-wallets" style="color: var(--error);">' +
 					userMessage +
 					'<br><br>' +
@@ -2032,16 +2017,13 @@ export function generateProfilePage(
 
 			// In-app browser: auto-connect to the single available wallet
 			if (isInAppBrowser()) {
-				const wallets = getSuiWallets();
-				if (wallets.length > 0) {
-					connectToWallet(wallets[0]);
-					return;
-				}
-				await new Promise(r => setTimeout(r, 300));
-				const retryWallets = getSuiWallets();
-				if (retryWallets.length > 0) {
-					connectToWallet(retryWallets[0]);
-					return;
+				for (let attempt = 0; attempt < 5; attempt++) {
+					const wallets = getSuiWallets();
+					if (wallets.length > 0) {
+						connectToWallet(wallets[0]);
+						return;
+					}
+					await new Promise(r => setTimeout(r, 300));
 				}
 			}
 
