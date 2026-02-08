@@ -562,44 +562,37 @@ export const profileStyles = `
 			min-height: 0;
 			overflow-y: visible;
 		}
-		.linked-controls-module {
-			display: block;
-			margin-top: 0;
-		}
-		.linked-controls-module .linked-names-section {
-			margin-top: 0;
-			margin-bottom: 0;
-			padding: 10px 10px 8px;
-		}
-		.linked-controls-module .linked-names-header {
-			margin-bottom: 6px;
-		}
-		.linked-controls-module .linked-names-sort {
-			margin-bottom: 0;
-			gap: 3px;
-		}
-		.linked-controls-module .linked-sort-pill {
-			padding: 2px 7px;
-			font-size: 0.58rem;
-		}
-		.linked-controls-module .linked-names-filter {
-			margin-bottom: 0;
-			gap: 5px;
-		}
-		.linked-controls-module .linked-names-filter-input {
-			padding: 6px 9px;
-			font-size: 0.68rem;
-		}
-		.linked-controls-module .linked-filter-clear {
-			padding: 5px 8px;
-			font-size: 0.6rem;
-		}
 		.linked-wide-module {
 			grid-column: 2;
 			min-width: 0;
 		}
 		.linked-wide-module .linked-names-section {
+			margin-top: 0;
 			margin-bottom: 0;
+			padding: 10px 10px 8px;
+		}
+		.linked-wide-module .linked-names-header {
+			margin-bottom: 6px;
+		}
+		.linked-wide-module .linked-names-sort {
+			margin-bottom: 0;
+			gap: 3px;
+		}
+		.linked-wide-module .linked-sort-pill {
+			padding: 2px 7px;
+			font-size: 0.58rem;
+		}
+		.linked-wide-module .linked-names-filter {
+			margin-bottom: 0;
+			gap: 5px;
+		}
+		.linked-wide-module .linked-names-filter-input {
+			padding: 6px 9px;
+			font-size: 0.68rem;
+		}
+		.linked-wide-module .linked-filter-clear {
+			padding: 5px 8px;
+			font-size: 0.6rem;
 		}
 		.linked-wide-module .linked-names-list {
 			max-height: none;
@@ -8870,7 +8863,6 @@ export const profileStyles = `
 		@media (max-width: 600px) {
 			body { padding: 16px 12px; }
 			.card { padding: 18px; border-radius: 12px; margin-bottom: 14px; }
-			.main-content { --mobile-overview-fixed-width: 260px; }
 
 			.overview-primary-row {
 				grid-template-columns: 1fr;
@@ -8880,8 +8872,8 @@ export const profileStyles = `
 				grid-row: auto;
 				justify-self: center;
 				order: 0;
-				width: var(--mobile-overview-fixed-width);
-				max-width: calc(100vw - 24px);
+				width: 100%;
+				max-width: min(380px, calc(100vw - 24px));
 			}
 			.hero-main {
 				width: 100%;
@@ -8937,8 +8929,7 @@ export const profileStyles = `
 			.header-meta-item { gap: 6px; }
 			.header-meta-item svg { width: 14px; height: 14px; }
 
-			.linked-owner-row,
-			.linked-controls-module {
+			.linked-owner-row {
 				width: 100%;
 				max-width: 100%;
 			}
@@ -8994,7 +8985,7 @@ export const profileStyles = `
 			body { padding: 12px; }
 			.card { padding: 14px; margin-bottom: 10px; }
 			h1 { font-size: 1.2rem; }
-			.main-content { --mobile-overview-fixed-width: 200px; }
+			.identity-card { max-width: min(300px, calc(100vw - 24px)); }
 			.renewal-card .renewal-price-value {
 				font-size: 0.95rem;
 			}

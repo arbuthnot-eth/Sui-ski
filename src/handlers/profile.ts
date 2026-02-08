@@ -282,46 +282,6 @@ export function generateProfilePage(
 							</div>
 						</div>
 						<div id="owner-inline-status" class="status owner-inline-status linked-owner-status hidden"></div>
-						<div class="linked-controls-module">
-						<div class="linked-names-section" id="linked-names-section">
-						<div class="linked-names-header">
-							<span class="linked-names-title">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-								<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-							</svg>
-								Linked Names
-							</span>
-					<div class="linked-names-sort" id="linked-names-sort" style="display:none;">
-						<button type="button" class="linked-sort-pill active" data-sort="address">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-							Address
-						</button>
-						<button type="button" class="linked-sort-pill" data-sort="expiry">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-							Expiry
-						</button>
-						<button type="button" class="linked-sort-pill" data-sort="price">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-							Price
-						</button>
-					</div>
-						<span class="linked-names-count" id="linked-names-count">Loading...</span>
-					</div>
-					<div class="linked-names-filter" id="linked-names-filter" style="display:none;">
-						<label for="linked-names-filter-input" class="visually-hidden">Filter linked names</label>
-						<input
-							type="text"
-							id="linked-names-filter-input"
-							class="linked-names-filter-input"
-							placeholder="Filter names (partial or fuzzy)..."
-							autocomplete="off"
-							spellcheck="false"
-						/>
-						<button type="button" class="linked-filter-clear" id="linked-filter-clear" aria-label="Clear linked name filter">Clear</button>
-					</div>
-						</div>
-						</div>
 						</div>
 						</div>
 						</div>
@@ -551,7 +511,43 @@ export function generateProfilePage(
 					</div>
 
 						<div class="overview-module linked-wide-module">
-						<div class="linked-names-section linked-names-results">
+						<div class="linked-names-section linked-names-results" id="linked-names-section">
+						<div class="linked-names-header">
+							<span class="linked-names-title">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+								<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+							</svg>
+								Linked Names
+							</span>
+					<div class="linked-names-sort" id="linked-names-sort" style="display:none;">
+						<button type="button" class="linked-sort-pill active" data-sort="address">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+							Address
+						</button>
+						<button type="button" class="linked-sort-pill" data-sort="expiry">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+							Expiry
+						</button>
+						<button type="button" class="linked-sort-pill" data-sort="price">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+							Price
+						</button>
+					</div>
+						<span class="linked-names-count" id="linked-names-count">Loading...</span>
+					</div>
+					<div class="linked-names-filter" id="linked-names-filter" style="display:none;">
+						<label for="linked-names-filter-input" class="visually-hidden">Filter linked names</label>
+						<input
+							type="text"
+							id="linked-names-filter-input"
+							class="linked-names-filter-input"
+							placeholder="Filter names (partial or fuzzy)..."
+							autocomplete="off"
+							spellcheck="false"
+						/>
+						<button type="button" class="linked-filter-clear" id="linked-filter-clear" aria-label="Clear linked name filter">Clear</button>
+					</div>
 							<div class="linked-names-list" id="linked-names-list">
 								<div class="linked-names-loading"><span class="loading"></span> Fetching linked names...</div>
 							</div>
