@@ -6,30 +6,121 @@ Instructions for AI assistants working on this codebase.
 
 ## Project Overview
 
-**Sui-ski**: Cloudflare Worker gateway for the Sui blockchain ecosystem. Resolves wildcard subdomains (`*.sui.ski`) to route requests to SuiNS names, Move Registry packages, decentralized content (IPFS/Walrus), and a read-only RPC proxy.
+**Sui-ski**: Cloudflare Worker gateway for the Sui blockchain ecosystem. Routes wildcard subdomains (`*.sui.ski`) to SuiNS name profiles, Move Registry packages, decentralized content (IPFS/Walrus), an encrypted messaging app, a read-only RPC proxy, and management UIs for SuiNS subdomains. Built with **Hono** on Cloudflare Workers.
 
 **Directory Structure:**
 
 ```
 src/
-├── index.ts              # Worker entry point, request routing by subdomain type
-├── types.ts              # Shared TypeScript types (Env, ParsedSubdomain, etc.)
+├── index.ts                      # Hono app entry point, CORS middleware, subdomain routing
+├── types.ts                      # Shared TypeScript types (Env, ParsedSubdomain, etc.)
 ├── handlers/
-│   ├── landing.ts        # Root domain handler (sui.ski), API endpoints
-│   ├── profile.ts        # SuiNS profile page with grace period support
-│   ├── vortex.ts         # Vortex privacy protocol API and UI
-│   ├── mvr-management.ts # MVR package management API endpoints
-│   └── mvr-ui.ts         # MVR package management web UI
+│   ├── app.ts                    # Encrypted messaging app (chat, channels, agents, LLM proxy)
+│   ├── black-diamond.ts          # Name watchlist API
+│   ├── dashboard.ts              # "My Names" management UI
+│   ├── grpc-proxy.ts             # gRPC backend proxy (config-only, no backend URL set)
+│   ├── landing.ts                # Root domain landing page, pricing/resolve/status APIs
+│   ├── profile.ts                # SuiNS profile page with grace period, OG images
+│   ├── profile.css.ts            # Embedded CSS for profile pages
+│   ├── register.ts               # Registration page for available names
+│   ├── renewal.ts                # SuiNS renewal with x402 payment, Seal encryption
+│   ├── subnamecap.ts             # SubnameCAP management API endpoints
+│   ├── subnamecap-ui.ts          # SubnameCAP web UI
+│   ├── subnamecap-ui.css.ts      # Embedded CSS for SubnameCAP UI
+│   ├── suins-manager.ts          # SuiNS contract interaction APIs and pricing
+│   ├── transaction.ts            # Transaction data fetch and SuiNS registration detection
+│   ├── vault.ts                  # Seal-encrypted bookmark/blob storage API
+│   ├── views.ts                  # Page view tracking API
+│   └── wallet-api.ts             # Wallet session management (Durable Object backed)
 ├── resolvers/
-│   ├── suins.ts          # SuiNS name resolution using @mysten/suins SDK
-│   ├── mvr.ts            # Move Registry package lookup via on-chain registry
-│   ├── content.ts        # IPFS gateway fallback + Walrus blob fetching
-│   └── rpc.ts            # JSON-RPC proxy with method allowlist + rate limiting
-└── utils/
-    ├── subdomain.ts      # Subdomain parsing logic (pattern matching)
-    ├── cache.ts          # KV-backed caching utilities
-    ├── response.ts       # HTTP response helpers (JSON, HTML, CORS)
-    └── mvr-transactions.ts # MVR transaction builders for offline signing
+│   ├── suins.ts                  # SuiNS name resolution via @mysten/suins + Surflux gRPC
+│   ├── mvr.ts                    # Move Registry package lookup via on-chain dynamic fields
+│   ├── content.ts                # IPFS gateway fallback + Walrus blob fetching
+│   └── rpc.ts                    # JSON-RPC proxy with method allowlist + rate limiting
+├── utils/
+│   ├── subdomain.ts              # Subdomain parsing (hostname → route type)
+│   ├── cache.ts                  # Dual-layer caching (in-memory + Cache API + KV fallback)
+│   ├── response.ts               # HTTP response helpers (JSON, HTML, CORS, error pages)
+│   ├── rpc.ts                    # RPC URL selection by network
+│   ├── og-image.ts               # SVG and PNG OG image generation
+│   ├── social.ts                 # Social meta tags, media URL normalization
+│   ├── status.ts                 # Gateway status endpoint
+│   ├── pricing.ts                # SuiNS registration price calculation (premium decay, NS discount)
+│   ├── ns-price.ts               # NS token price from DeepBook orderbook
+│   ├── premium.ts                # Grace period premium calculation (exponential decay)
+│   ├── pyth-price-info.ts        # Pyth oracle price feed lookup
+│   ├── suins-object.ts           # SuiNS object querying
+│   ├── sui-client.ts             # Sui client exports
+│   ├── surflux-client.ts         # Surflux HTTP client wrapper
+│   ├── surflux-grpc.ts           # Surflux gRPC-Web name resolution
+│   ├── grpc-client.ts            # gRPC client wrapper
+│   ├── subnamecap-queries.ts     # SubnameCAP RPC queries (fetch caps, active caps)
+│   ├── subnamecap-transactions.ts # SubnameCAP transaction builders
+│   ├── black-diamond.ts          # Watchlist transaction builders
+│   ├── ika-transactions.ts       # IKA dWallet transaction builders
+│   ├── swap-transactions.ts      # Token swap transaction builders
+│   ├── transactions.ts           # Generic transaction relay
+│   ├── vault.ts                  # Vault storage constants and key builders
+│   ├── wallet-session-js.ts      # Client-side wallet session script generation
+│   ├── x402-middleware.ts        # HTTP 402 payment middleware
+│   └── x402-sui.ts               # X402 payment requirement builder
+├── sdk/
+│   ├── index.ts                  # SDK exports (provers, messaging, MVR resolver)
+│   ├── types.ts                  # Privacy protocol types (Note, Commitment, Proof)
+│   ├── messaging-client.ts       # Encrypted messaging client (Seal + SuiNS + signing)
+│   ├── messaging-client-browser.ts # Browser-specific messaging wrapper
+│   ├── messaging-client.test.ts  # Messaging client tests
+│   ├── mvr-resolver.ts           # MVR package name parser and resolver with caching
+│   ├── mvr-resolver.test.ts      # MVR resolver tests
+│   ├── groth16/prover.ts         # Groth16 zero-knowledge proof generation
+│   ├── ligetron/prover.ts        # Ligetron zkVM witness computation
+│   ├── types/snarkjs.d.ts        # SnarkJS type definitions
+│   └── utils/
+│       ├── encryption.ts         # Message encryption/decryption
+│       ├── merkle.ts             # Merkle tree implementation
+│       └── poseidon.ts           # Poseidon hash function
+├── client/
+│   └── wallet-session.ts         # Client-side wallet session API wrapper
+├── config/
+│   └── subnamecap.ts             # SubnameCAP configuration constants
+├── durable-objects/
+│   └── wallet-session.ts         # Cloudflare Durable Object for wallet sessions (SQLite)
+└── index.test.ts                 # Subdomain parsing tests
+
+contracts/                        # Move smart contracts (7 packages)
+├── black_diamond/                # Name watchlist/auction tracking
+├── bounty_escrow/                # Escrow for bounty payouts
+├── decay_auction/                # Premium name auction with exponential decay
+├── mvr/                          # Move Registry on-chain package metadata
+├── private/                      # Privacy protocol (Ligetron + Groth16)
+├── seal_messaging/               # Encrypted messaging using Seal protocol
+└── upgrade_cap_transfer/         # Capability transfer utilities
+
+proxy/                            # Surflux gRPC-to-HTTP proxy service
+├── src/index.ts                  # Worker entry point
+├── api/                          # Lookup, reverse, health endpoints
+├── protos/                       # Protocol Buffer definitions
+└── fly.toml / render.yaml        # Deploy configs (Fly.io, Render)
+
+backend/                          # Backend server (separate Node.js/Bun app)
+├── src/server.ts                 # Server entry point
+└── docker-compose.yml            # Container orchestration
+
+scripts/                          # Deployment and utility scripts
+├── full-deploy.sh                # Complete deployment
+├── deploy-messaging-mainnet.sh   # Mainnet messaging deployment
+├── set-suins-contenthash.ts      # Update SuiNS content hash
+├── extract-suins-object.ts       # Extract SuiNS object info
+└── transfer-upgrade-cap-from-nft.ts
+
+docs/                             # Extended documentation
+├── WALLET_SESSION.md             # Durable Objects for wallet sessions
+├── MESSAGING_SDK.md              # Messaging with Seal + Walrus
+├── LIGETRON_INTEGRATION.md       # Ligetron zkVM + Groth16 hybrid proving
+├── MVR_COMPATIBILITY.md          # MVR package resolution strategies
+├── MVR_IMPROVEMENTS.md           # MVR subdomain management and versioning
+├── SUI_TRANSACTION_BUILDING.md   # Sui PTB patterns and examples
+└── SUI_STACK_SYSTEM_DIAGRAM.md   # Full Sui ecosystem architecture diagram
 ```
 
 ---
@@ -237,6 +328,14 @@ Patterns to actively avoid.
 | Usually  | Complex private helpers, state transitions |
 | Never    | Trivial getters, framework internals       |
 
+### Test Files
+
+| File                            | Covers                        |
+| ------------------------------- | ----------------------------- |
+| `src/index.test.ts`             | Subdomain parsing logic       |
+| `src/sdk/messaging-client.test.ts` | Messaging client           |
+| `src/sdk/mvr-resolver.test.ts`  | MVR name resolution           |
+
 ---
 
 ## TypeScript
@@ -246,16 +345,29 @@ Patterns to actively avoid.
 ```bash
 bun install               # Install dependencies
 bun run dev               # Development server (Wrangler dev with hot reload)
-bun test                  # Run tests
+bun test                  # Run tests (Bun test runner)
 bun test --watch          # Watch mode
 bun test src/index.test.ts  # Single file
-bun run typecheck         # Type checking only
+bun run typecheck         # Type checking only (tsc --noEmit)
 bun run lint              # Check for issues (Biome)
 bun run lint:fix          # Auto-fix issues
-bun run format            # Format code
+bun run format            # Format code (Biome)
 bun run deploy            # Deploy to Cloudflare
 bun run tail              # Stream live logs
+bun run set:contenthash   # Update SuiNS content hash
 ```
+
+### Formatter & Linter (Biome)
+
+| Setting         | Value           |
+| --------------- | --------------- |
+| Indent style    | Tabs            |
+| Line width      | 100             |
+| Quote style     | Single quotes   |
+| Semicolons      | As needed       |
+| Unused imports  | Error           |
+| Unused variables| Error           |
+| Non-null assertion | Warn         |
 
 ### Type Naming
 
@@ -427,27 +539,73 @@ emoji type(scope): subject
 
 ## Project Configuration
 
+### Framework
+
+**Hono** (`^4.11.7`) is the HTTP framework. The app is a `Hono<AppEnv>` instance with typed bindings for Cloudflare Workers. Middleware handles CORS preflight, subdomain parsing, and network override injection.
+
+### Cloudflare Bindings
+
+| Binding           | Type            | Purpose                           |
+| ----------------- | --------------- | --------------------------------- |
+| `CACHE`           | KV Namespace    | Name resolution and content cache |
+| `WALLET_SESSIONS` | Durable Object  | Persistent wallet sessions (SQLite) |
+
 ### Environment Variables
 
 `wrangler.toml` defines:
 
 ```bash
-SUI_NETWORK=mainnet|testnet|devnet
-SUI_RPC_URL=                        # Sui fullnode endpoint
-WALRUS_NETWORK=                     # Walrus network
-CACHE=                              # KV namespace binding
+SUI_NETWORK=mainnet|testnet|devnet   # Active Sui network
+SUI_RPC_URL=                          # Sui fullnode endpoint (secret)
+WALRUS_NETWORK=mainnet|testnet        # Walrus network
+SEAL_NETWORK=testnet                  # Seal uses testnet (open key servers)
+SEAL_PACKAGE_ID=                      # Seal contract address
+SEAL_KEY_SERVERS=                     # Comma-separated key server object IDs
+SERVICE_FEE_NAME=brando.sui           # NS token fee recipient
+DISCOUNT_RECIPIENT_NAME=extra.sui     # NS discount recipient
+LLM_API_KEY=                          # LLM provider API key (secret)
+SURFLUX_API_KEY=                      # Surflux gRPC API key (secret)
+BRAVE_SEARCH_API_KEY=                 # Brave search API key (secret)
+INDEXER_API_KEY=                      # Indexer API key (secret)
 ```
 
-Use `env.dev` for testnet development.
+SuiNS/SubnameCAP package IDs, jacket package IDs, decay auction, and black diamond package IDs are also configured as environment variables. See `wrangler.toml` for the full list.
 
-### Key Dependencies
+Network selection uses environment overrides or hostname prefixes (`*.t.sui.ski` for testnet, `*.d.sui.ski` for devnet).
 
-| Package              | Purpose                    |
-| -------------------- | -------------------------- |
-| `@mysten/sui`        | Sui TypeScript SDK         |
-| `@mysten/suins`      | SuiNS client               |
-| `@mysten/walrus`     | Walrus blob storage client |
-| `wrangler`           | Cloudflare Workers CLI     |
+### Worker Routes
+
+```
+*.sui.ski/*       # Mainnet wildcard
+sui.ski/*         # Mainnet root
+*.t.sui.ski/*     # Testnet wildcard
+t.sui.ski/*       # Testnet root
+*.d.sui.ski/*     # Devnet wildcard
+d.sui.ski/*       # Devnet root
+```
+
+### Dependencies
+
+| Package                       | Purpose                         |
+| ----------------------------- | ------------------------------- |
+| `hono`                        | HTTP framework for Workers      |
+| `@mysten/sui`                 | Sui TypeScript SDK              |
+| `@mysten/suins`               | SuiNS client                    |
+| `@mysten/walrus`              | Walrus blob storage client      |
+| `@mysten/deepbook-v3`         | DeepBook AMM (pricing)          |
+| `@noble/hashes`               | Cryptographic hash functions    |
+| `@bufbuild/protobuf`          | Protocol Buffers runtime        |
+| `@connectrpc/connect-web`     | gRPC-Web client                 |
+
+**Dev Dependencies:**
+
+| Package                       | Purpose                         |
+| ----------------------------- | ------------------------------- |
+| `wrangler`                    | Cloudflare Workers CLI          |
+| `typescript`                  | Type checking                   |
+| `@biomejs/biome`              | Linter and formatter            |
+| `@cloudflare/workers-types`   | Worker type definitions         |
+| `@types/bun`                  | Bun runtime types               |
 
 **Note:** The Vortex SDK (`@interest-protocol/vortex-sdk`) is NOT imported in the worker due to its 9MB size exceeding Cloudflare's 3MB limit. The gateway proxies Vortex API requests; the SDK should be loaded client-side from CDN.
 
@@ -455,17 +613,77 @@ Use `env.dev` for testnet development.
 
 ## Subdomain Routing
 
-The gateway parses hostnames to determine routing:
+The gateway parses hostnames to determine routing. All patterns support optional network prefixes (`t.` for testnet, `d.` for devnet).
 
-| Pattern                        | Route Type | Example               |
-| ------------------------------ | ---------- | --------------------- |
-| `sui.ski`                      | root       | Landing page          |
-| `rpc.sui.ski`                  | rpc        | JSON-RPC proxy        |
-| `{name}.sui.ski`               | suins      | SuiNS resolution      |
-| `{pkg}--{name}.sui.ski`        | mvr        | MVR package           |
-| `{pkg}--{name}--v{n}.sui.ski`  | mvr        | MVR package version   |
-| `ipfs-{cid}.sui.ski`           | content    | Direct IPFS           |
-| `walrus-{blobId}.sui.ski`      | content    | Direct Walrus         |
+| Pattern                        | Route Type  | Handler                        |
+| ------------------------------ | ----------- | ------------------------------ |
+| `sui.ski`                      | `root`      | Landing page + API endpoints   |
+| `rpc.sui.ski`                  | `rpc`       | JSON-RPC proxy                 |
+| `app.sui.ski`                  | `app`       | Encrypted messaging app        |
+| `my.sui.ski`                   | `dashboard` | Name management dashboard      |
+| `msg.sui.ski`                  | `messaging` | Messaging protocol endpoint    |
+| `{name}.sui.ski`               | `suins`     | SuiNS profile resolution       |
+| `{pkg}--{name}.sui.ski`        | `mvr`       | MVR package (latest version)   |
+| `{pkg}--{name}--v{n}.sui.ski`  | `mvr`       | MVR package (specific version) |
+| `ipfs-{cid}.sui.ski`           | `content`   | Direct IPFS gateway            |
+| `walrus-{blobId}.sui.ski`      | `content`   | Direct Walrus blob             |
+
+Additional path-based routes on the root domain:
+
+| Path                   | Handler                              |
+| ---------------------- | ------------------------------------ |
+| `/api/wallet/*`        | Wallet session management            |
+| `/api/subnamecap/*`    | SubnameCAP transaction builders      |
+| `/api/black-diamond/*` | Name watchlist operations            |
+| `/api/vault/*`         | Encrypted vault storage              |
+| `/api/app/*`           | Messaging app API                    |
+| `/api/agents/*`        | Agent registry and SubnameCAP agents |
+| `/api/ika/*`           | IKA dWallet operations               |
+| `/api/llm/*`           | LLM completion proxy                 |
+| `/api/pricing`         | Registration price calculation       |
+| `/api/ns-price`        | NS/SUI exchange rate                 |
+| `/api/usdc-price`      | USDC/SUI price                       |
+| `/api/deepbook-pools`  | DeepBook liquidity data              |
+| `/api/renewal-pricing` | Renewal cost calculation             |
+| `/api/suins/contracts` | SuiNS contract addresses             |
+| `/api/views/{name}`    | Page view counter                    |
+| `/resolve?name=...`    | SuiNS resolution API                 |
+| `/status`              | Gateway health status                |
+| `/subnamecap`          | SubnameCAP management UI             |
+| `/app`, `/app/*`       | Messaging app (root domain access)   |
+| `/walrus/{id}`         | Walrus content (path-based)          |
+| `/ipfs/{id}`           | IPFS content (path-based)            |
+| `/og/{name}.svg`       | Profile OG image                     |
+| `/favicon.svg`         | Favicon                              |
+| `/og-image.svg`        | Brand OG image (SVG)                 |
+| `/og-image.png`        | Brand OG image (PNG)                 |
+
+---
+
+## Key Architecture Patterns
+
+### Subdomain Parsing Middleware
+
+Every request passes through two Hono middleware layers:
+1. **CORS** - Handles OPTIONS preflight with permissive headers
+2. **Subdomain parser** - Extracts `ParsedSubdomain` from hostname, applies network overrides, sets Hono context variables (`parsed`, `hostname`, `env`)
+
+The `X-Host` header or `?host=` query parameter can override the hostname for testing.
+
+### Dual-Layer Caching
+
+The caching system (`src/utils/cache.ts`) uses:
+1. **In-memory cache** - LRU-style with configurable max entries (~100)
+2. **Cache API** - Cloudflare edge cache
+3. **KV fallback** - Persistent storage with TTL
+
+### Transaction Building Pattern
+
+The gateway generates unsigned PTBs (Programmable Transaction Blocks) for client-side signing. Transaction builders in `src/utils/` construct `Transaction` objects and serialize them as base64 for the client to sign and submit.
+
+### Durable Objects
+
+`WalletSession` is a Cloudflare Durable Object using SQLite for persistent wallet session storage. It handles connect, check, and disconnect operations.
 
 ---
 
@@ -512,11 +730,49 @@ For the complete list of active packages and objects, see the [SuiNS Developer D
 - **Off-chain resolution:** Use available Sui API endpoints (JSON-RPC or GraphQL). For GraphQL's default name resolution, use the `defaultSuinsName` field.
 - **On-chain resolution:** Use the SuiNS core package. Add the appropriate dependency in your `Move.toml` file depending on which network you are targeting.
 
+### Gateway Resolution Flow
+
+1. Parse subdomain from hostname (`{name}.sui.ski` → `name`)
+2. Check dual-layer cache (memory → Cache API → KV)
+3. Resolve via `@mysten/suins` SDK or Surflux gRPC
+4. Handle grace period (30-day window after expiration with premium pricing)
+5. Return profile page, JSON data, or proxy to IPFS/Walrus content
+
 ---
 
 ## RPC Proxy Security
 
-The RPC proxy at `rpc.sui.ski` only allows read-only methods. Write operations (`sui_executeTransactionBlock`, etc.) are blocked. Rate limiting is 100 requests/minute per IP.
+The RPC proxy at `rpc.sui.ski` only allows read-only methods. Write operations (`sui_executeTransactionBlock`, etc.) are blocked. Rate limiting is 100 requests/minute per IP. Batch requests are supported with individual method validation.
+
+---
+
+## Encrypted Messaging App
+
+The messaging app (`app.sui.ski` or `sui.ski/app`) provides encrypted communication:
+
+- **1:1 direct messages** with Seal envelope encryption
+- **Group channels** with access control
+- **News/broadcast channels**
+- **Agent marketplace** integration with LLM proxy
+- **Message signing** with Ed25519/secp256k1/secp256r1
+- **Nonce replay protection** and conversation deduplication
+- **Max message size:** 1MB
+
+The app handler (`src/handlers/app.ts`) manages conversations, message routing, and agent interactions. The SDK (`src/sdk/messaging-client.ts`) provides the client-side encryption and signing logic.
+
+---
+
+## SubnameCAP System
+
+SubnameCAP (Subdomain Capability) allows creating and managing subdomains under SuiNS names with constraint enforcement:
+
+- **Fee jackets** - Require payment for subdomain creation
+- **Allowlist jackets** - Restrict who can create subdomains
+- **Rate limit jackets** - Throttle subdomain creation
+- **Single-use jackets** - One-time subdomain creation
+- **Decay auction** - Premium pricing with exponential decay for high-value subnames
+
+Configuration constants are in `src/config/subnamecap.ts`. Transaction builders are in `src/utils/subnamecap-transactions.ts`. Query helpers are in `src/utils/subnamecap-queries.ts`.
 
 ---
 
@@ -528,40 +784,13 @@ The RPC proxy at `rpc.sui.ski` only allows read-only methods. Write operations (
 - With version: `@myname/mypackage/2` (resolves to specific on-chain version)
 - Without version: defaults to latest
 
-**Design:**
-- `PackageInfo` registration: exists independently per network (metadata + ownership proof)
-- MVR registration: single source of truth on Mainnet only
-
-**Registration Flow:**
-1. Register `PackageInfo` object when publishing (once per network)
-2. Register application using SuiNS name
-3. Associate application with `PackageInfo`:
-   - Mainnet: full `PackageInfo` object (complete mapping)
-   - Other networks: `PackageInfo` object ID (pointer only)
-
-**Source Code:**
-- [MVR CLI & Web App](https://github.com/MystenLabs/mvr)
-- [MVR GraphQL](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/src/types/move_registry)
-- [TypeScript SDK Plugin](https://github.com/MystenLabs/ts-sdks/tree/main/packages/typescript/src/transactions/plugins/NamedPackagesPlugin.ts)
-
 **Gateway Subdomain Patterns:**
 - `core--suifrens.sui.ski` → `@suifrens/core`
 - `nft--myname--v2.sui.ski` → `@myname/nft/2`
 
-**Management UI** (`/mvr`):
-- Web interface for package registration, versioning, and metadata updates
-- Generate unsigned transactions for offline signing
-- Browse and search packages
+**SDK Resolver:** `src/sdk/mvr-resolver.ts` provides a caching resolver that parses MVR names and resolves them to on-chain package addresses via dynamic field lookup.
 
-**API Endpoints**:
-- `POST /api/mvr/register` - Register new package
-- `POST /api/mvr/publish-version` - Publish new version
-- `POST /api/mvr/update-metadata` - Update package metadata
-- `POST /api/mvr/transfer` - Transfer package ownership
-- `GET /api/mvr/packages/{suinsName}` - List packages for a SuiNS name
-- `GET /api/mvr/search?q={query}` - Search packages
-
-See `docs/MVR_IMPROVEMENTS.md` for detailed documentation.
+See `docs/MVR_IMPROVEMENTS.md` and `docs/MVR_COMPATIBILITY.md` for detailed documentation.
 
 ### MVR TypeScript SDK
 
@@ -624,101 +853,6 @@ network = "mainnet"
 
 **Building:** Standard `sui move build` automatically invokes MVR dependency resolution.
 
-**Verify Installation:** `mvr --help`
-
-### MVR Names & Applications
-
-Managing applications involves four operations:
-
-1. **Create Application**: Register with SuiNS name + package name. Returns `appCap` for subsequent operations.
-
-2. **Set Metadata** (strongly recommended):
-   - `description`, `icon_url`, `documentation_url`, `homepage_url`, `contact`
-
-3. **Mainnet Package Attachment**: Links `PackageInfo` to application permanently (cannot be detached).
-
-4. **Non-Mainnet Attachment**: Attaches pointers (not strict bindings). Can update by unsetting then resetting the network.
-
-### MVR Package Metadata
-
-Create a `PackageInfo` object when first deploying (once per network) as the source of truth for package metadata.
-
-**Create PackageInfo:**
-```typescript
-const packageInfo = transaction.moveCall({
-  target: `@mvr/metadata::package_info::new`,
-  arguments: [transaction.object('<UpgradeCap>')],
-});
-
-const display = transaction.moveCall({
-  target: `@mvr/metadata::display::default`,
-  arguments: [transaction.pure.string('<package display name>')],
-});
-
-transaction.moveCall({
-  target: `@mvr/metadata::package_info::set_display`,
-  arguments: [transaction.object(packageInfo), display],
-});
-
-transaction.moveCall({
-  target: `@mvr/metadata::package_info::set_metadata`,
-  arguments: [
-    transaction.object(packageInfo),
-    transaction.pure.string('default'),
-    transaction.pure.string('<MVR name>'),  // e.g., @suins/core
-  ],
-});
-
-transaction.moveCall({
-  target: `@mvr/metadata::package_info::transfer`,
-  arguments: [transaction.object(packageInfo), transaction.pure.address('<safe address>')],
-});
-```
-
-**Reverse Resolution** (lookup MVR name from package ID):
-```bash
-curl -X POST 'https://mainnet.mvr.mystenlabs.com/v1/reverse-resolution/bulk' \
-  -H 'Content-Type: application/json' \
-  -d '{"package_ids": ["0x00c2f85e07..."]}'
-```
-
-**Add Source Code Info:**
-```typescript
-const git = transaction.moveCall({
-  target: `@mvr/metadata::git::new`,
-  arguments: [
-    transaction.pure.string('<repo URL>'),
-    transaction.pure.string('<subdirectory>'),
-    transaction.pure.string('<commit hash or tag>'),
-  ],
-});
-
-transaction.moveCall({
-  target: `@mvr/metadata::package_info::set_git_versioning`,
-  arguments: [
-    transaction.object('<PackageInfo>'),
-    transaction.pure.u64('<version number>'),
-    git,
-  ],
-});
-```
-
-**Update Source:** Call `unset_git_versioning` first, then `set_git_versioning` with new info.
-
-**Transfer:** Use `@mvr/metadata::package_info::transfer`. No public transfers (ensures indexability).
-
-### MVR Maintainer Practices
-
-Best practices for maintaining packages in the Move Registry:
-
-1. **Automated Address Management**: Use Sui's automated address management when publishing/upgrading. Commit and tag changes after configuration.
-
-2. **Network-Specific Dependencies**: Switch `Sui` dependency to correct network (testnet/mainnet). Starting with Sui v1.45, system dependencies are auto-managed and should be removed from `Move.toml`.
-
-3. **Release Tagging**: Use `<network>/<version>` format (e.g., `mainnet/v1`). Update `PackageInfo` source origin with commit SHA or tag reference.
-
-4. **Package Naming**: In multi-package repos, prefix package names with project identifier (e.g., `mvr_utils` not `utils`) to avoid conflicts and improve discoverability.
-
 ---
 
 ## Sui Transaction Building
@@ -734,6 +868,18 @@ tx.transferObjects([coin], '0xRecipientAddress');
 ```
 
 See `docs/SUI_TRANSACTION_BUILDING.md` for comprehensive documentation.
+
+---
+
+## Privacy Protocol (SDK)
+
+The SDK includes two ZK proving systems for privacy:
+
+- **Groth16 prover** (`src/sdk/groth16/prover.ts`) - Zero-knowledge proof generation using SnarkJS
+- **Ligetron prover** (`src/sdk/ligetron/prover.ts`) - Hybrid zkVM witness computation
+- **Supporting utilities** - Poseidon hash, Merkle trees, message encryption
+
+The `private/` contract implements the on-chain privacy protocol. See `docs/LIGETRON_INTEGRATION.md` for architecture details.
 
 ---
 
@@ -767,6 +913,13 @@ The gateway integrates with [Vortex](https://github.com/interest-protocol/vortex
 ## Seal Decentralized Secrets Management
 
 [Seal](https://github.com/MystenLabs/seal) is a decentralized secrets management (DSM) service for encrypting sensitive data stored on Walrus or other on/off-chain storage, with access controlled by onchain policies on Sui.
+
+The gateway uses Seal for:
+- **Messaging encryption** - End-to-end encrypted messages via `seal_messaging` contract
+- **Vault storage** - Encrypted bookmarks/blobs
+- **Renewal operations** - Payment-gated encrypted data
+
+Currently configured to use **testnet** key servers (open mode, no registration required).
 
 ### Architecture
 
@@ -946,6 +1099,39 @@ Solves the problem of TEEs losing secrets on restart/migration:
 - **Storage Nodes**: Decentralized infrastructure layer
 
 **Typical Integration:** End users interact via aggregators/publishers (HTTP), avoiding local binary deployment.
+
+---
+
+## Move Smart Contracts
+
+Seven on-chain packages in `contracts/`:
+
+| Package               | Purpose                                             |
+| --------------------- | --------------------------------------------------- |
+| `black_diamond`       | Name watchlist and auction tracking                 |
+| `bounty_escrow`       | Escrow for bounty payouts                           |
+| `decay_auction`       | Premium name auction with exponential decay pricing |
+| `mvr`                 | Move Registry on-chain package metadata             |
+| `private`             | Privacy protocol using Ligetron + Groth16           |
+| `seal_messaging`      | Encrypted messaging using Seal protocol             |
+| `upgrade_cap_transfer`| Capability transfer utilities                       |
+
+Each package has a `Move.toml` and published packages include `Published.toml` with on-chain addresses.
+
+---
+
+## Surflux gRPC Proxy
+
+The `proxy/` directory contains a lightweight HTTP-to-gRPC bridge for Surflux's NameService API (Cloudflare Workers cannot make native gRPC calls).
+
+**Endpoints:**
+- `/lookup` - Forward name lookup
+- `/reverse` - Reverse name lookup
+- `/health` - Health check
+
+**Protocol Buffers:** `proxy/protos/name_service.proto`
+
+**Deploy targets:** Fly.io (`fly.toml`), Render (`render.yaml`), Vercel (`vercel.json`), Cloudflare Workers (`wrangler.jsonc`)
 
 ---
 
