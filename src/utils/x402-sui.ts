@@ -11,7 +11,7 @@ const SUI_ASSET = '0x2::sui::SUI'
 const SCHEME = 'exact-sui' as const
 const X402_VERSION = 2
 const DEFAULT_TIMEOUT_SECONDS = 120
-const SUBNAME_FEE_MIST = '1000000000'
+const DEFAULT_AMOUNT_MIST = '1000000000'
 const X402_SUINS_NAME = 'x402.sui'
 
 export async function resolveX402Recipient(env: Env): Promise<string | null> {
@@ -45,7 +45,11 @@ export class X402SuiPaymentHandler {
 		this.#rpcUrl = env.SUI_RPC_URL || getDefaultRpcUrl(env.SUI_NETWORK)
 	}
 
-	createPaymentRequirements(resourceUrl: string, description: string): X402PaymentRequired {
+	createPaymentRequirements(
+		resourceUrl: string,
+		description: string,
+		amountMist = DEFAULT_AMOUNT_MIST,
+	): X402PaymentRequired {
 		return {
 			x402Version: X402_VERSION,
 			resource: {
@@ -57,7 +61,7 @@ export class X402SuiPaymentHandler {
 				{
 					scheme: SCHEME,
 					network: this.#networkId,
-					amount: SUBNAME_FEE_MIST,
+					amount: amountMist,
 					asset: SUI_ASSET,
 					payTo: this.#recipientAddress,
 					maxTimeoutSeconds: DEFAULT_TIMEOUT_SECONDS,
@@ -82,8 +86,25 @@ export class X402SuiPaymentHandler {
 
 	async verifyPayment(
 		payload: X402SuiPaymentPayload,
+		expectedAmountMist = DEFAULT_AMOUNT_MIST,
 	): Promise<{ valid: boolean; error?: string; payer?: string }> {
 		try {
+			if (payload.accepted.scheme !== SCHEME) {
+				return { valid: false, error: 'Unsupported payment scheme' }
+			}
+			if (payload.accepted.network !== this.#networkId) {
+				return { valid: false, error: 'Unexpected payment network' }
+			}
+			if (payload.accepted.asset !== SUI_ASSET) {
+				return { valid: false, error: 'Unexpected payment asset' }
+			}
+			if (payload.accepted.payTo.toLowerCase() !== this.#recipientAddress.toLowerCase()) {
+				return { valid: false, error: 'Unexpected payment recipient' }
+			}
+			if (payload.accepted.amount !== expectedAmountMist) {
+				return { valid: false, error: 'Unexpected payment amount in header' }
+			}
+
 			const suiClient = new SuiClient({
 				url: this.#rpcUrl,
 				network: this.#suiNetwork,
@@ -113,7 +134,7 @@ export class X402SuiPaymentHandler {
 				return { valid: false, error: 'Payment not found to expected recipient' }
 			}
 
-			const expectedAmount = BigInt(payload.accepted.amount)
+			const expectedAmount = BigInt(expectedAmountMist)
 			if (BigInt(recipientChange.amount) < expectedAmount) {
 				return {
 					valid: false,

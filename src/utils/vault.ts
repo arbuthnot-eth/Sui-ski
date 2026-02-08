@@ -15,6 +15,7 @@ export interface VaultMeta {
 	version: number
 	updatedAt: number
 	count: number
+	names?: string[]
 }
 
 export const VAULT_MAX_BOOKMARKS = 100

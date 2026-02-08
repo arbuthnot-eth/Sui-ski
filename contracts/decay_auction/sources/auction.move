@@ -16,7 +16,7 @@ module decay_auction::auction {
     const MAX_DURATION_MS: u64 = 30 * 24 * 60 * 60 * 1000;
     const MIN_DURATION_MS: u64 = 60 * 60 * 1000;
     const CANCEL_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
-    const MIN_START_PRICE_MIST: u64 = 1_000_000_000;
+    const MIN_START_PRICE_MIST: u64 = 100_000_000_000_000_000;
     const PPM: u256 = 1_000_000;
     const PPM_POW_EIGHT: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000;
 

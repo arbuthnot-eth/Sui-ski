@@ -1,10 +1,11 @@
 import { Hono } from 'hono'
 import { WalletSession } from './durable-objects/wallet-session'
 import { handleAppRequest } from './handlers/app'
-import { blackDiamondRoutes } from './handlers/black-diamond'
 import { generateDashboardPage } from './handlers/dashboard'
+import { agentGraceVaultRoutes } from './handlers/grace-vault-agent'
 import { apiRoutes, landingPageHTML } from './handlers/landing'
 import { generateProfilePage } from './handlers/profile'
+import { solSwapRoutes } from './handlers/sol-swap'
 import { agentSubnameCapRoutes, subnameCapRoutes } from './handlers/subnamecap'
 import { generateSubnameCapPage } from './handlers/subnamecap-ui'
 import { vaultRoutes } from './handlers/vault'
@@ -120,12 +121,17 @@ app.use('/api/agents/subnamecap/*', async (c, next) => {
 	await next()
 })
 app.route('/api/agents/subnamecap', agentSubnameCapRoutes)
+app.use('/api/agents/grace-vault/*', async (c, next) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	await next()
+})
+app.route('/api/agents/grace-vault', agentGraceVaultRoutes)
 app.all('/api/agents/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
 app.all('/api/ika/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
 app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
 
+app.route('/api/sol-swap', solSwapRoutes)
 app.route('/api/subnamecap', subnameCapRoutes)
-app.route('/api/black-diamond', blackDiamondRoutes)
 app.route('/api/vault', vaultRoutes)
 app.route('/api', apiRoutes)
 

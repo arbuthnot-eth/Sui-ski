@@ -1,6 +1,6 @@
 ---
 compiled_package_info:
-  package_name: bounty_escrow
+  package_name: sol_swap
   build_flags:
     test_mode: false
     generate_docs: false

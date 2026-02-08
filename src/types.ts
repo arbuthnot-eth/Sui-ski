@@ -21,6 +21,11 @@ export interface Env {
 	WALRUS_PUBLISHER_URL?: string
 	WALRUS_AGGREGATOR_URL?: string
 	BOUNTY_ESCROW_MVR_ALIAS?: string
+	BOUNTY_ESCROW_PACKAGE_ID?: string
+	X402_VERIFIERS?: string
+	X402_AGENT_FEE_MIST?: string
+	COINBASE_X402_VERIFY_URL?: string
+	COINBASE_X402_API_KEY?: string
 	SURFLUX_API_KEY?: string
 	SUBNAMECAP_SUINS_PACKAGE_ID?: string
 	SUBNAMECAP_SUBDOMAINS_PACKAGE_ID?: string
@@ -33,12 +38,22 @@ export interface Env {
 	JACKET_RATE_LIMIT_OBJECT_ID?: string
 	JACKET_SINGLE_USE_PACKAGE_ID?: string
 	DECAY_AUCTION_PACKAGE_ID?: string
-	BLACK_DIAMOND_PACKAGE_ID?: string
 	BRAVE_SEARCH_API_KEY?: string
 	OPENROUTER_API_KEY?: string
 	INDEXER_API_KEY?: string
 	TRADEPORT_USER?: string
 	TRADEPORT_API_KEY?: string
+	SOL_SWAP_POOL_ID?: string
+	SOL_SWAP_DWALLET_ID?: string
+	SOL_SWAP_SOLANA_ADDRESS?: string
+}
+
+export type X402VerifierProvider = 'cloudflare' | 'coinbase'
+
+export interface X402VerifiedPayment {
+	digest: string
+	payer: string
+	provider: X402VerifierProvider
 }
 
 export interface X402PaymentRequirements {

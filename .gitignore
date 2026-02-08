@@ -22,6 +22,14 @@ Thumbs.db
 # Logs
 *.log
 
+# Move build artifacts
+**/build/*/bytecode_modules/
+**/build/*/debug_info/
+**/build/*/sources/
+
+# Test results
+test-results/
+
 # Test/dev assets
 pilled-site/
 ragtag-images/

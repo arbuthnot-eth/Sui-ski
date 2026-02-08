@@ -765,9 +765,17 @@ export const profileStyles = `
 			transition: transform 0.4s ease, filter 0.4s ease;
 			filter: brightness(0.9) contrast(1.05);
 		}
+		.identity-visual img.identity-tagged-image {
+			filter: none !important;
+			transform: none !important;
+		}
 		.identity-card:hover .identity-visual img {
 			transform: scale(1.02);
 			filter: brightness(0.95) contrast(1.05);
+		}
+		.identity-card:hover .identity-visual img.identity-tagged-image {
+			transform: none;
+			filter: none !important;
 		}
 		.identity-visual canvas {
 			width: 85%;
@@ -3799,6 +3807,32 @@ export const profileStyles = `
 				height: 26px;
 				font-size: 0.95rem;
 			}
+			.marketplace-bid-max-btn {
+				padding: 2px 6px;
+				font-size: 0.6rem;
+				font-weight: 700;
+				letter-spacing: 0.04em;
+				border: 1px solid rgba(139, 92, 246, 0.35);
+				border-radius: 4px;
+				background: rgba(139, 92, 246, 0.12);
+				color: #c4b5fd;
+				cursor: pointer;
+				transition: all 0.15s ease;
+				flex: 0 0 auto;
+				line-height: 1.2;
+			}
+			.marketplace-bid-max-btn:hover {
+				background: rgba(139, 92, 246, 0.25);
+				border-color: rgba(139, 92, 246, 0.55);
+				color: #e0d4ff;
+			}
+			.marketplace-bid-max-btn:active {
+				background: rgba(139, 92, 246, 0.35);
+			}
+			.marketplace-bid-max-btn:disabled {
+				opacity: 0.4;
+				cursor: wait;
+			}
 			.marketplace-bid-price-control input,
 			.marketplace-list-price-control input {
 				flex: 1 1 auto;
@@ -4323,6 +4357,271 @@ export const profileStyles = `
 		}
 		.auction-status.success { color: var(--success); }
 		.auction-status.error { color: var(--danger); }
+
+		/* Swap Toggle Button */
+		.swap-toggle-btn {
+			width: 40px;
+			height: 40px;
+			border-radius: 10px;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			background: rgba(167, 139, 250, 0.12);
+			border: 1px solid rgba(167, 139, 250, 0.35);
+			cursor: pointer;
+			transition: all 0.2s ease;
+			padding: 0;
+			color: var(--purple);
+		}
+		.swap-toggle-btn svg {
+			width: 18px;
+			height: 18px;
+		}
+		.swap-toggle-btn:hover {
+			background: rgba(167, 139, 250, 0.2);
+			border-color: rgba(167, 139, 250, 0.55);
+			transform: translateY(-1px);
+		}
+
+		/* Swap Panel */
+		.swap-panel {
+			position: fixed;
+			top: calc(68px + env(safe-area-inset-top));
+			right: calc(16px + env(safe-area-inset-right));
+			z-index: 10050;
+			width: 380px;
+			max-height: calc(100vh - 100px);
+			overflow-y: auto;
+			background: var(--card-bg-elevated);
+			backdrop-filter: blur(24px);
+			-webkit-backdrop-filter: blur(24px);
+			border: 1px solid var(--glass-border);
+			border-radius: 16px;
+			box-shadow: var(--shadow-lg), var(--shadow-glow);
+			animation: swapPanelIn 0.2s ease;
+		}
+		@keyframes swapPanelIn {
+			from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+			to { opacity: 1; transform: translateY(0) scale(1); }
+		}
+		.swap-panel-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 14px 16px 0;
+		}
+		.swap-panel-tabs {
+			display: flex;
+			gap: 4px;
+		}
+		.swap-tab {
+			padding: 6px 14px;
+			border-radius: 8px;
+			border: none;
+			background: transparent;
+			color: var(--text-muted);
+			font-size: 0.82rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.15s ease;
+		}
+		.swap-tab:hover {
+			color: var(--text);
+			background: rgba(255, 255, 255, 0.04);
+		}
+		.swap-tab.active {
+			color: var(--text-bright);
+			background: rgba(96, 165, 250, 0.12);
+		}
+		.swap-panel-close {
+			width: 28px;
+			height: 28px;
+			border-radius: 6px;
+			border: none;
+			background: transparent;
+			color: var(--text-muted);
+			font-size: 1.2rem;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: all 0.15s ease;
+		}
+		.swap-panel-close:hover {
+			background: rgba(255, 255, 255, 0.06);
+			color: var(--text);
+		}
+		.swap-tab-content {
+			padding: 12px 16px 16px;
+		}
+		#sui-coins-terminal {
+			min-height: 360px;
+		}
+		.crosschain-ui {
+			display: flex;
+			flex-direction: column;
+			gap: 14px;
+		}
+		.cc-direction {
+			font-size: 0.85rem;
+			font-weight: 700;
+			color: var(--purple);
+			letter-spacing: 0.5px;
+		}
+		.cc-field {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+		.cc-label {
+			font-size: 0.72rem;
+			font-weight: 600;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+		}
+		.cc-input {
+			background: var(--bg-subtle);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 10px 12px;
+			color: var(--text);
+			font-size: 0.9rem;
+			font-family: var(--font-mono, monospace);
+			transition: border-color 0.15s ease;
+			width: 100%;
+		}
+		.cc-input:focus {
+			outline: none;
+			border-color: var(--purple);
+		}
+		.cc-input::placeholder {
+			color: var(--text-dim);
+		}
+		.cc-rate {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			font-size: 0.75rem;
+		}
+		.cc-rate-label {
+			color: var(--text-muted);
+			font-weight: 600;
+		}
+		.cc-rate-value {
+			color: var(--text);
+			font-family: var(--font-mono, monospace);
+		}
+		.cc-output {
+			background: rgba(167, 139, 250, 0.08);
+			border: 1px solid rgba(167, 139, 250, 0.25);
+			border-radius: 8px;
+			padding: 10px 12px;
+			color: var(--purple);
+			font-size: 0.9rem;
+			font-weight: 600;
+			font-family: var(--font-mono, monospace);
+		}
+		.cc-fee {
+			font-size: 0.72rem;
+			color: var(--text-dim);
+		}
+		.cc-btn {
+			width: 100%;
+			background: linear-gradient(135deg, var(--purple), var(--accent));
+			color: var(--text-bright);
+			border: none;
+			border-radius: 10px;
+			padding: 11px 20px;
+			font-size: 0.85rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: opacity 0.15s ease, transform 0.15s ease;
+		}
+		.cc-btn:hover:not(:disabled) {
+			opacity: 0.9;
+			transform: translateY(-1px);
+		}
+		.cc-btn:disabled {
+			opacity: 0.45;
+			cursor: not-allowed;
+		}
+		.cc-deposit {
+			background: rgba(167, 139, 250, 0.06);
+			border: 1px solid rgba(167, 139, 250, 0.15);
+			border-radius: 10px;
+			padding: 14px;
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.cc-deposit-label {
+			font-size: 0.75rem;
+			font-weight: 600;
+			color: var(--text-muted);
+		}
+		.cc-deposit-addr {
+			font-family: var(--font-mono, monospace);
+			font-size: 0.78rem;
+			color: var(--text);
+			word-break: break-all;
+			background: var(--bg-subtle);
+			padding: 8px 10px;
+			border-radius: 6px;
+			border: 1px solid var(--border);
+		}
+		.cc-copy-btn {
+			align-self: flex-start;
+			padding: 4px 12px;
+			border-radius: 6px;
+			border: 1px solid var(--border);
+			background: transparent;
+			color: var(--accent);
+			font-size: 0.72rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.15s ease;
+		}
+		.cc-copy-btn:hover {
+			background: rgba(96, 165, 250, 0.1);
+			border-color: var(--accent);
+		}
+		.cc-confirm-section {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+			margin-top: 6px;
+			padding-top: 10px;
+			border-top: 1px solid var(--border);
+		}
+		.cc-confirm-btn {
+			background: linear-gradient(135deg, var(--success), #22c55e) !important;
+		}
+		.cc-status {
+			min-height: 16px;
+			font-size: 0.8rem;
+			color: var(--text-muted);
+		}
+		.cc-status.success { color: var(--success); }
+		.cc-status.error { color: var(--error); }
+
+		@media (max-width: 480px) {
+			.swap-panel {
+				position: fixed;
+				top: auto;
+				bottom: 0;
+				left: 0;
+				right: 0;
+				width: 100%;
+				max-height: 80vh;
+				border-radius: 20px 20px 0 0;
+				animation: swapPanelSlideUp 0.25s ease;
+			}
+			@keyframes swapPanelSlideUp {
+				from { opacity: 0; transform: translateY(100%); }
+				to { opacity: 1; transform: translateY(0); }
+			}
+		}
 
 		/* Renewal Card (Overview Tab) */
 		.renewal-card {
@@ -5180,6 +5479,131 @@ export const profileStyles = `
 			text-transform: uppercase;
 			letter-spacing: 0.05em;
 			backdrop-filter: blur(8px);
+		}
+		.nft-card-blackout {
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background:
+				radial-gradient(circle at 22% 18%, rgba(20, 36, 66, 0.38) 0%, rgba(6, 8, 14, 0.06) 38%, rgba(0, 0, 0, 0.88) 100%),
+				linear-gradient(160deg, rgba(3, 7, 16, 0.96) 0%, rgba(0, 0, 0, 0.94) 55%, rgba(1, 3, 8, 0.96) 100%);
+			z-index: 5;
+			transition: opacity 0.3s ease;
+		}
+		.nft-card-blackout::before {
+			content: '';
+			position: absolute;
+			inset: 0;
+			background-image:
+				repeating-linear-gradient(135deg, rgba(96, 165, 250, 0.06) 0, rgba(96, 165, 250, 0.06) 2px, transparent 2px, transparent 20px),
+				repeating-linear-gradient(-35deg, rgba(148, 163, 184, 0.045) 0, rgba(148, 163, 184, 0.045) 2px, transparent 2px, transparent 26px);
+			opacity: 0.58;
+		}
+		.nft-card-image-wrapper:hover .nft-card-blackout {
+			opacity: 0.62;
+		}
+		.nft-card-name-trace {
+			position: absolute;
+			top: 10px;
+			left: 12px;
+			z-index: 9;
+			display: flex;
+			align-items: baseline;
+			gap: 1px;
+			pointer-events: none;
+			font-size: clamp(1.4rem, 2.8vw, 2rem);
+			font-weight: 800;
+			line-height: 1;
+		}
+		.nft-card-name-at {
+			color: #60a5fa;
+			-webkit-text-stroke: 1.05px rgba(191, 229, 255, 0.72);
+			text-shadow:
+				0 0 10px rgba(96, 165, 250, 0.45),
+				0 0 18px rgba(59, 130, 246, 0.26);
+		}
+		.nft-card-name-handle {
+			max-width: 140px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			-webkit-text-stroke: 0.85px rgba(226, 232, 240, 0.62);
+			background: linear-gradient(120deg, #86efac 0%, #facc15 58%, #fb7185 100%);
+			-webkit-background-clip: text;
+			background-clip: text;
+			color: transparent;
+			text-shadow:
+				0 0 8px rgba(0, 0, 0, 0.8),
+				0 0 16px rgba(0, 0, 0, 0.45);
+		}
+		.nft-card-overlay-tags {
+			position: absolute;
+			top: 44px;
+			left: 12px;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			z-index: 9;
+			pointer-events: none;
+		}
+		.nft-card-overlay-tag {
+			display: inline-flex;
+			align-items: center;
+			padding: 2px 8px;
+			border-radius: 999px;
+			background: rgba(15, 22, 36, 0.7);
+			border: 1px solid rgba(148, 163, 184, 0.45);
+			color: rgba(226, 232, 240, 0.95);
+			font-size: 0.64rem;
+			font-weight: 700;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+			backdrop-filter: blur(5px);
+		}
+		.nft-card-overlay-tag.warning {
+			border-color: rgba(251, 191, 36, 0.7);
+			background: rgba(146, 64, 14, 0.3);
+			color: #fef3c7;
+		}
+		.nft-card-overlay-tag.expired {
+			border-color: rgba(248, 113, 113, 0.72);
+			background: rgba(127, 29, 29, 0.34);
+			color: #fecaca;
+		}
+		.nft-card-overlay-date {
+			position: absolute;
+			right: 12px;
+			bottom: 10px;
+			z-index: 9;
+			pointer-events: none;
+			font-size: 0.74rem;
+			font-weight: 700;
+			color: rgba(226, 232, 240, 0.96);
+			text-shadow:
+				0 0 0 rgba(0, 0, 0, 0.9),
+				0 1px 2px rgba(0, 0, 0, 0.95),
+				0 0 8px rgba(0, 0, 0, 0.62);
+		}
+		.nft-card-qr-tag {
+			position: absolute;
+			bottom: 10px;
+			left: 10px;
+			width: 32px;
+			height: 32px;
+			background: rgba(0, 0, 0, 0.8);
+			border: 1.5px solid #60a5fa;
+			border-radius: 6px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			z-index: 10;
+			backdrop-filter: blur(4px);
+		}
+		.nft-card-qr-tag svg {
+			width: 20px;
+			height: 20px;
 		}
 		.nft-card-info {
 			padding: 14px 16px;
@@ -9701,35 +10125,39 @@ export const profileStyles = `
 		#crypto-tracker .tracker-sep {
 			color: var(--text-dim);
 		}
-		/* Keep the fixed bottom footer compact on phones */
-		@media (max-width: 600px) {
-			.container {
-				padding-bottom: 68px;
-			}
-			#crypto-tracker {
-				flex-wrap: wrap !important;
-				gap: 4px 10px !important;
-				padding: 7px 10px calc(7px + env(safe-area-inset-bottom)) !important;
-				font-size: 0.68rem !important;
-				line-height: 1.2;
-			}
+/* Keep the fixed bottom footer compact on phones */
+@media (max-width: 600px) {
+	body {
+		padding-bottom: 90px;
+	}
+	#crypto-tracker {
+		flex-direction: column !important;
+		align-items: center !important;
+		gap: 4px !important;
+		padding: 8px 10px calc(8px + env(safe-area-inset-bottom)) !important;
+		font-size: 0.68rem !important;
+		line-height: 1.2;
+		left: 0 !important;
+		right: 0 !important;
+		width: 100% !important;
+		max-width: 100vw !important;
+	}
 			#crypto-tracker .tracker-line {
 				display: flex;
-				width: 100%;
-				flex-wrap: wrap;
+				flex-direction: column;
 				align-items: center;
-				justify-content: center;
-				gap: 3px 6px;
-				white-space: normal;
+				gap: 4px;
+				width: 100%;
+			}
+			#crypto-tracker .tracker-line > .tracker-sep {
+				display: none;
 			}
 			#crypto-tracker .tracker-built-on {
 				display: flex;
-				width: 100%;
-				flex: 1 1 100%;
 				align-items: center;
 				justify-content: center;
 				flex-wrap: wrap;
-				gap: 2px 8px;
+				gap: 2px 6px;
 				font-size: 0.62rem;
 				line-height: 1.1;
 				white-space: normal;
@@ -9740,16 +10168,12 @@ export const profileStyles = `
 		}
 		@media (max-width: 380px) {
 			#crypto-tracker {
-				gap: 3px 8px !important;
 				padding: 6px 8px calc(6px + env(safe-area-inset-bottom)) !important;
 				font-size: 0.62rem !important;
 			}
-			#crypto-tracker .tracker-line {
-				gap: 2px 5px;
-			}
 			#crypto-tracker .tracker-built-on {
-				gap: 2px 6px;
-				font-size: 0.58rem;
+				gap: 2px 5px;
+				font-size: 0.56rem;
 			}
 		}
 

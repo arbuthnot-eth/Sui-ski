@@ -574,7 +574,7 @@ export function generateDashboardPage(env: Env): string {
 				</div>
 				<div id="watching-grid" class="names-grid"></div>
 				<div id="watching-empty" class="empty-hint" style="display:none">
-					Click &#9670; on any profile to save it to your private vault
+					Click &#9670; on any profile to save it to your vault
 				</div>
 			</div>
 
@@ -1120,14 +1120,13 @@ export function generateDashboardPage(env: Env): string {
 			const watchingEmpty = document.getElementById('watching-empty');
 
 			try {
-				const res = await fetch(API_BASE + '/api/black-diamond/watchlist?address=' + encodeURIComponent(connectedAddress));
+				const res = await fetch(API_BASE + '/api/vault/meta?address=' + encodeURIComponent(connectedAddress));
 				const data = await res.json();
 
 				if (!data.found || !data.names || data.names.length === 0) {
 					watchingSection.style.display = '';
 					watchingGrid.style.display = 'none';
 					watchingEmpty.style.display = '';
-					watchingEmpty.textContent = 'Click the diamond on any profile to watch it on-chain';
 					return;
 				}
 

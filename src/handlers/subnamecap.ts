@@ -1,6 +1,6 @@
 import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import { Hono } from 'hono'
-import type { Env } from '../types'
+import type { Env, X402VerifiedPayment } from '../types'
 import { jsonResponse } from '../utils/response'
 import { getDefaultRpcUrl } from '../utils/rpc'
 import {
@@ -33,14 +33,14 @@ import {
 	buildUseSingleUseJacketNodeTx,
 	serializeTransaction,
 } from '../utils/subnamecap-transactions'
-import { x402PaymentMiddleware } from '../utils/x402-middleware'
+import { resolveX402Providers, x402PaymentMiddleware } from '../utils/x402-middleware'
 import { resolveX402Recipient } from '../utils/x402-sui'
 
 type SubnameCapEnv = {
 	Bindings: Env
 	Variables: {
 		env: Env
-		x402Payment?: { digest: string; payer: string }
+		x402Payment?: X402VerifiedPayment
 	}
 }
 
@@ -921,6 +921,7 @@ agentSubnameCapRoutes.get('/info', async (c) => {
 		getAgentRelayAddress(env),
 		resolveX402Recipient(env),
 	])
+	const x402Providers = resolveX402Providers(env)
 
 	return jsonResponse({
 		service: 'SubnameCap Agent API',
@@ -943,6 +944,7 @@ agentSubnameCapRoutes.get('/info', async (c) => {
 					asset: '0x2::sui::SUI',
 					payTo: x402Address,
 					verificationMethod: 'pre-executed',
+					verificationProviders: x402Providers,
 				}
 			: null,
 		endpoints: {
@@ -955,7 +957,10 @@ agentSubnameCapRoutes.get('/info', async (c) => {
 
 agentSubnameCapRoutes.post(
 	'/register',
-	x402PaymentMiddleware({ description: 'Register a leaf subname under a delegated SuiNS domain' }),
+	x402PaymentMiddleware({
+		description: 'Register a leaf subname under a delegated SuiNS domain',
+		amountMist: SUBNAME_FEE_MIST.toString(),
+	}),
 	async (c) => {
 		const env = c.get('env')
 
@@ -985,10 +990,12 @@ agentSubnameCapRoutes.post(
 		const x402Payment = c.get('x402Payment')
 		let paymentDigest: string
 		let paymentMethod: 'x402' | 'legacy'
+		let paymentProvider: string | null = null
 
 		if (x402Payment) {
 			paymentDigest = x402Payment.digest
 			paymentMethod = 'x402'
+			paymentProvider = x402Payment.provider
 		} else {
 			const legacyDigest = c.req.header('X-Payment-Tx-Digest')
 
@@ -1061,6 +1068,7 @@ agentSubnameCapRoutes.post(
 					target,
 					paymentDigest,
 					paymentMethod,
+					paymentProvider,
 					status: 'pending',
 					createdAt: Date.now(),
 				}),
@@ -1074,6 +1082,7 @@ agentSubnameCapRoutes.post(
 				message: `Subname registration queued: ${subname}.${parentDomain}`,
 				statusUrl: `/api/agents/subnamecap/status/${requestId}`,
 				paymentMethod,
+				paymentProvider,
 			})
 		} catch (error) {
 			console.error('Failed to queue subname registration:', error)

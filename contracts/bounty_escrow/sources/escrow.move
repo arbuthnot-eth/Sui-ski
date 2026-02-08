@@ -231,9 +231,9 @@ module bounty_escrow::escrow {
 
     /// Claim gift reward by providing the registered NFT
     /// The NFT will be transferred to the beneficiary
-    public fun claim_gift_reward(
+    public fun claim_gift_reward<Nft: key + store>(
         bounty: &mut GiftBounty,
-        nft: 0x2::suins_registration::SuinsRegistration,
+        nft: Nft,
         ctx: &mut TxContext
     ) {
         assert!(!bounty.executed, EBountyAlreadyExecuted);

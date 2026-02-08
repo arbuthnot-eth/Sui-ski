@@ -1,7 +1,7 @@
 export interface WalletSessionClient {
-	connect(address: string): Promise<{ sessionId: string; address: string }>;
-	check(): Promise<{ address: string | null }>;
-	disconnect(): Promise<{ success: boolean }>;
+	connect(address: string): Promise<{ sessionId: string; address: string }>
+	check(): Promise<{ address: string | null }>
+	disconnect(): Promise<{ success: boolean }>
 }
 
 export function createWalletSessionClient(baseUrl = ''): WalletSessionClient {
@@ -12,25 +12,25 @@ export function createWalletSessionClient(baseUrl = ''): WalletSessionClient {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ address }),
 				credentials: 'include',
-			});
+			})
 
 			if (!response.ok) {
-				throw new Error(`Failed to connect wallet: ${response.statusText}`);
+				throw new Error(`Failed to connect wallet: ${response.statusText}`)
 			}
 
-			return response.json();
+			return response.json()
 		},
 
 		async check() {
 			const response = await fetch(`${baseUrl}/api/wallet/check`, {
 				credentials: 'include',
-			});
+			})
 
 			if (!response.ok) {
-				throw new Error(`Failed to check wallet: ${response.statusText}`);
+				throw new Error(`Failed to check wallet: ${response.statusText}`)
 			}
 
-			return response.json();
+			return response.json()
 		},
 
 		async disconnect() {
@@ -41,16 +41,16 @@ export function createWalletSessionClient(baseUrl = ''): WalletSessionClient {
 					sessionId: localStorage.getItem('sui_session_id') || '',
 				}),
 				credentials: 'include',
-			});
+			})
 
 			if (!response.ok) {
-				throw new Error(`Failed to disconnect wallet: ${response.statusText}`);
+				throw new Error(`Failed to disconnect wallet: ${response.statusText}`)
 			}
 
-			localStorage.removeItem('sui_session_id');
-			return response.json();
+			localStorage.removeItem('sui_session_id')
+			return response.json()
 		},
-	};
+	}
 }
 
-export const walletSession = createWalletSessionClient();
+export const walletSession = createWalletSessionClient()

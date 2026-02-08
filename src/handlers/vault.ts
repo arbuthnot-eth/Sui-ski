@@ -104,6 +104,94 @@ vaultRoutes.post('/sync', async (c) => {
 	return jsonResponse({ success: true })
 })
 
+vaultRoutes.get('/watching', async (c) => {
+	const env = c.get('env')
+	const address = c.req.query('address')
+	const name = c.req.query('name')
+	if (!address || !name) return jsonResponse({ error: 'address and name parameters required' }, 400)
+	if (!isValidSuiAddress(address))
+		return jsonResponse(
+			{
+				error: `Invalid Sui address: expected ${SUI_ADDRESS_LENGTH} hex chars starting with ${SUI_ADDRESS_PREFIX}`,
+			},
+			400,
+		)
+
+	const metaJson = await env.CACHE.get(vaultMetaKey(address))
+	if (!metaJson) return jsonResponse({ watching: false })
+
+	const meta: VaultMeta = JSON.parse(metaJson)
+	const watching = Array.isArray(meta.names) && meta.names.includes(name)
+	return jsonResponse({ watching })
+})
+
+vaultRoutes.post('/toggle-watch', async (c) => {
+	const env = c.get('env')
+	const body = await c.req.json<{
+		ownerAddress: string
+		name: string
+		action: 'watch' | 'unwatch'
+		encryptedBlob?: string
+	}>()
+
+	if (!body.ownerAddress || !body.name || !body.action)
+		return jsonResponse({ error: 'ownerAddress, name, and action are required' }, 400)
+	if (!isValidSuiAddress(body.ownerAddress))
+		return jsonResponse(
+			{
+				error: `Invalid ownerAddress: expected ${SUI_ADDRESS_LENGTH} hex chars starting with ${SUI_ADDRESS_PREFIX}`,
+			},
+			400,
+		)
+
+	const metaJson = await env.CACHE.get(vaultMetaKey(body.ownerAddress))
+	const meta: VaultMeta = metaJson
+		? JSON.parse(metaJson)
+		: { version: 1, updatedAt: Date.now(), count: 0, names: [] }
+
+	if (!Array.isArray(meta.names)) meta.names = []
+
+	if (body.action === 'watch') {
+		if (!meta.names.includes(body.name)) {
+			if (meta.names.length >= VAULT_MAX_BOOKMARKS)
+				return jsonResponse({ error: `Vault full: max ${VAULT_MAX_BOOKMARKS} bookmarks` }, 400)
+			meta.names.push(body.name)
+			meta.count = meta.names.length
+		}
+	} else {
+		const idx = meta.names.indexOf(body.name)
+		if (idx !== -1) {
+			meta.names.splice(idx, 1)
+			meta.count = meta.names.length
+		}
+	}
+
+	meta.updatedAt = Date.now()
+
+	const writes: Promise<void>[] = [
+		env.CACHE.put(vaultMetaKey(body.ownerAddress), JSON.stringify(meta), {
+			expirationTtl: VAULT_TTL_SECONDS,
+		}),
+	]
+
+	if (body.encryptedBlob) {
+		if (body.encryptedBlob.length > VAULT_BLOB_MAX_BYTES)
+			return jsonResponse(
+				{ error: `encryptedBlob exceeds max size of ${VAULT_BLOB_MAX_BYTES} bytes` },
+				400,
+			)
+		writes.push(
+			env.CACHE.put(vaultKey(body.ownerAddress), body.encryptedBlob, {
+				expirationTtl: VAULT_TTL_SECONDS,
+			}),
+		)
+	}
+
+	await Promise.all(writes)
+
+	return jsonResponse({ success: true, watching: body.action === 'watch', meta })
+})
+
 vaultRoutes.get('/meta', async (c) => {
 	const env = c.get('env')
 	const address = c.req.query('address')

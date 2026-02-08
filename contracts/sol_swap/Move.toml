@@ -1,0 +1,8 @@
+[package]
+name = "sol_swap"
+edition = "2024.beta"
+
+[dependencies]
+
+[addresses]
+sol_swap = "0x0"

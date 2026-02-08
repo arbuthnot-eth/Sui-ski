@@ -2722,7 +2722,11 @@ ${socialMeta}
 
 			// Wallet Standard API with fallbacks
 		let walletsApi = null;
-		try { walletsApi = getWallets(); } catch (e) { console.error('Wallet API init failed:', e); }
+		if (typeof getWallets === 'function') {
+			try { walletsApi = getWallets(); } catch (e) { console.error('Wallet API init failed:', e); }
+		} else {
+			console.warn('getWallets function not available, wallet connection may not work');
+		}
 
 		function normalizeAccountAddress(account) {
 			if (!account) return '';
@@ -3370,7 +3374,9 @@ ${socialMeta}
 							priceHtml += '<span class="listing-price">' + (data.bestListing.price / 1e9).toFixed(1) + ' SUI</span>';
 						}
 						if (hasBid) {
-							priceHtml += '<span class="offer-price">' + (data.bestBid.price / 1e9).toFixed(1) + ' offer</span>';
+							const hasRecentSale = data.sales && data.sales.length > 0;
+							const priceLabel = hasRecentSale ? 'sale' : 'offer';
+							priceHtml += '<span class="offer-price">' + (data.bestBid.price / 1e9).toFixed(1) + ' ' + priceLabel + '</span>';
 						}
 						if (priceCol) priceCol.innerHTML = priceHtml;
 

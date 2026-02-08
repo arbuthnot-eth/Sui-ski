@@ -48,7 +48,10 @@ export function generateProfilePage(
 		? `https://www.tradeport.xyz/sui/${encodeURIComponent(initialPortfolioAddress)}?tab=items&bottomTab=trades&collectionFilter=suins`
 		: 'https://www.tradeport.xyz/sui?tab=items&bottomTab=trades&collectionFilter=suins'
 
-	const cleanName = name.replace(/\.sui$/i, '').replace(/^@+/, '').toLowerCase()
+	const cleanName = name
+		.replace(/\.sui$/i, '')
+		.replace(/^@+/, '')
+		.toLowerCase()
 	const fullName = `${cleanName}.sui`
 	const profileDomain = `${cleanName}.sui.ski`
 	const expiresMs = record.expirationTimestampMs
@@ -125,8 +128,15 @@ export function generateProfilePage(
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>${escapeHtml(fullName)} | sui.ski</title>${canonicalTag}${socialMeta}
 
-	
+
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+	<link rel="preconnect" href="https://esm.sh" crossorigin>
+	<script type="module">
+		import('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle').catch(()=>{});
+		import('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle').catch(()=>{});
+		import('https://esm.sh/@mysten/suins@1.0.0?bundle').catch(()=>{});
+		import('https://esm.sh/@wallet-standard/app@1.1.0').catch(()=>{});
+	</script>
 
 	<style>${profileStyles}</style>
 </head>
@@ -141,6 +151,11 @@ export function generateProfilePage(
 		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile">
 			${generateLogoSvg(18)}
 		</button>
+		<button class="swap-toggle-btn" id="swap-toggle-btn" title="Swap tokens">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/>
+			</svg>
+		</button>
 		<button class="wallet-btn" id="wallet-btn">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 				<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/>
@@ -150,6 +165,50 @@ export function generateProfilePage(
 		</button>
 	</div>
 	<div class="wallet-menu" id="wallet-menu"></div>
+
+	<!-- Swap Panel -->
+	<div class="swap-panel" id="swap-panel" style="display:none;">
+		<div class="swap-panel-header">
+			<div class="swap-panel-tabs">
+				<button class="swap-tab active" data-tab="swap">Swap</button>
+				<button class="swap-tab" data-tab="crosschain">Cross-Chain</button>
+			</div>
+			<button class="swap-panel-close" id="swap-panel-close">&times;</button>
+		</div>
+		<div class="swap-tab-content" id="swap-tab-swap">
+			<div id="sui-coins-terminal"></div>
+		</div>
+		<div class="swap-tab-content" id="swap-tab-crosschain" style="display:none;">
+			<div class="crosschain-ui" id="crosschain-ui">
+				<div class="cc-direction">SOL &rarr; SUI</div>
+				<div class="cc-field">
+					<label class="cc-label">Amount (SOL)</label>
+					<input type="text" id="cc-sol-amount" class="cc-input" placeholder="0.00" inputmode="decimal" autocomplete="off">
+				</div>
+				<div class="cc-rate" id="cc-rate">
+					<span class="cc-rate-label">Rate:</span>
+					<span class="cc-rate-value" id="cc-rate-value">--</span>
+				</div>
+				<div class="cc-field">
+					<label class="cc-label">You receive</label>
+					<div class="cc-output" id="cc-output">-- SUI</div>
+				</div>
+				<div class="cc-fee" id="cc-fee"></div>
+				<button class="cc-btn" id="cc-quote-btn" disabled>Get Deposit Address</button>
+				<div class="cc-deposit" id="cc-deposit" style="display:none;">
+					<div class="cc-deposit-label">Send SOL to:</div>
+					<div class="cc-deposit-addr" id="cc-deposit-addr"></div>
+					<button class="cc-copy-btn" id="cc-copy-addr">Copy</button>
+					<div class="cc-confirm-section">
+						<label class="cc-label">Solana TX Signature</label>
+						<input type="text" id="cc-sol-tx" class="cc-input" placeholder="Paste Solana transaction signature">
+						<button class="cc-btn cc-confirm-btn" id="cc-confirm-btn" disabled>Confirm &amp; Receive SUI</button>
+					</div>
+				</div>
+				<div class="cc-status" id="cc-status"></div>
+			</div>
+		</div>
+	</div>
 
 		<div class="container">
 			<div class="page-layout">
@@ -192,7 +251,7 @@ export function generateProfilePage(
 						<div class="header">
 						<div class="header-top">
 							<div class="header-name-wrap" id="header-name-wrap">
-								<button class="diamond-btn" id="vault-diamond-btn" title="Watch on-chain" style="display:none">
+								<button class="diamond-btn" id="vault-diamond-btn" title="Save to vault" style="display:none">
 									<svg viewBox="0 0 24 24"><path d="M12 2L22 12L12 22L2 12Z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
 								</button>
 								<canvas class="diamond-tendril-canvas" id="diamond-tendril-canvas"></canvas>
@@ -294,11 +353,11 @@ export function generateProfilePage(
 								Linked Names
 							</span>
 					<div class="linked-names-sort" id="linked-names-sort" style="display:none;">
-						<button type="button" class="linked-sort-pill active" data-sort="address">
+						<button type="button" class="linked-sort-pill" data-sort="address">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
 							Address
 						</button>
-						<button type="button" class="linked-sort-pill" data-sort="expiry">
+						<button type="button" class="linked-sort-pill active" data-sort="expiry">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
 							Expiry
 						</button>
@@ -484,9 +543,10 @@ export function generateProfilePage(
 						<div class="marketplace-bid-input" id="marketplace-bid-input">
 							<div class="marketplace-bid-estimate" id="marketplace-bid-estimate"></div>
 							<div class="marketplace-bid-price-control">
-										<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-down" aria-label="Decrease bid by 1 SUI">-</button>
-								<input type="text" id="marketplace-bid-amount" placeholder="Bid amount" inputmode="numeric" pattern="[0-9]*">
-								<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-up" aria-label="Increase bid by 1 SUI">+</button>
+										<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-down" aria-label="Decrease bid by 0.5 SUI">-</button>
+								<input type="text" id="marketplace-bid-amount" placeholder="Bid amount" inputmode="decimal" pattern="[0-9]*\\.?[0-9]*" step="any">
+								<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-up" aria-label="Increase bid by 0.5 SUI">+</button>
+								<button type="button" class="marketplace-bid-max-btn" id="marketplace-bid-max" title="Use entire portfolio (95%)">MAX</button>
 							</div>
 							<button class="marketplace-bid-btn" id="marketplace-place-bid-btn" disabled>
 								<span class="marketplace-bid-text">Offer SUI for ${escapeHtml(cleanName)}.sui</span>
@@ -497,9 +557,9 @@ export function generateProfilePage(
 							<div class="marketplace-list-top-row">
 								<div class="marketplace-list-estimate" id="marketplace-list-estimate"></div>
 								<div class="marketplace-list-price-control">
-										<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-down" aria-label="Decrease list price by 1 SUI">-</button>
+										<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-down" aria-label="Decrease list price by 0.5 SUI">-</button>
 									<input type="text" id="marketplace-list-amount" placeholder="12" inputmode="numeric" pattern="[0-9]*">
-									<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-up" aria-label="Increase list price by 1 SUI">+</button>
+									<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-up" aria-label="Increase list price by 0.5 SUI">+</button>
 								</div>
 							</div>
 							<button class="marketplace-list-btn" id="marketplace-list-btn" style="display:none;" disabled>
@@ -721,7 +781,31 @@ export function generateProfilePage(
 				if (results[5].status === 'fulfilled') ({ fromHex, toHex } = results[5].value);
 				const failed = results.filter(r => r.status === 'rejected');
 				if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
-				if (!SuinsClient) console.warn('SuinsClient export unavailable from @mysten/suins module');
+				if (!SuinsClient || !Transaction || !SuiJsonRpcClient) {
+					console.warn('Retrying failed SDK modules without ?bundle...');
+					const retryImport = (url) => Promise.race([
+						import(url),
+						new Promise((_, r) => setTimeout(() => r(new Error('Retry timeout: ' + url)), 20000)),
+					]);
+					const retries = [];
+					if (!SuiJsonRpcClient) retries.push(
+						retryImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc')
+							.then(m => { if (!SuiJsonRpcClient) SuiJsonRpcClient = pickExport(m, 'SuiJsonRpcClient'); })
+							.catch(e => console.warn('Retry SuiJsonRpcClient failed:', e.message))
+					);
+					if (!Transaction) retries.push(
+						retryImport('https://esm.sh/@mysten/sui@2.2.0/transactions')
+							.then(m => { if (!Transaction) Transaction = pickExport(m, 'Transaction'); })
+							.catch(e => console.warn('Retry Transaction failed:', e.message))
+					);
+					if (!SuinsClient) retries.push(
+						retryImport('https://esm.sh/@mysten/suins@1.0.0')
+							.then(m => { SuinsClient = pickExport(m, 'SuinsClient') || SuinsClient; SuinsTransaction = pickExport(m, 'SuinsTransaction') || SuinsTransaction; })
+							.catch(e => console.warn('Retry SuinsClient failed:', e.message))
+					);
+					if (retries.length > 0) await Promise.allSettled(retries);
+				}
+				if (!SuinsClient) console.warn('SuinsClient unavailable after all retries');
 			}
 		if (Transaction) window.Transaction = Transaction;
 
@@ -761,9 +845,10 @@ export function generateProfilePage(
 
 			if (!suinsModuleLoadingPromise) {
 				suinsModuleLoadingPromise = (async () => {
-					const timeoutMs = 12000;
+					const timeoutMs = 20000;
 					const urls = [
 						'https://esm.sh/@mysten/suins@1.0.0?bundle',
+						'https://esm.sh/@mysten/suins@1.0.0',
 						'https://esm.sh/@mysten/suins?bundle',
 					];
 					for (const url of urls) {
@@ -794,7 +879,7 @@ export function generateProfilePage(
 		async function createSuinsClient(requireTransaction = false) {
 			const ready = await ensureSuinsSdkLoaded(requireTransaction);
 			if (!ready) {
-				throw new Error('SuiNS SDK unavailable. Reload and reconnect your Sui wallet.');
+				throw new Error('SuiNS SDK failed to load from CDN. Check your connection and reload the page.');
 			}
 			return new SuinsClient({
 				client: getSuiClient(),
@@ -836,12 +921,17 @@ export function generateProfilePage(
 		let ownerDisplayAddress = CURRENT_ADDRESS;
 		let currentTargetAddress = TARGET_ADDRESS || '';
 		let currentListing = null;
+		let currentSales = [];
 		let pendingBidAmount = null;
 
-		try {
-			walletsApi = getWallets();
-		} catch (e) {
-			console.error('Failed to init wallet API:', e);
+		if (typeof getWallets === 'function') {
+			try {
+				walletsApi = getWallets();
+			} catch (e) {
+				console.error('Failed to init wallet API:', e);
+			}
+		} else {
+			console.warn('getWallets function not available, wallet connection may not work');
 		}
 
 		// DOM Elements
@@ -1754,9 +1844,21 @@ export function generateProfilePage(
 					return false;
 				}
 
-				// Per Sui docs: wallets auto-restore authorized accounts
-				// Check wallet.accounts first before calling connect()
-					let accounts = filterSuiAccounts(wallet.accounts || []);
+				let accounts = filterSuiAccounts(wallet.accounts || []);
+
+				if (accounts.length === 0) {
+					const phantomProvider = window.phantom?.sui;
+					const isPhantom = phantomProvider && (walletName === 'Phantom' || wallet._raw === phantomProvider);
+					if (isPhantom) {
+						accounts = filterSuiAccounts(phantomProvider.accounts || []);
+						if (accounts.length === 0 && typeof phantomProvider.connect === 'function') {
+							try {
+								await phantomProvider.connect();
+								accounts = filterSuiAccounts(phantomProvider.accounts || []);
+							} catch {}
+						}
+					}
+				}
 
 				if (accounts.length === 0) {
 					const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
@@ -1807,8 +1909,38 @@ export function generateProfilePage(
 
 		// Connect to a specific wallet
 		async function connectToWallet(wallet) {
+			const finishConnect = (accounts, walletName) => {
+				connectedAccount = accounts[0];
+				connectedAddress = accounts[0].address;
+				connectedWallet = wallet;
+				connectedWalletName = walletName || wallet.name;
+				walletModal.classList.remove('open');
+				saveWalletConnection();
+				updateUIForWallet();
+			};
+
 			try {
 				walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Connecting...</div>';
+
+				const phantomProvider = window.phantom?.sui;
+				const isPhantom = phantomProvider && (wallet.name === 'Phantom' || wallet._raw === phantomProvider);
+
+				if (isPhantom) {
+					const existing = filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []);
+					if (existing.length > 0) {
+						finishConnect(existing, 'Phantom');
+						return;
+					}
+					if (typeof phantomProvider.connect === 'function') {
+						await phantomProvider.connect();
+						const accounts = filterSuiAccounts(phantomProvider.accounts || []);
+						if (accounts.length > 0) {
+							finishConnect(accounts, 'Phantom');
+							return;
+						}
+					}
+				}
+
 				const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
 				if (!connectFeature) throw new Error('Wallet does not support connection');
 
@@ -1827,34 +1959,49 @@ export function generateProfilePage(
 				}
 					if (!accounts?.length) throw new Error('No Sui accounts. Switch your wallet to Sui and try again.');
 
-				connectedAccount = accounts[0];
-				connectedAddress = accounts[0].address;
-				connectedWallet = wallet;
-				connectedWalletName = wallet.name;
-
-				walletModal.classList.remove('open');
-				saveWalletConnection();
-				updateUIForWallet();
+				finishConnect(accounts);
 			} catch (e) {
 				const errorMsg = e.message || 'Unknown error';
+
+				const phantomProvider = window.phantom?.sui;
+				if (phantomProvider) {
+					const existing = filterSuiAccounts(phantomProvider.accounts || []);
+					if (existing.length > 0) {
+						finishConnect(existing, 'Phantom');
+						return;
+					}
+					if (errorMsg.includes('authorized') && typeof phantomProvider.connect === 'function') {
+						try {
+							walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Requesting approval...</div>';
+							await phantomProvider.connect();
+							const accounts = filterSuiAccounts(phantomProvider.accounts || []);
+							if (accounts.length > 0) {
+								finishConnect(accounts, 'Phantom');
+								return;
+							}
+						} catch (retryErr) {
+							console.warn('Phantom direct connect retry failed:', retryErr.message);
+						}
+					}
+				}
+
 				const isUserAction = errorMsg.includes('rejected') ||
 					errorMsg.includes('cancelled') ||
-					errorMsg.includes('authorized') ||
 					errorMsg.includes('Unexpected');
-				if (!isUserAction) {
+				if (!isUserAction && !errorMsg.includes('authorized')) {
 					console.error('Wallet error:', errorMsg);
 				}
 				const userMessage = errorMsg.includes('authorized')
-					? 'Please authorize this site in your wallet settings and try again.'
+					? 'Tap Connect again to approve the connection.'
 					: isUserAction
 						? 'Connection cancelled.'
 						: 'Connection failed: ' + errorMsg;
 				walletList.innerHTML = '<div class="wallet-no-wallets" style="color: var(--error);">' +
 					userMessage +
 					'<br><br>' +
-					'<button onclick="document.getElementById(\\'wallet-modal\\').classList.remove(\\'open\\')" ' +
+					'<button onclick="connectWallet()" ' +
 					'style="padding: 8px 16px; background: var(--accent); border: none; border-radius: 8px; color: white; cursor: pointer;">' +
-					'Close</button></div>';
+					'Retry</button></div>';
 			}
 		}
 
@@ -1974,6 +2121,7 @@ export function generateProfilePage(
 			html += '<a class="wallet-menu-item" href="' + namesHref + '" target="_blank" rel="noopener noreferrer">' +
 				'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>' +
 				'My Names</a>';
+			
 			html += '<button class="wallet-menu-item" id="wm-switch">' +
 				'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>' +
 				'Switch Wallet</button>';
@@ -2016,7 +2164,6 @@ export function generateProfilePage(
 			}
 		}
 
-		// Update wallet widget (shared behavior with landing component)
 		function updateGlobalWalletWidget() {
 			if (!walletBtn || !walletBtnText) return;
 
@@ -2082,15 +2229,16 @@ export function generateProfilePage(
 						if (connectedAddress && connectedAddress !== TARGET_ADDRESS && connectedAddress !== OWNER_ADDRESS) {
 							vaultBtn.style.display = '';
 							vaultBtn.classList.remove('bookmarked', 'diamond-transforming');
-							vaultBtn.title = 'Watch on-chain';
+							vaultBtn.title = 'Save to vault';
 							if (document.body) document.body.classList.remove('diamond-watch-active');
 							const identityCard = document.querySelector('.identity-card');
 							if (identityCard) identityCard.classList.remove('black-diamond-active');
 							try { diamondWatching = false; } catch {}
+							checkWatchingState();
 						} else {
 							vaultBtn.style.display = 'none';
 							vaultBtn.classList.remove('bookmarked', 'diamond-transforming');
-							vaultBtn.title = 'Watch on-chain';
+							vaultBtn.title = 'Save to vault';
 							if (document.body) document.body.classList.remove('diamond-watch-active');
 							const identityCard = document.querySelector('.identity-card');
 							if (identityCard) identityCard.classList.remove('black-diamond-active');
@@ -2426,7 +2574,7 @@ export function generateProfilePage(
 					const taggedFilename = NAME.replace(/\\./g, '-') + '-sui.png';
 				const sealPayload = buildMetaSealPayload(preferQr);
 				try {
-					const taggedCanvas = await buildTaggedIdentityCanvas(preferQr, currentListing, currentBestBid);
+					const taggedCanvas = await buildTaggedIdentityCanvas(preferQr, currentListing, currentBestBid, { sales: currentSales });
 					if (taggedCanvas) {
 						triggerCanvasDownload(taggedCanvas, taggedFilename, feedbackBtn, sealPayload);
 						return;
@@ -2459,12 +2607,18 @@ export function generateProfilePage(
 			}
 
 				async function buildTaggedIdentityCanvas(preferQr = showingQr, listing = null, bestBid = null, options = {}) {
+					const sales = options.sales || [];
+					const wasOfferAccepted = sales.length > 0;
 					const blackDiamondMode = options && options.blackDiamondMode === true;
-					const nftSource = rawIdentityNftImage || identityVisual?.querySelector('img') || null;
+					const taggedNftSource = identityVisual?.querySelector('img.identity-tagged-image') || null;
+					const cleanNftSource =
+						rawIdentityNftImage || identityVisual?.querySelector('img:not(.identity-tagged-image)') || null;
+					const nftSource = cleanNftSource || taggedNftSource || null;
 					const qrSource = identityCanvas && identityCanvas.width > 0 ? identityCanvas : null;
 					// Prefer the SuiNS registration NFT visual for export; QR is fallback only.
 					const visualSource = nftSource || qrSource;
 					if (!visualSource) return null;
+					const canBlackenBase = blackDiamondMode && Boolean(cleanNftSource);
 
 					const srcWidth = visualSource.naturalWidth || visualSource.width || 1600;
 					const srcHeight = visualSource.naturalHeight || visualSource.height || 900;
@@ -2504,8 +2658,8 @@ export function generateProfilePage(
 						ctx.putImageData(imageData, 0, 0);
 					};
 
-					// Black-diamond mode: ink-crush only the base NFT pass, then draw overlays in normal color.
-					if (blackDiamondMode) {
+					// Black-diamond mode: ink-crush only the clean base NFT pass, then draw overlays in normal color.
+					if (canBlackenBase) {
 						ctx.filter = 'saturate(325%) contrast(132%) brightness(98%)';
 						ctx.drawImage(visualSource, 0, 0, srcWidth, srcHeight);
 						ctx.filter = 'none';
@@ -2542,7 +2696,7 @@ export function generateProfilePage(
 
 					// Subtle contrast pass so logo implant reads on bright NFTs.
 					const topFade = ctx.createLinearGradient(0, 0, 0, srcHeight * 0.24);
-					if (blackDiamondMode) {
+					if (canBlackenBase) {
 						topFade.addColorStop(0, 'rgba(2, 8, 18, 0.34)');
 						topFade.addColorStop(1, 'rgba(2, 8, 18, 0.04)');
 					} else {
@@ -2551,6 +2705,123 @@ export function generateProfilePage(
 					}
 					ctx.fillStyle = topFade;
 					ctx.fillRect(0, 0, srcWidth, srcHeight * 0.24);
+
+					const minSide = Math.min(srcWidth, srcHeight);
+					const overlayPadding = Math.max(22, Math.round(minSide * 0.045));
+					const drawOverlayTag = (label, x, y, variant = 'neutral') => {
+						const textSize = Math.max(14, Math.round(minSide * 0.043));
+						const px = Math.max(10, Math.round(minSide * 0.022));
+						const py = Math.max(6, Math.round(minSide * 0.013));
+						ctx.font = '700 ' + textSize + 'px Inter, system-ui, -apple-system, sans-serif';
+						const textWidth = ctx.measureText(label).width;
+						const tagWidth = Math.round(textWidth + px * 2);
+						const tagHeight = Math.round(textSize + py * 1.9);
+						const radius = Math.round(tagHeight * 0.5);
+
+						let fill = 'rgba(14, 18, 28, 0.68)';
+						let stroke = 'rgba(148, 163, 184, 0.36)';
+						let textColor = 'rgba(232, 238, 249, 0.95)';
+						if (variant === 'accent') {
+							fill = 'rgba(37, 99, 235, 0.28)';
+							stroke = 'rgba(96, 165, 250, 0.72)';
+							textColor = '#dbeafe';
+						}
+						if (variant === 'warning') {
+							fill = 'rgba(146, 64, 14, 0.3)';
+							stroke = 'rgba(251, 191, 36, 0.68)';
+							textColor = '#fef3c7';
+						}
+						if (variant === 'expired') {
+							fill = 'rgba(127, 29, 29, 0.34)';
+							stroke = 'rgba(248, 113, 113, 0.68)';
+							textColor = '#fecaca';
+						}
+
+						ctx.save();
+						drawRoundedRect(ctx, x, y, tagWidth, tagHeight, radius);
+						ctx.fillStyle = fill;
+						ctx.fill();
+						ctx.strokeStyle = stroke;
+						ctx.lineWidth = Math.max(1.2, Math.round(minSide * 0.0038));
+						ctx.stroke();
+						ctx.fillStyle = textColor;
+						ctx.textAlign = 'left';
+						ctx.textBaseline = 'middle';
+						ctx.fillText(label, x + px, y + tagHeight / 2);
+						ctx.restore();
+						return { width: tagWidth, height: tagHeight };
+					};
+
+					if (canBlackenBase) {
+						const overlayName = String(NAME || '').replace(/.sui$/i, '').replace(/^@+/, '') || 'sui';
+						const atText = '@';
+						const nameText = overlayName;
+						const nameFontSize = Math.max(46, Math.round(minSide * 0.175));
+						const nameY = overlayPadding;
+						ctx.save();
+						ctx.font = '800 ' + nameFontSize + 'px Inter, system-ui, -apple-system, sans-serif';
+						ctx.textAlign = 'left';
+						ctx.textBaseline = 'top';
+						ctx.lineJoin = 'round';
+						ctx.shadowColor = 'rgba(1, 5, 15, 0.82)';
+						ctx.shadowBlur = Math.max(8, Math.round(minSide * 0.028));
+						ctx.shadowOffsetY = 1;
+						ctx.lineWidth = Math.max(3, Math.round(nameFontSize * 0.12));
+						ctx.strokeStyle = 'rgba(191, 229, 255, 0.65)';
+						ctx.strokeText(atText, overlayPadding, nameY);
+						ctx.fillStyle = '#60a5fa';
+						ctx.fillText(atText, overlayPadding, nameY);
+
+						const atWidth = ctx.measureText(atText).width + Math.max(4, Math.round(minSide * 0.008));
+						const nameX = overlayPadding + atWidth;
+						const nameWidth = ctx.measureText(nameText).width;
+						ctx.strokeStyle = 'rgba(226, 232, 240, 0.6)';
+						ctx.strokeText(nameText, nameX, nameY);
+						const nameGradient = ctx.createLinearGradient(nameX, nameY, nameX + nameWidth, nameY + nameFontSize);
+						nameGradient.addColorStop(0, '#86efac');
+						nameGradient.addColorStop(0.55, '#facc15');
+						nameGradient.addColorStop(1, '#fb7185');
+						ctx.fillStyle = nameGradient;
+						ctx.fillText(nameText, nameX, nameY);
+						ctx.restore();
+
+						const tagY = nameY + nameFontSize + Math.max(8, Math.round(minSide * 0.014));
+						const primaryTag = drawOverlayTag('.sui', overlayPadding, tagY, 'accent');
+						let expiryLabel = '';
+						let expiryVariant = 'neutral';
+						if (Number.isFinite(EXPIRATION_MS) && EXPIRATION_MS > 0) {
+							const daysLeft = Math.ceil((EXPIRATION_MS - Date.now()) / 86400000);
+							if (daysLeft <= 0) {
+								expiryLabel = 'Expired';
+								expiryVariant = 'expired';
+							} else {
+								expiryLabel = String(daysLeft) + 'D';
+								expiryVariant = daysLeft <= 30 ? 'warning' : 'neutral';
+							}
+						}
+						if (expiryLabel) {
+							const expiryX = overlayPadding + primaryTag.width + Math.max(8, Math.round(minSide * 0.012));
+							drawOverlayTag(expiryLabel, expiryX, tagY, expiryVariant);
+						}
+						if (Number.isFinite(EXPIRATION_MS) && EXPIRATION_MS > 0) {
+							const expiryDate = new Date(EXPIRATION_MS).toLocaleDateString('en-US', {
+								month: 'short',
+								day: 'numeric',
+								year: 'numeric',
+							});
+							const dateSize = Math.max(14, Math.round(minSide * 0.04));
+							ctx.save();
+							ctx.font = '700 ' + dateSize + 'px Inter, system-ui, -apple-system, sans-serif';
+							ctx.textBaseline = 'alphabetic';
+							ctx.textAlign = 'right';
+							ctx.strokeStyle = 'rgba(0, 0, 0, 0.68)';
+							ctx.lineWidth = Math.max(2, Math.round(dateSize * 0.2));
+							ctx.strokeText(expiryDate, srcWidth - overlayPadding, srcHeight - overlayPadding);
+							ctx.fillStyle = 'rgba(226, 232, 240, 0.95)';
+							ctx.fillText(expiryDate, srcWidth - overlayPadding, srcHeight - overlayPadding);
+							ctx.restore();
+						}
+					}
 
 					let logoImage = null;
 					try {
@@ -2657,7 +2928,7 @@ export function generateProfilePage(
 						}
 						if (hasBestBid) {
 							const bidPrice = formatSuiPrice(bestBid.price);
-							entries.push({ label: 'Offer:', suiValue: bidPrice + ' SUI' });
+							entries.push({ label: wasOfferAccepted ? 'Sale:' : 'Offer:', suiValue: bidPrice + ' SUI' });
 						}
 
 						ctx.font = '700 ' + priceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
@@ -2731,7 +3002,7 @@ export function generateProfilePage(
 						const blackDiamondMode =
 							Boolean(document.body && document.body.classList.contains('diamond-watch-active')) ||
 							Boolean(typeof diamondWatching !== 'undefined' && diamondWatching);
-						const taggedCanvas = await buildTaggedIdentityCanvas(false, currentListing, currentBestBid, { blackDiamondMode });
+						const taggedCanvas = await buildTaggedIdentityCanvas(false, currentListing, currentBestBid, { blackDiamondMode, sales: currentSales });
 						if (!taggedCanvas) return;
 						const taggedImg = new Image();
 						taggedImg.onload = () => {
@@ -2741,11 +3012,12 @@ export function generateProfilePage(
 							taggedImg.style.width = '90%';
 							taggedImg.style.height = '90%';
 							taggedImg.style.objectFit = 'cover';
-						taggedImg.style.display = 'block';
-						taggedImg.style.position = 'absolute';
-						taggedImg.style.top = '5%';
-						taggedImg.style.left = '5%';
-						taggedImg.style.borderRadius = '12px';
+							taggedImg.style.display = 'block';
+							taggedImg.style.position = 'absolute';
+							taggedImg.style.top = '5%';
+							taggedImg.style.left = '5%';
+							taggedImg.style.zIndex = '6';
+							taggedImg.style.borderRadius = '12px';
 						identityVisual.appendChild(taggedImg);
 						if (identityCanvas) identityCanvas.style.display = 'none';
 
@@ -5681,10 +5953,40 @@ export function generateProfilePage(
 					else if (daysRemaining <= 30) expiryClass = 'warning';
 					else if (daysRemaining > 365) expiryClass = 'premium';
 				}
+				const overlayName = cleanedName ? escapeHtmlJs(cleanedName) : 'unknown';
+				const overlayExpiryTag = daysRemaining === null
+					? ''
+					: daysRemaining <= 0
+						? 'Expired'
+						: String(daysRemaining) + 'd';
+				const overlayExpiryClass = daysRemaining !== null && daysRemaining <= 0
+					? 'expired'
+					: daysRemaining !== null && daysRemaining <= 30
+						? 'warning'
+						: '';
 
 				return \`
 					<div class="nft-card\${isCurrentName ? ' current' : ''}" onclick="\${profileUrl ? \`window.location.href='\${profileUrl}'\` : ''}">
 						<div class="nft-card-image-wrapper">
+							<div class="nft-card-blackout"></div>
+							<div class="nft-card-name-trace">
+								<span class="nft-card-name-at">@</span><span class="nft-card-name-handle">\${overlayName}</span>
+							</div>
+							<div class="nft-card-overlay-tags">
+								<span class="nft-card-overlay-tag">.sui</span>
+								\${overlayExpiryTag ? \`<span class="nft-card-overlay-tag \${overlayExpiryClass}">\${overlayExpiryTag}</span>\` : ''}
+							</div>
+							\${expirationText ? \`<div class="nft-card-overlay-date">\${escapeHtmlJs(expirationText)}</div>\` : ''}
+							<div class="nft-card-qr-tag">
+								<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2">
+									<rect x="3" y="3" width="7" height="7"/>
+									<rect x="14" y="3" width="7" height="7"/>
+									<rect x="14" y="14" width="7" height="7"/>
+									<path d="M10 10h4"/>
+									<path d="M7 17h4"/>
+									<rect x="3" y="14" width="7" height="7"/>
+								</svg>
+							</div>
 							\${nftImageUrl ? \`<img src="\${nftImageUrl}" alt="\${cleanedName}.sui" class="nft-card-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">\` : ''}
 							<div class="nft-card-fallback"\${nftImageUrl ? ' style="display:none;"' : ''}>
 								<span class="nft-card-initial">\${cleanedName ? cleanedName.charAt(0).toUpperCase() : '?'}</span>
@@ -6297,7 +6599,8 @@ export function generateProfilePage(
 				const tokensNeeded = shortfallSui / pool.suiPerToken;
 				const tokenMistNeeded = BigInt(Math.ceil(tokensNeeded * Math.pow(10, pool.decimals)));
 				const tokenMistWithBuffer = tokenMistNeeded * 130n / 100n;
-				const amountToSell = tokenMistWithBuffer > candidate.balance ? candidate.balance : tokenMistWithBuffer;
+				const maxSellable = candidate.balance * 95n / 100n;
+				const amountToSell = tokenMistWithBuffer > maxSellable ? maxSellable : tokenMistWithBuffer;
 
 				const expectedSui = Number(amountToSell) / Math.pow(10, pool.decimals) * pool.suiPerToken;
 				const minSuiOut = BigInt(Math.floor(expectedSui * 0.80 * 1e9));
@@ -6321,6 +6624,34 @@ export function generateProfilePage(
 				};
 			}
 			return null;
+		}
+
+	async function estimatePortfolioSui(suiClient, address) {
+			const suiBal = await suiClient.getBalance({ owner: address, coinType: SUI_TYPE }).catch(() => ({ totalBalance: '0' }));
+			let totalSui = Number(BigInt(suiBal.totalBalance)) / 1e9;
+			const pools = await fetch('/api/deepbook-pools').then(r => r.json()).catch(() => []);
+			if (pools.length) {
+				const balances = await Promise.all(
+					pools.map(p => suiClient.getBalance({ owner: address, coinType: p.coinType }).catch(() => ({ totalBalance: '0' })))
+				);
+				for (let i = 0; i < pools.length; i++) {
+					const bal = Number(BigInt(balances[i].totalBalance));
+					if (bal <= 0) continue;
+					const tokenAmount = bal / Math.pow(10, pools[i].decimals);
+					totalSui += tokenAmount * pools[i].suiPerToken * 0.95;
+				}
+			}
+			return totalSui;
+		}
+
+		async function getMaxBidSui() {
+			if (!connectedAddress) return 0;
+			const suiClient = getSuiClient();
+			const OVERHEAD_SUI = 0.15;
+			const TRADEPORT_FEE_RATE = 1.03;
+			const totalSui = await estimatePortfolioSui(suiClient, connectedAddress);
+			const maxBid = (totalSui - OVERHEAD_SUI) / TRADEPORT_FEE_RATE;
+			return Math.max(0, Math.round(maxBid * 1e4) / 1e4);
 		}
 
 		async function handleRenewal(yearsEl, btnEl, btnTextEl, btnLoadingEl, statusEl, options = {}) {
@@ -7047,7 +7378,7 @@ export function generateProfilePage(
 		var linkedNamesGrouped = {};
 		var linkedNamesPrices = {};
 		var linkedNamesMarketData = {};
-		var linkedSortMode = 'address';
+		var linkedSortMode = 'expiry';
 		var linkedFilterQuery = '';
 		var linkedMatchedCount = 0;
 		const linkedNameHoverCard = document.getElementById('linked-name-hover-card');
@@ -7104,10 +7435,23 @@ export function generateProfilePage(
 			}
 		}
 
-			function shortAddr(addr) {
-				if (!addr || addr.length < 12) return addr || 'Unknown';
-				return addr.slice(0, 6) + '...' + addr.slice(-4);
-			}
+function shortAddr(addr) {
+					if (!addr || typeof addr !== 'string') return '--';
+					return addr.slice(0, 6) + '...' + addr.slice(-4);
+				}
+
+				async function resolveLinkedPrimaryName(addr) {
+					if (!addr || typeof addr !== 'string' || !addr.startsWith('0x')) return null;
+					const cacheKey = addr.toLowerCase();
+					if (linkedPrimaryNameCache.has(cacheKey)) {
+						return linkedPrimaryNameCache.get(cacheKey);
+					}
+					const primaryName = await fetchPrimaryName(addr).catch(() => null);
+					if (primaryName) {
+						linkedPrimaryNameCache.set(cacheKey, primaryName);
+					}
+					return primaryName;
+				}
 
 			function normalizeLinkedGroupAddress(value) {
 				if (!value) return '';
@@ -7498,7 +7842,7 @@ export function generateProfilePage(
 				.catch(function() {});
 		}
 
-			function renderLinkedNames() {
+			async function renderLinkedNames() {
 				if (!linkedNamesList || linkedNamesData.length === 0) {
 					hideLinkedNameHover(true);
 					return;
@@ -7552,21 +7896,33 @@ export function generateProfilePage(
 						return String(a).localeCompare(String(b));
 					});
 
+					const realAddresses = addresses.filter(function(addr) {
+						return addr !== 'unset' && addr !== '__misc' && addr !== '__expired_misc' && addr.startsWith('0x');
+					});
+					const primaryNamePromises = realAddresses.map(function(addr) {
+						return resolveLinkedPrimaryName(addr).then(function(primary) {
+							return [addr, primary];
+						});
+					});
+					const primaryNamePairs = await Promise.all(primaryNamePromises);
+					const primaryNameMap = new Map(primaryNamePairs);
+
 				let groupIndex = 0;
 				for (const addr of addresses) {
 					const group = linkedNamesGrouped[addr];
 					if (!group || group.length === 0) continue;
 
-						const addrLabel =
-							addr === 'unset'
-								? 'No target set'
-								: addr === '__misc'
-									? 'Other linked targets'
-									: addr === '__expired_misc'
-										? 'Expired linked targets'
-										: shortAddr(addr);
-						const collapseByDefault = isLinkedGroupAllExpired(group);
-						html += '<div class="linked-group' + (collapseByDefault ? ' collapsed' : '') + '" data-group-index="' + groupIndex + '">';
+					const primaryName = primaryNameMap.get(addr);
+					const addrLabel =
+						addr === 'unset'
+							? 'No target set'
+							: addr === '__misc'
+								? 'Other linked targets'
+								: addr === '__expired_misc'
+									? 'Expired linked targets'
+									: (primaryName ? primaryName.replace(/.sui$/i, '') : shortAddr(addr));
+					const collapseByDefault = isLinkedGroupAllExpired(group);
+					html += '<div class="linked-group' + (collapseByDefault ? ' collapsed' : '') + '" data-group-index="' + groupIndex + '">';
 					html += '<button type="button" class="linked-group-header">';
 					html += '<svg class="linked-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
 					html += '<span class="linked-group-addr">' + addrLabel + '</span>';
@@ -7620,6 +7976,20 @@ export function generateProfilePage(
 			linkedNamesList.querySelectorAll('.linked-group-header').forEach(function(header) {
 				header.addEventListener('click', function(e) {
 					e.preventDefault();
+					const addrEl = e.target.closest('.linked-group-addr');
+					if (addrEl instanceof Element) {
+						const text = addrEl.textContent || '';
+						const isLabel = text !== 'No target set'
+							&& !text.startsWith('Other')
+							&& !text.startsWith('Expired')
+							&& !text.startsWith('0x')
+							&& text.length > 0;
+						if (isLabel) {
+							const profileUrl = 'https://' + encodeURIComponent(text) + '.sui.ski';
+							window.open(profileUrl, '_blank', 'noopener,noreferrer');
+							return;
+						}
+					}
 					const group = this.closest('.linked-group');
 					if (group) group.classList.toggle('collapsed');
 				});
@@ -7657,7 +8027,7 @@ export function generateProfilePage(
 				});
 				await Promise.all(fetches);
 			}
-			renderLinkedNames();
+			await renderLinkedNames();
 		}
 
 		if (linkedNamesSort) {
@@ -7813,7 +8183,7 @@ export function generateProfilePage(
 
 				if (linkedNamesSort) linkedNamesSort.style.display = '';
 				if (linkedNamesFilter) linkedNamesFilter.style.display = '';
-				renderLinkedNames();
+				await renderLinkedNames();
 				fetchListingPrices(names);
 			} catch (error) {
 				console.error('Failed to fetch linked names:', error);
@@ -7847,6 +8217,7 @@ export function generateProfilePage(
 			const marketplaceBidAmountInput = document.getElementById('marketplace-bid-amount');
 			const marketplaceBidPriceUpBtn = document.getElementById('marketplace-bid-price-up');
 			const marketplaceBidPriceDownBtn = document.getElementById('marketplace-bid-price-down');
+			const marketplaceBidMaxBtn = document.getElementById('marketplace-bid-max');
 			const marketplacePlaceBidBtn = document.getElementById('marketplace-place-bid-btn');
 			const marketplaceBidText = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-text');
 			const marketplaceBidLoading = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-loading');
@@ -7871,6 +8242,7 @@ export function generateProfilePage(
 				let profileRegistrationCostSui = null;
 				let profileRegistrationCostPending = null;
 				const bidPrimaryNameCache = new Map();
+				const linkedPrimaryNameCache = new Map();
 				let marketplaceActivityRenderNonce = 0;
 
 		function tryParseMarketplaceTx(candidate) {
@@ -7966,30 +8338,32 @@ export function generateProfilePage(
 				if (!connectedAddress) return;
 
 			const suiClient = getSuiClient();
-			const gasReserveMist = 50_000_000n;
+			const BASE_GAS_RESERVE = 50_000_000n;
+			const SWAP_OVERHEAD = SUI_FOR_DEEP_SWAP + 50_000_000n;
 			const balanceRes = await suiClient.getBalance({
 				owner: connectedAddress,
 				coinType: SUI_TYPE,
 			});
 			const availableMist = BigInt(balanceRes?.totalBalance || '0');
-			const shortfallMist = requiredMist + gasReserveMist - availableMist;
+			const basicShortfall = requiredMist + BASE_GAS_RESERVE - availableMist;
 
-			if (shortfallMist <= 0n) return;
+			if (basicShortfall <= 0n) return;
 				if (!DEEPBOOK_PACKAGE) {
-					const neededSui = Number(requiredMist) / 1e9;
+					const neededSui = Number(requiredMist + BASE_GAS_RESERVE) / 1e9;
 					const haveSui = Number(availableMist) / 1e9;
 					throw new Error(
-						'Need ' + neededSui.toFixed(4) + ' SUI (have ' + haveSui.toFixed(4) + '). Connect more SUI.',
+						'Need ~' + neededSui.toFixed(2) + ' SUI (have ' + haveSui.toFixed(2) + ')',
 					);
 				}
 
+			const swapShortfall = requiredMist + BASE_GAS_RESERVE + SWAP_OVERHEAD - availableMist;
 			marketplaceStatus.textContent = 'Insufficient SUI. Routing via DeepBook...';
-			const swapInfo = await findBestSwapForSui(suiClient, shortfallMist, connectedAddress);
+			const swapInfo = await findBestSwapForSui(suiClient, swapShortfall, connectedAddress);
 				if (!swapInfo) {
-					const neededSui = Number(requiredMist) / 1e9;
-					const haveSui = Number(availableMist) / 1e9;
+					const totalPortfolio = await estimatePortfolioSui(suiClient, connectedAddress);
+					const maxBidSui = totalPortfolio > 0 ? (totalPortfolio * 0.95).toFixed(2) : '?';
 					throw new Error(
-						'Need ' + neededSui.toFixed(4) + ' SUI (have ' + haveSui.toFixed(4) + '). No swap route found.',
+						'Not enough funds for this bid. Max offer ~' + maxBidSui + ' SUI',
 					);
 				}
 
@@ -7998,20 +8372,17 @@ export function generateProfilePage(
 				}
 
 			function getBidMinimumSui() {
+				const BID_FLOOR_SUI = 0.01;
 				const bestOfferSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
-				const bestOfferBaselineSui = bestOfferSui > 0 ? (Math.ceil(bestOfferSui) + 1) : 1;
-				const registrationBaselineSui =
-					Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0
-						? (Math.ceil(profileRegistrationCostSui) + 1)
-						: 2;
-				return Math.max(1, bestOfferBaselineSui, registrationBaselineSui);
+				const bestOfferBaselineSui = bestOfferSui > 0 ? (Math.round((bestOfferSui + 0.01) * 100) / 100) : BID_FLOOR_SUI;
+				return Math.max(BID_FLOOR_SUI, bestOfferBaselineSui);
 			}
 
 			function getRoundedBidAmountSuiOrNull() {
 				if (!marketplaceBidAmountInput) return null;
 				const amountSui = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
 				if (!Number.isFinite(amountSui) || amountSui <= 0) return null;
-				return Math.max(getBidMinimumSui(), Math.ceil(amountSui));
+				return Math.max(getBidMinimumSui(), Math.round(amountSui * 1e4) / 1e4);
 			}
 
 			function normalizeBidAmountInput() {
@@ -8030,7 +8401,7 @@ export function generateProfilePage(
 				const minimumSui = getBidMinimumSui();
 				const currentInput = parseFloat(String(marketplaceBidAmountInput?.value || '').replace(/[^0-9.]/g, ''));
 				const bidSui = Number.isFinite(currentInput) && currentInput > 0
-					? Math.max(minimumSui, Math.ceil(currentInput))
+					? Math.max(minimumSui, Math.round(currentInput * 1e4) / 1e4)
 					: minimumSui;
 				const tradeportFeeSui = bidSui * (tradeportBidFeeBps / 10000);
 				const estimatedCostSui = bidSui + tradeportFeeSui;
@@ -8042,7 +8413,8 @@ export function generateProfilePage(
 			function updateBidButtonLabel(bidSui) {
 				if (!marketplaceBidText) return;
 				if (!connectedAddress || marketplacePlaceBidBtn?.classList.contains('connect-wallet')) return;
-				marketplaceBidText.textContent = 'Offer ' + bidSui + ' SUI for ' + NAME + '.sui';
+				const display = Number.isInteger(bidSui) ? String(bidSui) : bidSui.toFixed(Math.min(4, String(bidSui).split('.')[1]?.length || 2));
+				marketplaceBidText.textContent = 'Offer ' + display + ' SUI for ' + NAME + '.sui';
 			}
 
 			function setBidInputDefaultFromBestOffer(force = false) {
@@ -8083,7 +8455,7 @@ export function generateProfilePage(
 				if (!marketplaceBidder) return;
 				const hasAddress = Boolean(address && typeof address === 'string' && address.startsWith('0x'));
 				const displayRaw = resolvedName || (hasAddress ? getBidderFallback(address) : '--');
-				const display = /\.sui$/i.test(displayRaw) ? displayRaw.replace(/\.sui$/i, '') : displayRaw;
+				const display = /.sui$/i.test(displayRaw) ? displayRaw.replace(/.sui$/i, '') : displayRaw;
 				marketplaceBidder.textContent = display;
 				marketplaceBidder.title = hasAddress ? address : '';
 
@@ -8460,13 +8832,10 @@ export function generateProfilePage(
 			}
 
 			function getListMinimumSui() {
+				const LIST_FLOOR_SUI = 0.01;
 				const bestBidSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
-				const bestBidBaselineSui = bestBidSui > 0 ? (Math.ceil(bestBidSui) + 1) : 1;
-				const registrationBaselineSui =
-					Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0
-						? Math.ceil(profileRegistrationCostSui)
-						: 1;
-				return Math.max(1, bestBidBaselineSui, registrationBaselineSui);
+				const bestBidBaselineSui = bestBidSui > 0 ? (Math.round((bestBidSui + 0.01) * 100) / 100) : LIST_FLOOR_SUI;
+				return Math.max(LIST_FLOOR_SUI, bestBidBaselineSui);
 			}
 
 			function getMarketplaceListLabel() {
@@ -8494,7 +8863,7 @@ export function generateProfilePage(
 				if (!marketplaceListAmountInput) return null;
 				const amountSui = parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''));
 				if (!Number.isFinite(amountSui) || amountSui <= 0) return null;
-				return Math.max(getListMinimumSui(), Math.ceil(amountSui));
+				return Math.max(getListMinimumSui(), Math.round(amountSui * 1e4) / 1e4);
 			}
 
 			function normalizeListAmountInput() {
@@ -8529,7 +8898,7 @@ export function generateProfilePage(
 				}
 
 				if (defaultValue > 0) {
-					marketplaceListAmountInput.value = String(Math.max(minimumSui, Math.ceil(defaultValue)));
+					marketplaceListAmountInput.value = String(Math.max(minimumSui, Math.round(defaultValue * 1e4) / 1e4));
 					marketplaceListAmountInput.min = String(minimumSui);
 				} else {
 					marketplaceListAmountInput.value = '';
@@ -8542,7 +8911,7 @@ export function generateProfilePage(
 			function getListAmountMistOrNull() {
 				const amountSui = normalizeListAmountInput();
 				if (!amountSui) return null;
-				return BigInt(amountSui) * 1_000_000_000n;
+				return BigInt(Math.round(amountSui * 1e9));
 			}
 
 			function updateListEstimateDisplay() {
@@ -8557,7 +8926,7 @@ export function generateProfilePage(
 					return;
 				}
 
-				const listingAmountSui = Math.ceil(rawListAmountSui);
+				const listingAmountSui = Math.round(rawListAmountSui * 1e4) / 1e4;
 				const usdEstimate = cachedSuiUsdPrice > 0 ? (listingAmountSui * cachedSuiUsdPrice).toFixed(2) : null;
 				if (usdEstimate) {
 					marketplaceListEstimate.innerHTML = '<span class="marketplace-list-usd">≈ $' + usdEstimate + '</span>';
@@ -8655,8 +9024,9 @@ export function generateProfilePage(
 							marketplacePlaceBidBtn.disabled = !connectedAddress || isOwner;
 							marketplacePlaceBidBtn.classList.remove('connect-wallet');
 							const currentBid = parseFloat(String(marketplaceBidAmountInput?.value || '').replace(/[^0-9.]/g, ''));
-							const bidVal = Number.isFinite(currentBid) && currentBid > 0 ? Math.ceil(currentBid) : getBidMinimumSui();
-							marketplaceBidText.textContent = 'Offer ' + bidVal + ' SUI for ' + NAME + '.sui';
+							const bidVal = Number.isFinite(currentBid) && currentBid > 0 ? Math.round(currentBid * 1e4) / 1e4 : getBidMinimumSui();
+							const bidDisplay = Number.isInteger(bidVal) ? String(bidVal) : bidVal.toFixed(Math.min(4, String(bidVal).split('.')[1]?.length || 2));
+							marketplaceBidText.textContent = 'Offer ' + bidDisplay + ' SUI for ' + NAME + '.sui';
 						}
 				}
 				updateBidEstimateDisplay();
@@ -8775,41 +9145,44 @@ export function generateProfilePage(
 					setListInputDefault(true);
 				}
 
-						if (resolvedBestBid && resolvedBestBid.price) {
-							currentBestBid = resolvedBestBid;
-							const bidInSui = formatMarketplaceBidSuiDisplay(Number(resolvedBestBid.price) / 1e9);
-							marketplaceBidPrice.textContent = bidInSui + ' SUI';
-							marketplaceBidRow.style.display = 'grid';
-						if (marketplaceBidder) {
-							const bidderAddress = resolvedBestBid.bidder || '';
-							setMarketplaceBidderLink(bidderAddress);
-							resolveBidderDisplay(bidderAddress).then((display) => {
-								if (currentBestBid?.bidder === bidderAddress) {
-									setMarketplaceBidderLink(bidderAddress, display);
-								}
-							});
-						}
-						setBidInputDefaultFromBestOffer();
-					} else {
-					currentBestBid = null;
-						marketplaceBidRow.style.display = 'none';
-						if (marketplaceBidder) {
-							setMarketplaceBidderLink('', '');
-						}
-					setBidInputDefaultFromBestOffer();
+				const sales = data.sales || [];
+				currentSales = sales;
+
+				if (resolvedBestBid && resolvedBestBid.price) {
+					currentBestBid = resolvedBestBid;
+					const bidInSui = formatMarketplaceBidSuiDisplay(Number(resolvedBestBid.price) / 1e9);
+					marketplaceBidPrice.textContent = bidInSui + ' SUI';
+					marketplaceBidRow.style.display = 'grid';
+					if (marketplaceBidder) {
+						const bidderAddress = resolvedBestBid.bidder || '';
+						setMarketplaceBidderLink(bidderAddress);
+						resolveBidderDisplay(bidderAddress).then((display) => {
+							if (currentBestBid?.bidder === bidderAddress) {
+								setMarketplaceBidderLink(bidderAddress, display);
+							}
+						});
 					}
-					setListInputDefault();
-					updateMarketplaceButton();
-					renderMarketplaceActivity(data).catch((error) => {
-						console.log('Marketplace activity render failed:', error);
-						setMarketplaceActivityMessage('Activity unavailable right now.');
-					});
-					applyTaggedIdentityToProfile();
-				} catch (e) {
-					console.log('Marketplace fetch failed:', e);
-					setMarketplaceActivityMessage('Activity unavailable right now.');
+					setBidInputDefaultFromBestOffer();
+				} else {
+					currentBestBid = null;
+					marketplaceBidRow.style.display = 'none';
+					if (marketplaceBidder) {
+						setMarketplaceBidderLink('', '');
+					}
+					setBidInputDefaultFromBestOffer();
 				}
+				setListInputDefault();
+				updateMarketplaceButton();
+				renderMarketplaceActivity(data).catch((error) => {
+					console.log('Marketplace activity render failed:', error);
+					setMarketplaceActivityMessage('Activity unavailable right now.');
+				});
+				applyTaggedIdentityToProfile();
+			} catch (e) {
+				console.log('Marketplace fetch failed:', e);
+				setMarketplaceActivityMessage('Activity unavailable right now.');
 			}
+		}
 
 		// Tradeport contract constants
 		// Legacy listings (nonce starts with 0x)
@@ -9211,6 +9584,8 @@ export function generateProfilePage(
 					const msg = e.message || 'Transaction failed';
 					if (msg.includes('rejected') || msg.includes('cancelled')) {
 						marketplaceStatus.textContent = 'Transaction cancelled';
+					} else if (msg.includes('InsufficientCoinBalance') || msg.includes('Insufficient')) {
+						marketplaceStatus.textContent = 'Insufficient balance. Try a lower amount or tap MAX.';
 					} else {
 						marketplaceStatus.textContent = 'Failed: ' + msg.slice(0, 100);
 					}
@@ -9257,36 +9632,35 @@ export function generateProfilePage(
 			marketplaceListPriceUpBtn.addEventListener('click', () => {
 				const currentValue = parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''));
 				const minimumSui = getListMinimumSui();
-				const nextValue = Number.isFinite(currentValue) && currentValue > 0
-					? Math.max(minimumSui, Math.ceil(currentValue)) + 1
-					: minimumSui;
+				const base = Number.isFinite(currentValue) && currentValue > 0 ? currentValue : minimumSui;
+				const step = 0.5;
+				const nextValue = Math.round((base + step) * 1e4) / 1e4;
 				marketplaceListAmountInput.value = String(nextValue);
 				listInputTouched = true;
 				updateListButtonState();
 			});
 		}
 
-			if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
+if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				marketplaceListPriceDownBtn.addEventListener('click', () => {
 				const currentValue = parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''));
 				const minimumSui = getListMinimumSui();
-				const currentRounded = Number.isFinite(currentValue) && currentValue > 0
-					? Math.max(minimumSui, Math.ceil(currentValue))
-					: minimumSui;
-				const nextValue = Math.max(minimumSui, currentRounded - 1);
+				const base = Number.isFinite(currentValue) && currentValue > 0 ? currentValue : minimumSui;
+				const step = 0.5;
+				const nextValue = Math.max(minimumSui, Math.round((base - step) * 1e4) / 1e4);
 				marketplaceListAmountInput.value = String(nextValue);
 				listInputTouched = true;
 				updateListButtonState();
-				});
-			}
+			});
+		}
 
 			if (marketplaceBidPriceUpBtn && marketplaceBidAmountInput) {
 				marketplaceBidPriceUpBtn.addEventListener('click', () => {
 					const currentValue = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
 					const minimumSui = getBidMinimumSui();
-					const nextValue = Number.isFinite(currentValue) && currentValue > 0
-						? Math.max(minimumSui, Math.ceil(currentValue)) + 1
-						: minimumSui;
+					const base = Number.isFinite(currentValue) && currentValue > 0 ? currentValue : 0;
+					const step = 0.5;
+					const nextValue = Math.max(minimumSui, Math.round((base + step) * 1e4) / 1e4);
 					marketplaceBidAmountInput.value = String(nextValue);
 					bidInputTouched = true;
 					updateBidEstimateDisplay();
@@ -9297,13 +9671,33 @@ export function generateProfilePage(
 				marketplaceBidPriceDownBtn.addEventListener('click', () => {
 					const currentValue = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
 					const minimumSui = getBidMinimumSui();
-					const currentRounded = Number.isFinite(currentValue) && currentValue > 0
-						? Math.max(minimumSui, Math.ceil(currentValue))
-						: minimumSui;
-					const nextValue = Math.max(minimumSui, currentRounded - 1);
+					const base = Number.isFinite(currentValue) && currentValue > 0 ? currentValue : minimumSui;
+					const step = 0.5;
+					const nextValue = Math.max(minimumSui, Math.round((base - step) * 1e4) / 1e4);
 					marketplaceBidAmountInput.value = String(nextValue);
 					bidInputTouched = true;
 					updateBidEstimateDisplay();
+				});
+			}
+
+		if (marketplaceBidMaxBtn && marketplaceBidAmountInput) {
+				marketplaceBidMaxBtn.addEventListener('click', async () => {
+					if (!connectedAddress) return;
+					marketplaceBidMaxBtn.disabled = true;
+					marketplaceBidMaxBtn.textContent = '...';
+					try {
+						const maxSui = await getMaxBidSui();
+						if (maxSui > 0) {
+							marketplaceBidAmountInput.value = String(maxSui);
+							bidInputTouched = true;
+							updateBidEstimateDisplay();
+						}
+					} catch (err) {
+						console.warn('Max bid calc failed:', err.message);
+					} finally {
+						marketplaceBidMaxBtn.disabled = false;
+						marketplaceBidMaxBtn.textContent = 'MAX';
+					}
 				});
 			}
 
@@ -9320,7 +9714,14 @@ export function generateProfilePage(
 				if (!(actorEl instanceof Element)) return;
 				const address = actorEl.getAttribute('data-activity-address') || '';
 				if (!address) return;
-				window.open(getTradeportPortfolioHref(address), '_blank', 'noopener,noreferrer');
+				fetchPrimaryName(address).then((primaryName) => {
+					if (primaryName) {
+						const cleanedName = primaryName.replace(/.sui$/i, '');
+						window.open('https://' + encodeURIComponent(cleanedName) + '.sui.ski', '_blank', 'noopener,noreferrer');
+					} else {
+						window.open(getTradeportPortfolioHref(address), '_blank', 'noopener,noreferrer');
+					}
+				});
 			});
 
 			marketplaceActivityList.addEventListener('keydown', (event) => {
@@ -9337,7 +9738,14 @@ export function generateProfilePage(
 				const address = actorEl.getAttribute('data-activity-address') || '';
 				if (!address) return;
 				event.preventDefault();
-				window.open(getTradeportPortfolioHref(address), '_blank', 'noopener,noreferrer');
+				fetchPrimaryName(address).then((primaryName) => {
+					if (primaryName) {
+						const cleanedName = primaryName.replace(/.sui$/i, '');
+						window.open('https://' + encodeURIComponent(cleanedName) + '.sui.ski', '_blank', 'noopener,noreferrer');
+					} else {
+						window.open(getTradeportPortfolioHref(address), '_blank', 'noopener,noreferrer');
+					}
+				});
 			});
 		}
 
@@ -9691,6 +10099,8 @@ export function generateProfilePage(
 				<a href="https://docs.sui.io/standards/deepbook" target="_blank" rel="noopener">DeepBook</a>
 				<span class="tracker-sep">·</span>
 				<a href="https://docs.wal.app" target="_blank" rel="noopener">Walrus</a>
+				<span class="tracker-sep">·</span>
+				<a href="https://seal-docs.wal.app" target="_blank" rel="noopener">Seal</a>
 			</span>
 		</span>
 	</div>
@@ -9716,7 +10126,8 @@ export function generateProfilePage(
 
 		const SUBSCRIPTIONS_KEY = 'sui_ski_subscriptions';
 		const SUBSCRIPTIONS_BLOB_KEY = 'sui_ski_subscriptions_blob';
-		let sealSdk = null;
+		let sealClient = null;
+		let sealConfigData = null;
 		let sealInitialized = false;
 
 		// Local cache (also encrypted on Walrus for cross-device sync)
@@ -9748,27 +10159,29 @@ export function generateProfilePage(
 			localStorage.setItem(SUBSCRIPTIONS_BLOB_KEY, JSON.stringify(info));
 		}
 
-		// Initialize Seal SDK for encryption (uses module-scoped functions via window)
 		async function initSealSdk() {
 			if (sealInitialized) return true;
+			if (!SealClient || !fromHex) return false;
 			try {
-				if (window.initSealClient) {
-					await window.initSealClient();
-					sealInitialized = window.sealClient !== null;
-				}
-				return sealInitialized;
+				const res = await fetch('/api/vault/config');
+				sealConfigData = await res.json();
+				const suiClient = getSuiClient();
+				sealClient = new SealClient({
+					suiClient,
+					serverConfigs: sealConfigData.seal.keyServers.map(id => ({ objectId: id, weight: 1 })),
+					verifyKeyServers: false,
+				});
+				sealInitialized = true;
+				return true;
 			} catch (err) {
 				console.error('Failed to init Seal:', err);
 				return false;
 			}
 		}
 
-		// Encrypt subscriptions with Seal
 		async function encryptSubscriptions(subs, subscriberAddress) {
-			if (!window.sealClient) {
-				if (window.initSealClient) await window.initSealClient();
-			}
-			if (!window.sealClient || !window.sealConfig?.seal?.packageId) {
+			if (!sealClient) await initSealSdk();
+			if (!sealClient || !sealConfigData?.seal?.packageId) {
 				console.warn('SealClient not available, falling back to base64');
 				const data = JSON.stringify({
 					subscriptions: subs,
@@ -9780,7 +10193,7 @@ export function generateProfilePage(
 			}
 
 			try {
-				const packageId = window.sealConfig.seal.packageId;
+				const packageId = sealConfigData.seal.packageId;
 				const data = JSON.stringify({
 					subscriptions: subs,
 					subscriberAddress: subscriberAddress,
@@ -9790,10 +10203,10 @@ export function generateProfilePage(
 				const plaintext = new TextEncoder().encode(data);
 				const policyId = subscriberAddress.startsWith('0x') ? subscriberAddress.slice(2) : subscriberAddress;
 
-				const { encryptedObject } = await window.sealClient.encrypt({
+				const { encryptedObject } = await sealClient.encrypt({
 					threshold: 2,
-					packageId: window.fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
-					id: window.fromHex(policyId),
+					packageId: fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
+					id: fromHex(policyId),
 					data: plaintext,
 				});
 
@@ -9898,19 +10311,9 @@ export function generateProfilePage(
 			saveLocalSubscriptions(subs);
 		}
 
-		const WATCHLIST_ID_KEY = 'sui_ski_watchlist_id';
-		const SEAL_TAG_KEY = 'sui_ski_diamond_tag_';
 		let diamondWatching = false;
 		let diamondBusy = false;
 		let tendrilAnimId = null;
-
-		function getCachedWatchlistId() {
-			return localStorage.getItem(WATCHLIST_ID_KEY) || null;
-		}
-
-		function setCachedWatchlistId(id) {
-			localStorage.setItem(WATCHLIST_ID_KEY, id);
-		}
 
 		function drawTendrils(canvas, progress) {
 			const ctx = canvas.getContext('2d');
@@ -10041,11 +10444,11 @@ export function generateProfilePage(
 						setTimeout(() => btn.classList.remove('diamond-transforming'), 820);
 					}
 					btn.classList.add('bookmarked');
-					btn.title = 'Unwatch on-chain';
+					btn.title = 'Remove from vault';
 				} else {
 					btn.classList.remove('bookmarked');
 					btn.classList.remove('diamond-transforming');
-					btn.title = 'Watch on-chain';
+					btn.title = 'Save to vault';
 				}
 			}
 			if (watching !== wasWatching) {
@@ -10053,54 +10456,31 @@ export function generateProfilePage(
 			}
 		}
 
-		async function sealTagNft(nftId, senderAddress) {
-			await initSealSdk();
-			if (!window.sealClient || !window.sealConfig?.seal?.packageId) return null;
-
+		async function encryptVaultData(vaultData) {
+			if (!sealClient) await initSealSdk();
+			if (!sealClient || !sealConfigData?.seal?.packageId) return null;
 			try {
-				const packageId = window.sealConfig.seal.packageId;
-				const tagData = JSON.stringify({
-					type: 'black_diamond_tag',
-					nftId: nftId,
-					tagger: senderAddress,
-					name: NAME,
-					taggedAt: Date.now(),
-				});
-				const plaintext = new TextEncoder().encode(tagData);
-				const policyId = senderAddress.startsWith('0x') ? senderAddress.slice(2) : senderAddress;
-
-				const { encryptedObject } = await window.sealClient.encrypt({
+				const packageId = sealConfigData.seal.packageId;
+				const policyId = vaultData.ownerAddress.startsWith('0x')
+					? vaultData.ownerAddress.slice(2) : vaultData.ownerAddress;
+				const plaintext = new TextEncoder().encode(JSON.stringify(vaultData));
+				const { encryptedObject } = await sealClient.encrypt({
 					threshold: 2,
-					packageId: window.fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
-					id: window.fromHex(policyId),
+					packageId: fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
+					id: fromHex(policyId),
 					data: plaintext,
 				});
-
-				const encoded = btoa(String.fromCharCode.apply(null, encryptedObject.data));
-				localStorage.setItem(SEAL_TAG_KEY + NAME, encoded);
-				return encoded;
+				return btoa(String.fromCharCode.apply(null, encryptedObject.data));
 			} catch (err) {
-				console.error('Seal tag encryption failed:', err);
+				console.error('Vault encryption failed:', err);
 				return null;
 			}
 		}
 
-		function removeSealTag() {
-			localStorage.removeItem(SEAL_TAG_KEY + NAME);
-		}
-
 		async function checkWatchingState() {
-			const addr = connectedAddress;
-			if (!addr) return;
+			if (!connectedAddress) return;
 			try {
-				if (!getCachedWatchlistId()) {
-					const listRes = await fetch('/api/black-diamond/watchlist?address=' + encodeURIComponent(addr));
-					const listData = await listRes.json();
-					if (listData.found && listData.watchlistId) {
-						setCachedWatchlistId(listData.watchlistId);
-					}
-				}
-				const res = await fetch('/api/black-diamond/watching?address=' + encodeURIComponent(addr) + '&name=' + encodeURIComponent(NAME));
+				const res = await fetch('/api/vault/watching?address=' + encodeURIComponent(connectedAddress) + '&name=' + encodeURIComponent(NAME));
 				const data = await res.json();
 				updateDiamondState(!!data.watching);
 			} catch (err) {
@@ -10108,56 +10488,9 @@ export function generateProfilePage(
 			}
 		}
 
-		async function signAndExecuteWatchlistTx(txBytes) {
-			if (!Transaction) throw new Error('Sui SDK not loaded. Please refresh the page.');
-			const tx = Transaction.from(txBytes);
-			const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
-			const txOptions = { showEffects: true, showObjectChanges: true };
-			const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-			const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
-
-			if (signExecFeature?.signAndExecuteTransaction) {
-				return signExecFeature.signAndExecuteTransaction({ transaction: tx, account: connectedAccount, chain, options: txOptions });
-			}
-			if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-				return signExecBlockFeature.signAndExecuteTransactionBlock({ transactionBlock: tx, account: connectedAccount, chain, options: txOptions });
-			}
-			const phantomProvider = window.phantom?.sui;
-			if (phantomProvider?.signAndExecuteTransactionBlock) {
-				const suiClient = getSuiClient();
-				const built = await tx.build({ client: suiClient });
-				return phantomProvider.signAndExecuteTransactionBlock({ transactionBlock: built, options: txOptions });
-			}
-			throw new Error('Wallet does not support transaction signing');
-		}
-
-		function extractCreatedWatchlistId(result) {
-			const changes = result.objectChanges || [];
-			for (const change of changes) {
-				if (change.type === 'created' && change.objectType && change.objectType.includes('::watchlist::Watchlist')) {
-					return change.objectId;
-				}
-			}
-			return null;
-		}
-
-		function refreshAfterBlackDiamondSign() {
-			try {
-				if (typeof updateRenewalButton === 'function') updateRenewalButton();
-				if (typeof updateMarketplaceButton === 'function') updateMarketplaceButton();
-				if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
-				if (typeof syncOverviewModulesLayout === 'function') syncOverviewModulesLayout();
-				if (typeof fetchLinkedNames === 'function') fetchLinkedNames();
-				if (typeof fetchMarketplaceData === 'function') fetchMarketplaceData();
-				if (typeof fetchAuctionStatus === 'function') fetchAuctionStatus();
-			} catch (err) {
-				console.warn('Post-sign UI refresh failed:', err);
-			}
-		}
-
-		async function toggleBlackDiamond() {
+		async function toggleVaultDiamond() {
 			if (diamondBusy) return;
-			if (!connectedAddress || !connectedWallet) return;
+			if (!connectedAddress) return;
 
 			const btn = document.getElementById('vault-diamond-btn');
 			if (!btn) return;
@@ -10166,72 +10499,54 @@ export function generateProfilePage(
 			btn.classList.add('diamond-loading');
 
 			try {
-				const sender = typeof connectedAccount.address === 'string'
-					? connectedAccount.address
-					: connectedAccount.address?.toString() || connectedAddress;
+				const action = diamondWatching ? 'unwatch' : 'watch';
+				const toggleBody = {
+					ownerAddress: connectedAddress,
+					name: NAME,
+					action,
+				};
 
-				let watchlistId = getCachedWatchlistId();
+				const toggleRes = await fetch('/api/vault/toggle-watch', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(toggleBody),
+				});
+				const toggleData = await toggleRes.json();
+				if (toggleData.error) throw new Error(toggleData.error);
 
-				if (!diamondWatching) {
+				updateDiamondState(action === 'watch');
+
+				initSealSdk().then(async (ready) => {
+					if (!ready) return;
 					try {
-						const syncRes = await fetch('/api/black-diamond/watching?address=' + encodeURIComponent(sender) + '&name=' + encodeURIComponent(NAME));
-						const syncData = await syncRes.json();
-						if (syncData?.watching) {
-							updateDiamondState(true);
-							return;
-						}
-					} catch {}
-				}
-
-					if (diamondWatching) {
-						if (!watchlistId) throw new Error('No watchlist found to unwatch from');
-						const res = await fetch('/api/black-diamond/unwatch', {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ sender, name: NAME, watchlistId }),
-					});
-					const data = await res.json();
-					if (data.error) throw new Error(data.error);
-						await signAndExecuteWatchlistTx(data.txBytes);
-						removeSealTag();
-						updateDiamondState(false);
-						refreshAfterBlackDiamondSign();
-					} else {
-						if (!watchlistId) {
-							const createRes = await fetch('/api/black-diamond/watch', {
+						const vaultData = {
+							bookmarks: (toggleData.meta?.names || []).map(n => ({
+								name: n,
+								address: '',
+								addedAt: Date.now(),
+							})),
+							ownerAddress: connectedAddress,
+							version: toggleData.meta?.version || 1,
+							updatedAt: Date.now(),
+						};
+						const encrypted = await encryptVaultData(vaultData);
+						if (encrypted) {
+							fetch('/api/vault/sync', {
 								method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({ sender, name: NAME }),
-						});
-						const createData = await createRes.json();
-						if (createData.error) throw new Error(createData.error);
-						const createResult = await signAndExecuteWatchlistTx(createData.txBytes);
-
-						watchlistId = extractCreatedWatchlistId(createResult);
-						if (!watchlistId && createResult.digest) {
-							const suiClient = getSuiClient();
-							const txDetail = await suiClient.getTransactionBlock({ digest: createResult.digest, options: { showObjectChanges: true } });
-							watchlistId = extractCreatedWatchlistId(txDetail);
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({
+									encryptedBlob: encrypted,
+									ownerAddress: connectedAddress,
+									meta: toggleData.meta,
+								}),
+							}).catch(err => console.error('Vault sync failed:', err));
 						}
-						if (!watchlistId) throw new Error('Failed to find created watchlist object');
-						setCachedWatchlistId(watchlistId);
+					} catch (err) {
+						console.error('Vault encryption failed:', err);
 					}
-
-					const watchRes = await fetch('/api/black-diamond/watch', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ sender, name: NAME, watchlistId }),
-					});
-					const watchData = await watchRes.json();
-					if (watchData.error) throw new Error(watchData.error);
-						await signAndExecuteWatchlistTx(watchData.txBytes);
-
-						if (NFT_ID) sealTagNft(NFT_ID, sender);
-						updateDiamondState(true);
-						refreshAfterBlackDiamondSign();
-					}
-				} catch (err) {
-				console.error('Watchlist transaction failed:', err);
+				});
+			} catch (err) {
+				console.error('Vault toggle failed:', err);
 			} finally {
 				diamondBusy = false;
 				if (btn) btn.classList.remove('diamond-loading');
@@ -10239,7 +10554,7 @@ export function generateProfilePage(
 		}
 
 		const vaultDiamondBtn = document.getElementById('vault-diamond-btn');
-		if (vaultDiamondBtn) vaultDiamondBtn.addEventListener('click', toggleBlackDiamond);
+		if (vaultDiamondBtn) vaultDiamondBtn.addEventListener('click', toggleVaultDiamond);
 
 		initSealSdk();
 
@@ -10453,6 +10768,215 @@ export function generateProfilePage(
 
 		// Pool refresh button
 		document.getElementById('pools-refresh-btn')?.addEventListener('click', loadVortexPools);
+	</script>
+
+	<script>
+		(function() {
+			const swapPanel = document.getElementById('swap-panel');
+			const swapToggleBtn = document.getElementById('swap-toggle-btn');
+			const swapCloseBtn = document.getElementById('swap-panel-close');
+			const tabs = swapPanel ? swapPanel.querySelectorAll('.swap-tab') : [];
+			const tabSwap = document.getElementById('swap-tab-swap');
+			const tabCrosschain = document.getElementById('swap-tab-crosschain');
+			let terminalLoaded = false;
+
+			function toggleSwapPanel() {
+				if (!swapPanel) return;
+				const isOpen = swapPanel.style.display !== 'none';
+				swapPanel.style.display = isOpen ? 'none' : 'block';
+				if (!isOpen && !terminalLoaded) {
+					loadTerminal();
+				}
+			}
+
+			function loadTerminal() {
+				if (terminalLoaded) return;
+				terminalLoaded = true;
+				const container = document.getElementById('sui-coins-terminal');
+				if (container) container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);"><span class="loading"></span> Loading swap terminal...</div>';
+				const script = document.createElement('script');
+				script.src = 'https://cdn.jsdelivr.net/npm/@interest-protocol/sui-coins-terminal-vanilla@1.1.1/dist/index.umd.js';
+				script.onload = function() {
+					if (typeof window.SuiCoinsTerminal === 'function') {
+						if (container) container.innerHTML = '';
+						window.SuiCoinsTerminal({
+							container: container,
+							projectAddress: '0xf7c22e1d2bcc6b8a9afb98730fdd2bec3af417ee1a8fbb27755ba0e64e96f0e1',
+							slippage: 1,
+							aggregator: 'Aftermath'
+						});
+					}
+				};
+				script.onerror = function() {
+					if (container) container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">Failed to load swap terminal</div>';
+				};
+				document.body.appendChild(script);
+			}
+
+			if (swapToggleBtn) {
+				swapToggleBtn.addEventListener('click', (e) => {
+					e.stopPropagation();
+					toggleSwapPanel();
+				});
+			}
+
+			if (swapCloseBtn) {
+				swapCloseBtn.addEventListener('click', () => {
+					if (swapPanel) swapPanel.style.display = 'none';
+				});
+			}
+
+			tabs.forEach(tab => {
+				tab.addEventListener('click', () => {
+					tabs.forEach(t => t.classList.remove('active'));
+					tab.classList.add('active');
+					const target = tab.dataset.tab;
+					if (tabSwap) tabSwap.style.display = target === 'swap' ? 'block' : 'none';
+					if (tabCrosschain) tabCrosschain.style.display = target === 'crosschain' ? 'block' : 'none';
+				});
+			});
+
+			document.addEventListener('click', (e) => {
+				if (!swapPanel || swapPanel.style.display === 'none') return;
+				if (swapPanel.contains(e.target)) return;
+				if (swapToggleBtn && swapToggleBtn.contains(e.target)) return;
+				swapPanel.style.display = 'none';
+			});
+
+			const ccSolAmount = document.getElementById('cc-sol-amount');
+			const ccRateValue = document.getElementById('cc-rate-value');
+			const ccOutput = document.getElementById('cc-output');
+			const ccFee = document.getElementById('cc-fee');
+			const ccQuoteBtn = document.getElementById('cc-quote-btn');
+			const ccDeposit = document.getElementById('cc-deposit');
+			const ccDepositAddr = document.getElementById('cc-deposit-addr');
+			const ccCopyAddr = document.getElementById('cc-copy-addr');
+			const ccSolTx = document.getElementById('cc-sol-tx');
+			const ccConfirmBtn = document.getElementById('cc-confirm-btn');
+			const ccStatus = document.getElementById('cc-status');
+			let ccQuoteData = null;
+
+			async function fetchCCQuote() {
+				const amount = parseFloat(ccSolAmount?.value || '');
+				if (!Number.isFinite(amount) || amount <= 0) {
+					if (ccRateValue) ccRateValue.textContent = '--';
+					if (ccOutput) ccOutput.textContent = '-- SUI';
+					if (ccFee) ccFee.textContent = '';
+					if (ccQuoteBtn) ccQuoteBtn.disabled = true;
+					ccQuoteData = null;
+					return;
+				}
+
+				try {
+					const res = await fetch('/api/sol-swap/quote?direction=sol_to_sui&amount=' + amount);
+					const data = await res.json();
+					if (data.error) throw new Error(data.error);
+
+					ccQuoteData = data;
+					if (ccRateValue) ccRateValue.textContent = '1 SOL = ' + data.rate.toFixed(4) + ' SUI';
+					if (ccOutput) ccOutput.textContent = data.outputAmount.toFixed(4) + ' SUI';
+					if (ccFee) ccFee.textContent = 'Fee: ' + data.fee.toFixed(4) + ' SUI (' + (data.feeBps / 100) + '%)';
+					if (ccQuoteBtn) ccQuoteBtn.disabled = !data.solanaDepositAddress;
+				} catch (err) {
+					if (ccRateValue) ccRateValue.textContent = 'Error';
+					if (ccOutput) ccOutput.textContent = '-- SUI';
+					if (ccQuoteBtn) ccQuoteBtn.disabled = true;
+					ccQuoteData = null;
+				}
+			}
+
+			if (ccSolAmount) {
+				let debounceTimer = null;
+				ccSolAmount.addEventListener('input', () => {
+					if (debounceTimer) clearTimeout(debounceTimer);
+					debounceTimer = setTimeout(fetchCCQuote, 400);
+				});
+			}
+
+			if (ccQuoteBtn) {
+				ccQuoteBtn.addEventListener('click', async () => {
+					if (!ccQuoteData || !ccQuoteData.solanaDepositAddress) return;
+
+					if (!window.connectedAddress) {
+						if (ccStatus) { ccStatus.textContent = 'Connect wallet first'; ccStatus.className = 'cc-status error'; }
+						return;
+					}
+
+					try {
+						ccQuoteBtn.disabled = true;
+						ccQuoteBtn.textContent = 'Requesting...';
+
+						const res = await fetch('/api/sol-swap/request', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({
+								solAmount: ccQuoteData.inputAmount,
+								suiAddress: window.connectedAddress,
+							}),
+						});
+						const data = await res.json();
+						if (data.error) throw new Error(data.error);
+
+						if (ccDepositAddr) ccDepositAddr.textContent = data.depositAddress;
+						if (ccDeposit) ccDeposit.style.display = 'flex';
+						if (ccStatus) { ccStatus.textContent = 'Send ' + data.solAmount + ' SOL to the address below'; ccStatus.className = 'cc-status'; }
+					} catch (err) {
+						if (ccStatus) { ccStatus.textContent = err.message || 'Request failed'; ccStatus.className = 'cc-status error'; }
+					} finally {
+						ccQuoteBtn.textContent = 'Get Deposit Address';
+						ccQuoteBtn.disabled = false;
+					}
+				});
+			}
+
+			if (ccCopyAddr) {
+				ccCopyAddr.addEventListener('click', async () => {
+					const addr = ccDepositAddr?.textContent;
+					if (addr) {
+						await navigator.clipboard.writeText(addr).catch(() => {});
+						ccCopyAddr.textContent = 'Copied!';
+						setTimeout(() => { ccCopyAddr.textContent = 'Copy'; }, 1500);
+					}
+				});
+			}
+
+			if (ccSolTx) {
+				ccSolTx.addEventListener('input', () => {
+					if (ccConfirmBtn) ccConfirmBtn.disabled = !ccSolTx.value.trim();
+				});
+			}
+
+			if (ccConfirmBtn) {
+				ccConfirmBtn.addEventListener('click', async () => {
+					const sig = ccSolTx?.value?.trim();
+					if (!sig) return;
+
+					ccConfirmBtn.disabled = true;
+					ccConfirmBtn.textContent = 'Verifying...';
+					if (ccStatus) { ccStatus.textContent = 'Verifying Solana transaction...'; ccStatus.className = 'cc-status'; }
+
+					try {
+						const res = await fetch('/api/sol-swap/confirm', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ requestId: ccQuoteData?.requestId || 'unknown', solTxSignature: sig }),
+						});
+						const data = await res.json();
+						if (data.error) throw new Error(data.error);
+
+						if (ccStatus) {
+							ccStatus.textContent = 'Verification submitted. SUI will be sent to your wallet shortly.';
+							ccStatus.className = 'cc-status success';
+						}
+					} catch (err) {
+						if (ccStatus) { ccStatus.textContent = err.message || 'Confirmation failed'; ccStatus.className = 'cc-status error'; }
+					} finally {
+						ccConfirmBtn.textContent = 'Confirm & Receive SUI';
+						ccConfirmBtn.disabled = false;
+					}
+				});
+			}
+		})();
 	</script>
 
 </body>
