@@ -904,6 +904,8 @@ const TRADEPORT_TX_API_URL = 'https://api.indexer.xyz/api/v1/tradeport'
  * Fetch marketplace data (listings, bids) for a SuiNS name.
  * When tokenId is provided, queries by on-chain token_id for reliable results.
  */
+const MARKETPLACE_CACHE_TTL = 60
+
 async function handleMarketplaceData(name: string, _env: Env, tokenId?: string): Promise<Response> {
 	const corsHeaders = {
 		'Access-Control-Allow-Origin': '*',
@@ -911,6 +913,15 @@ async function handleMarketplaceData(name: string, _env: Env, tokenId?: string):
 	}
 
 	const normalizedName = name.endsWith('.sui') ? name : `${name}.sui`
+	const marketCacheKey = cacheKey('marketplace', normalizedName, tokenId || '')
+
+	const cached = await getCached<MarketplaceData>(marketCacheKey)
+	if (cached) {
+		return new Response(JSON.stringify(cached), {
+			status: 200,
+			headers: { ...corsHeaders, 'X-Cache': 'HIT' },
+		})
+	}
 
 	try {
 		const nftFilter = tokenId
@@ -1138,9 +1149,11 @@ async function handleMarketplaceData(name: string, _env: Env, tokenId?: string):
 			volume: collection?.volume ?? null,
 		}
 
+		await setCache(marketCacheKey, data, MARKETPLACE_CACHE_TTL)
+
 		return new Response(JSON.stringify(data), {
 			status: 200,
-			headers: corsHeaders,
+			headers: { ...corsHeaders, 'X-Cache': 'MISS' },
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch marketplace data'
@@ -1180,10 +1193,21 @@ interface NftActivityAction {
 	listingNonce: string | null
 }
 
+const ACTIVITY_CACHE_TTL = 60
+
 async function handleNftActivity(nftId: string, _env: Env): Promise<Response> {
 	const corsHeaders = {
 		'Access-Control-Allow-Origin': '*',
 		'Content-Type': 'application/json',
+	}
+
+	const activityCacheKey = cacheKey('activity', nftId)
+	const cached = await getCached<{ actions: NftActivityAction[] }>(activityCacheKey)
+	if (cached) {
+		return new Response(JSON.stringify(cached), {
+			status: 200,
+			headers: { ...corsHeaders, 'X-Cache': 'HIT' },
+		})
 	}
 
 	try {
@@ -1279,9 +1303,12 @@ async function handleNftActivity(nftId: string, _env: Env): Promise<Response> {
 			listingNonce: action.listing_nonce,
 		}))
 
-		return new Response(JSON.stringify({ actions: formattedActions }), {
+		const activityData = { actions: formattedActions }
+		await setCache(activityCacheKey, activityData, ACTIVITY_CACHE_TTL)
+
+		return new Response(JSON.stringify(activityData), {
 			status: 200,
-			headers: corsHeaders,
+			headers: { ...corsHeaders, 'X-Cache': 'MISS' },
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch NFT activity'
@@ -1302,6 +1329,15 @@ async function handleNftActivityByTokenId(tokenId: string, _env: Env): Promise<R
 	const corsHeaders = {
 		'Access-Control-Allow-Origin': '*',
 		'Content-Type': 'application/json',
+	}
+
+	const activityCacheKey = cacheKey('activity-token', tokenId)
+	const cached = await getCached<{ actions: NftActivityAction[] }>(activityCacheKey)
+	if (cached) {
+		return new Response(JSON.stringify(cached), {
+			status: 200,
+			headers: { ...corsHeaders, 'X-Cache': 'HIT' },
+		})
 	}
 
 	try {
@@ -1406,9 +1442,12 @@ async function handleNftActivityByTokenId(tokenId: string, _env: Env): Promise<R
 			listingNonce: action.listing_nonce,
 		}))
 
-		return new Response(JSON.stringify({ actions: formattedActions }), {
+		const activityData = { actions: formattedActions }
+		await setCache(activityCacheKey, activityData, ACTIVITY_CACHE_TTL)
+
+		return new Response(JSON.stringify(activityData), {
 			status: 200,
-			headers: corsHeaders,
+			headers: { ...corsHeaders, 'X-Cache': 'MISS' },
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch NFT activity'
