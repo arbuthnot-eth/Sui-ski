@@ -1853,8 +1853,13 @@ export function generateProfilePage(
 						accounts = filterSuiAccounts(phantomProvider.accounts || []);
 						if (accounts.length === 0 && typeof phantomProvider.connect === 'function') {
 							try {
-								await phantomProvider.connect();
-								accounts = filterSuiAccounts(phantomProvider.accounts || []);
+								const connectResult = await phantomProvider.connect();
+								const resultAccounts = connectResult?.accounts || connectResult;
+								accounts = filterSuiAccounts(
+									Array.isArray(resultAccounts) && resultAccounts.length > 0
+										? resultAccounts
+										: phantomProvider.accounts || []
+								);
 							} catch {}
 						}
 					}
@@ -1932,8 +1937,13 @@ export function generateProfilePage(
 						return;
 					}
 					if (typeof phantomProvider.connect === 'function') {
-						await phantomProvider.connect();
-						const accounts = filterSuiAccounts(phantomProvider.accounts || []);
+						const connectResult = await phantomProvider.connect();
+						const resultAccounts = connectResult?.accounts || connectResult;
+						const accounts = filterSuiAccounts(
+							Array.isArray(resultAccounts) && resultAccounts.length > 0
+								? resultAccounts
+								: phantomProvider.accounts || []
+						);
 						if (accounts.length > 0) {
 							finishConnect(accounts, 'Phantom');
 							return;
@@ -1973,8 +1983,13 @@ export function generateProfilePage(
 					if (errorMsg.includes('authorized') && typeof phantomProvider.connect === 'function') {
 						try {
 							walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Requesting approval...</div>';
-							await phantomProvider.connect();
-							const accounts = filterSuiAccounts(phantomProvider.accounts || []);
+							const retryResult = await phantomProvider.connect();
+							const retryAccounts = retryResult?.accounts || retryResult;
+							const accounts = filterSuiAccounts(
+								Array.isArray(retryAccounts) && retryAccounts.length > 0
+									? retryAccounts
+									: phantomProvider.accounts || []
+							);
 							if (accounts.length > 0) {
 								finishConnect(accounts, 'Phantom');
 								return;
@@ -2005,10 +2020,30 @@ export function generateProfilePage(
 			}
 		}
 
+		function isInAppBrowser() {
+			const ua = navigator.userAgent || '';
+			return /Phantom/i.test(ua) || !!window.phantom?.sui || !!window.slush;
+		}
+
 		// Show wallet selection modal (non-blocking)
 		async function connectWallet() {
 			walletModal.classList.add('open');
 			walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Detecting wallets...</div>';
+
+			// In-app browser: auto-connect to the single available wallet
+			if (isInAppBrowser()) {
+				const wallets = getSuiWallets();
+				if (wallets.length > 0) {
+					connectToWallet(wallets[0]);
+					return;
+				}
+				await new Promise(r => setTimeout(r, 300));
+				const retryWallets = getSuiWallets();
+				if (retryWallets.length > 0) {
+					connectToWallet(retryWallets[0]);
+					return;
+				}
+			}
 
 			// Don't block - show immediate results and update as wallets are detected
 			const immediateWallets = getSuiWallets();
@@ -4751,7 +4786,21 @@ export function generateProfilePage(
 			renderWalletBar();
 		updateGlobalWalletWidget();
 		updateEditButton();
-		restoreWalletConnection();
+		restoreWalletConnection().then(restored => {
+			if (!restored && isInAppBrowser()) {
+				const wallets = getSuiWallets();
+				if (wallets.length > 0) {
+					connectToWallet(wallets[0]);
+				} else {
+					setTimeout(() => {
+						if (!connectedAddress) {
+							const retryWallets = getSuiWallets();
+							if (retryWallets.length > 0) connectToWallet(retryWallets[0]);
+						}
+					}, 500);
+				}
+			}
+		});
 		fetchAndDisplayOwnerInfo();
 		updateGracePeriodOwnerInfo();
 		updateGracePeriodCountdown();
@@ -8658,22 +8707,27 @@ function shortAddr(addr) {
 
 						const renderNonce = ++marketplaceActivityRenderNonce;
 
+						function normalizeActionType(type) {
+							return String(type || '').replace(/-/g, '_');
+						}
+
 						function getActionLabel(type) {
+							const normalized = normalizeActionType(type);
 							const labels = {
 								sale: 'Buy',
 								list: 'Listed',
 								delist: 'Delisted',
 								bid: 'Offer',
 								cancel_bid: 'Offer Cancelled',
-								accept_bid: 'Offer Accepted',
+								accept_bid: 'Sale',
 								buy: 'Buy',
 								mint: 'Mint',
 								transfer: 'Transfer',
 								expire: 'Expire',
 								expired: 'Expire',
 							};
-							if (labels[type]) return labels[type];
-							return String(type || '')
+							if (labels[normalized]) return labels[normalized];
+							return String(normalized || '')
 								.split('_')
 								.filter(Boolean)
 								.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -8681,8 +8735,18 @@ function shortAddr(addr) {
 						}
 
 						function getActionAddress(action) {
-							const actionType = String(action?.type || '').toLowerCase();
-							const showRecipientTypes = new Set(['sale', 'accept_bid', 'buy', 'transfer', 'mint']);
+							const actionType = normalizeActionType(action?.type).toLowerCase();
+							if (actionType === 'bid') {
+								const receiver = typeof action.receiver === 'string' ? action.receiver.trim() : '';
+								if (receiver && receiver.startsWith('0x')) return receiver;
+								return '';
+							}
+							if (actionType === 'accept_bid') {
+								const sender = typeof action.sender === 'string' ? action.sender.trim() : '';
+								if (sender && sender.startsWith('0x')) return sender;
+								return '';
+							}
+							const showRecipientTypes = new Set(['sale', 'buy', 'transfer', 'mint']);
 							if (!showRecipientTypes.has(actionType)) return '';
 							const receiver = typeof action.receiver === 'string' ? action.receiver.trim() : '';
 							if (receiver && receiver.startsWith('0x')) return receiver;
@@ -8749,9 +8813,10 @@ function shortAddr(addr) {
 									? '<a href="https://suiscan.xyz/' + NETWORK + '/tx/' + escapeHtmlJs(txDigest) + '" target="_blank" class="marketplace-activity-kind marketplace-activity-tx-link" title="' + escapeHtmlJs(txDigest) + '">' + escapeHtmlJs(label) + '</a>'
 									: '<span class="marketplace-activity-kind">' + escapeHtmlJs(label) + '</span>';
 
+								const normalizedType = normalizeActionType(action.type);
 								return (
 									yearHeader +
-									'<div class="marketplace-activity-item ' + escapeHtmlJs(action.type) + '">' +
+									'<div class="marketplace-activity-item ' + escapeHtmlJs(normalizedType) + '">' +
 										kindHtml +
 										activityActorHtml +
 										priceDisplay +
