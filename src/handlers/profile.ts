@@ -730,6 +730,7 @@ export function generateProfilePage(
 	const EXPIRATION_MS = ${safeNumber(expiresMs)};
 	const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 	const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
+	const IS_LONG_RENEWAL = EXPIRATION_MS > Date.now() + 2 * 365.25 * 86400000;
 		const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
 		const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
 		const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
@@ -857,9 +858,10 @@ export function generateProfilePage(
 				}
 				targetPreviewEl.style.display = '';
 				targetPreviewEl.classList.add('is-copyable');
+				targetPreviewEl.classList.toggle('long-renewal', IS_LONG_RENEWAL);
 				} else {
 					targetPreviewEl.style.display = '';
-					targetPreviewEl.classList.remove('is-copyable', 'copied');
+					targetPreviewEl.classList.remove('is-copyable', 'copied', 'long-renewal');
 					targetPreviewEl.classList.add('no-target');
 					targetPreviewEl.removeAttribute('role');
 					targetPreviewEl.removeAttribute('aria-label');

@@ -1407,6 +1407,31 @@ export const profileStyles = `
 			border-color: rgba(148, 163, 184, 0.45);
 			box-shadow: none;
 		}
+		.target-preview.long-renewal:not(.self-target) {
+			background: linear-gradient(135deg, rgba(248, 251, 255, 0.26), rgba(226, 232, 240, 0.2));
+			border-color: rgba(248, 251, 255, 0.58);
+			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 1px 5px rgba(148, 163, 184, 0.22);
+		}
+		.target-preview.long-renewal:not(.self-target):hover {
+			background: linear-gradient(135deg, rgba(248, 251, 255, 0.38), rgba(226, 232, 240, 0.32));
+			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 8px rgba(148, 163, 184, 0.35);
+		}
+		.target-preview.long-renewal:not(.self-target) .target-preview-value {
+			color: #f8fbff;
+			text-shadow: 0 0 10px rgba(248, 251, 255, 0.3);
+		}
+		.target-preview.long-renewal:not(.self-target) .target-preview-copy-btn {
+			color: #f1f5f9;
+		}
+		body.profile-primary-active .target-preview.long-renewal:not(.self-target) {
+			background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(99, 102, 241, 0.14));
+			border-color: rgba(96, 165, 250, 0.45);
+			box-shadow: none;
+		}
+		body.profile-primary-active .target-preview.long-renewal:not(.self-target) .target-preview-value {
+			color: #9edcff;
+			text-shadow: 0 0 10px rgba(125, 211, 252, 0.28);
+		}
 		.target-preview-copy-btn {
 			display: inline-flex;
 			align-items: center;
