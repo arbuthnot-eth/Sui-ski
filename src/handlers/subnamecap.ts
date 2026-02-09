@@ -1,4 +1,5 @@
-import { SuiClient } from '@mysten/sui/client'
+import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
+import { Transaction } from '@mysten/sui/transactions'
 import { SuinsClient } from '@mysten/suins'
 import { Hono } from 'hono'
 import type { Env, X402VerifiedPayment } from '../types'
@@ -870,7 +871,7 @@ async function verifyAgentPayment(
 			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
 		})
 
-		const txResponse = await suiClient.getTransaction({
+		const txResponse = await suiClient.getTransactionBlock({
 			digest: txDigest,
 			options: { showEffects: true, showBalanceChanges: true },
 		})

@@ -843,12 +843,12 @@ ${generateZkSendCss()}</style>
 				]);
 				const results = await Promise.allSettled([
 					timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
-					timedImport('https://esm.sh/@mysten/sui@2.2.0/client?bundle'),
+					timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
 					timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
 					timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
 				]);
 				if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
-				if (results[1].status === 'fulfilled') ({ SuiClient } = results[1].value);
+				if (results[1].status === 'fulfilled') ({ SuiJsonRpcClient } = results[1].value);
 				if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value);
 				if (results[3].status === 'fulfilled') {
 					const suinsModule = results[3].value;
@@ -864,10 +864,10 @@ ${generateZkSendCss()}</style>
 						new Promise((_, r) => setTimeout(() => r(new Error('Retry timeout: ' + url)), 20000)),
 					]);
 					const retries = [];
-					if (!SuiClient) retries.push(
-						retryImport('https://esm.sh/@mysten/sui@2.2.0/client')
-							.then(m => { if (!SuiClient) SuiClient = pickExport(m, 'SuiClient'); })
-							.catch(e => console.warn('Retry SuiClient failed:', e.message))
+					if (!SuiJsonRpcClient) retries.push(
+						retryImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc')
+							.then(m => { if (!SuiJsonRpcClient) SuiJsonRpcClient = pickExport(m, 'SuiJsonRpcClient'); })
+							.catch(e => console.warn('Retry SuiJsonRpcClient failed:', e.message))
 					);
 					if (!Transaction) retries.push(
 						retryImport('https://esm.sh/@mysten/sui@2.2.0/transactions')
@@ -964,7 +964,7 @@ ${generateZkSendCss()}</style>
 		let cachedSuiClient = null;
 		const getSuiClient = () => {
 			if (!cachedSuiClient) {
-				cachedSuiClient = new SuiClient({ url: ACTIVE_RPC_URL });
+				cachedSuiClient = new SuiJsonRpcClient({ url: ACTIVE_RPC_URL });
 			}
 			return cachedSuiClient;
 		};
@@ -6735,8 +6735,8 @@ ${generateZkSendCss()}</style>
 				if (!result) {
 					showBidBountyStatus(createBountyStatus, 'Submitting transaction...', 'loading');
 					const signResult = await SuiWalletKit.signTransaction(txWrapper);
-					result = await suiClient.executeTransaction({
-						transaction: builtTxBytes,
+					result = await suiClient.executeTransactionBlock({
+						transactionBlock: builtTxBytes,
 						signature: signResult.signature,
 						options: { showEffects: true, showObjectChanges: true },
 					});
