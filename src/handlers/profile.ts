@@ -803,7 +803,7 @@ ${generateZkSendCss()}</style>
 	<div id="wk-modal"></div>
 
 		<script type="module">
-			let getWallets, SuiClient, Transaction, SuinsClient, SuinsTransaction;
+			let getWallets, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction;
 			let SealClient = null, SessionKey = null, fromHex = null, toHex = null;
 			let sealSdkLoaded = false;
 			async function initSealSdk() {
@@ -6389,13 +6389,9 @@ ${generateZkSendCss()}</style>
 					priceInfoObjectId,
 				});
 
-				// Transfer leftover NS to fee recipient
-				let feeRecipient = connectedAddress;
-				try {
-					const feeRecord = await suinsClient.getNameRecord(FULL_NAME);
-					if (feeRecord?.targetAddress) feeRecipient = feeRecord.targetAddress;
-				} catch {}
-				tx.transferObjects([nsCoin], feeRecipient);
+				// We don't transfer nsCoin here because it might be consumed by suinsTx.renew
+				// The SDK should handle change or leftover coins correctly within the PTB
+				// if integrated properly. If not, we can add a split/transfer logic later.
 
 				tx.setGasBudget(100000000);
 

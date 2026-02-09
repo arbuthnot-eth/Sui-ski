@@ -64,9 +64,6 @@ export function generateWalletTxJs(): string {
     async function __skiSerializeTx(txInput) {
       if (typeof txInput === 'string') return txInput;
       if (txInput instanceof Uint8Array) return __wkBytesToBase64(txInput);
-      if (txInput && typeof txInput.serialize === 'function') {
-        return __wkBytesToBase64(await txInput.serialize());
-      }
       if (txInput && typeof txInput.toJSON === 'function') {
         return JSON.stringify(await txInput.toJSON());
       }
@@ -78,9 +75,6 @@ export function generateWalletTxJs(): string {
       if (txInput instanceof Uint8Array) return txInput;
       if (txInput && typeof txInput.serialize === 'function') {
         return await txInput.serialize();
-      }
-      if (txInput && typeof txInput.toJSON === 'function') {
-        return JSON.stringify(await txInput.toJSON());
       }
       return txInput;
     }
@@ -107,22 +101,30 @@ export function generateWalletTxJs(): string {
 
       var signExecFeature = wallet.features && wallet.features['sui:signAndExecuteTransaction'];
       if (signExecFeature && signExecFeature.signAndExecuteTransaction) {
-        return await signExecFeature.signAndExecuteTransaction({
-          transaction: txBytes,
-          account: account,
-          chain: chain,
-          options: txOptions,
-        });
+        try {
+          return await signExecFeature.signAndExecuteTransaction({
+            transaction: txBytes,
+            account: account,
+            chain: chain,
+            options: txOptions,
+          });
+        } catch (err) {
+          console.warn('signAndExecuteTransaction failed:', err.message);
+        }
       }
 
       var signExecBlockFeature = wallet.features && wallet.features['sui:signAndExecuteTransactionBlock'];
       if (signExecBlockFeature && signExecBlockFeature.signAndExecuteTransactionBlock) {
-        return await signExecBlockFeature.signAndExecuteTransactionBlock({
-          transactionBlock: txBytes,
-          account: account,
-          chain: chain,
-          options: txOptions,
-        });
+        try {
+          return await signExecBlockFeature.signAndExecuteTransactionBlock({
+            transactionBlock: txBytes,
+            account: account,
+            chain: chain,
+            options: txOptions,
+          });
+        } catch (err) {
+          console.warn('signAndExecuteTransactionBlock failed:', err.message);
+        }
       }
 
       var phantom = __wkGetPhantomProvider();
@@ -130,11 +132,13 @@ export function generateWalletTxJs(): string {
         try {
           return await phantom.signAndExecuteTransactionBlock({
             transactionBlock: txBytes,
+            options: txOptions,
           });
         } catch (_e) {
           var b64 = (txBytes instanceof Uint8Array) ? __wkBytesToBase64(txBytes) : txBytes;
           return await phantom.signAndExecuteTransactionBlock({
             transactionBlock: b64,
+            options: txOptions,
           });
         }
       }
@@ -142,6 +146,7 @@ export function generateWalletTxJs(): string {
       if (window.suiWallet && window.suiWallet.signAndExecuteTransactionBlock) {
         return await window.suiWallet.signAndExecuteTransactionBlock({
           transactionBlock: txBytes,
+          options: txOptions,
         });
       }
 
