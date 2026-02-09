@@ -50,10 +50,6 @@ export class MerkleTree {
 	private nodes: Map<string, bigint> = new Map()
 	private nextIndex = 0
 
-	constructor() {
-		// Initialize with empty tree
-	}
-
 	/**
 	 * Get the current root
 	 */

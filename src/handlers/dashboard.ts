@@ -1,7 +1,9 @@
 import type { Env } from '../types'
 import { generateLogoSvg } from '../utils/og-image'
 import { renderSocialMeta } from '../utils/social'
+import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
+import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
 
 export function generateDashboardPage(env: Env): string {
 	const network = env.SUI_NETWORK || 'mainnet'
@@ -81,157 +83,6 @@ export function generateDashboardPage(env: Env): string {
 		}
 		.home-btn svg { width: 28px; height: 28px; }
 
-		.wallet-widget {
-			position: fixed;
-			top: 16px;
-			right: 16px;
-			z-index: 9999;
-		}
-		.wallet-btn {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			padding: 10px 16px;
-			background: #0c0c12;
-			border: 1px solid rgba(255,255,255,0.08);
-			border-radius: 14px;
-			color: #71717a;
-			font-size: 0.82rem;
-			font-weight: 500;
-			cursor: pointer;
-			transition: all 0.3s ease;
-			box-shadow: 0 4px 24px rgba(0,0,0,0.6), 0 0 40px rgba(96,165,250,0.08);
-		}
-		.wallet-btn:hover {
-			border-color: rgba(96,165,250,0.4);
-			color: #e4e4e7;
-		}
-		.wallet-btn svg { width: 16px; height: 16px; color: #60a5fa; }
-		.wallet-btn.connected {
-			background: linear-gradient(135deg, rgba(96,165,250,0.15), rgba(139,92,246,0.15));
-			border-color: rgba(96,165,250,0.3);
-			color: #60a5fa;
-		}
-		.wallet-dropdown {
-			position: absolute;
-			top: calc(100% + 8px);
-			right: 0;
-			min-width: 200px;
-			background: #0c0c12;
-			border: 1px solid rgba(255,255,255,0.08);
-			border-radius: 14px;
-			box-shadow: 0 12px 48px rgba(0,0,0,0.7);
-			opacity: 0;
-			visibility: hidden;
-			transform: translateY(-8px);
-			transition: all 0.25s ease;
-			overflow: hidden;
-		}
-		.wallet-widget.open .wallet-dropdown {
-			opacity: 1;
-			visibility: visible;
-			transform: translateY(0);
-		}
-		.wallet-dropdown-addr {
-			padding: 12px 16px;
-			background: rgba(0,0,0,0.3);
-			border-bottom: 1px solid rgba(255,255,255,0.06);
-			font-family: ui-monospace, monospace;
-			font-size: 0.72rem;
-			color: #71717a;
-			word-break: break-all;
-			cursor: pointer;
-		}
-		.wallet-dropdown-addr:hover { color: #60a5fa; }
-		.wallet-dropdown-item {
-			display: flex;
-			align-items: center;
-			gap: 12px;
-			width: 100%;
-			padding: 12px 16px;
-			background: none;
-			border: none;
-			color: #71717a;
-			font-size: 0.82rem;
-			cursor: pointer;
-			transition: all 0.2s ease;
-			text-align: left;
-		}
-		.wallet-dropdown-item:hover { background: rgba(104,137,176,0.06); color: #e4e4e7; }
-		.wallet-dropdown-item svg { width: 15px; height: 15px; color: #52525b; }
-		.wallet-dropdown-item:hover svg { color: #60a5fa; }
-		.wallet-dropdown-item.disconnect { border-top: 1px solid rgba(255,255,255,0.06); color: #f87171; }
-		.wallet-dropdown-item.disconnect svg { color: #f87171; }
-		.wallet-dropdown-item.disconnect:hover { background: rgba(168,96,104,0.08); }
-
-		.wallet-modal {
-			display: none;
-			position: fixed;
-			top: 0; left: 0; right: 0; bottom: 0;
-			background: rgba(0,0,0,0.7);
-			z-index: 10000;
-			align-items: center;
-			justify-content: center;
-			padding: 20px;
-		}
-		.wallet-modal.open { display: flex; }
-		.wallet-modal-content {
-			background: #0c0c12;
-			border: 1px solid rgba(255,255,255,0.08);
-			border-radius: 20px;
-			padding: 24px;
-			width: 100%;
-			max-width: 380px;
-			box-shadow: 0 12px 48px rgba(0,0,0,0.7);
-		}
-		.wallet-modal-header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			margin-bottom: 20px;
-			font-size: 1.1rem;
-			font-weight: 700;
-		}
-		.wallet-modal-close {
-			background: none;
-			border: none;
-			color: #71717a;
-			font-size: 1.5rem;
-			cursor: pointer;
-			width: 32px; height: 32px;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			border-radius: 8px;
-		}
-		.wallet-modal-close:hover { background: rgba(255,255,255,0.1); color: #e4e4e7; }
-		.wallet-list { display: flex; flex-direction: column; gap: 10px; }
-		.wallet-detecting {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			gap: 10px;
-			padding: 24px;
-			color: #71717a;
-			font-size: 0.9rem;
-		}
-		.wallet-item {
-			display: flex;
-			align-items: center;
-			gap: 14px;
-			padding: 14px 16px;
-			background: rgba(30,30,40,0.6);
-			border: 1px solid rgba(255,255,255,0.06);
-			border-radius: 12px;
-			cursor: pointer;
-			transition: all 0.2s;
-		}
-		.wallet-item:hover { border-color: #60a5fa; background: rgba(96,165,250,0.1); }
-		.wallet-item img { width: 36px; height: 36px; border-radius: 8px; }
-		.wallet-item .wallet-name { font-weight: 600; }
-		.wallet-no-wallets { text-align: center; padding: 20px; color: #71717a; font-size: 0.9rem; }
-		.wallet-no-wallets a { display: inline-block; margin-top: 12px; color: #60a5fa; text-decoration: none; }
-		.wallet-no-wallets a:hover { text-decoration: underline; }
 
 		.container {
 			max-width: 1200px;
@@ -513,6 +364,35 @@ export function generateDashboardPage(env: Env): string {
 			.card-action { padding: 10px 8px; font-size: 0.78rem; }
 			.footer-bar { font-size: 0.72rem; }
 		}
+
+		${generateWalletUiCss()}
+		.wallet-widget { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+		.wk-widget-btn {
+			padding: 10px 16px;
+			background: #0c0c12;
+			border: 1px solid rgba(255,255,255,0.08);
+			border-radius: 14px;
+			color: #71717a;
+			font-size: 0.82rem;
+			font-weight: 500;
+			box-shadow: 0 4px 24px rgba(0,0,0,0.6), 0 0 40px rgba(96,165,250,0.08);
+			font-family: 'Inter', system-ui, -apple-system, sans-serif;
+		}
+		.wk-widget-btn:hover { border-color: rgba(96,165,250,0.4); color: #e4e4e7; }
+		.wk-widget-btn.connected {
+			background: linear-gradient(135deg, rgba(96,165,250,0.15), rgba(139,92,246,0.15));
+			border-color: rgba(96,165,250,0.3);
+			color: #60a5fa;
+		}
+		.wk-dropdown {
+			background: #0c0c12;
+			border: 1px solid rgba(255,255,255,0.08);
+			border-radius: 14px;
+			box-shadow: 0 12px 48px rgba(0,0,0,0.7);
+		}
+		.wk-modal { background: #0c0c12; border-radius: 20px; }
+		.wk-modal-header { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+		.wk-wallet-item { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
 	</style>
 </head>
 <body>
@@ -520,16 +400,7 @@ export function generateDashboardPage(env: Env): string {
 		${generateLogoSvg(28)}
 	</a>
 
-	<div class="wallet-widget" id="wallet-widget">
-		<button class="wallet-btn" id="wallet-btn">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-				<line x1="1" y1="10" x2="23" y2="10"></line>
-			</svg>
-			<span id="wallet-text">Connect</span>
-		</button>
-		<div class="wallet-dropdown" id="wallet-dropdown"></div>
-	</div>
+	<div class="wallet-widget" id="wk-widget"></div>
 
 	<div class="container">
 		<div class="page-header">
@@ -607,23 +478,10 @@ export function generateDashboardPage(env: Env): string {
 		</div>
 	</div>
 
-	<div class="wallet-modal" id="wallet-modal">
-		<div class="wallet-modal-content">
-			<div class="wallet-modal-header">
-				<span>Connect Wallet</span>
-				<button class="wallet-modal-close" id="wallet-modal-close">&times;</button>
-			</div>
-			<div class="wallet-list" id="wallet-list">
-				<div class="wallet-detecting">
-					<div class="spinner" style="width:20px;height:20px;border-width:2px;margin:0"></div>
-					Detecting wallets...
-				</div>
-			</div>
-		</div>
-	</div>
+	<div id="wk-modal"></div>
 
 	<script type="module">
-		let getWallets, SealClient, SessionKey, fromHex, toHex, SuiJsonRpcClient, Transaction;
+		let getWallets;
 		{
 			const SDK_TIMEOUT = 15000;
 			const timedImport = (url) => Promise.race([
@@ -632,41 +490,20 @@ export function generateDashboardPage(env: Env): string {
 			]);
 			const results = await Promise.allSettled([
 				timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
-				timedImport('https://esm.sh/@mysten/seal@0.9.6'),
-				timedImport('https://esm.sh/@mysten/bcs@1.3.0'),
-				timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
-				timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
 			]);
 			if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
-			if (results[1].status === 'fulfilled') ({ SealClient, SessionKey } = results[1].value);
-			if (results[2].status === 'fulfilled') ({ fromHex, toHex } = results[2].value);
-			if (results[3].status === 'fulfilled') ({ SuiJsonRpcClient } = results[3].value);
-			if (results[4].status === 'fulfilled') ({ Transaction } = results[4].value);
 		}
 
 		${generateWalletSessionJs()}
+		${generateWalletKitJs({ network })}
+		${generateWalletUiJs({ showPrimaryName: false, onConnect: 'onWalletConnected', onDisconnect: 'onWalletDisconnected' })}
 
 		const API_BASE = ${JSON.stringify(apiBase)};
 		const PROFILE_BASE = ${JSON.stringify(profileBase)};
-		const STORAGE_KEY = 'sui-ski-dashboard-wallet';
 		const TRADEPORT_ITEM_URL = 'https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=TOKEN_ID&modalSlug=suins&nav=1';
 
-		let walletsApi = null;
-		let connectedWallet = null;
-		let connectedAccount = null;
-		let connectedAddress = null;
-		let connectedWalletName = null;
 		let cachedSuiPriceUsd = null;
 
-		try { walletsApi = getWallets(); } catch (e) { console.error('Wallet API init failed:', e); }
-
-		const walletWidget = document.getElementById('wallet-widget');
-		const walletBtn = document.getElementById('wallet-btn');
-		const walletText = document.getElementById('wallet-text');
-		const walletDropdown = document.getElementById('wallet-dropdown');
-		const walletModal = document.getElementById('wallet-modal');
-		const walletList = document.getElementById('wallet-list');
-		const walletModalClose = document.getElementById('wallet-modal-close');
 		const emptyState = document.getElementById('empty-state');
 		const loadingState = document.getElementById('loading-state');
 		const namesContainer = document.getElementById('names-container');
@@ -675,293 +512,11 @@ export function generateDashboardPage(env: Env): string {
 		const headerSubtitle = document.getElementById('header-subtitle');
 		const connectCta = document.getElementById('connect-cta');
 
+		connectCta.addEventListener('click', () => SuiWalletKit.openModal());
+
 		function truncAddr(addr) {
 			if (!addr || addr.length < 12) return addr || '';
 			return addr.slice(0, 6) + '...' + addr.slice(-4);
-		}
-
-		function normalizeAccountAddress(account) {
-			if (!account) return '';
-			if (typeof account.address === 'string') return account.address.trim();
-			if (account.address && typeof account.address.toString === 'function') {
-				return String(account.address.toString()).trim();
-			}
-			return '';
-		}
-
-		function isSuiAccount(account) {
-			if (!account) return false;
-			const accountChains = Array.isArray(account.chains) ? account.chains : [];
-			if (accountChains.some((chain) => typeof chain === 'string' && chain.startsWith('sui:'))) {
-				return true;
-			}
-			const addr = normalizeAccountAddress(account);
-			return /^0x[0-9a-fA-F]{2,}$/.test(addr);
-		}
-
-		function filterSuiAccounts(accounts) {
-			if (!Array.isArray(accounts)) return [];
-			return accounts
-				.filter(isSuiAccount)
-				.map((account) => {
-					const normalizedAddress = normalizeAccountAddress(account);
-					if (!normalizedAddress) return account;
-					if (typeof account.address === 'string' && account.address === normalizedAddress) return account;
-					return { ...account, address: normalizedAddress };
-				});
-		}
-
-		function isSuiCapableWallet(wallet) {
-			if (!wallet) return false;
-			const features = wallet.features || {};
-			const hasSuiChain = Array.isArray(wallet.chains) && wallet.chains.some((c) => c.startsWith('sui:'));
-			const hasConnect = !!(features['standard:connect'] || wallet.connect);
-			const hasSuiNamespaceFeature = Object.keys(features).some((key) => key.startsWith('sui:'));
-			const hasSuiTxMethod = !!(
-				features['sui:signAndExecuteTransactionBlock'] ||
-				features['sui:signAndExecuteTransaction'] ||
-				wallet.signAndExecuteTransactionBlock ||
-				wallet.signAndExecuteTransaction
-			);
-			return hasConnect && (hasSuiChain || hasSuiNamespaceFeature || hasSuiTxMethod);
-		}
-
-		function getSuiWallets() {
-			const wallets = [];
-			const seenNames = new Set();
-			if (walletsApi) {
-				try {
-					for (const wallet of walletsApi.get()) {
-						if (isSuiCapableWallet(wallet)) {
-							wallets.push(wallet);
-							seenNames.add(wallet.name);
-						}
-					}
-				} catch {}
-			}
-			const wellKnown = [
-				{ check: () => window.phantom?.sui, name: 'Phantom' },
-				{ check: () => window.suiWallet, name: 'Sui Wallet' },
-				{ check: () => window.martian?.sui, name: 'Martian' },
-			];
-			for (const { check, name } of wellKnown) {
-				if (seenNames.has(name)) continue;
-				try {
-					const wallet = check();
-					if (wallet && typeof wallet === 'object' && isSuiCapableWallet(wallet)) {
-						wallets.push({
-							name,
-							icon: wallet.icon || '',
-							chains: ['sui:mainnet'],
-							features: wallet.features || {
-								'standard:connect': wallet.connect ? { connect: wallet.connect.bind(wallet) } : undefined,
-								'sui:signAndExecuteTransaction': wallet.signAndExecuteTransaction
-									? { signAndExecuteTransaction: wallet.signAndExecuteTransaction.bind(wallet) } : undefined,
-								'sui:signAndExecuteTransactionBlock': wallet.signAndExecuteTransactionBlock
-									? { signAndExecuteTransactionBlock: wallet.signAndExecuteTransactionBlock.bind(wallet) } : undefined,
-							},
-							accounts: wallet.accounts || [],
-						});
-						seenNames.add(name);
-					}
-				} catch {}
-			}
-			return wallets;
-		}
-
-		async function detectWallets() {
-			const immediate = getSuiWallets();
-			if (immediate.length > 0) return immediate;
-			return new Promise((resolve) => {
-				let attempts = 0;
-				let resolved = false;
-				const check = () => {
-					if (resolved) return;
-					const wallets = getSuiWallets();
-					if (wallets.length > 0 || attempts >= 10) {
-						resolved = true;
-						resolve(wallets);
-						return;
-					}
-					attempts++;
-					setTimeout(check, 200);
-				};
-				if (walletsApi) {
-					walletsApi.on('register', () => {
-						if (resolved) return;
-						const wallets = getSuiWallets();
-						if (wallets.length > 0) { resolved = true; resolve(wallets); }
-					});
-				}
-				check();
-			});
-		}
-
-		async function connectToWallet(wallet) {
-			try {
-				let accounts = filterSuiAccounts(wallet.accounts || []);
-				if (accounts.length === 0) {
-					const connectFeature = wallet.features?.['standard:connect'];
-					if (!connectFeature?.connect) throw new Error('Wallet does not support connection');
-					const result = await connectFeature.connect();
-					accounts = filterSuiAccounts(result?.accounts || wallet.accounts || []);
-					if (accounts.length === 0) {
-						await new Promise(r => setTimeout(r, 150));
-						accounts = filterSuiAccounts(wallet.accounts || []);
-					}
-				}
-				if (accounts.length === 0) throw new Error('No Sui accounts. Switch your wallet to Sui and try again.');
-				connectedAccount = accounts[0];
-				connectedAddress = accounts[0].address;
-				connectedWallet = wallet;
-				connectedWalletName = wallet.name;
-				walletModal.classList.remove('open');
-				saveWalletConnection();
-				onWalletConnected();
-			} catch (e) {
-				const msg = e.message || 'Unknown error';
-				const isUserAction = msg.includes('rejected') || msg.includes('cancelled') || msg.includes('Unexpected');
-				if (!isUserAction) console.error('Wallet error:', msg);
-				walletList.innerHTML = '<div class="wallet-no-wallets" style="color:#f87171">' +
-					(isUserAction ? 'Connection cancelled.' : 'Connection failed: ' + msg) +
-					'<br><br><button onclick="document.getElementById(\\'wallet-modal\\').classList.remove(\\'open\\')" ' +
-					'style="padding:8px 16px;background:#60a5fa;border:none;border-radius:8px;color:white;cursor:pointer">Close</button></div>';
-			}
-		}
-
-		function disconnectWallet() {
-			if (connectedWallet?.features?.['standard:disconnect']?.disconnect) {
-				try { connectedWallet.features['standard:disconnect'].disconnect(); } catch {}
-			}
-			connectedWallet = null;
-			connectedAccount = null;
-			connectedAddress = null;
-			connectedWalletName = null;
-			localStorage.removeItem(STORAGE_KEY);
-			disconnectWalletSession();
-			walletWidget.classList.remove('open');
-			walletBtn.classList.remove('connected');
-			walletText.textContent = 'Connect';
-			walletDropdown.innerHTML = '';
-			emptyState.style.display = '';
-			loadingState.style.display = 'none';
-			namesContainer.style.display = 'none';
-			noNamesState.style.display = 'none';
-			document.getElementById('watching-section').style.display = 'none';
-			headerSubtitle.textContent = 'Connect your wallet to view your portfolio';
-		}
-
-		function saveWalletConnection() {
-			if (connectedWalletName && connectedAddress) {
-				localStorage.setItem(STORAGE_KEY, JSON.stringify({ walletName: connectedWalletName, address: connectedAddress }));
-				connectWalletSession(connectedWalletName, connectedAddress);
-			}
-		}
-
-		async function restoreWalletConnection() {
-			try {
-				const saved = localStorage.getItem(STORAGE_KEY);
-				const cookieHint = getWalletSession();
-				const walletName = saved ? JSON.parse(saved).walletName : cookieHint?.walletName;
-				if (!walletName) return false;
-				const wallets = getSuiWallets();
-				const wallet = wallets.find(w => w.name === walletName);
-				if (!wallet) { localStorage.removeItem(STORAGE_KEY); return false; }
-				let accounts = filterSuiAccounts(wallet.accounts || []);
-				if (accounts.length === 0) {
-					const connectFeature = wallet.features?.['standard:connect'];
-					if (connectFeature?.connect) {
-						const result = await connectFeature.connect();
-						accounts = filterSuiAccounts(result?.accounts || wallet.accounts || []);
-					}
-				}
-				if (accounts.length === 0) return false;
-				connectedAccount = accounts[0];
-				connectedAddress = accounts[0].address;
-				connectedWallet = wallet;
-				connectedWalletName = walletName;
-				onWalletConnected();
-				return true;
-			} catch {
-				localStorage.removeItem(STORAGE_KEY);
-				return false;
-			}
-		}
-
-		function openWalletModal() {
-			walletModal.classList.add('open');
-			walletList.innerHTML = '<div class="wallet-detecting"><div class="spinner" style="width:20px;height:20px;border-width:2px;margin:0"></div> Detecting wallets...</div>';
-			const immediate = getSuiWallets();
-			if (immediate.length > 0) {
-				renderWalletList(immediate);
-				detectWallets().then(w => { if (w.length > immediate.length) renderWalletList(w); }).catch(() => {});
-				return;
-			}
-			walletList.innerHTML = '<div class="wallet-no-wallets">Detecting wallets...<br><br>' +
-				'<a href="https://phantom.app/download" target="_blank">Install Phantom &rarr;</a><br>' +
-				'<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank">Install Sui Wallet &rarr;</a></div>';
-			detectWallets().then(w => { if (w.length > 0) renderWalletList(w); }).catch(() => {});
-		}
-
-		function renderWalletList(wallets) {
-			if (wallets.length === 0) {
-				walletList.innerHTML = '<div class="wallet-no-wallets">No Sui wallets detected.<br><br>' +
-					'<a href="https://phantom.app/download" target="_blank">Install Phantom &rarr;</a><br>' +
-					'<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank">Install Sui Wallet &rarr;</a></div>';
-				return;
-			}
-			walletList.innerHTML = '';
-			for (const wallet of wallets) {
-				const item = document.createElement('div');
-				item.className = 'wallet-item';
-				const iconSrc = wallet.icon || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><circle fill=%22%23818cf8%22 cx=%2216%22 cy=%2216%22 r=%2216%22/></svg>';
-				item.innerHTML = '<img src="' + iconSrc + '" alt="' + (wallet.name || 'Wallet') + '" onerror="this.style.display=\\'none\\'">' +
-					'<span class="wallet-name">' + (wallet.name || 'Unknown') + '</span>';
-				item.addEventListener('click', () => connectToWallet(wallet));
-				walletList.appendChild(item);
-			}
-		}
-
-		walletModalClose.addEventListener('click', () => walletModal.classList.remove('open'));
-		walletModal.addEventListener('click', (e) => { if (e.target === walletModal) walletModal.classList.remove('open'); });
-
-		walletBtn.addEventListener('click', () => {
-			if (connectedAddress) {
-				walletWidget.classList.toggle('open');
-			} else {
-				openWalletModal();
-			}
-		});
-
-		connectCta.addEventListener('click', () => openWalletModal());
-
-		document.addEventListener('click', (e) => {
-			if (!walletWidget.contains(e.target)) walletWidget.classList.remove('open');
-		});
-
-		function updateWalletDropdown() {
-			walletBtn.classList.add('connected');
-			walletText.textContent = truncAddr(connectedAddress);
-			walletDropdown.innerHTML =
-				'<div class="wallet-dropdown-addr" id="dd-addr">' + connectedAddress + '</div>' +
-				'<button class="wallet-dropdown-item" id="dd-switch">' +
-					'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M4 4l17 17"/></svg>' +
-					'Switch Wallet</button>' +
-				'<button class="wallet-dropdown-item disconnect" id="dd-disconnect">' +
-					'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>' +
-					'Disconnect</button>';
-			document.getElementById('dd-addr').addEventListener('click', () => {
-				navigator.clipboard.writeText(connectedAddress).catch(() => {});
-			});
-			document.getElementById('dd-switch').addEventListener('click', () => {
-				walletWidget.classList.remove('open');
-				disconnectWallet();
-				setTimeout(() => openWalletModal(), 100);
-			});
-			document.getElementById('dd-disconnect').addEventListener('click', () => {
-				walletWidget.classList.remove('open');
-				disconnectWallet();
-			});
 		}
 
 		function formatSui(mist) {
@@ -1053,13 +608,16 @@ export function generateDashboardPage(env: Env): string {
 		}
 
 		async function loadNames() {
+			const address = SuiWalletKit.$connection.value.address;
+			if (!address) return;
+
 			emptyState.style.display = 'none';
 			noNamesState.style.display = 'none';
 			namesContainer.style.display = 'none';
 			loadingState.style.display = '';
 
 			try {
-				const res = await fetch(API_BASE + '/api/owned-names?address=' + encodeURIComponent(connectedAddress));
+				const res = await fetch(API_BASE + '/api/owned-names?address=' + encodeURIComponent(address));
 				if (!res.ok) throw new Error('API error: ' + res.status);
 				const data = await res.json();
 
@@ -1069,14 +627,14 @@ export function generateDashboardPage(env: Env): string {
 				if (names.length === 0) {
 					loadingState.style.display = 'none';
 					noNamesState.style.display = '';
-					headerSubtitle.textContent = 'No names found for ' + truncAddr(connectedAddress);
+					headerSubtitle.textContent = 'No names found for ' + truncAddr(address);
 					return;
 				}
 
 				if (data.primaryName) {
 					headerSubtitle.textContent = data.primaryName + '.sui — ' + names.length + ' name' + (names.length !== 1 ? 's' : '');
 				} else {
-					headerSubtitle.textContent = truncAddr(connectedAddress) + ' — ' + names.length + ' name' + (names.length !== 1 ? 's' : '');
+					headerSubtitle.textContent = truncAddr(address) + ' — ' + names.length + ' name' + (names.length !== 1 ? 's' : '');
 				}
 
 				names.sort((a, b) => {
@@ -1114,13 +672,14 @@ export function generateDashboardPage(env: Env): string {
 		}
 
 		async function loadWatchlist() {
-			if (!connectedAddress) return;
+			const address = SuiWalletKit.$connection.value.address;
+			if (!address) return;
 			const watchingSection = document.getElementById('watching-section');
 			const watchingGrid = document.getElementById('watching-grid');
 			const watchingEmpty = document.getElementById('watching-empty');
 
 			try {
-				const res = await fetch(API_BASE + '/api/vault/meta?address=' + encodeURIComponent(connectedAddress));
+				const res = await fetch(API_BASE + '/api/vault/meta?address=' + encodeURIComponent(address));
 				const data = await res.json();
 
 				if (!data.found || !data.names || data.names.length === 0) {
@@ -1148,15 +707,25 @@ export function generateDashboardPage(env: Env): string {
 			}
 		}
 
-		function onWalletConnected() {
-			updateWalletDropdown();
+		window.onWalletConnected = function() {
 			loadNames();
 			loadWatchlist();
 			fetchSuiPrice();
-		}
+		};
 
+		window.onWalletDisconnected = function() {
+			emptyState.style.display = '';
+			loadingState.style.display = 'none';
+			namesContainer.style.display = 'none';
+			noNamesState.style.display = 'none';
+			document.getElementById('watching-section').style.display = 'none';
+			headerSubtitle.textContent = 'Connect your wallet to view your portfolio';
+		};
+
+		SuiWalletKit.renderModal('wk-modal');
+		SuiWalletKit.renderWidget('wk-widget');
 		fetchSuiPrice();
-		restoreWalletConnection();
+		SuiWalletKit.autoReconnect();
 	</script>
 </body>
 </html>`

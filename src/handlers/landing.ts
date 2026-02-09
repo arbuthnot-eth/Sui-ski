@@ -11,12 +11,20 @@ import { jsonResponse } from '../utils/response'
 import { getDefaultRpcUrl } from '../utils/rpc'
 import { renderSocialMeta } from '../utils/social'
 import { getGatewayStatus } from '../utils/status'
+import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
+import { generateWalletTxJs } from '../utils/wallet-tx-js'
+import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
 
 export interface LandingPageOptions {
 	canonicalUrl?: string
 	rpcUrl?: string
 	network?: string
+	session?: {
+		address: string | null
+		walletName: string | null
+		verified: boolean
+	}
 }
 
 type ApiEnv = {
@@ -460,6 +468,36 @@ apiRoutes.get('/marketplace/:name', async (c) => {
 	if (!name) return jsonResponse({ error: 'Name parameter required' }, 400)
 	const tokenId = c.req.query('tokenId') || undefined
 	return handleMarketplaceData(name, c.get('env'), tokenId)
+})
+
+apiRoutes.post('/marketplace-batch', async (c) => {
+	try {
+		const body = await c.req.json()
+		const { names } = body as { names?: string[] }
+		if (!names || !Array.isArray(names) || names.length === 0) {
+			return jsonResponse({ error: 'names array required' }, 400)
+		}
+		const MAX_BATCH = 20
+		const batch = names.slice(0, MAX_BATCH)
+		const env = c.get('env')
+		const settled = await Promise.allSettled(
+			batch.map(async (name) => {
+				const res = await handleMarketplaceData(name, env)
+				const data = await res.json()
+				return { name, data }
+			}),
+		)
+		const results: Record<string, unknown> = {}
+		for (const entry of settled) {
+			if (entry.status === 'fulfilled') {
+				results[entry.value.name] = entry.value.data
+			}
+		}
+		return jsonResponse({ results })
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Invalid request body'
+		return jsonResponse({ error: message }, 400)
+	}
 })
 
 apiRoutes.post('/marketplace/accept-bid', async (c) => {
@@ -2445,139 +2483,18 @@ ${socialMeta}
 			border-color: rgba(96, 165, 250, 0.55);
 			transform: translateY(-1px);
 		}
-		.wallet-btn {
-			padding: 10px 16px;
-			background: rgba(20, 20, 28, 0.95);
-			backdrop-filter: blur(12px);
-			border: 1px solid rgba(96, 165, 250, 0.2);
-			border-radius: 12px;
-			color: #e4e4e7;
-			font-size: 0.85rem;
-			font-weight: 500;
-			cursor: pointer;
-			transition: all 0.2s;
-			display: flex;
-			align-items: center;
-			gap: 8px;
-		}
-		.wallet-btn:hover {
-			border-color: rgba(96, 165, 250, 0.5);
-			background: rgba(96, 165, 250, 0.1);
-		}
-		.wallet-btn.connected {
-			background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(139, 92, 246, 0.15));
-			border-color: rgba(96, 165, 250, 0.3);
-		}
-		.wallet-btn svg { width: 16px; height: 16px; }
-
-		/* Wallet Menu */
-		.wallet-menu {
-			display: none;
-			position: fixed;
-			top: 58px;
-			right: 16px;
-			z-index: 1001;
-			min-width: 200px;
-			background: rgba(20, 20, 28, 0.98);
-			backdrop-filter: blur(16px);
-			border: 1px solid rgba(96, 165, 250, 0.2);
-			border-radius: 14px;
-			overflow: hidden;
-			box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-		}
-		.wallet-menu.open { display: block; }
-		.wallet-menu-item {
-			display: flex;
-			align-items: center;
-			gap: 10px;
-			width: 100%;
-			padding: 12px 16px;
-			background: none;
-			border: none;
-			border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-			color: #e4e4e7;
-			font-size: 0.85rem;
-			cursor: pointer;
-			transition: background 0.15s;
-			text-decoration: none;
-			text-align: left;
-		}
-		.wallet-menu-item:last-child { border-bottom: none; }
-		.wallet-menu-item:hover { background: rgba(96, 165, 250, 0.1); }
-		.wallet-menu-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.6; }
-		.wallet-menu-item.disconnect { color: #f87171; }
-		.wallet-menu-item.disconnect:hover { background: rgba(248, 113, 113, 0.1); }
-		.wallet-menu-item .copied-flash { color: #4ade80; font-size: 0.75rem; margin-left: auto; }
-
 		@media (max-width: 540px) {
 			.wallet-widget { top: 12px; right: 12px; }
-			.wallet-menu { top: 48px; right: 12px; min-width: 180px; }
 		}
 
-			/* Wallet Modal */
-		.wallet-modal {
-			display: none;
-			position: fixed;
-			inset: 0;
-			background: rgba(0,0,0,0.7);
-			backdrop-filter: blur(4px);
-			z-index: 10000;
-			align-items: center;
-			justify-content: center;
-			padding: 20px;
-		}
-		.wallet-modal.open { display: flex; }
-		.wallet-modal-content {
-			background: rgba(20, 20, 28, 0.98);
-			border: 1px solid rgba(96, 165, 250, 0.2);
-			border-radius: 20px;
-			max-width: 380px;
-			width: 100%;
-			overflow: hidden;
-		}
-		.wallet-modal-header {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			padding: 18px 20px;
-			border-bottom: 1px solid rgba(255,255,255,0.06);
-		}
-		.wallet-modal-header h3 { font-size: 1rem; font-weight: 600; }
-		.wallet-modal-close {
-			background: none;
-			border: none;
-			color: #71717a;
-			font-size: 1.4rem;
-			cursor: pointer;
-			padding: 0;
-			line-height: 1;
-		}
-		.wallet-list { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-		.wallet-option {
-			display: flex;
-			align-items: center;
-			gap: 12px;
-			padding: 12px 14px;
-			background: rgba(255,255,255,0.03);
-			border: 1px solid rgba(255,255,255,0.06);
-			border-radius: 12px;
-			cursor: pointer;
-			transition: all 0.2s;
-			width: 100%;
-			text-align: left;
-			color: #e4e4e7;
-			font-size: 0.95rem;
-		}
-		.wallet-option:hover { border-color: rgba(96, 165, 250, 0.4); background: rgba(96, 165, 250, 0.08); }
-		.wallet-option img { width: 28px; height: 28px; border-radius: 6px; }
+		body.search-focused .wk-dropdown { display: none !important; }
 
-			body.search-focused .wallet-menu { display: none !important; }
+		${generateWalletUiCss()}
 
 		@media (max-width: 540px) {
 				.header { padding: 40px 16px 16px; }
 				.logo { font-size: 2.5rem; }
 				.search-container { padding: 10px 12px; }
-				.wallet-btn { padding: 8px 12px; font-size: 0.8rem; }
 			}
 		</style>
 </head>
@@ -2586,26 +2503,9 @@ ${socialMeta}
 		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile">
 			${generateLogoSvg(18)}
 		</button>
-		<button class="wallet-btn" id="wallet-btn">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/>
-				<path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
-			</svg>
-			<span id="wallet-btn-text">Connect</span>
-		</button>
+		<div id="wk-widget"></div>
 	</div>
-
-	<div class="wallet-menu" id="wallet-menu"></div>
-
-	<div class="wallet-modal" id="wallet-modal">
-		<div class="wallet-modal-content">
-			<div class="wallet-modal-header">
-				<h3>Connect Wallet</h3>
-				<button class="wallet-modal-close" id="wallet-modal-close">&times;</button>
-			</div>
-			<div class="wallet-list" id="wallet-list"></div>
-		</div>
-	</div>
+	<div id="wk-modal"></div>
 
 	<div class="search-backdrop-logo" aria-hidden="true">
 		<div class="search-backdrop-lockup">
@@ -2662,7 +2562,6 @@ ${socialMeta}
 						if (mod.default && typeof mod.default === 'object' && name in mod.default) {
 							return mod.default[name];
 						}
-						if (name === 'SuinsClient' && typeof mod.default === 'function') return mod.default;
 						return undefined;
 					};
 					const SDK_TIMEOUT = 15000;
@@ -2687,6 +2586,7 @@ ${socialMeta}
 					if (!SuinsClient) console.warn('SuinsClient export unavailable from @mysten/suins module');
 				}
 			${generateWalletSessionJs()}
+			var __skiServerSession = ${options.session?.address ? JSON.stringify({ address: options.session.address, walletName: options.session.walletName, verified: options.session.verified }) : 'null'};
 			const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
 			const NETWORK = ${JSON.stringify(options.network || 'mainnet')};
 			const RPC_URL = RPC_URLS[NETWORK] || RPC_URLS.mainnet;
@@ -2704,34 +2604,31 @@ ${socialMeta}
 			const TRADEPORT_BID_FEE_BPS = 300;
 			const SUINS_REGISTRATION_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration';
 
-			let connectedWallet = null;
-			let connectedAccount = null;
-			let connectedAddress = null;
 			let cachedSuiPriceUsd = null;
 			let suiClient = null;
 			let suinsClient = null;
 
-			const walletBtn = document.getElementById('wallet-btn');
-			const walletBtnText = document.getElementById('wallet-btn-text');
 			const walletProfileBtn = document.getElementById('wallet-profile-btn');
-			const walletMenu = document.getElementById('wallet-menu');
-			const walletModal = document.getElementById('wallet-modal');
-			const walletModalClose = document.getElementById('wallet-modal-close');
-			const walletList = document.getElementById('wallet-list');
-			let resolvedPrimaryName = null;
+
+			function getConnectedAddress() {
+				var conn = SuiWalletKit.$connection.value;
+				return conn && conn.status === 'connected' ? conn.address : null;
+			}
 
 			function getWalletProfileHref() {
-				if (resolvedPrimaryName) {
-					return 'https://' + encodeURIComponent(resolvedPrimaryName) + '.sui.ski';
+				var conn = SuiWalletKit.$connection.value;
+				if (conn && conn.primaryName) {
+					return 'https://' + encodeURIComponent(conn.primaryName) + '.sui.ski';
 				}
 				return 'https://sui.ski';
 			}
 
 			function updateWalletProfileButton() {
 				if (!walletProfileBtn) return;
-				const href = getWalletProfileHref();
+				var conn = SuiWalletKit.$connection.value;
+				var href = getWalletProfileHref();
 				walletProfileBtn.dataset.href = href;
-				walletProfileBtn.title = resolvedPrimaryName
+				walletProfileBtn.title = conn && conn.primaryName
 					? 'View my primary profile'
 					: 'Go to sui.ski';
 			}
@@ -2741,354 +2638,54 @@ ${socialMeta}
 				suinsClient = new SuinsClient({ client: suiClient, network: NETWORK });
 			}
 
-		async function resolveWalletName(address) {
-			if (!address || !suiClient) return;
-			try {
-				const result = await suiClient.resolveNameServiceNames({ address });
-				const name = result?.data?.[0];
-				if (name) {
-					resolvedPrimaryName = name.replace(/.sui$/i, '');
-					if (walletBtnText) {
-						walletBtnText.textContent = name;
-						walletBtnText.title = address;
-					}
-					updateWalletProfileButton();
-				}
-			} catch (e) {
-				console.log('Reverse resolution failed:', e.message);
-			}
-		}
-
-			// Wallet Standard API with fallbacks
-		let walletsApi = null;
-		if (typeof getWallets === 'function') {
-			try { walletsApi = getWallets(); } catch (e) { console.error('Wallet API init failed:', e); }
-		} else {
-			console.warn('getWallets function not available, wallet connection may not work');
-		}
-
-		function normalizeAccountAddress(account) {
-			if (!account) return '';
-			if (typeof account.address === 'string') return account.address.trim();
-			if (account.address && typeof account.address.toString === 'function') {
-				return String(account.address.toString()).trim();
-			}
-			return '';
-		}
-
-		function isSuiAccount(account) {
-			if (!account) return false;
-			const accountChains = Array.isArray(account.chains) ? account.chains : [];
-			if (accountChains.some((chain) => typeof chain === 'string' && chain.startsWith('sui:'))) {
-				return true;
-			}
-			const addr = normalizeAccountAddress(account);
-			return /^0x[0-9a-fA-F]{2,}$/.test(addr);
-		}
-
-		function filterSuiAccounts(accounts) {
-			if (!Array.isArray(accounts)) return [];
-			return accounts
-				.filter(isSuiAccount)
-				.map((account) => {
-					const normalizedAddress = normalizeAccountAddress(account);
-					if (!normalizedAddress) return account;
-					if (typeof account.address === 'string' && account.address === normalizedAddress) return account;
-					return { ...account, address: normalizedAddress };
-				});
-		}
-
-		function isSuiCapableWallet(wallet) {
-			if (!wallet) return false;
-			const features = wallet.features || {};
-			const hasSuiChain = Array.isArray(wallet.chains) && wallet.chains.some(c => c.startsWith('sui:'));
-			const hasConnect = !!(features['standard:connect'] || wallet.connect);
-			const hasSuiNamespaceFeature = Object.keys(features).some((key) => key.startsWith('sui:'));
-			const hasSuiTxMethod = !!(
-				features['sui:signAndExecuteTransactionBlock'] ||
-				features['sui:signAndExecuteTransaction'] ||
-				wallet.signAndExecuteTransactionBlock ||
-				wallet.signAndExecuteTransaction
-			);
-			return hasConnect && (hasSuiChain || hasSuiNamespaceFeature || hasSuiTxMethod);
-		}
-
-		function getSuiWallets() {
-			const wallets = [];
-			const seenNames = new Set();
-
-			if (walletsApi) {
+			async function resolveWalletName(address) {
+				if (!address || !suiClient) return;
 				try {
-					for (const wallet of walletsApi.get()) {
-						if (isSuiCapableWallet(wallet)) {
-							wallets.push(wallet);
-							seenNames.add(wallet.name);
-						}
+					var result = await suiClient.resolveNameServiceNames({ address });
+					var name = result && result.data && result.data[0];
+					if (name) {
+						SuiWalletKit.setPrimaryName(name.replace(/.sui$/i, ''));
+						updateWalletProfileButton();
 					}
-				} catch (e) {}
-			}
-
-			// Fallback: scan registry exposed by some wallet injectors
-			const injectedWallets = Array.isArray(window.__sui_wallets__) ? window.__sui_wallets__ : [];
-			for (const wallet of injectedWallets) {
-				if (!wallet || !isSuiCapableWallet(wallet)) continue;
-				const walletName = wallet.name || 'Sui Wallet';
-				if (seenNames.has(walletName)) continue;
-				wallets.push(wallet);
-				seenNames.add(walletName);
-			}
-
-			// Fallback: check window globals
-			const windowWallets = [
-				{ check: () => window.phantom?.sui, name: 'Phantom' },
-				{ check: () => window.suiWallet, name: 'Sui Wallet' },
-				{ check: () => window.slush, name: 'Slush' },
-				{ check: () => window.suiet, name: 'Suiet' },
-				{ check: () => window.martian?.sui, name: 'Martian' },
-				{ check: () => window.ethos, name: 'Ethos' },
-				{ check: () => window.okxwallet?.sui, name: 'OKX Wallet' },
-			];
-			for (const wc of windowWallets) {
-				try {
-					const w = wc.check();
-					if (w && !seenNames.has(wc.name)) {
-						if (!isSuiCapableWallet(w)) continue;
-						wallets.push({
-							name: wc.name,
-							icon: w.icon || '',
-							chains: ['sui:mainnet', 'sui:testnet'],
-							features: w.features || {
-								'standard:connect': w.connect ? { connect: w.connect.bind(w) } : undefined,
-								'sui:signAndExecuteTransaction': w.signAndExecuteTransaction
-									? { signAndExecuteTransaction: w.signAndExecuteTransaction.bind(w) } : undefined,
-								'sui:signAndExecuteTransactionBlock': w.signAndExecuteTransactionBlock
-									? { signAndExecuteTransactionBlock: w.signAndExecuteTransactionBlock.bind(w) } : undefined,
-							},
-							accounts: w.accounts || [],
-							_raw: w,
-						});
-						seenNames.add(wc.name);
-					}
-				} catch (e) {}
-			}
-			return wallets;
-		}
-
-		async function detectWallets() {
-			await new Promise(r => setTimeout(r, 100));
-			let wallets = getSuiWallets();
-			if (wallets.length) return wallets;
-			await new Promise(r => setTimeout(r, 500));
-			return getSuiWallets();
-		}
-
-		async function connectWallet(wallet) {
-			walletList.innerHTML = '<div style="padding:20px;text-align:center"><span class="loading"></span> Connecting...</div>';
-			try {
-				const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
-				if (!connectFeature) throw new Error('Wallet does not support connect');
-
-				let accounts;
-				if (typeof connectFeature === 'function') {
-					const result = await connectFeature();
-					accounts = result?.accounts || result;
-				} else if (typeof connectFeature.connect === 'function') {
-					const result = await connectFeature.connect();
-					accounts = result?.accounts || result;
-				}
-
-				accounts = filterSuiAccounts(accounts);
-
-				if (!accounts?.length) {
-					await new Promise(r => setTimeout(r, 200));
-					accounts = filterSuiAccounts(wallet.accounts || wallet._raw?.accounts);
-				}
-
-				if (!accounts?.length) throw new Error('No Sui accounts. Switch your wallet to Sui and try again.');
-
-				connectedWallet = wallet;
-				connectedAccount = accounts[0];
-				connectedAddress = connectedAccount.address;
-				resolvedPrimaryName = null;
-				connectWalletSession(wallet.name, connectedAddress);
-				walletBtn.classList.add('connected');
-				walletBtnText.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
-				walletModal.classList.remove('open');
-				updateWalletProfileButton();
-
-					resolveWalletName(connectedAddress);
 				} catch (e) {
-				const msg = String(e?.message || '');
-				if (msg.includes('unlock') || msg.includes('No accounts') || msg.includes('rejected')) {
-					walletList.innerHTML = '<div style="padding:20px;color:#f87171;text-align:center">' + msg + '</div>';
-				} else {
-					walletModal.classList.remove('open');
+					console.log('Reverse resolution failed:', e.message);
 				}
 			}
-		}
 
-		function disconnectWallet() {
-			if (connectedWallet?.features?.['standard:disconnect']?.disconnect) {
-				try { connectedWallet.features['standard:disconnect'].disconnect(); } catch {}
-			}
-			connectedWallet = null;
-			connectedAccount = null;
-				connectedAddress = null;
-				resolvedPrimaryName = null;
-				disconnectWalletSession();
-				walletBtn.classList.remove('connected');
-				walletBtnText.textContent = 'Connect';
-				walletMenu.classList.remove('open');
+			${generateWalletKitJs({ network: options.network || 'mainnet', autoConnect: true })}
+			${generateWalletTxJs()}
+			${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onLandingWalletConnected', onDisconnect: 'onLandingWalletDisconnected' })}
+			if (__skiServerSession && __skiServerSession.address) { initSessionFromServer(__skiServerSession); }
+
+			SuiWalletKit.renderModal('wk-modal');
+			SuiWalletKit.renderWidget('wk-widget');
+
+			window.onLandingWalletConnected = function() {
 				updateWalletProfileButton();
-			}
-
-		function renderWalletMenu() {
-			const profileHref = resolvedPrimaryName
-				? 'https://' + encodeURIComponent(resolvedPrimaryName) + '.sui.ski'
-				: null;
-			const namesHref = 'https://www.tradeport.xyz/sui/' + connectedAddress + '?tab=items&collectionFilter=suins';
-			let html = '<button class="wallet-menu-item" id="wm-copy">'
-				+ '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
-				+ 'Copy Address</button>';
-			if (profileHref) {
-				html += '<a class="wallet-menu-item" href="' + profileHref + '">'
-					+ '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>'
-					+ 'My Profile</a>';
-			}
-			html += '<a class="wallet-menu-item" href="' + namesHref + '" target="_blank" rel="noopener noreferrer">'
-				+ '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>'
-				+ 'My Names</a>';
-			html += '<button class="wallet-menu-item" id="wm-switch">'
-				+ '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>'
-				+ 'Switch Wallet</button>';
-			html += '<button class="wallet-menu-item disconnect" id="wm-disconnect">'
-				+ '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>'
-				+ 'Disconnect</button>';
-			walletMenu.innerHTML = html;
-
-			document.getElementById('wm-copy').onclick = () => {
-				navigator.clipboard.writeText(connectedAddress).then(() => {
-					const btn = document.getElementById('wm-copy');
-					const flash = document.createElement('span');
-					flash.className = 'copied-flash';
-					flash.textContent = 'Copied!';
-					btn.appendChild(flash);
-					setTimeout(() => flash.remove(), 1500);
-				});
+				resolveWalletName(SuiWalletKit.$connection.value.address);
 			};
-			document.getElementById('wm-switch').onclick = () => {
-				walletMenu.classList.remove('open');
-				disconnectWallet();
-				setTimeout(() => openWalletModal(), 120);
+
+			window.onLandingWalletDisconnected = function() {
+				updateWalletProfileButton();
 			};
-			document.getElementById('wm-disconnect').onclick = () => disconnectWallet();
-		}
 
-		function toggleWalletMenu() {
-			if (walletMenu.classList.contains('open')) {
-				walletMenu.classList.remove('open');
-			} else {
-				renderWalletMenu();
-				walletMenu.classList.add('open');
+			updateWalletProfileButton();
+			if (walletProfileBtn) {
+				walletProfileBtn.onclick = function(e) {
+					e.stopPropagation();
+					window.location.href = walletProfileBtn.dataset.href || 'https://sui.ski';
+				};
 			}
-		}
-
-		async function openWalletModal() {
-			if (connectedAddress) { toggleWalletMenu(); return; }
-			walletList.innerHTML = '<div style="padding:20px;text-align:center"><span class="loading"></span> Detecting wallets...</div>';
-			walletModal.classList.add('open');
-
-			const wallets = await detectWallets();
-			if (!wallets.length) {
-				walletList.innerHTML = '<div style="padding:20px;color:#71717a;text-align:center">' +
-					'No Sui wallets detected.<br><br>' +
-					'<a href="https://phantom.app/download" target="_blank" style="color:#a78bfa">Install Phantom →</a><br>' +
-					'<a href="https://suiwallet.com" target="_blank" style="color:#a78bfa">Install Sui Wallet →</a></div>';
-			} else {
-				walletList.innerHTML = wallets.map(w =>
-					'<button class="wallet-option" data-name="' + w.name + '">' +
-					(w.icon ? '<img src="' + w.icon + '" alt="" onerror="this.style.display=\\'none\\'">' : '') +
-					w.name + '</button>'
-				).join('');
-				wallets.forEach(w => {
-					const btn = walletList.querySelector('[data-name="' + w.name + '"]');
-					if (btn) btn.onclick = () => connectWallet(w);
-				});
-			}
-		}
-
-		walletBtn.onclick = openWalletModal;
-		updateWalletProfileButton();
-		if (walletProfileBtn) {
-			walletProfileBtn.onclick = (e) => {
-				e.stopPropagation();
-				window.location.href = walletProfileBtn.dataset.href || 'https://sui.ski';
-			};
-		}
-		walletModalClose.onclick = () => walletModal.classList.remove('open');
-		walletModal.onclick = (e) => { if (e.target === walletModal) walletModal.classList.remove('open'); };
-
-		document.addEventListener('click', (e) => {
-			if (!e.target.closest('.wallet-btn') && !e.target.closest('.wallet-menu')) {
-				walletMenu.classList.remove('open');
-			}
-		});
 
 			async function executeTransaction(tx) {
-			const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
-			const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
-			const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-
-			const txBytes = await tx.build({ client: suiClient });
-
-			if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-				return await signExecBlockFeature.signAndExecuteTransactionBlock({
-					transactionBlock: txBytes,
-					account: connectedAccount,
-					chain,
-				});
+				var txBytes = await tx.build({ client: suiClient });
+				return SuiWalletKit.signAndExecuteFromBytes(txBytes);
 			}
 
-			if (signExecFeature?.signAndExecuteTransaction) {
-				return await signExecFeature.signAndExecuteTransaction({
-					transaction: Transaction.from(txBytes),
-					account: connectedAccount,
-					chain,
-				});
-			}
-
-			if (window.phantom?.sui?.signAndExecuteTransactionBlock) {
-				try {
-					return await window.phantom.sui.signAndExecuteTransactionBlock({
-						transactionBlock: txBytes,
-					});
-				} catch (e) {
-					const txB64 = btoa(String.fromCharCode.apply(null, Array.from(txBytes)));
-					return await window.phantom.sui.signAndExecuteTransactionBlock({
-						transactionBlock: txB64,
-					});
-				}
-			}
-
-			if (window.suiWallet?.signAndExecuteTransactionBlock) {
-				return await window.suiWallet.signAndExecuteTransactionBlock({
-					transactionBlock: txBytes,
-				});
-			}
-
-			throw new Error('No compatible Sui wallet found');
-		}
-
-		initClients();
-
-		(async () => {
-			const hint = getWalletSession();
-			if (!hint) return;
-			await new Promise(r => setTimeout(r, 300));
-			const wallets = getSuiWallets();
-			const match = wallets.find(w => w.name === hint.walletName);
-			if (match) connectWallet(match);
-		})();
+			initClients();
+			SuiWalletKit.detectWallets().then(function() {
+				SuiWalletKit.autoReconnect();
+			});
 
 		// ========== SEARCH FUNCTIONALITY ==========
 		const searchInput = document.getElementById('search-input');
@@ -3220,7 +2817,32 @@ ${socialMeta}
 				dropdown.innerHTML = html;
 			dropdown.classList.add('visible');
 			searchBox.classList.add('has-results');
-			for (const n of names) checkName(n);
+			var checkPromises = names.map(n => checkName(n));
+			Promise.allSettled(checkPromises).then(() => {
+				var takenNames = [];
+				for (var i = 0; i < names.length; i++) {
+					var cached = cache.get(names[i]);
+					if (cached && !cached.available) takenNames.push(names[i]);
+				}
+				if (takenNames.length === 0) return;
+				fetch('/api/marketplace-batch', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ names: takenNames }),
+				})
+				.then(function(res) { return res.ok ? res.json() : null; })
+				.then(function(body) {
+					if (!body || !body.results) return;
+					for (var k = 0; k < takenNames.length; k++) {
+						var n = takenNames[k];
+						var data = body.results[n];
+						if (!data) continue;
+						var item = dropdown.querySelector('[data-name="' + n + '"]');
+						if (item) applyMarketplaceData(item, n, data);
+					}
+				})
+				.catch(function() {});
+			});
 		}
 
 		async function checkName(name) {
@@ -3316,7 +2938,7 @@ ${socialMeta}
 						delete item.dataset.expiryColor;
 						setNameExpiry(item, null, null);
 					}
-					const canOffer = connectedAddress && result.nftId;
+					const canOffer = getConnectedAddress() && result.nftId;
 					if (canOffer) {
 						item.dataset.nftId = result.nftId;
 						priceCol.innerHTML =
@@ -3334,7 +2956,6 @@ ${socialMeta}
 					offerInput.addEventListener('click', (e) => e.stopPropagation());
 				}
 				statusCol.querySelectorAll('a.action-btn').forEach(b => b.addEventListener('click', (e) => e.stopPropagation()));
-				fetchListingPrice(item, name);
 			}
 		}
 
@@ -3352,11 +2973,7 @@ ${socialMeta}
 			} catch (e) {}
 		}
 
-		async function fetchListingPrice(item, name) {
-			try {
-				const res = await fetch('/api/marketplace/' + encodeURIComponent(name));
-				if (!res.ok) return;
-				const data = await res.json();
+		function applyMarketplaceData(item, name, data) {
 				const dot = item.querySelector('.dot');
 				const priceCol = item.querySelector('.col-price');
 				const statusCol = item.querySelector('.col-status');
@@ -3383,9 +3000,14 @@ ${socialMeta}
 
 					if (offerInput) {
 					if (cachedSuiPriceUsd) {
-							const refPrice = hasListing ? data.bestListing.price : (hasBid ? data.bestBid.price : 0);
-							if (refPrice > 0) {
-								const usdValue = Math.round((refPrice / 1e9) * cachedSuiPriceUsd);
+							var smartDefaultMist = 0;
+							if (hasBid) {
+								smartDefaultMist = data.bestBid.price + 1000000000;
+							} else if (hasListing) {
+								smartDefaultMist = data.bestListing.price;
+							}
+							if (smartDefaultMist > 0) {
+								var usdValue = Math.round((smartDefaultMist / 1e9) * cachedSuiPriceUsd);
 								item.dataset.referenceUsd = usdValue > 0 ? String(usdValue) : '';
 								offerInput.placeholder = usdValue > 0 ? String(usdValue) : '--';
 							}
@@ -3394,7 +3016,7 @@ ${socialMeta}
 							const listingSui = (data.bestListing.price / 1e9).toFixed(1) + ' SUI';
 							priceCol.innerHTML = '<span class="listing-price">' + listingSui + '</span>';
 							if (dot) dot.className = 'dot listed';
-							if (connectedAddress && item.dataset.nftId) {
+							if (getConnectedAddress() && item.dataset.nftId) {
 								statusCol.innerHTML =
 									'<button class="action-btn offer">Offer</button>' +
 									'<a class="action-btn register" href="' + tradeportUrl + '" target="_blank" rel="noopener noreferrer">Buy</a>';
@@ -3430,6 +3052,14 @@ ${socialMeta}
 				if (hasListing && !dot.classList.contains('listed')) {
 					if (dot) dot.className = 'dot listed';
 				}
+		}
+
+		async function fetchListingPrice(item, name) {
+			try {
+				const res = await fetch('/api/marketplace/' + encodeURIComponent(name));
+				if (!res.ok) return;
+				const data = await res.json();
+				applyMarketplaceData(item, name, data);
 			} catch (e) {}
 		}
 
@@ -3545,7 +3175,7 @@ ${socialMeta}
 				bidMist,
 				nftId,
 			) {
-				const usdcCoins = await suiClient.getCoins({ owner: connectedAddress, coinType: USDC_TYPE });
+				const usdcCoins = await suiClient.getCoins({ owner: getConnectedAddress(), coinType: USDC_TYPE });
 				if (!usdcCoins.data.length) throw new Error('No USDC balance found');
 			const usdcIds = usdcCoins.data.map(c => c.coinObjectId);
 			let usdcCoin;
@@ -3584,7 +3214,7 @@ ${socialMeta}
 
 				const [bidPayment] = tx.splitCoins(suiOut, [tx.pure.u64(totalMist)]);
 				buildBidCall(tx, nftId, bidMist, bidPayment);
-				tx.transferObjects([suiOut, usdcLeft, deepLeft2, suiLeftDeep, deepLeft1], tx.pure.address(connectedAddress));
+				tx.transferObjects([suiOut, usdcLeft, deepLeft2, suiLeftDeep, deepLeft1], tx.pure.address(getConnectedAddress()));
 			}
 
 		async function placeOffer(name, item) {
@@ -3592,13 +3222,11 @@ ${socialMeta}
 			const offerBtn = statusCol.querySelector('.action-btn.offer');
 			const offerInput = item.querySelector('.offer-amount');
 			let offerUsd = parseFloat(offerInput?.value || '');
-			if ((!offerUsd || offerUsd <= 0) && !offerInput) {
-				const suggested = item.dataset.referenceUsd || '';
-				const prompted = window.prompt('Enter offer amount (USD)', suggested);
-				offerUsd = parseFloat(prompted || '');
+			if ((!offerUsd || offerUsd <= 0) && offerInput && offerInput.placeholder && offerInput.placeholder !== '--') {
+				offerUsd = parseFloat(offerInput.placeholder);
 			}
 
-			if (!connectedAddress) { showOfferStatus(statusCol, 'Connect wallet', 'error'); return; }
+			if (!getConnectedAddress()) { showOfferStatus(statusCol, 'Connect wallet', 'error'); return; }
 			if (!offerUsd || offerUsd <= 0) { showOfferStatus(statusCol, 'Enter amount', 'error'); return; }
 			if (!cachedSuiPriceUsd) { showOfferStatus(statusCol, 'Price loading...', 'error'); return; }
 
@@ -3614,9 +3242,9 @@ ${socialMeta}
 					const totalMist = bidMist + feeMist;
 
 					const tx = new Transaction();
-					tx.setSender(connectedAddress);
+					tx.setSender(getConnectedAddress());
 
-				const suiBalance = await suiClient.getBalance({ owner: connectedAddress, coinType: SUI_TYPE });
+				const suiBalance = await suiClient.getBalance({ owner: getConnectedAddress(), coinType: SUI_TYPE });
 				const suiBal = BigInt(suiBalance.totalBalance);
 				const gasBuffer = 50_000_000n;
 

@@ -1,4 +1,5 @@
-import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
+import { SuiClient } from '@mysten/sui/client'
+import { SuinsClient } from '@mysten/suins'
 import { Hono } from 'hono'
 import type { Env, X402VerifiedPayment } from '../types'
 import { jsonResponse } from '../utils/response'
@@ -63,7 +64,6 @@ async function resolveSuinsTargetAddress(name: string, env: Env): Promise<string
 	const normalizedName = normalizeSuinsName(name)
 	if (!normalizedName) return null
 
-	const { SuinsClient } = await import('@mysten/suins')
 	const suiClient = new SuiClient({
 		url: getDefaultRpcUrl(env.SUI_NETWORK),
 		network: env.SUI_NETWORK,
@@ -843,7 +843,6 @@ function getSubnameCapRpcUrl(env: Env): string {
 
 async function getAgentRelayAddress(env: Env): Promise<string | null> {
 	try {
-		const { SuinsClient } = await import('@mysten/suins')
 		const suiClient = new SuiClient({
 			url: getDefaultRpcUrl(env.SUI_NETWORK),
 			network: env.SUI_NETWORK,
@@ -871,7 +870,7 @@ async function verifyAgentPayment(
 			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
 		})
 
-		const txResponse = await suiClient.getTransactionBlock({
+		const txResponse = await suiClient.getTransaction({
 			digest: txDigest,
 			options: { showEffects: true, showBalanceChanges: true },
 		})

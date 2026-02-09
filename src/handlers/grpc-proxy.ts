@@ -112,7 +112,7 @@ async function proxyRequest(
 		}
 
 		if (config.apiKey) {
-			headers['Authorization'] = `Bearer ${config.apiKey}`
+			headers.Authorization = `Bearer ${config.apiKey}`
 		}
 
 		const response = await fetch(`${config.backendUrl}/rpc`, {
@@ -171,7 +171,7 @@ async function proxyBatchRequest(
 		}
 
 		if (config.apiKey) {
-			headers['Authorization'] = `Bearer ${config.apiKey}`
+			headers.Authorization = `Bearer ${config.apiKey}`
 		}
 
 		const response = await fetch(`${config.backendUrl}/rpc/batch`, {

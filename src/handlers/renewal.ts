@@ -144,7 +144,7 @@ async function getNftId(env: Env, name: string): Promise<string | null> {
 			client: suiClient as never,
 			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
 		})
-		const cleanName = name.replace(/\.sui$/i, '') + '.sui'
+		const cleanName = `${name.replace(/\.sui$/i, '')}.sui`
 		const nameRecord = await suinsClient.getNameRecord(cleanName)
 		return nameRecord?.nftId || null
 	} catch (error) {
@@ -272,7 +272,7 @@ export async function handleRenewalRequest(request: Request, env: Env): Promise<
 		return jsonResponse({ error: 'Name is required' }, 400)
 	}
 
-	const cleanName = name.replace(/\.sui$/i, '') + '.sui'
+	const cleanName = `${name.replace(/\.sui$/i, '')}.sui`
 
 	// Resolve relay address
 	const relayAddress = await getRelayAddress(env)

@@ -273,7 +273,7 @@ export class MVRResolver {
 				} else {
 					// Try parsing as number
 					const numVersion = parseInt(parsed.version, 10)
-					if (!isNaN(numVersion)) {
+					if (!Number.isNaN(numVersion)) {
 						version = numVersion
 					}
 				}

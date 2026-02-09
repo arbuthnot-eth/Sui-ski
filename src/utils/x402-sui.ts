@@ -1,4 +1,5 @@
 import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
+import { SuinsClient } from '@mysten/suins'
 import type {
 	Env,
 	X402PaymentRequired,
@@ -16,7 +17,6 @@ const X402_SUINS_NAME = 'x402.sui'
 
 export async function resolveX402Recipient(env: Env): Promise<string | null> {
 	try {
-		const { SuinsClient } = await import('@mysten/suins')
 		const suiClient = new SuiClient({
 			url: getDefaultRpcUrl(env.SUI_NETWORK),
 			network: env.SUI_NETWORK,

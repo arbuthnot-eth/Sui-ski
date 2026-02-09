@@ -5,11 +5,14 @@ import { generateDashboardPage } from './handlers/dashboard'
 import { agentGraceVaultRoutes } from './handlers/grace-vault-agent'
 import { apiRoutes, landingPageHTML } from './handlers/landing'
 import { generateProfilePage } from './handlers/profile'
+import { generateSkiPage } from './handlers/ski'
+import { generateSkiSignPage } from './handlers/ski-sign'
 import { solSwapRoutes } from './handlers/sol-swap'
 import { agentSubnameCapRoutes, subnameCapRoutes } from './handlers/subnamecap'
 import { generateSubnameCapPage } from './handlers/subnamecap-ui'
 import { vaultRoutes } from './handlers/vault'
 import {
+	handleWalletChallenge,
 	handleWalletCheck,
 	handleWalletConnect,
 	handleWalletDisconnect,
@@ -37,6 +40,11 @@ type AppEnv = {
 		parsed: ParsedSubdomain
 		hostname: string
 		env: Env
+		session: {
+			address: string | null
+			walletName: string | null
+			verified: boolean
+		}
 	}
 }
 
@@ -73,6 +81,40 @@ app.use('*', async (c, next) => {
 	await next()
 })
 
+// SKI Middleware (Sui-Key-In ubiquitous authentication)
+app.use('*', async (c, next) => {
+	const cookies = c.req.header('Cookie') || ''
+	const sessionCookie = cookies.split('; ').find((row) => row.startsWith('session_id='))
+	const addrCookie = cookies.split('; ').find((row) => row.startsWith('wallet_address='))
+	const nameCookie = cookies.split('; ').find((row) => row.startsWith('wallet_name='))
+
+	const sessionId = sessionCookie?.split('=')[1]
+	const walletAddress = addrCookie?.split('=')[1]
+	const walletName = nameCookie?.split('=')[1]
+
+	const session = {
+		address: walletAddress || null,
+		walletName: walletName || null,
+		verified: false,
+	}
+
+	if (sessionId) {
+		const stub = c.env.WALLET_SESSIONS.getByName('global')
+		const info = await stub.getSessionInfo(sessionId)
+		if (info) {
+			session.address = info.address
+			session.verified = info.verified
+		}
+	}
+
+	c.set('session', session)
+	await next()
+})
+
+app.post('/api/wallet/challenge', async (c) => {
+	return handleWalletChallenge(c.req.raw, c.env)
+})
+
 app.post('/api/wallet/connect', async (c) => {
 	return handleWalletConnect(c.req.raw, c.env)
 })
@@ -93,7 +135,7 @@ app.use('*', async (c, next) => {
 		case 'rpc':
 			return handleRPCRequest(c.req.raw, env)
 		case 'app':
-			return handleAppRequest(c.req.raw, env)
+			return handleAppRequest(c.req.raw, env, c.get('session'))
 		case 'dashboard':
 			return htmlResponse(generateDashboardPage(env))
 		case 'content': {
@@ -115,7 +157,7 @@ app.use('*', async (c, next) => {
 	}
 })
 
-app.all('/api/app/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
+app.all('/api/app/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.use('/api/agents/subnamecap/*', async (c, next) => {
 	if (c.get('parsed').type !== 'root') return c.notFound()
 	await next()
@@ -126,9 +168,9 @@ app.use('/api/agents/grace-vault/*', async (c, next) => {
 	await next()
 })
 app.route('/api/agents/grace-vault', agentGraceVaultRoutes)
-app.all('/api/agents/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
-app.all('/api/ika/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
-app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env')))
+app.all('/api/agents/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
+app.all('/api/ika/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
+app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 
 app.route('/api/sol-swap', solSwapRoutes)
 app.route('/api/subnamecap', subnameCapRoutes)
@@ -167,6 +209,14 @@ app.get('/ipfs/:id{.+}', async (c) => {
 	return result.data as Response
 })
 
+app.get('/in', async (c) => {
+	return htmlResponse(generateSkiPage(c.get('env'), c.get('session')))
+})
+
+app.get('/sign', async (c) => {
+	return htmlResponse(generateSkiSignPage(c.get('env')))
+})
+
 app.get('/subnamecap', async (c) => {
 	if (c.get('parsed').type !== 'root') return c.notFound()
 	return htmlResponse(generateSubnameCapPage(c.get('env')))
@@ -174,12 +224,12 @@ app.get('/subnamecap', async (c) => {
 
 app.all('/app', async (c) => {
 	if (c.get('parsed').type !== 'root') return c.notFound()
-	return handleAppRequest(c.req.raw, c.get('env'))
+	return handleAppRequest(c.req.raw, c.get('env'), c.get('session'))
 })
 
 app.all('/app/*', async (c) => {
 	if (c.get('parsed').type !== 'root') return c.notFound()
-	return handleAppRequest(c.req.raw, c.get('env'))
+	return handleAppRequest(c.req.raw, c.get('env'), c.get('session'))
 })
 
 app.all('*', async (c) => {
@@ -194,6 +244,7 @@ app.all('*', async (c) => {
 				canonicalUrl,
 				rpcUrl: env.SUI_RPC_URL,
 				network: env.SUI_NETWORK,
+				session: c.get('session'),
 			}),
 		)
 	}
@@ -231,6 +282,7 @@ app.all('*', async (c) => {
 			canonicalUrl,
 			hostname,
 			inGracePeriod: result.inGracePeriod || false,
+			session: c.get('session'),
 		}
 		const shouldServeProfileForTwitter =
 			isTwitterPreviewBot(userAgent ?? null) && normalizedPath === '/'

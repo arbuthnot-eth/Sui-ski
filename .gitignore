@@ -15,6 +15,12 @@ dist/
 .idea/
 docs/.obsidian/
 
+# Obsidian vault (personal notes)
+.vault/daily-notes/
+.vault/git-observations/
+.vault/progress/
+vault/.obsidian/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -20,10 +20,16 @@ bun run deploy        # Deploy to Cloudflare
 ### Single Test
 To run a specific test: `bun test <path-to-test-file>`
 
+**CRITICAL: Deployment Requirement**
+- **You MUST run `npx wrangler deploy` (or `bun run deploy`) every time you make changes.**
+- This ensures that the live environment reflects the latest updates immediately.
+- Do not consider a task complete until the deployment command has been executed and confirmed.
+
 **Pre-commit checklist:**
 - Run `bun run typecheck` (must pass)
 - Run `bun run lint` (must pass, zero warnings)
 - Run `bun test` (must pass)
+- **Run `bun run deploy` (MANDATORY)**
 
 ## Code Style
 

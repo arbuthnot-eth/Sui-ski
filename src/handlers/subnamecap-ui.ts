@@ -1,5 +1,8 @@
 import type { Env } from '../types'
+import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
+import { generateWalletTxJs } from '../utils/wallet-tx-js'
+import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
 import { subnameCapStyles } from './subnamecap-ui.css'
 
 export function generateSubnameCapPage(env: Env): string {
@@ -14,7 +17,8 @@ export function generateSubnameCapPage(env: Env): string {
 	<title>SubnameCap Manager | sui.ski</title>
 	<meta name="description" content="Manage SuiNS subdomain delegation with SubnameCaps">
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-	<style>${subnameCapStyles}</style>
+	<style>${subnameCapStyles}
+	${generateWalletUiCss()}</style>
 </head>
 <body>
 	<div class="container">
@@ -25,7 +29,7 @@ export function generateSubnameCapPage(env: Env): string {
 			<div class="header-actions">
 				<span class="status-dot ${subdomainsPackageId ? 'online' : 'offline'}"></span>
 				<span style="font-size: 0.8rem; color: var(--text-muted);">${network}</span>
-				<button id="wallet-btn" class="wallet-btn" onclick="connectWallet()">Connect Wallet</button>
+				<div id="wk-widget"></div>
 			</div>
 		</div>
 
@@ -321,6 +325,8 @@ export function generateSubnameCapPage(env: Env): string {
 		</div>
 	</div>
 
+	<div id="wk-modal"></div>
+
 	<!-- Toast -->
 	<div id="toast" class="toast"></div>
 
@@ -360,9 +366,10 @@ export function generateSubnameCapPage(env: Env): string {
 
 	<script type="module">
 		${generateWalletSessionJs()}
+		${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
+		${generateWalletTxJs()}
+		${generateWalletUiJs({ onConnect: 'onWalletConnected' })}
 		const API_BASE = '/api/subnamecap';
-		let connectedAddress = null;
-		let currentWallet = null;
 
 		window.switchTab = function(tabId) {
 			document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -382,79 +389,8 @@ export function generateSubnameCapPage(env: Env): string {
 			document.getElementById(id).classList.remove('show');
 		};
 
-		async function detectWallets() {
-			if (!window.navigator) return [];
-			const wallets = [];
-			if (typeof window !== 'undefined') {
-				const registered = window['__sui_wallets__'] || [];
-				for (const w of registered) {
-					if (w.features && w.features['standard:connect']) {
-						wallets.push(w);
-					}
-				}
-			}
-			return wallets;
-		}
-
-		window.connectWallet = async function() {
-			try {
-				const wallets = await detectWallets();
-				if (wallets.length === 0) {
-					showToast('No Sui wallet found. Install Sui Wallet or Suiet.', 'error');
-					return;
-				}
-
-				const wallet = wallets[0];
-				const connectFeature = wallet.features['standard:connect'];
-				const result = await connectFeature.connect();
-				const accounts = result.accounts || [];
-
-				if (accounts.length === 0) {
-					showToast('No accounts found in wallet', 'error');
-					return;
-				}
-
-				connectedAddress = accounts[0].address;
-				currentWallet = wallet;
-				connectWalletSession(wallet.name, connectedAddress);
-
-				const btn = document.getElementById('wallet-btn');
-				btn.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
-				btn.classList.add('connected');
-
-				showToast('Wallet connected');
-				loadMyCaps();
-			} catch (err) {
-				console.error('Wallet connection failed:', err);
-				showToast('Failed to connect wallet: ' + err.message, 'error');
-			}
-		};
-
-		async function signAndExecute(txJson) {
-			if (!currentWallet || !connectedAddress) {
-				showToast('Connect wallet first', 'error');
-				return null;
-			}
-
-			const signFeature = currentWallet.features['sui:signAndExecuteTransactionBlock'] ||
-				currentWallet.features['sui:signAndExecuteTransaction'];
-
-			if (!signFeature) {
-				showToast('Wallet does not support transaction signing', 'error');
-				return null;
-			}
-
-			const account = { address: connectedAddress };
-			const result = await signFeature.signAndExecuteTransactionBlock({
-				transactionBlock: txJson,
-				account,
-				chain: 'sui:${network}',
-			});
-
-			return result;
-		}
-
 		async function loadMyCaps() {
+			const connectedAddress = SuiWalletKit.$connection.value.address;
 			if (!connectedAddress) return;
 
 			const listEl = document.getElementById('my-caps-list');
@@ -537,6 +473,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 		window.handleCreateCap = async function(e) {
 			e.preventDefault();
+			const connectedAddress = SuiWalletKit.$connection.value.address;
 			if (!connectedAddress) { showToast('Connect wallet first', 'error'); return; }
 
 			const btn = document.getElementById('create-cap-btn');
@@ -566,7 +503,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 				if (data.error) { showToast(data.error, 'error'); return; }
 
-				const result = await signAndExecute(data.txBytes);
+				const result = await SuiWalletKit.signAndExecute(data.txBytes);
 				if (result) {
 					showToast('SubnameCap created successfully!');
 					loadMyCaps();
@@ -581,6 +518,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 		window.handleCreateSubname = async function(e) {
 			e.preventDefault();
+			const connectedAddress = SuiWalletKit.$connection.value.address;
 			if (!connectedAddress) { showToast('Connect wallet first', 'error'); return; }
 
 			const btn = document.getElementById('create-subname-btn');
@@ -602,7 +540,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 				if (data.error) { showToast(data.error, 'error'); return; }
 
-				const result = await signAndExecute(data.txBytes);
+				const result = await SuiWalletKit.signAndExecute(data.txBytes);
 				if (result) {
 					showToast('Leaf subname created!');
 				}
@@ -616,6 +554,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 		window.handleCreateNode = async function(e) {
 			e.preventDefault();
+			const connectedAddress = SuiWalletKit.$connection.value.address;
 			if (!connectedAddress) { showToast('Connect wallet first', 'error'); return; }
 
 			const btn = document.getElementById('create-node-btn');
@@ -640,7 +579,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 				if (data.error) { showToast(data.error, 'error'); return; }
 
-				const result = await signAndExecute(data.txBytes);
+				const result = await SuiWalletKit.signAndExecute(data.txBytes);
 				if (result) {
 					showToast('Node subname created!');
 				}
@@ -653,6 +592,7 @@ export function generateSubnameCapPage(env: Env): string {
 		};
 
 		window.handleRevokeCap = async function() {
+			const connectedAddress = SuiWalletKit.$connection.value.address;
 			if (!connectedAddress) { showToast('Connect wallet first', 'error'); return; }
 
 			const capId = document.getElementById('revoke-cap-id').value;
@@ -674,7 +614,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 				if (data.error) { showToast(data.error, 'error'); return; }
 
-				const result = await signAndExecute(data.txBytes);
+				const result = await SuiWalletKit.signAndExecute(data.txBytes);
 				if (result) {
 					showToast('Cap revoked');
 					closeModal('revoke-modal');
@@ -686,6 +626,7 @@ export function generateSubnameCapPage(env: Env): string {
 		};
 
 		window.handleSurrenderCap = async function() {
+			const connectedAddress = SuiWalletKit.$connection.value.address;
 			if (!connectedAddress) { showToast('Connect wallet first', 'error'); return; }
 
 			const capId = document.getElementById('surrender-cap-id').value;
@@ -703,7 +644,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 				if (data.error) { showToast(data.error, 'error'); return; }
 
-				const result = await signAndExecute(data.txBytes);
+				const result = await SuiWalletKit.signAndExecute(data.txBytes);
 				if (result) {
 					showToast('Cap surrendered');
 					closeModal('surrender-modal');
@@ -772,6 +713,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 		window.handleCreateJacket = async function(e) {
 			e.preventDefault();
+			const connectedAddress = SuiWalletKit.$connection.value.address;
 			if (!connectedAddress) { showToast('Connect wallet first', 'error'); return; }
 
 			const btn = document.getElementById('create-jacket-btn');
@@ -842,7 +784,7 @@ export function generateSubnameCapPage(env: Env): string {
 						}
 					}
 
-						const result = await signAndExecute(data.txBytes);
+						const result = await SuiWalletKit.signAndExecute(data.txBytes);
 						if (result) {
 							const recipientSummary = data.recipientAddress
 								? ' Voucher recipient: ' + data.recipientAddress.slice(0, 6) + '...' + data.recipientAddress.slice(-4)
@@ -905,6 +847,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 		window.handleJacketCreateLeaf = async function(e) {
 			e.preventDefault();
+			const connectedAddress = SuiWalletKit.$connection.value.address;
 			if (!connectedAddress) { showToast('Connect wallet first', 'error'); return; }
 
 			const btn = document.getElementById('jacket-create-leaf-btn');
@@ -943,7 +886,7 @@ export function generateSubnameCapPage(env: Env): string {
 
 				if (data.error) { showToast(data.error, 'error'); return; }
 
-				const result = await signAndExecute(data.txBytes);
+				const result = await SuiWalletKit.signAndExecute(data.txBytes);
 				if (result) { showToast('Subname created via jacket!'); }
 			} catch (err) {
 				showToast('Failed: ' + err.message, 'error');
@@ -980,26 +923,16 @@ export function generateSubnameCapPage(env: Env): string {
 			}
 		};
 
-		(async () => {
-			const hint = getWalletSession();
-			if (!hint) return;
-			await new Promise(r => setTimeout(r, 300));
-			const wallets = await detectWallets();
-			const match = wallets.find(w => w.name === hint.walletName);
-			if (match) {
-				const feat = match.features['standard:connect'];
-				const result = await feat.connect();
-				const accounts = result.accounts || [];
-				if (accounts.length > 0) {
-					connectedAddress = accounts[0].address;
-					currentWallet = match;
-					const btn = document.getElementById('wallet-btn');
-					btn.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
-					btn.classList.add('connected');
-					loadMyCaps();
-				}
-			}
-		})();
+		SuiWalletKit.renderModal('wk-modal');
+		SuiWalletKit.renderWidget('wk-widget');
+
+		window.onWalletConnected = function() {
+			loadMyCaps();
+		};
+
+		SuiWalletKit.detectWallets().then(function() {
+			SuiWalletKit.autoReconnect();
+		});
 	</script>
 </body>
 </html>`

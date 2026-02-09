@@ -277,7 +277,7 @@ export class MessagingClient {
 					network: 'testnet', // Default to testnet, should be configurable
 				})
 
-				const name = recipientNameOrAddress.replace(/^@/, '').replace(/\.sui$/i, '') + '.sui'
+				const name = `${recipientNameOrAddress.replace(/^@/, '').replace(/\.sui$/i, '')}.sui`
 				const record = await suinsClient.getNameRecord(name)
 				if (record?.targetAddress) {
 					return record.targetAddress
@@ -316,14 +316,11 @@ export class MessagingClient {
 
 			const threshold = this.sealConfig.threshold || 2
 
-			const packageIdHex = packageId.startsWith('0x') ? packageId.slice(2) : packageId
-			const policyIdHex = policyId.startsWith('0x') ? policyId.slice(2) : policyId
-
-			// fromHex returns Uint8Array, which is what encrypt expects
+			// Use proper address strings for SealClient
 			const { encryptedObject } = await sealClient.encrypt({
 				threshold,
-				packageId: fromHex(packageIdHex) as unknown as string,
-				id: fromHex(policyIdHex) as unknown as string,
+				packageId: packageId.startsWith('0x') ? packageId : `0x${packageId}`,
+				id: policyId.startsWith('0x') ? policyId : `0x${policyId}`,
 				data: plaintext,
 			})
 
@@ -346,7 +343,7 @@ export class MessagingClient {
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Unknown error'
 			console.error('Seal encryption failed:', error)
-			throw new Error('Encryption failed: ' + message)
+			throw new Error(`Encryption failed: ${message}`)
 		}
 	}
 
@@ -374,8 +371,8 @@ export class MessagingClient {
 			return null
 		}
 
-		if (!this.suiClient) {
-			throw new Error('Sui RPC URL not configured for decryption')
+		if (!this.sealSuiClient) {
+			throw new Error('Seal RPC URL not configured for decryption')
 		}
 
 		try {
@@ -389,7 +386,7 @@ export class MessagingClient {
 				],
 			})
 
-			const txBytes = await tx.build({ client: this.suiClient, onlyTransactionKind: true })
+			const txBytes = await tx.build({ client: this.sealSuiClient, onlyTransactionKind: true })
 
 			const ciphertext: Uint8Array =
 				typeof encryptedEnvelope.ciphertext === 'string'
@@ -588,7 +585,7 @@ export function createDefaultSuiNSResolver(
 			}
 
 			try {
-				const name = nameOrAddress.replace(/^@/, '').replace(/\.sui$/i, '') + '.sui'
+				const name = `${nameOrAddress.replace(/^@/, '').replace(/\.sui$/i, '')}.sui`
 				const record = await suinsClient.getNameRecord(name)
 				return record?.targetAddress || null
 			} catch (error) {

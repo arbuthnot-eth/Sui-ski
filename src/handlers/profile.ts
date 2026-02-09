@@ -1,7 +1,11 @@
 import type { Env, SuiNSRecord } from '../types'
 import { generateLogoSvg, getDefaultOgImageUrl, getProfileOgImageUrl } from '../utils/og-image'
 import { normalizeMediaUrl, renderSocialMeta } from '../utils/social'
+import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
+import { generateWalletTxJs } from '../utils/wallet-tx-js'
+import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
+import { generateZkSendCss, generateZkSendJs } from '../utils/zksend-js'
 import { profileStyles } from './profile.css'
 
 export interface ProfilePageOptions {
@@ -11,6 +15,11 @@ export interface ProfilePageOptions {
 	image?: string
 	/** Whether the name is in grace period (expired but not yet available for registration) */
 	inGracePeriod?: boolean
+	session?: {
+		address: string | null
+		walletName: string | null
+		verified: boolean
+	}
 }
 
 const DESCRIPTION_RECORD_KEYS = ['description', 'bio', 'about', 'summary', 'tagline', 'note']
@@ -28,6 +37,16 @@ const IMAGE_RECORD_KEYS = [
 	'banner',
 	'cover',
 ]
+
+const TRADEPORT_LOGO_ICON_SVG = `<svg width="99" height="61" viewBox="0 0 99 61" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M28.7101 0V17.8976H1.83946C0.824278 17.8976 8.3292e-06 17.0715 8.3292e-06 16.0541V1.84352C-0.00302207 0.826089 0.821248 0 1.83643 0H28.707H28.7101Z" fill="#F7A000"/>
+<path d="M57.4402 17.8976H28.709V0H39.5851C49.446 0 57.4433 8.01185 57.4433 17.8976H57.4402Z" fill="#A66C00"/>
+<path d="M46.5611 35.789V59.1564C46.5611 60.1738 45.7368 60.9999 44.7216 60.9999H30.5484C29.5333 60.9999 28.709 60.1738 28.709 59.1564V17.8975C38.5699 17.8975 46.5611 25.9093 46.5611 35.789Z" fill="#F7A000"/>
+<path d="M98.8943 1.84352V16.051C98.8943 17.0685 98.07 17.8945 97.0548 17.8945H57.4414V0H97.0548C98.07 0 98.8943 0.826089 98.8943 1.84352Z" fill="#F7A000"/>
+<path d="M75.2985 35.792V59.1533C75.2985 60.1707 74.4742 60.9968 73.459 60.9968H59.2828C58.2676 60.9968 57.4434 60.1707 57.4434 59.1533V17.8975C67.3043 17.8975 75.3015 25.9093 75.3015 35.795L75.2985 35.792Z" fill="#A66C00"/>
+</svg>`
+
+const TRADEPORT_LOGO_ICON_DATA_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(TRADEPORT_LOGO_ICON_SVG)}`
 
 /**
  * Generate sui.ski themed SuiNS profile page HTML
@@ -138,7 +157,9 @@ export function generateProfilePage(
 		import('https://esm.sh/@wallet-standard/app@1.1.0').catch(()=>{});
 	</script>
 
-	<style>${profileStyles}</style>
+	<style>${profileStyles}
+${generateWalletUiCss()}
+${generateZkSendCss()}</style>
 </head>
 <body>
 	<!-- Home Button -->
@@ -156,15 +177,8 @@ export function generateProfilePage(
 				<path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/>
 			</svg>
 		</button>
-		<button class="wallet-btn" id="wallet-btn">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/>
-				<path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
-			</svg>
-			<span id="wallet-btn-text">Connect</span>
-		</button>
+		<div id="wk-widget"></div>
 	</div>
-	<div class="wallet-menu" id="wallet-menu"></div>
 
 	<!-- Swap Panel -->
 	<div class="swap-panel" id="swap-panel" style="display:none;">
@@ -184,6 +198,10 @@ export function generateProfilePage(
 				<div class="cc-field">
 					<label class="cc-label">Amount (SOL)</label>
 					<input type="text" id="cc-sol-amount" class="cc-input" placeholder="0.00" inputmode="decimal" autocomplete="off">
+				</div>
+				<div class="cc-field">
+					<label class="cc-label">Recipient (Sui Address or Name)</label>
+					<input type="text" id="cc-target" class="cc-input" placeholder="0x... or name.sui" autocomplete="off">
 				</div>
 				<div class="cc-rate" id="cc-rate">
 					<span class="cc-rate-label">Rate:</span>
@@ -517,8 +535,16 @@ export function generateProfilePage(
 				</div>
 				<div class="marketplace-body">
 					<div class="marketplace-row" id="marketplace-listing-row" style="display:none;">
-						<span class="marketplace-label">Listed for</span>
-						<span class="marketplace-value listing-price" id="marketplace-listing-price">--</span>
+						<span class="marketplace-listing-meta">
+							<a
+								class="marketplace-lister"
+								id="marketplace-lister"
+								href="https://sui.ski"
+								target="_blank"
+								rel="noopener noreferrer"
+							>--</a>
+						</span>
+						<span class="marketplace-value listing-price" id="marketplace-listing-price"><span class="price-amount">--</span><span class="price-sui"></span></span>
 					</div>
 						<div class="marketplace-row" id="marketplace-bid-row" style="display:none;">
 							<span class="marketplace-bid-meta">
@@ -530,11 +556,23 @@ export function generateProfilePage(
 									rel="noopener noreferrer"
 								>--</a>
 							</span>
-						<span class="marketplace-value bid-price" id="marketplace-bid-price">--</span>
+						<span class="marketplace-value bid-price" id="marketplace-bid-price"><span class="price-amount">--</span><span class="price-sui"></span></span>
 						<button class="marketplace-accept-bid-btn" id="marketplace-accept-bid-btn" style="display:none;" disabled>
 							<span class="marketplace-accept-text">Accept</span>
 							<span class="marketplace-accept-loading hidden"><span class="loading"></span></span>
 						</button>
+					</div>
+					<div class="marketplace-row" id="marketplace-sold-row" style="display:none;">
+						<span class="marketplace-seller-meta">
+							<a
+								class="marketplace-seller"
+								id="marketplace-seller"
+								href="https://sui.ski"
+								target="_blank"
+								rel="noopener noreferrer"
+							>--</a>
+						</span>
+						<span class="marketplace-value sold-price" id="marketplace-sold-price"><span class="price-amount">--</span><span class="price-sui"></span></span>
 					</div>
 						<button class="marketplace-buy-btn" id="marketplace-buy-btn" style="display:none;" disabled>
 							<span class="marketplace-buy-text">Buy Now</span>
@@ -609,6 +647,18 @@ export function generateProfilePage(
 					</div>
 					</div>
 					</div>
+
+						<div class="overview-module linked-wide-module vault-list-module" id="vault-list-module" style="display:none;">
+							<div class="vault-list-header">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+									<path d="M12 2L22 12L12 22L2 12Z" fill="currentColor"/>
+								</svg>
+								<span>YOUR BLACK DIAMONDS</span>
+							</div>
+							<div class="linked-names-list" id="vault-names-list">
+								<div class="linked-names-empty">No black diamonds saved yet.</div>
+							</div>
+						</div>
 
 						<div class="overview-module linked-wide-module">
 						<div class="linked-names-section linked-names-results">
@@ -685,6 +735,11 @@ export function generateProfilePage(
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="send-modal-icon"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
 				<h3>Send SUI</h3>
 			</div>
+			<div class="send-tab-row">
+				<button class="send-tab-btn active" id="send-tab-direct">Direct Transfer</button>
+				<button class="send-tab-btn" id="send-tab-link">Send via Link</button>
+			</div>
+			<div id="send-panel-direct" class="send-tab-panel">
 			<div class="send-recipient-card">
 				<span class="send-recipient-label">To</span>
 				<span class="send-recipient-name" id="send-recipient-name">${escapeHtml(cleanName)}.sui</span>
@@ -702,6 +757,23 @@ export function generateProfilePage(
 			<div class="send-modal-buttons">
 				<button class="cancel-btn" id="send-cancel-btn">Cancel</button>
 				<button class="save-btn" id="send-confirm-btn">Send to ${escapeHtml(cleanName)}.sui</button>
+			</div>
+			</div>
+			<div id="send-panel-link" class="send-tab-panel hidden">
+				<div class="send-amount-row">
+					<button type="button" class="send-stepper-btn" id="zk-amount-down" aria-label="Decrease by 1 SUI">-</button>
+					<label for="zk-amount" class="visually-hidden">Amount in SUI</label>
+					<input type="text" id="zk-amount" value="1" inputmode="decimal" placeholder="1" />
+					<span class="send-amount-currency">SUI</span>
+					<button type="button" class="send-stepper-btn" id="zk-amount-up" aria-label="Increase by 1 SUI">+</button>
+				</div>
+				<div class="send-wallet-indicator" id="zk-wallet-indicator"></div>
+				<div id="zk-status" class="status hidden"></div>
+				<div id="zk-result" style="display:none;"></div>
+				<div class="send-modal-buttons">
+					<button class="cancel-btn" id="zk-cancel-btn">Cancel</button>
+					<button class="save-btn" id="zk-generate-btn">Generate Link</button>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -728,24 +800,33 @@ export function generateProfilePage(
 		</div>
 	</div>
 
-	<!-- Wallet Selection Modal -->
-	<div class="wallet-modal" id="wallet-modal">
-		<div class="wallet-modal-content">
-			<div class="wallet-modal-header">
-				<span>Connect Wallet</span>
-				<button class="wallet-modal-close" id="wallet-modal-close">&times;</button>
-			</div>
-			<div class="wallet-list" id="wallet-list">
-				<div class="wallet-detecting">
-					<span class="loading"></span>
-					Detecting wallets...
-				</div>
-			</div>
-		</div>
-	</div>
+	<div id="wk-modal"></div>
 
 		<script type="module">
-			let getWallets, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction, SealClient, SessionKey, fromHex, toHex;
+			let getWallets, SuiClient, Transaction, SuinsClient, SuinsTransaction;
+			let SealClient = null, SessionKey = null, fromHex = null, toHex = null;
+			let sealSdkLoaded = false;
+			async function initSealSdk() {
+				if (sealSdkLoaded) return !!SealClient;
+				sealSdkLoaded = true;
+				try {
+					const [sealMod, bcsMod] = await Promise.allSettled([
+						import('https://esm.sh/@mysten/seal@0.2.0?bundle'),
+						import('https://esm.sh/@mysten/bcs@1.3.0?bundle'),
+					]);
+					if (sealMod.status === 'fulfilled') {
+						SealClient = sealMod.value.SealClient || (sealMod.value.default && sealMod.value.default.SealClient) || null;
+						SessionKey = sealMod.value.SessionKey || (sealMod.value.default && sealMod.value.default.SessionKey) || null;
+					}
+					if (bcsMod.status === 'fulfilled') {
+						fromHex = bcsMod.value.fromHEX || bcsMod.value.fromHex || (bcsMod.value.default && bcsMod.value.default.fromHEX) || null;
+						toHex = bcsMod.value.toHEX || bcsMod.value.toHex || (bcsMod.value.default && bcsMod.value.default.toHEX) || null;
+					}
+				} catch (e) {
+					console.warn('Seal SDK load failed:', e.message);
+				}
+				return !!SealClient;
+			}
 			{
 				const pickExport = (mod, name) => {
 					if (!mod || typeof mod !== 'object') return undefined;
@@ -753,7 +834,6 @@ export function generateProfilePage(
 					if (mod.default && typeof mod.default === 'object' && name in mod.default) {
 						return mod.default[name];
 					}
-					if (name === 'SuinsClient' && typeof mod.default === 'function') return mod.default;
 					return undefined;
 				};
 				const SDK_TIMEOUT = 15000;
@@ -761,37 +841,33 @@ export function generateProfilePage(
 					import(url),
 					new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
 				]);
-			const results = await Promise.allSettled([
-				timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
-				timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
-				timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
-				timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
-				timedImport('https://esm.sh/@mysten/seal@0.9.6'),
-				timedImport('https://esm.sh/@mysten/bcs@1.3.0'),
-			]);
+				const results = await Promise.allSettled([
+					timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
+					timedImport('https://esm.sh/@mysten/sui@2.2.0/client?bundle'),
+					timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
+					timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
+				]);
 				if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
-				if (results[1].status === 'fulfilled') ({ SuiJsonRpcClient } = results[1].value);
+				if (results[1].status === 'fulfilled') ({ SuiClient } = results[1].value);
 				if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value);
 				if (results[3].status === 'fulfilled') {
 					const suinsModule = results[3].value;
 					SuinsClient = pickExport(suinsModule, 'SuinsClient');
 					SuinsTransaction = pickExport(suinsModule, 'SuinsTransaction');
 				}
-				if (results[4].status === 'fulfilled') ({ SealClient, SessionKey } = results[4].value);
-				if (results[5].status === 'fulfilled') ({ fromHex, toHex } = results[5].value);
 				const failed = results.filter(r => r.status === 'rejected');
-				if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
-				if (!SuinsClient || !Transaction || !SuiJsonRpcClient) {
+				if (failed.length > 0) {
+					console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
 					console.warn('Retrying failed SDK modules without ?bundle...');
 					const retryImport = (url) => Promise.race([
 						import(url),
 						new Promise((_, r) => setTimeout(() => r(new Error('Retry timeout: ' + url)), 20000)),
 					]);
 					const retries = [];
-					if (!SuiJsonRpcClient) retries.push(
-						retryImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc')
-							.then(m => { if (!SuiJsonRpcClient) SuiJsonRpcClient = pickExport(m, 'SuiJsonRpcClient'); })
-							.catch(e => console.warn('Retry SuiJsonRpcClient failed:', e.message))
+					if (!SuiClient) retries.push(
+						retryImport('https://esm.sh/@mysten/sui@2.2.0/client')
+							.then(m => { if (!SuiClient) SuiClient = pickExport(m, 'SuiClient'); })
+							.catch(e => console.warn('Retry SuiClient failed:', e.message))
 					);
 					if (!Transaction) retries.push(
 						retryImport('https://esm.sh/@mysten/sui@2.2.0/transactions')
@@ -809,28 +885,105 @@ export function generateProfilePage(
 			}
 		if (Transaction) window.Transaction = Transaction;
 
-		${generateWalletSessionJs()}
-
 		// ===== CONSTANTS =====
-		const NAME = ${serializeJson(cleanName)};
-		const FULL_NAME = ${serializeJson(fullName)};
-		const NETWORK = ${serializeJson(network)};
+		window.NAME = ${serializeJson(cleanName)};
+		window.FULL_NAME = ${serializeJson(fullName)};
+		window.NETWORK = ${serializeJson(network)};
+		const NFT_ID = ${serializeJson(record.nftId || '')};
+		const TARGET_ADDRESS = ${serializeJson(record.address)};
+		const OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
+		const CURRENT_ADDRESS = TARGET_ADDRESS || OWNER_ADDRESS;
+		const PROFILE_URL = ${serializeJson(`https://${cleanName}.sui.ski`)};
+		const LOGO_SVG_MARKUP = ${serializeJson(generateLogoSvg(220))};
+		const LOGO_DATA_URL = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(LOGO_SVG_MARKUP);
+		const TRADEPORT_LOGO_URL = ${serializeJson(TRADEPORT_LOGO_ICON_DATA_URL)};
+		const META_SEAL_SCHEMA = 'meta-seal-lite-v1';
+		const NFT_EXPLORER_URL = ${serializeJson(nftExplorerUrl)};
+		const EXPLORER_BASE = ${serializeJson(explorerBase)};
+		const IS_SUBNAME = window.NAME.includes('.');
+		const EXPIRATION_MS = ${safeNumber(expiresMs)};
+		const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
+		const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
+		const IS_LONG_RENEWAL = EXPIRATION_MS > Date.now() + 2 * 365.25 * 86400000;
+		const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
+		const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
+		const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
+		const DECAY_AUCTION_PACKAGE_ID = ${serializeJson(String(env.DECAY_AUCTION_PACKAGE_ID || ''))};
+		const DISCOUNT_RECIPIENT_NAME = ${serializeJson(env.DISCOUNT_RECIPIENT_NAME || 'extra.sui')};
+
+		const NAME = window.NAME;
+		const FULL_NAME = window.FULL_NAME;
+		const NETWORK = window.NETWORK;
+		window.NFT_ID = NFT_ID;
+		window.TARGET_ADDRESS = TARGET_ADDRESS;
+		window.OWNER_ADDRESS = OWNER_ADDRESS;
+		window.CURRENT_ADDRESS = CURRENT_ADDRESS;
+		window.PROFILE_URL = PROFILE_URL;
+		window.LOGO_SVG_MARKUP = LOGO_SVG_MARKUP;
+		window.LOGO_DATA_URL = LOGO_DATA_URL;
+		window.META_SEAL_SCHEMA = META_SEAL_SCHEMA;
+		window.NFT_EXPLORER_URL = NFT_EXPLORER_URL;
+		window.EXPLORER_BASE = EXPLORER_BASE;
+		window.IS_SUBNAME = IS_SUBNAME;
+		window.EXPIRATION_MS = EXPIRATION_MS;
+		window.GRACE_PERIOD_MS = GRACE_PERIOD_MS;
+		window.AVAILABLE_AT = AVAILABLE_AT;
+		window.IS_LONG_RENEWAL = IS_LONG_RENEWAL;
+		window.HAS_WALRUS_SITE = HAS_WALRUS_SITE;
+		window.HAS_CONTENT_HASH = HAS_CONTENT_HASH;
+		window.IS_IN_GRACE_PERIOD = IS_IN_GRACE_PERIOD;
+		window.DECAY_AUCTION_PACKAGE_ID = DECAY_AUCTION_PACKAGE_ID;
+		window.DISCOUNT_RECIPIENT_NAME = DISCOUNT_RECIPIENT_NAME;
+		window.rawIdentityNftImage = null;
+
+		${generateWalletSessionJs()}
+		var __skiServerSession = ${options.session?.address ? JSON.stringify({ address: options.session.address, walletName: options.session.walletName, verified: options.session.verified }) : 'null'};
+		if (__skiServerSession && __skiServerSession.address) { initSessionFromServer(__skiServerSession); }
+		${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
+		${generateWalletTxJs()}
+		${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onProfileWalletConnected', onDisconnect: 'onProfileWalletDisconnected' })}
+		${generateZkSendJs()}
+
+		SuiWalletKit.renderModal('wk-modal');
+		SuiWalletKit.renderWidget('wk-widget');
+
+		window.onProfileWalletConnected = function() {
+			updateUIForWallet();
+			if (connectedAddress) {
+				resolveWalletName(connectedAddress);
+			}
+		};
+
+		window.onProfileWalletDisconnected = function() {
+			updateUIForWallet();
+		};
+
 		const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
 		const ACTIVE_RPC_URL = RPC_URLS[NETWORK] || RPC_URLS.mainnet;
 
 		let cachedSuiClient = null;
 		const getSuiClient = () => {
 			if (!cachedSuiClient) {
-				cachedSuiClient = new SuiJsonRpcClient({ url: ACTIVE_RPC_URL });
+				cachedSuiClient = new SuiClient({ url: ACTIVE_RPC_URL });
 			}
 			return cachedSuiClient;
 		};
+		async function resolveWalletName(address) {
+			if (!address) return;
+			try {
+				var client = getSuiClient();
+				var result = await client.resolveNameServiceNames({ address: address });
+				var name = result && result.data && result.data[0];
+				if (name) {
+					SuiWalletKit.setPrimaryName(name.replace(/.sui$/i, ''));
+				}
+			} catch (e) {}
+		}
 		let suinsModuleLoadingPromise = null;
 		function pickSuinsExport(mod, name) {
 			if (!mod || typeof mod !== 'object') return undefined;
 			if (name in mod) return mod[name];
 			if (mod.default && typeof mod.default === 'object' && name in mod.default) return mod.default[name];
-			if (name === 'SuinsClient' && typeof mod.default === 'function') return mod.default;
 			return undefined;
 		}
 		function getSuinsNetwork() {
@@ -886,54 +1039,67 @@ export function generateProfilePage(
 				network: getSuinsNetwork(),
 			});
 		}
-	const NFT_ID = ${serializeJson(record.nftId || '')};
-	const TARGET_ADDRESS = ${serializeJson(record.address)};
-	const OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
-	const CURRENT_ADDRESS = TARGET_ADDRESS || OWNER_ADDRESS;
-		const PROFILE_URL = ${serializeJson(`https://${cleanName}.sui.ski`)};
-		const LOGO_SVG_MARKUP = ${serializeJson(generateLogoSvg(220))};
-		const LOGO_DATA_URL = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(LOGO_SVG_MARKUP);
-		const TRADEPORT_LOGO_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGMAAAA9EAIAAABmTZwGAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRP///////wlY99wAAAAHdElNRQfqAgcQMh6XRTP/AAAFxElEQVR42u3cf1DTdRzH8c9wE4H4pQJiKRyKCuqZphImgmZKcnUcXaKhJ3d2WIY/8jpMHaggEk6NMNM8pSL8AVfadBNFwh+ZcqiICENEFJk4dYLo2Nq++/7oD7ozCzfQj7yHvB9/fm/77nW75x/ffbebSNjAZDz81BxwNiXuIDf1xqbcBmKTmAHst4QoM8vefL7ziJU9fR1/7JXlMsF7v7vda96jizz6+70RvM3z3cGlYVdcJvVLCyjrMV+y3UHxPK/CJ6knyX2YlUXzI+uh37nOI14dmLbkSxGTf/Kd6J+4sBsxufOgJ1lCK6n28C0au/gjXYB26taEELffXs0YdbGjZ+ieSbWy48JuxOTGQs+wLXVTzmfucc6P/op7veyIfoNozFZdwL1B1dHQu7oGO+gBtu7BQXX8xXhFUsqMYXmVeUfj11WSQCGL3wG9y3ZhUh1QzilEiSOOPpLljFvISk2yFjfoRbYIk+qwJpl6eCknX54U7mM2T/xrVbMUepFtwaSeEaMw7GgyHB0lsx/Xj2NZiXEO9CJbgUk9F91Erfbaogsf5O2Ob4beYiswKQpqZ539Y5dSM1w18zAHvQUeJkXNCek2rwgxl2AeZqiF3gIJk6KsrqTkfI4SegUkTIqykgX7VixYInjxSdx86C0wMKkXoiX7fmbt19ArYGBSL8Q9h2sFJ/tCr4CBSb0Qt89WHFBeg14BA5NClGFSiDI7sTTw4yXe0DPaS7SbLCSE+JCucZ2SThSEEB0xQg/pTCKhhFtnimZFl7asPcgXNrjn2+g9Fea0KdjoK/6lJbTKr/WIKZkLlVQ8iGCuOgtN0aZBrikP95qPOAUwk/lUSSjsWvsS1qCZranWzL1zt/WIm8plp8OfHvvcTzof95Z4rnVd6sa6FDrWShaJ88SzYdfS0kPt9/Yck0gQBEEQoMe0Q5SxURtl3JOr8Dxg+YGiu06lA+wkS8cpNy23Sx2oiZxGAkV6SVhnjm2Iuhwul5/6cId/ZKTlR3oXBtRMqxu5IqJ/yvQ+vX3WjM8hvclAMrYz19L1El5LCV76MWqe2XsicWaa0S/7u56T+V23flUwRCAPSRX0uv/STK3yL/AtOLfRKahaMT55xGD+UeCdNarV0Lue3UuY1P8xMb+3vGdvHnns6vQ4ksg0Nx+DXtQ2XYp2Xm2QMjG1cXiyqleBfWo9CRIO8cehd3VMt0iqFXf+tqrgtHHVXrn7NOGyzqEmFXqRJZd+OBQn9SmsyPgk5AAXwpQYJkAvaq9ulNS/mfz3bx8iFbKbiyrnQm+xRLvzetSZLQrXlMwhC9lTJr6lGnqRdd00qVammXL1iBziqi+v56G3WGKIaXZvmFuUumXMlHXC5/widgP0Iku6dVKtTKr8cxOTyBVhKOsEvcWSxtibIedyyh8o7kpF0FsswaSI0EcvVqdyMyrup++H3mKdavoxr/SExoi6L4pl0Fvahkn9w6wq3SwNJyL9qJvh0FusK5RmrAqVCRcEMWdzP6HBpJ7AOl0SJ9+CXmEdX8clMVpNWOWKwzb3SRCTegJ7v2ZxViX5jPFoWgy9xbrivjnZsWeIjmhJDfSWxzCpNnCZ6mGHtkKvsM60Xv9+07IW+8bg63LoLY9hUm3g0qtU36yFXtFemjJV3BEb+qIJk2oDv6xx88VEcpzjjFroLdZdLy+WZblBr3gMk3q6WNP2Rh/oEdY1OdXPurCZrCdBws/QWwjBpCwQ+unHqsXQK9qLTWCGGK5CryAEk7JA+J59S9dlfrfE17IrGZu4/YFJPV2uWa/3hx7RXsJoroe5DHoFIZgUog6TQpRhUogyTApRhkkhyjApRBkmhSjDpBBlmBSiDJNClGFSiDJMClGGSSHKMClEGSaFKMOkEGWYFKIMk0KUYVKIMkwKUYZJIcowKUQZJoUo6zpJpdlPdi/pzBcUBbvKhjo+23Od0z1jhhZ35tqeHo6vuNvEHxj9DcC9E2fGe9rKAAAAAElFTkSuQmCC';
-		const META_SEAL_SCHEMA = 'meta-seal-lite-v1';
-		const NFT_EXPLORER_URL = ${serializeJson(nftExplorerUrl)};
-	const EXPLORER_BASE = ${serializeJson(explorerBase)};
-	const IS_SUBNAME = NAME.includes('.');
-	const STORAGE_KEY = 'sui_ski_wallet';
-	const EXPIRATION_MS = ${safeNumber(expiresMs)};
-	const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-	const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
-	const IS_LONG_RENEWAL = EXPIRATION_MS > Date.now() + 2 * 365.25 * 86400000;
-		const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
-		const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
-		const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
-	const DECAY_AUCTION_PACKAGE_ID = ${serializeJson(String(env.DECAY_AUCTION_PACKAGE_ID || ''))};
-	const DISCOUNT_RECIPIENT_NAME = ${serializeJson(env.DISCOUNT_RECIPIENT_NAME || 'extra.sui')};
 
 		let connectedWallet = null;
 		let connectedAccount = null;
 		let connectedAddress = null;
 		let connectedWalletName = null;
 		let connectedPrimaryName = null;
-		let walletsApi = null;
 		let nftOwnerAddress = null;
 		let targetPrimaryName = null;
 		let canEdit = false;
 		let ownerDisplayAddress = CURRENT_ADDRESS;
 		let currentTargetAddress = TARGET_ADDRESS || '';
-		let currentListing = null;
-		let currentSales = [];
-		let lastSoldPriceMist = null;
-		let pendingBidAmount = null;
+			let currentListing = null;
+			let currentBestBid = null;
+			let currentSales = [];
+			let lastSoldPriceMist = null;
+			let lastSaleEventMs = 0;
+			let lastListingEventMs = 0;
+			let pendingBidAmount = null;
 
-		if (typeof getWallets === 'function') {
-			try {
-				walletsApi = getWallets();
-			} catch (e) {
-				console.error('Failed to init wallet API:', e);
+		var __lastVaultAddress = null;
+		SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
+			connectedWallet = conn.wallet;
+			connectedAccount = conn.account;
+			connectedAddress = conn.address;
+			connectedWalletName = conn.wallet ? conn.wallet.name : null;
+			connectedPrimaryName = conn.primaryName;
+
+			if (connectedAddress) {
+				if (connectedAddress !== __lastVaultAddress) {
+					__lastVaultAddress = connectedAddress;
+					if (typeof window.loadUserVault === 'function') window.loadUserVault();
+				}
+			} else {
+				__lastVaultAddress = null;
+				window.userVaultNames = new Set();
+				if (typeof window.renderVaultList === 'function') window.renderVaultList();
 			}
-		} else {
-			console.warn('getWallets function not available, wallet connection may not work');
+		});
+
+		function canSign() {
+			if (!connectedAddress) return false;
+			if (connectedWallet && connectedAccount) return true;
+			var conn = SuiWalletKit.$connection.value;
+			return conn && conn.status === 'session' && !!SuiWalletKit.__skiSignFrame;
 		}
+
+		window.connectWallet = function connectWallet() {
+			if (canSign()) return Promise.resolve();
+			SuiWalletKit.openModal();
+			return new Promise(function(resolve) {
+				var unsub = SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
+					if (conn && (conn.status === 'connected' || conn.status === 'session') && conn.address) {
+						unsub();
+						resolve();
+					}
+				});
+			});
+		};
+
+		function renderWalletBar() {}
+		function updateGlobalWalletWidget() {}
 
 		// DOM Elements
 		const walletBar = document.getElementById('wallet-bar');
@@ -985,6 +1151,7 @@ export function generateProfilePage(
 			let nftImageUrl = null;
 			let rawIdentityNftImage = null;
 			let showingQr = false; // Default to NFT display, QR is fallback
+			let stylizedMode = false;
 			let nftDisplayLoaded = false;
 			let restoringIdentityVisual = false;
 
@@ -1174,197 +1341,6 @@ export function generateProfilePage(
 			});
 		}
 
-			function isMobileDevice() {
-				try {
-					const ua = navigator.userAgent || '';
-					const uaDataMobile = navigator.userAgentData && navigator.userAgentData.mobile === true;
-					const uaMobile = /android|iphone|ipad|ipod|mobile/i.test(ua);
-					const touchLike = navigator.maxTouchPoints > 1;
-					const smallViewport = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900;
-					return Boolean(uaDataMobile || uaMobile || (touchLike && smallViewport));
-				} catch {
-					return false;
-				}
-			}
-
-			function getNoWalletsMessageHtml(message) {
-				const baseMessage = message || 'No Sui wallets detected.';
-				if (isMobileDevice()) {
-					return '<div class="wallet-no-wallets">'
-						+ baseMessage
-						+ '<br><br>'
-						+ 'Open this page in your wallet\\'s in-app browser:'
-						+ '<br>'
-						+ '<a href="https://slush.app" target="_blank" rel="noopener noreferrer">Open Slush (Mysten) →</a>'
-						+ '<br>'
-						+ '<a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer">Open Phantom →</a>'
-						+ '</div>';
-				}
-				return '<div class="wallet-no-wallets">'
-					+ baseMessage
-					+ '<br><br>'
-					+ '<a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer">Install Phantom →</a>'
-					+ '<br>'
-					+ '<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank" rel="noopener noreferrer">Install Sui Wallet →</a>'
-					+ '</div>';
-			}
-
-			function normalizeAccountAddress(account) {
-				if (!account) return '';
-				if (typeof account.address === 'string') return account.address.trim();
-				if (account.address && typeof account.address.toString === 'function') {
-					return String(account.address.toString()).trim();
-				}
-				return '';
-			}
-
-			function isSuiAccount(account) {
-				if (!account) return false;
-				const accountChains = Array.isArray(account.chains) ? account.chains : [];
-				if (accountChains.some((chain) => typeof chain === 'string' && chain.startsWith('sui:'))) {
-					return true;
-				}
-				const addr = normalizeAccountAddress(account);
-				return /^0x[0-9a-fA-F]{2,}$/.test(addr);
-			}
-
-			function filterSuiAccounts(accounts) {
-				if (!Array.isArray(accounts)) return [];
-				return accounts
-					.filter(isSuiAccount)
-					.map((account) => {
-						const normalizedAddress = normalizeAccountAddress(account);
-						if (!normalizedAddress) return account;
-						if (typeof account.address === 'string' && account.address === normalizedAddress) return account;
-						return { ...account, address: normalizedAddress };
-					});
-			}
-
-			function extractConnectedAccounts(connectResult, wallet) {
-				let accounts = [];
-				if (Array.isArray(connectResult)) {
-					accounts = connectResult;
-				} else if (connectResult && Array.isArray(connectResult.accounts)) {
-					accounts = connectResult.accounts;
-				} else if (connectResult && connectResult.account && connectResult.account.address) {
-					accounts = [connectResult.account];
-				}
-				if (accounts.length === 0) {
-					const walletAccounts = wallet?.accounts;
-					if (Array.isArray(walletAccounts) && walletAccounts.length > 0) {
-						accounts = walletAccounts;
-					}
-				}
-				if (accounts.length === 0) {
-					const rawAccounts = wallet?._raw?.accounts;
-					if (Array.isArray(rawAccounts) && rawAccounts.length > 0) {
-						accounts = rawAccounts;
-					}
-				}
-				return filterSuiAccounts(accounts);
-			}
-
-			// Get available Sui wallets with fallbacks
-			function getSuiWallets() {
-				const wallets = [];
-				const seenNames = new Set();
-				const isSuiCapableWallet = (wallet) => {
-					if (!wallet) return false;
-					const features = wallet.features || {};
-					const hasSuiChain =
-						Array.isArray(wallet.chains) && wallet.chains.some(chain => chain.startsWith('sui:'));
-					const hasConnect = !!(features['standard:connect'] || wallet.connect);
-					const hasSuiNamespaceFeature = Object.keys(features).some((key) => key.startsWith('sui:'));
-					const hasSuiTxMethod = !!(
-						features['sui:signAndExecuteTransactionBlock'] ||
-						features['sui:signAndExecuteTransaction'] ||
-						wallet.signAndExecuteTransactionBlock ||
-						wallet.signAndExecuteTransaction
-					);
-					return hasConnect && (hasSuiChain || hasSuiNamespaceFeature || hasSuiTxMethod);
-				};
-
-			// First, try wallet-standard registry
-			if (walletsApi) {
-				try {
-					const standardWallets = walletsApi.get();
-					for (const wallet of standardWallets) {
-						if (isSuiCapableWallet(wallet)) {
-							wallets.push(wallet);
-							seenNames.add(wallet.name);
-						}
-					}
-				} catch (e) {
-					console.log('Error getting wallets from standard:', e);
-				}
-			}
-
-			// Fallback: scan registry exposed by some wallet injectors
-			const injectedWallets = Array.isArray(window.__sui_wallets__) ? window.__sui_wallets__ : [];
-			for (const wallet of injectedWallets) {
-				if (!wallet || !isSuiCapableWallet(wallet)) continue;
-				const walletName = wallet.name || 'Sui Wallet';
-				if (seenNames.has(walletName)) continue;
-				wallets.push(wallet);
-				seenNames.add(walletName);
-			}
-
-			// Fallback: check window globals for common Sui wallets
-				const windowWallets = [
-					{ check: () => window.sui, name: 'Sui Wallet', icon: 'https://sui.io/favicon.png' },
-					{ check: () => window.phantom?.sui, name: 'Phantom', icon: 'https://phantom.app/img/phantom-icon-purple.svg' },
-					{ check: () => window.suiWallet, name: 'Sui Wallet', icon: 'https://sui.io/favicon.png' },
-					{ check: () => window.mystenWallet?.sui || window.mystenWallet, name: 'Sui Wallet', icon: 'https://sui.io/favicon.png' },
-					{ check: () => window.mysten?.sui || window.mysten?.wallet, name: 'Sui Wallet', icon: 'https://sui.io/favicon.png' },
-					{ check: () => window.slush, name: 'Slush', icon: 'https://slush.app/favicon.ico' },
-					{ check: () => window.suiet, name: 'Suiet', icon: 'https://suiet.app/favicon.ico' },
-					{ check: () => window.martian?.sui, name: 'Martian', icon: 'https://martianwallet.xyz/favicon.ico' },
-				{ check: () => window.ethos, name: 'Ethos', icon: 'https://ethoswallet.xyz/favicon.ico' },
-				{ check: () => window.okxwallet?.sui, name: 'OKX Wallet', icon: 'https://static.okx.com/cdn/assets/imgs/226/EB771A4D4E5CC234.png' },
-			];
-
-			for (const { check, name, icon } of windowWallets) {
-				try {
-					const wallet = check();
-					if (wallet && !seenNames.has(name)) {
-						if (!isSuiCapableWallet(wallet)) continue;
-						// Wrap window wallet to match landing-page wallet features.
-							wallets.push({
-								name,
-								icon,
-								chains: ['sui:mainnet', 'sui:testnet'],
-								features: {
-									'standard:connect': wallet.connect ? { connect: wallet.connect.bind(wallet) } : undefined,
-									'standard:disconnect': wallet.disconnect ? { disconnect: wallet.disconnect.bind(wallet) } : undefined,
-									'sui:signAndExecuteTransaction': wallet.signAndExecuteTransaction
-										? { signAndExecuteTransaction: wallet.signAndExecuteTransaction.bind(wallet) } : undefined,
-									'sui:signAndExecuteTransactionBlock': wallet.signAndExecuteTransactionBlock
-										? { signAndExecuteTransactionBlock: wallet.signAndExecuteTransactionBlock.bind(wallet) } : undefined,
-									'sui:signTransaction': wallet.signTransaction
-										? { signTransaction: wallet.signTransaction.bind(wallet) } : undefined,
-								},
-								get accounts() { return wallet.accounts || []; },
-								_raw: wallet,
-						});
-						seenNames.add(name);
-					}
-				} catch (e) {
-					// Wallet check failed, skip
-				}
-			}
-
-			return wallets;
-		}
-
-		// Detect wallets with retry logic (non-blocking)
-		async function detectWallets() {
-			await new Promise(r => setTimeout(r, 100));
-			let wallets = getSuiWallets();
-			if (wallets.length) return wallets;
-			await new Promise(r => setTimeout(r, 500));
-			return getSuiWallets();
-		}
-
 		// Fetch NFT owner address
 		async function fetchNftOwner() {
 			if (!NFT_ID) return null;
@@ -1475,7 +1451,7 @@ export function generateProfilePage(
 				} else if (isAlreadyPrimary) {
 					ownerPrimaryStar.disabled = true;
 					ownerPrimaryStar.title = 'This is your primary name';
-				} else if (isOwner && connectedWallet && connectedAccount) {
+				} else if (isOwner && canSign()) {
 					ownerPrimaryStar.disabled = false;
 					ownerPrimaryStar.title = 'Set as primary name';
 				} else {
@@ -1535,7 +1511,7 @@ export function generateProfilePage(
 
 		// x402 Renewal API - uses Payment Kit pattern
 		async function handleGiftRenewal() {
-			if (!connectedAddress || !connectedWallet) {
+			if (!canSign()) {
 				showGracePeriodStatus('Connect wallet first', 'error');
 				return;
 			}
@@ -1572,12 +1548,7 @@ export function generateProfilePage(
 
 					if (txt) txt.textContent = 'Approve in wallet...';
 
-					const result = await signAndExecuteWithWallet(
-						tx,
-						getSuiClient(),
-						connectedAccount,
-						NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet'
-					);
+					const result = await SuiWalletKit.signAndExecute(tx);
 
 					if (!result?.digest) throw new Error('No transaction digest');
 
@@ -1697,7 +1668,7 @@ export function generateProfilePage(
 
 		// Burn NFT and release name
 		async function handleBurnNft() {
-			if (!connectedAddress || !connectedWallet || !NFT_ID) {
+			if (!canSign() || !NFT_ID) {
 				showBurnStatus('Connect wallet first', 'error');
 				return;
 			}
@@ -1729,23 +1700,7 @@ export function generateProfilePage(
 				});
 
 				let result;
-				const txOptions = { showEffects: true, showObjectChanges: true };
-
-				if (connectedWallet.features?.['sui:signAndExecuteTransaction']?.signAndExecuteTransaction) {
-					result = await connectedWallet.features['sui:signAndExecuteTransaction'].signAndExecuteTransaction({
-						transaction: tx,
-						options: txOptions,
-					});
-				} else if (connectedWallet.features?.['sui:signAndExecuteTransactionBlock']?.signAndExecuteTransactionBlock) {
-					const suiClient = getSuiClient();
-					const txBytes = await tx.build({ client: suiClient });
-					result = await connectedWallet.features['sui:signAndExecuteTransactionBlock'].signAndExecuteTransactionBlock({
-						transactionBlock: txBytes,
-						options: txOptions,
-					});
-				} else {
-					throw new Error('Wallet does not support transaction signing');
-				}
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true } });
 
 				showBurnStatus(
 					'NFT burned! ' + renderTxExplorerLinks(result.digest, true) + '<br>' +
@@ -1805,7 +1760,7 @@ export function generateProfilePage(
 				const truncatedAddr = truncAddr(nftOwnerAddress);
 
 				if (ownerPrimaryName) {
-					const cleanedName = ownerPrimaryName.replace(/\\.sui$/i, '');
+					const cleanedName = ownerPrimaryName.replace(/.sui$/i, '');
 					ownerInfoEl.innerHTML = \`<a href="https://\${cleanedName}.sui.ski" target="_blank">\${ownerPrimaryName}</a> (<code>\${truncatedAddr}</code>)\`;
 				} else {
 					ownerInfoEl.innerHTML = \`<code>\${truncatedAddr}</code>\`;
@@ -1816,318 +1771,12 @@ export function generateProfilePage(
 			}
 		}
 
-		function saveWalletConnection() {
-			if (connectedWalletName && connectedAddress) {
-				localStorage.setItem(STORAGE_KEY, JSON.stringify({
-					walletName: connectedWalletName,
-					address: connectedAddress
-				}));
-				connectWalletSession(connectedWalletName, connectedAddress);
-			}
-		}
-
-		function clearWalletConnection() {
-			localStorage.removeItem(STORAGE_KEY);
-			disconnectWalletSession();
-		}
-
-		const PHANTOM_POLL_MAX_ATTEMPTS = 10;
-		const PHANTOM_POLL_INTERVAL_MS = 150;
-		const PHANTOM_ERROR_POLL_ATTEMPTS = 8;
-		const PHANTOM_ERROR_POLL_INTERVAL_MS = 200;
-		const IN_APP_BROWSER_POLL_ATTEMPTS = 5;
-		const IN_APP_BROWSER_POLL_INTERVAL_MS = 300;
-
-		async function pollPhantomAccounts(getAccountsFn, maxAttempts, intervalMs) {
-			for (let attempt = 0; attempt < maxAttempts; attempt++) {
-				const accounts = getAccountsFn();
-				if (accounts.length > 0) return accounts;
-				await new Promise(r => setTimeout(r, intervalMs));
-			}
-			return [];
-		}
-
-		async function restoreWalletConnection() {
-			try {
-				const saved = localStorage.getItem(STORAGE_KEY);
-				const cookieHint = getWalletSession();
-				const walletName = saved ? JSON.parse(saved).walletName : cookieHint?.walletName;
-				if (!walletName) return false;
-
-				const wallets = getSuiWallets();
-				const wallet = wallets.find(w => w.name === walletName);
-				if (!wallet) {
-					clearWalletConnection();
-					return false;
-				}
-
-				let accounts = filterSuiAccounts(wallet.accounts || []);
-
-				if (accounts.length === 0) {
-					const phantomProvider = window.phantom?.sui;
-					const isPhantom = phantomProvider && (walletName === 'Phantom' || wallet._raw === phantomProvider);
-					if (isPhantom) {
-						accounts = filterSuiAccounts(phantomProvider.accounts || []);
-						if (accounts.length === 0 && typeof phantomProvider.connect === 'function') {
-							try {
-								await phantomProvider.connect();
-								accounts = await pollPhantomAccounts(
-									() => filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []),
-									PHANTOM_POLL_MAX_ATTEMPTS,
-									PHANTOM_POLL_INTERVAL_MS,
-								);
-							} catch (connectErr) {
-								const msg = connectErr?.message || '';
-								if (!msg.includes('rejected') && !msg.includes('cancelled')) {
-									console.error('Phantom restore connect failed:', msg);
-								}
-							}
-						}
-					} else {
-						const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
-						if (typeof connectFeature === 'function') {
-							const result = await connectFeature();
-							accounts = extractConnectedAccounts(result, wallet);
-						} else if (connectFeature?.connect) {
-							const result = await connectFeature.connect();
-							accounts = extractConnectedAccounts(result, wallet);
-						}
-					}
-				}
-
-					if (accounts.length === 0) return false;
-
-				connectedAccount = accounts[0];
-				connectedAddress = accounts[0].address;
-				connectedWallet = wallet;
-				connectedWalletName = walletName;
-
-				updateUIForWallet();
-				return true;
-			} catch {
-				clearWalletConnection();
-				return false;
-			}
-		}
-
-		// Wallet modal elements
-		const walletModal = document.getElementById('wallet-modal');
-		const walletList = document.getElementById('wallet-list');
-		const walletModalClose = document.getElementById('wallet-modal-close');
-
-		// Close wallet modal
-		if (walletModalClose) {
-			walletModalClose.addEventListener('click', () => {
-				walletModal.classList.remove('open');
-			});
-		}
-
-		// Close on backdrop click
-		if (walletModal) {
-			walletModal.addEventListener('click', (e) => {
-				if (e.target === walletModal) {
-					walletModal.classList.remove('open');
-				}
-			});
-		}
-
-		// Connect to a specific wallet
-		async function connectToWallet(wallet) {
-			const finishConnect = (accounts, walletName) => {
-				connectedAccount = accounts[0];
-				connectedAddress = accounts[0].address;
-				connectedWallet = wallet;
-				connectedWalletName = walletName || wallet.name;
-				walletModal.classList.remove('open');
-				saveWalletConnection();
-				updateUIForWallet();
-			};
-
-			try {
-				walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Connecting...</div>';
-
-				const phantomProvider = window.phantom?.sui;
-				const isPhantom = phantomProvider && (wallet.name === 'Phantom' || wallet._raw === phantomProvider);
-
-				if (isPhantom) {
-					const existing = filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []);
-					if (existing.length > 0) {
-						finishConnect(existing, 'Phantom');
-						return;
-					}
-					if (typeof phantomProvider.connect === 'function') {
-						await phantomProvider.connect();
-						const accounts = await pollPhantomAccounts(
-							() => filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []),
-							PHANTOM_POLL_MAX_ATTEMPTS,
-							PHANTOM_POLL_INTERVAL_MS,
-						);
-						if (accounts.length > 0) {
-							finishConnect(accounts, 'Phantom');
-							return;
-						}
-					}
-					throw new Error('Phantom connected but no Sui accounts found. Switch your wallet to Sui and try again.');
-				}
-
-				const connectFeature = wallet.features?.['standard:connect'] || wallet._raw?.connect;
-				if (!connectFeature) throw new Error('Wallet does not support connection');
-
-				let accounts;
-				if (typeof connectFeature === 'function') {
-					const result = await connectFeature();
-					accounts = extractConnectedAccounts(result, wallet);
-				} else if (typeof connectFeature.connect === 'function') {
-					const result = await connectFeature.connect();
-					accounts = extractConnectedAccounts(result, wallet);
-				}
-
-				if (!accounts?.length) {
-					await new Promise(r => setTimeout(r, 200));
-					accounts = extractConnectedAccounts(null, wallet);
-				}
-					if (!accounts?.length) throw new Error('No Sui accounts. Switch your wallet to Sui and try again.');
-
-				finishConnect(accounts);
-			} catch (e) {
-				const errorMsg = e.message || 'Unknown error';
-
-				const phantomProvider = window.phantom?.sui;
-				if (phantomProvider) {
-					walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Checking wallet...</div>';
-					const recovered = await pollPhantomAccounts(
-						() => filterSuiAccounts(phantomProvider.accounts || wallet.accounts || []),
-						PHANTOM_ERROR_POLL_ATTEMPTS,
-						PHANTOM_ERROR_POLL_INTERVAL_MS,
-					);
-					if (recovered.length > 0) {
-						finishConnect(recovered, 'Phantom');
-						return;
-					}
-				}
-
-				const isUserAction = errorMsg.includes('rejected') ||
-					errorMsg.includes('cancelled') ||
-					errorMsg.includes('Unexpected');
-				if (!isUserAction && !errorMsg.includes('authorized')) {
-					console.error('Wallet error:', errorMsg);
-				}
-				const userMessage = errorMsg.includes('authorized')
-					? 'Tap Connect again to approve the connection.'
-					: isUserAction
-						? 'Connection cancelled.'
-						: 'Connection failed: ' + errorMsg;
-				walletList.innerHTML = '<div class="wallet-no-wallets" style="color: var(--error);">' +
-					userMessage +
-					'<br><br>' +
-					'<button onclick="connectWallet()" ' +
-					'style="padding: 8px 16px; background: var(--accent); border: none; border-radius: 8px; color: white; cursor: pointer;">' +
-					'Retry</button></div>';
-			}
-		}
-
-		function isInAppBrowser() {
-			const ua = navigator.userAgent || '';
-			return /Phantom/i.test(ua) || /Slush/i.test(ua);
-		}
-
-		// Show wallet selection modal (non-blocking)
-		async function connectWallet() {
-			walletModal.classList.add('open');
-			walletList.innerHTML = '<div class="wallet-detecting"><span class="loading"></span> Detecting wallets...</div>';
-
-			// In-app browser: auto-connect to the single available wallet
-			if (isInAppBrowser()) {
-				for (let attempt = 0; attempt < IN_APP_BROWSER_POLL_ATTEMPTS; attempt++) {
-					const wallets = getSuiWallets();
-					if (wallets.length > 0) {
-						connectToWallet(wallets[0]);
-						return;
-					}
-					await new Promise(r => setTimeout(r, IN_APP_BROWSER_POLL_INTERVAL_MS));
-				}
-			}
-
-			// Don't block - show immediate results and update as wallets are detected
-			const immediateWallets = getSuiWallets();
-			if (immediateWallets.length > 0) {
-				renderWalletList(immediateWallets);
-				// Continue detecting in background for newly registered wallets
-				detectWallets().then(wallets => {
-					if (wallets.length > immediateWallets.length) {
-						renderWalletList(wallets);
-					}
-				}).catch(() => {});
-				return;
-			}
-
-			// If no immediate wallets, show install links and detect in background
-			walletList.innerHTML = getNoWalletsMessageHtml('Detecting wallets...');
-
-			// Detect wallets in background without blocking
-			detectWallets().then(wallets => {
-				if (wallets.length > 0) {
-					renderWalletList(wallets);
-				}
-			}).catch(() => {});
-		}
-
-		// Render wallet list (helper function)
-		function renderWalletList(wallets) {
-			if (wallets.length === 0) {
-				walletList.innerHTML = getNoWalletsMessageHtml('No Sui wallets detected.');
-				return;
-			}
-
-			walletList.innerHTML = '';
-			for (const wallet of wallets) {
-				const item = document.createElement('div');
-				item.className = 'wallet-item';
-				const iconSrc = wallet.icon || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><circle fill=%22%23818cf8%22 cx=%2216%22 cy=%2216%22 r=%2216%22/></svg>';
-				const walletName = wallet.name || 'Unknown';
-				item.innerHTML = '<img src="' + iconSrc + '" alt="' + walletName + '" onerror="this.style.display=\\'none\\'">' +
-					'<span class="wallet-name">' + walletName + '</span>';
-				item.addEventListener('click', () => {
-					console.log('Wallet item clicked:', walletName);
-					connectToWallet(wallet);
-				});
-				walletList.appendChild(item);
-			}
-		}
-
-
-		// Disconnect wallet
-		function disconnectWallet() {
-			if (connectedWallet?.features?.['standard:disconnect']?.disconnect) {
-				try { connectedWallet.features['standard:disconnect'].disconnect(); } catch {}
-			}
-			connectedWallet = null;
-			connectedAccount = null;
-			connectedAddress = null;
-			connectedWalletName = null;
-			connectedPrimaryName = null;
-			canEdit = false;
-			clearWalletConnection();
-			// Update all UI components
-			updateUIForWallet();
-		}
-
-		// Render wallet connection status (no-op, wallet UI removed)
-		function renderWalletBar() {
-			const existingWalletStatus = walletBar.querySelector('.wallet-status');
-			if (existingWalletStatus) existingWalletStatus.remove();
-		}
-
 		function getWalletProfileHref() {
 			if (connectedPrimaryName) {
-				const cleanedName = connectedPrimaryName.replace(/\\.sui$/i, '');
+				const cleanedName = connectedPrimaryName.replace(/.sui$/i, '');
 				return \`https://\${cleanedName}.sui.ski\`;
 			}
 			return 'https://sui.ski';
-		}
-
-		function closeWalletMenu() {
-			if (walletMenu) walletMenu.classList.remove('open');
 		}
 
 		function updateWalletProfileButton() {
@@ -2137,89 +1786,6 @@ export function generateProfilePage(
 			walletProfileBtn.title = connectedPrimaryName ? 'View my primary profile' : 'Go to sui.ski';
 		}
 
-		function renderWalletMenu() {
-			if (!walletMenu || !connectedAddress) {
-				if (walletMenu) walletMenu.innerHTML = '';
-				return;
-			}
-
-			const profileHref = connectedPrimaryName
-				? getWalletProfileHref()
-				: null;
-			const namesHref = \`https://www.tradeport.xyz/sui/\${connectedAddress}?tab=items&collectionFilter=suins\`;
-
-			let html = '<button class="wallet-menu-item" id="wm-copy">' +
-				'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
-				'Copy Address</button>';
-			if (profileHref) {
-				html += '<a class="wallet-menu-item" href="' + profileHref + '">' +
-					'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>' +
-					'My Profile</a>';
-			}
-			html += '<a class="wallet-menu-item" href="' + namesHref + '" target="_blank" rel="noopener noreferrer">' +
-				'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>' +
-				'My Names</a>';
-			
-			html += '<button class="wallet-menu-item" id="wm-switch">' +
-				'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>' +
-				'Switch Wallet</button>';
-			html += '<button class="wallet-menu-item disconnect" id="wm-disconnect">' +
-				'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>' +
-				'Disconnect</button>';
-			walletMenu.innerHTML = html;
-
-			const copyBtn = document.getElementById('wm-copy');
-			if (copyBtn) {
-				copyBtn.onclick = async () => {
-					try {
-						await navigator.clipboard.writeText(connectedAddress);
-						const flash = document.createElement('span');
-						flash.className = 'copied-flash';
-						flash.textContent = 'Copied!';
-						copyBtn.appendChild(flash);
-						setTimeout(() => flash.remove(), 1500);
-					} catch (err) {
-						console.error('Failed to copy address:', err);
-					}
-				};
-			}
-
-			const switchBtn = document.getElementById('wm-switch');
-			if (switchBtn) {
-				switchBtn.onclick = () => {
-					closeWalletMenu();
-					disconnectWallet();
-					setTimeout(() => connectWallet(), 120);
-				};
-			}
-
-			const disconnectBtn = document.getElementById('wm-disconnect');
-			if (disconnectBtn) {
-				disconnectBtn.onclick = () => {
-					closeWalletMenu();
-					disconnectWallet();
-				};
-			}
-		}
-
-		function updateGlobalWalletWidget() {
-			if (!walletBtn || !walletBtnText) return;
-
-			updateWalletProfileButton();
-			if (!connectedAddress) {
-				walletBtn.classList.remove('connected');
-				walletBtnText.textContent = 'Connect';
-				closeWalletMenu();
-				if (walletMenu) walletMenu.innerHTML = '';
-				return;
-			}
-
-			const displayName = connectedPrimaryName || truncAddr(connectedAddress);
-			walletBtn.classList.add('connected');
-			walletBtnText.textContent = displayName;
-			renderWalletMenu();
-		}
-
 		if (walletProfileBtn) {
 			walletProfileBtn.addEventListener('click', (e) => {
 				e.stopPropagation();
@@ -2227,38 +1793,24 @@ export function generateProfilePage(
 			});
 		}
 
-		if (walletBtn) {
-			walletBtn.addEventListener('click', (e) => {
-				e.stopPropagation();
-				if (!connectedAddress) {
-					connectWallet();
-					return;
-				}
-				renderWalletMenu();
-				if (walletMenu) walletMenu.classList.toggle('open');
-			});
-		}
-
-		document.addEventListener('click', (e) => {
-			if (walletWidget && walletWidget.contains(e.target)) return;
-			if (walletMenu && walletMenu.contains(e.target)) return;
-			closeWalletMenu();
-		});
-
 		// Global function to update UI when wallet connects/disconnects
+
 		// This can be extended by other features (messaging, etc.)
-			var updateUIForWallet = function() {
+			var updateUIForWallet = () => {
 			// Expose wallet state to window for cross-script access
 			window.connectedAddress = connectedAddress;
 			window.connectedWallet = connectedWallet;
 			window.connectedAccount = connectedAccount;
+			window.connectedPrimaryName = connectedPrimaryName;
 			window.updateEditButton = updateEditButton;
+			if (typeof syncCrosschainTargetFromWallet === 'function') syncCrosschainTargetFromWallet();
 
 			renderWalletBar();
 			updateGlobalWalletWidget();
 			checkEditPermission();
-				updateEditButton();
-				if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
+			updateEditButton();
+			if (typeof loadUserVault === 'function') loadUserVault();
+			if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
 				if (typeof updateRenewalButton === 'function') updateRenewalButton();
 				if (typeof updateMarketplaceButton === 'function') updateMarketplaceButton();
 
@@ -2266,21 +1818,19 @@ export function generateProfilePage(
 					if (vaultBtn) {
 						if (connectedAddress && connectedAddress !== TARGET_ADDRESS && connectedAddress !== OWNER_ADDRESS) {
 							vaultBtn.style.display = '';
-							vaultBtn.classList.remove('bookmarked', 'diamond-transforming');
-							vaultBtn.title = 'Save to vault';
-							if (document.body) document.body.classList.remove('diamond-watch-active');
-							const identityCard = document.querySelector('.identity-card');
-							if (identityCard) identityCard.classList.remove('black-diamond-active');
-							try { diamondWatching = false; } catch {}
-							checkWatchingState();
+							if (!diamondWatching) {
+								checkWatchingState();
+							}
 						} else {
 							vaultBtn.style.display = 'none';
-							vaultBtn.classList.remove('bookmarked', 'diamond-transforming');
-							vaultBtn.title = 'Save to vault';
-							if (document.body) document.body.classList.remove('diamond-watch-active');
-							const identityCard = document.querySelector('.identity-card');
-							if (identityCard) identityCard.classList.remove('black-diamond-active');
-							try { diamondWatching = false; } catch {}
+							if (diamondWatching) {
+								vaultBtn.classList.remove('bookmarked', 'diamond-transforming');
+								vaultBtn.title = 'Save to vault';
+								if (document.body) document.body.classList.remove('diamond-watch-active');
+								const identityCard = document.querySelector('.identity-card');
+								if (identityCard) identityCard.classList.remove('black-diamond-active');
+								try { diamondWatching = false; } catch {}
+							}
 						}
 					}
 
@@ -2395,9 +1945,9 @@ export function generateProfilePage(
 				showOwnerInlineStatus('No valid target address available for this profile.', 'error');
 				return;
 			}
-			if (!connectedAddress || !connectedWallet || !connectedAccount) {
+			if (!canSign()) {
 				connectWallet().then(() => {
-					if (connectedAddress && connectedWallet && connectedAccount) openSendModal();
+					if (canSign()) openSendModal();
 				});
 				return;
 			}
@@ -2420,12 +1970,26 @@ export function generateProfilePage(
 					: '<span class="send-wallet-ball send-wallet-ball-default"></span>';
 			}
 			if (sendStatus) hideStatus(sendStatus);
+			if (typeof switchSendTab === 'function') switchSendTab('direct');
+			const zkWalletInd = document.getElementById('zk-wallet-indicator');
+			if (zkWalletInd && connectedWallet) {
+				const iconSrc = connectedWallet.icon || '';
+				zkWalletInd.innerHTML = iconSrc
+					? '<img src="' + iconSrc + '" class="send-wallet-ball" alt="' + (connectedWallet.name || '') + '" onerror="this.style.display=\\'none\\'">'
+					: '<span class="send-wallet-ball send-wallet-ball-default"></span>';
+			}
+			const zkAmtInput = document.getElementById('zk-amount');
+			if (zkAmtInput) zkAmtInput.value = '1';
 			if (sendModal) sendModal.classList.add('open');
 		}
 
 		function closeSendModal() {
 			if (sendModal) sendModal.classList.remove('open');
 			if (sendStatus) hideStatus(sendStatus);
+			const zkSt = document.getElementById('zk-status');
+			const zkRes = document.getElementById('zk-result');
+			if (zkSt) hideStatus(zkSt);
+			if (zkRes) zkRes.style.display = 'none';
 		}
 
 		async function sendSuiToProfile() {
@@ -2436,7 +2000,7 @@ export function generateProfilePage(
 				showStatus(sendStatus, 'Recipient address is invalid', 'error');
 				return;
 			}
-			if (!connectedAddress || !connectedWallet || !connectedAccount) {
+			if (!canSign()) {
 				showStatus(sendStatus, 'Connect wallet first', 'error');
 				return;
 			}
@@ -2465,37 +2029,8 @@ export function generateProfilePage(
 
 				showStatus(sendStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
-				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
 				let result;
-				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
-
-				if (signExecFeature?.signAndExecuteTransaction) {
-					result = await signExecFeature.signAndExecuteTransaction({
-						transaction: tx,
-						account: connectedAccount,
-						chain,
-						options: { showEffects: true },
-					});
-				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-						transactionBlock: tx,
-						account: connectedAccount,
-						chain,
-						options: { showEffects: true },
-					});
-				} else {
-					const txBytes = await tx.build({ client: getSuiClient() });
-					const phantomProvider = window.phantom?.sui;
-					if (phantomProvider?.signAndExecuteTransactionBlock) {
-						result = await phantomProvider.signAndExecuteTransactionBlock({
-							transactionBlock: txBytes,
-							options: { showEffects: true },
-						});
-					} else {
-						throw new Error('Wallet does not support transaction signing');
-					}
-				}
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 				showStatus(sendStatus, '<strong>Sent!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 				try {
@@ -2523,6 +2058,7 @@ export function generateProfilePage(
 			const nftImg = identityVisual.querySelector('img');
 			if (nftImg) nftImg.style.display = 'none';
 			showingQr = true;
+			stylizedMode = false;
 		}
 
 		function showIdentityNft() {
@@ -2533,10 +2069,16 @@ export function generateProfilePage(
 			const nftImg = identityVisual.querySelector('img');
 			if (nftImg) nftImg.style.display = 'block';
 			showingQr = false;
+			stylizedMode = false;
 		}
 
 		function toggleIdentityView() {
 			if (showingQr) {
+				showingQr = false;
+				stylizedMode = true;
+				applyTaggedIdentityToProfile();
+			} else if (stylizedMode) {
+				stylizedMode = false;
 				showIdentityNft();
 			} else {
 				showIdentityQr();
@@ -2608,11 +2150,16 @@ export function generateProfilePage(
 				});
 			}
 
-				async function downloadIdentityImage(feedbackBtn, preferQr = showingQr) {
-					const taggedFilename = NAME.replace(/\\./g, '-') + '-sui.png';
+			async function downloadIdentityImage(feedbackBtn, preferQr = showingQr) {
+				const taggedFilename = NAME.replace(/./g, '-') + '-sui.png';
 				const sealPayload = buildMetaSealPayload(preferQr);
 				try {
-					const taggedCanvas = await buildTaggedIdentityCanvas(preferQr, currentListing, currentBestBid, { sales: currentSales, soldPriceMist: lastSoldPriceMist });
+					const taggedCanvas = await buildTaggedIdentityCanvas(preferQr, currentListing, currentBestBid, {
+						sales: currentSales,
+						soldPriceMist: lastSoldPriceMist,
+						saleEventMs: lastSaleEventMs,
+						listingEventMs: lastListingEventMs,
+					});
 					if (taggedCanvas) {
 						triggerCanvasDownload(taggedCanvas, taggedFilename, feedbackBtn, sealPayload);
 						return;
@@ -2622,7 +2169,7 @@ export function generateProfilePage(
 				}
 
 				// Fallback to raw visual export if tagged generation fails
-				const fallbackFilename = NAME.replace(/\\./g, '-') + '-sui.png';
+				const fallbackFilename = NAME.replace(/./g, '-') + '-sui.png';
 				if (preferQr && identityCanvas) {
 					triggerCanvasDownload(identityCanvas, fallbackFilename, feedbackBtn, sealPayload);
 					return;
@@ -2630,8 +2177,8 @@ export function generateProfilePage(
 				const nftImg = identityVisual?.querySelector('img');
 				if (nftImg) {
 					const canvas = document.createElement('canvas');
-				canvas.width = nftImg.naturalWidth || nftImg.width;
-				canvas.height = nftImg.naturalHeight || nftImg.height;
+					canvas.width = nftImg.naturalWidth || nftImg.width;
+					canvas.height = nftImg.naturalHeight || nftImg.height;
 					const ctx = canvas.getContext('2d');
 					if (ctx) {
 						ctx.drawImage(nftImg, 0, 0, canvas.width, canvas.height);
@@ -2644,183 +2191,218 @@ export function generateProfilePage(
 				}
 			}
 
-				async function buildTaggedIdentityCanvas(preferQr = showingQr, listing = null, bestBid = null, options = {}) {
-					const sales = options.sales || [];
-					const soldPriceMist = options.soldPriceMist || null;
-					const lastSale = sales.length > 0 ? sales[0] : null;
-					const lastSalePriceMist = soldPriceMist || (lastSale?.price ?? null);
-					const blackDiamondMode = options && options.blackDiamondMode === true;
-					const taggedNftSource = identityVisual?.querySelector('img.identity-tagged-image') || null;
-					const cleanNftSource =
-						rawIdentityNftImage || identityVisual?.querySelector('img:not(.identity-tagged-image)') || null;
-					const nftSource = cleanNftSource || taggedNftSource || null;
-					const qrSource = identityCanvas && identityCanvas.width > 0 ? identityCanvas : null;
-					// Prefer the SuiNS registration NFT visual for export; QR is fallback only.
-					const visualSource = nftSource || qrSource;
-					if (!visualSource) return null;
-					const canBlackenBase = blackDiamondMode && Boolean(cleanNftSource);
+			async function buildTaggedIdentityCanvas(preferQr = showingQr, listing = null, bestBid = null, options = {}) {
+				const sales = options.sales || [];
+				const soldPriceMist = options.soldPriceMist || null;
+				const saleEventMs = Number(options.saleEventMs || 0);
+				const listingEventMs = Number(options.listingEventMs || 0);
+				const lastSale = sales.length > 0 ? sales[0] : null;
+				const lastSalePriceMist = soldPriceMist || (lastSale?.price ?? null);
+				const blackDiamondMode = options && options.blackDiamondMode === true;
+				const isStylized = options && options.stylizedMode === true;
+				const taggedNftSource = identityVisual?.querySelector('img.identity-tagged-image') || null;
+				const cleanNftSource =
+					rawIdentityNftImage || identityVisual?.querySelector('img:not(.identity-tagged-image)') || null;
+				const nftSource = cleanNftSource || taggedNftSource || null;
+				const qrSource = identityCanvas && identityCanvas.width > 0 ? identityCanvas : null;
+				// Prefer the SuiNS registration NFT visual for export; QR is fallback only.
+				const visualSource = nftSource || qrSource;
+				if (!visualSource) return null;
+				const canBlackenBase = blackDiamondMode && Boolean(cleanNftSource);
 
-					const srcWidth = visualSource.naturalWidth || visualSource.width || 1600;
-					const srcHeight = visualSource.naturalHeight || visualSource.height || 900;
-					const canvas = document.createElement('canvas');
-					canvas.width = srcWidth;
-					canvas.height = srcHeight;
-					const ctx = canvas.getContext('2d');
-					if (!ctx) return null;
+				const srcWidth = visualSource.naturalWidth || visualSource.width || 1600;
+				const srcHeight = visualSource.naturalHeight || visualSource.height || 900;
+				const canvas = document.createElement('canvas');
+				canvas.width = srcWidth;
+				canvas.height = srcHeight;
+				const ctx = canvas.getContext('2d');
+				if (!ctx) return null;
 
-					const clamp8 = (value) => Math.max(0, Math.min(255, Math.round(value)));
-					const inkCrushBackgroundPixels = () => {
-						let imageData;
-						try {
-							imageData = ctx.getImageData(0, 0, srcWidth, srcHeight);
-						} catch {
-							return;
-						}
-						const data = imageData.data;
-						for (let i = 0; i < data.length; i += 4) {
-							const r = data[i];
-							const g = data[i + 1];
-							const b = data[i + 2];
-							const max = Math.max(r, g, b);
-							const min = Math.min(r, g, b);
-							const sat = max === 0 ? 0 : (max - min) / max;
-							const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-							const blueBias = b - ((r + g) * 0.5);
-							const backgroundLike = sat < 0.48 || (blueBias > 8 && sat < 0.72);
-							if (!backgroundLike) continue;
-
-							const darkness = luma < 72 ? 0.1 : luma < 128 ? 0.16 : luma < 188 ? 0.24 : 0.32;
-							const blueLift = sat < 0.25 ? 1.16 : 1.08;
-							data[i] = clamp8(r * darkness * 0.9);
-							data[i + 1] = clamp8(g * darkness * 0.88);
-							data[i + 2] = clamp8(b * darkness * blueLift);
-						}
-						ctx.putImageData(imageData, 0, 0);
-					};
-
-					// Black-diamond mode: ink-crush only the clean base NFT pass, then draw overlays in normal color.
-					if (canBlackenBase) {
-						ctx.filter = 'saturate(325%) contrast(132%) brightness(98%)';
-						ctx.drawImage(visualSource, 0, 0, srcWidth, srcHeight);
-						ctx.filter = 'none';
-						inkCrushBackgroundPixels();
-
-						const sideShadow = ctx.createLinearGradient(0, 0, srcWidth, 0);
-						sideShadow.addColorStop(0, 'rgba(0, 0, 0, 0.62)');
-						sideShadow.addColorStop(0.16, 'rgba(2, 6, 12, 0.22)');
-						sideShadow.addColorStop(0.5, 'rgba(3, 7, 14, 0.06)');
-						sideShadow.addColorStop(0.84, 'rgba(2, 6, 12, 0.24)');
-						sideShadow.addColorStop(1, 'rgba(0, 0, 0, 0.62)');
-						ctx.fillStyle = sideShadow;
-						ctx.fillRect(0, 0, srcWidth, srcHeight);
-
-						const deepVignette = ctx.createRadialGradient(
-							srcWidth * 0.5,
-							srcHeight * 0.44,
-							Math.min(srcWidth, srcHeight) * 0.2,
-							srcWidth * 0.5,
-							srcHeight * 0.52,
-							Math.max(srcWidth, srcHeight) * 0.76,
-						);
-						deepVignette.addColorStop(0, 'rgba(4, 10, 18, 0.08)');
-						deepVignette.addColorStop(0.62, 'rgba(2, 4, 8, 0.32)');
-						deepVignette.addColorStop(1, 'rgba(0, 0, 0, 0.84)');
-						ctx.save();
-						ctx.globalCompositeOperation = 'multiply';
-						ctx.fillStyle = deepVignette;
-						ctx.fillRect(0, 0, srcWidth, srcHeight);
-						ctx.restore();
-					} else {
-						ctx.drawImage(visualSource, 0, 0, srcWidth, srcHeight);
+				const clamp8 = (value) => Math.max(0, Math.min(255, Math.round(value)));
+				const inkCrushBackgroundPixels = () => {
+					let imageData;
+					try {
+						imageData = ctx.getImageData(0, 0, srcWidth, srcHeight);
+					} catch {
+						return;
 					}
+					const data = imageData.data;
+					for (let i = 0; i < data.length; i += 4) {
+						const r = data[i];
+						const g = data[i + 1];
+						const b = data[i + 2];
+						const max = Math.max(r, g, b);
+						const min = Math.min(r, g, b);
+						const sat = max === 0 ? 0 : (max - min) / max;
+						const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+						const blueBias = b - ((r + g) * 0.5);
+						const backgroundLike = sat < 0.48 || (blueBias > 8 && sat < 0.72);
+						if (!backgroundLike) continue;
 
-					// Subtle contrast pass so logo implant reads on bright NFTs.
-					const topFade = ctx.createLinearGradient(0, 0, 0, srcHeight * 0.24);
-					if (canBlackenBase) {
-						topFade.addColorStop(0, 'rgba(2, 8, 18, 0.34)');
-						topFade.addColorStop(1, 'rgba(2, 8, 18, 0.04)');
-					} else {
-						topFade.addColorStop(0, 'rgba(5, 9, 20, 0.26)');
-						topFade.addColorStop(1, 'rgba(5, 9, 20, 0.0)');
+						const darkness = luma < 72 ? 0.1 : luma < 128 ? 0.16 : luma < 188 ? 0.24 : 0.32;
+						const blueLift = sat < 0.25 ? 1.16 : 1.08;
+						data[i] = clamp8(r * darkness * 0.9);
+						data[i + 1] = clamp8(g * darkness * 0.88);
+						data[i + 2] = clamp8(b * darkness * blueLift);
 					}
-					ctx.fillStyle = topFade;
-					ctx.fillRect(0, 0, srcWidth, srcHeight * 0.24);
+					ctx.putImageData(imageData, 0, 0);
+				};
 
-					const minSide = Math.min(srcWidth, srcHeight);
-					const overlayPadding = Math.max(22, Math.round(minSide * 0.045));
-					const drawOverlayTag = (label, x, y, variant = 'neutral') => {
-						const textSize = Math.max(14, Math.round(minSide * 0.043));
-						const px = Math.max(10, Math.round(minSide * 0.022));
-						const py = Math.max(6, Math.round(minSide * 0.013));
-						ctx.font = '700 ' + textSize + 'px Inter, system-ui, -apple-system, sans-serif';
-						const textWidth = ctx.measureText(label).width;
-						const tagWidth = Math.round(textWidth + px * 2);
-						const tagHeight = Math.round(textSize + py * 1.9);
-						const radius = Math.round(tagHeight * 0.5);
+				const drawWavyBackground = (w, h) => {
+					ctx.fillStyle = '#05050a';
+					ctx.fillRect(0, 0, w, h);
+					ctx.save();
+					const waveWidth = Math.round(w * 0.18);
+					const spacingX = Math.round(waveWidth * 1.3);
+					const spacingY = Math.round(waveWidth * 0.65);
+					ctx.globalAlpha = 0.08;
+					for (let y = -spacingY; y < h + spacingY; y += spacingY) {
+						const row = Math.floor((y + spacingY) / spacingY);
+						const offsetX = (row % 2 === 0) ? 0 : spacingX / 2;
+						for (let x = -spacingX; x < w + spacingX; x += spacingX) {
+							const pathWidth = 304;
+							const scale = waveWidth / pathWidth;
+							const lw = Math.max(2, Math.round(16 * scale));
+							const c1x = (x + offsetX) + 80 * scale;
+							const c1y = y - 36 * scale;
+							const midX = (x + offsetX) + 160 * scale;
+							const midY = y;
+							const c2x = (x + offsetX) + 240 * scale;
+							const c2y = y + 36 * scale;
+							const endX = (x + offsetX) + 304 * scale;
+							const endY = y;
+							ctx.lineCap = 'round';
+							ctx.lineWidth = lw;
+							ctx.strokeStyle = '#60a5fa';
+							ctx.beginPath();
+							ctx.moveTo(x + offsetX, y);
+							ctx.quadraticCurveTo(c1x, c1y, midX, midY);
+							ctx.quadraticCurveTo(c2x, c2y, endX, endY);
+							ctx.stroke();
+						}
+					}
+					ctx.restore();
+				};
 
-						let fill = 'rgba(14, 18, 28, 0.68)';
-						let stroke = 'rgba(148, 163, 184, 0.36)';
-						let textColor = 'rgba(232, 238, 249, 0.95)';
-						if (variant === 'accent') {
-							fill = 'rgba(37, 99, 235, 0.28)';
-							stroke = 'rgba(96, 165, 250, 0.72)';
-							textColor = '#dbeafe';
-						}
-						if (variant === 'warning') {
-							fill = 'rgba(146, 64, 14, 0.3)';
-							stroke = 'rgba(251, 191, 36, 0.68)';
-							textColor = '#fef3c7';
-						}
-						if (variant === 'expired') {
-							fill = 'rgba(127, 29, 29, 0.34)';
-							stroke = 'rgba(248, 113, 113, 0.68)';
-							textColor = '#fecaca';
-						}
+				const minSide = Math.min(srcWidth, srcHeight);
+				const overlayPadding = Math.max(22, Math.round(minSide * 0.045));
 
+				if (blackDiamondMode) {
+					drawWavyBackground(srcWidth, srcHeight);
+					if (isStylized) {
+						const waterLogoSize = minSide * 0.75;
+						const waterX = (srcWidth - waterLogoSize) / 2;
+						const waterY = (srcHeight - waterLogoSize) / 2;
 						ctx.save();
-						drawRoundedRect(ctx, x, y, tagWidth, tagHeight, radius);
-						ctx.fillStyle = fill;
+						ctx.globalAlpha = 0.18;
+						const waterG = ctx.createLinearGradient(waterX, waterY, waterX + waterLogoSize, waterY + waterLogoSize);
+						waterG.addColorStop(0, '#60a5fa');
+						waterG.addColorStop(1, '#34d399');
+						const px = (v) => waterX + (v - 96) * (waterLogoSize / 320);
+						const py = (v) => waterY + (v - 96) * (waterLogoSize / 320);
+						ctx.fillStyle = waterG;
+						ctx.beginPath();
+						ctx.moveTo(px(256), py(96));
+						ctx.lineTo(px(416), py(352));
+						ctx.lineTo(px(336), py(352));
+						ctx.lineTo(px(280), py(256));
+						ctx.lineTo(px(256), py(296));
+						ctx.lineTo(px(232), py(256));
+						ctx.lineTo(px(176), py(352));
+						ctx.lineTo(px(96), py(352));
+						ctx.closePath();
 						ctx.fill();
-						ctx.strokeStyle = stroke;
-						ctx.lineWidth = Math.max(1.2, Math.round(minSide * 0.0038));
+						const waveScale = waterLogoSize / 304;
+						ctx.strokeStyle = waterG;
+						ctx.lineWidth = 24 * waveScale;
+						ctx.lineCap = 'round';
+						ctx.beginPath();
+						ctx.moveTo(px(128), py(384));
+						ctx.quadraticCurveTo(px(208), py(348), px(288), py(384));
+						ctx.quadraticCurveTo(px(368), py(420), px(432), py(384));
 						ctx.stroke();
-						ctx.fillStyle = textColor;
-						ctx.textAlign = 'left';
-						ctx.textBaseline = 'middle';
-						ctx.fillText(label, x + px, y + tagHeight / 2);
 						ctx.restore();
-						return { width: tagWidth, height: tagHeight };
-					};
+					}
+				} else {
+					ctx.drawImage(visualSource, 0, 0, srcWidth, srcHeight);
+				}
 
-					if (canBlackenBase) {
-						const overlayName = String(NAME || '').replace(/.sui$/i, '').replace(/^@+/, '') || 'sui';
-						const atText = '@';
-						const nameText = overlayName;
-						const nameFontSize = Math.max(46, Math.round(minSide * 0.175));
-						const nameY = overlayPadding;
-						ctx.save();
+				// Subtle contrast pass for top brand lockup
+				const topFade = ctx.createLinearGradient(0, 0, 0, srcHeight * 0.24);
+				topFade.addColorStop(0, blackDiamondMode ? 'rgba(5, 9, 20, 0.4)' : 'rgba(5, 9, 20, 0.26)');
+				topFade.addColorStop(1, 'rgba(5, 9, 20, 0.0)');
+				ctx.fillStyle = topFade;
+				ctx.fillRect(0, 0, srcWidth, srcHeight * 0.24);
+
+				const drawOverlayTag = (label, x, y, variant = 'neutral') => {
+					const textSize = Math.max(14, Math.round(minSide * 0.043));
+					const px = Math.max(10, Math.round(minSide * 0.022));
+					const py = Math.max(6, Math.round(minSide * 0.013));
+					ctx.font = '700 ' + textSize + 'px Inter, system-ui, -apple-system, sans-serif';
+					const textWidth = ctx.measureText(label).width;
+					const tagWidth = Math.round(textWidth + px * 2);
+					const tagHeight = Math.round(textSize + py * 1.9);
+					const radius = Math.round(tagHeight * 0.5);
+					let fill = 'rgba(14, 18, 28, 0.68)';
+					let stroke = 'rgba(148, 163, 184, 0.36)';
+					let textColor = 'rgba(232, 238, 249, 0.95)';
+					if (variant === 'accent') {
+						fill = 'rgba(37, 99, 235, 0.28)';
+						stroke = 'rgba(96, 165, 250, 0.72)';
+						textColor = '#dbeafe';
+					}
+					if (variant === 'warning') {
+						fill = 'rgba(146, 64, 14, 0.3)';
+						stroke = 'rgba(251, 191, 36, 0.68)';
+						textColor = '#fef3c7';
+					}
+					if (variant === 'expired') {
+						fill = 'rgba(127, 29, 29, 0.34)';
+						stroke = 'rgba(248, 113, 113, 0.68)';
+						textColor = '#fecaca';
+					}
+					ctx.save();
+					drawRoundedRect(ctx, x, y, tagWidth, tagHeight, radius);
+					ctx.fillStyle = fill;
+					ctx.fill();
+					ctx.strokeStyle = stroke;
+					ctx.lineWidth = Math.max(1.2, Math.round(minSide * 0.0038));
+					ctx.stroke();
+					ctx.fillStyle = textColor;
+					ctx.textAlign = 'left';
+					ctx.textBaseline = 'middle';
+					ctx.fillText(label, x + px, y + tagHeight / 2);
+					ctx.restore();
+					return { width: tagWidth, height: tagHeight };
+				};
+
+				const nameFontSize = Math.max(46, Math.round(minSide * 0.175));
+				const nameY = overlayPadding;
+				// Stylized look (no @) is preferred for black diamonds too
+				const nameText = (blackDiamondMode || isStylized) 
+					? (String(NAME || '').replace(/.sui$/i, '').replace(/^@+/, '') || 'sui')
+					: ((blackDiamondMode ? '@' : '') + (String(NAME || '').replace(/.sui$/i, '') || 'sui'));
+					ctx.save();
+					// Only draw name and date if activated
+					if (blackDiamondMode || isStylized) {
 						ctx.font = '800 ' + nameFontSize + 'px Inter, system-ui, -apple-system, sans-serif';
 						ctx.textAlign = 'left';
 						ctx.textBaseline = 'top';
 						ctx.lineJoin = 'round';
-						ctx.shadowColor = 'rgba(1, 5, 15, 0.82)';
-						ctx.shadowBlur = Math.max(8, Math.round(minSide * 0.028));
-						ctx.shadowOffsetY = 1;
-						ctx.lineWidth = Math.max(3, Math.round(nameFontSize * 0.12));
-						ctx.strokeStyle = 'rgba(191, 229, 255, 0.65)';
-						ctx.strokeText(atText, overlayPadding, nameY);
-						ctx.fillStyle = '#60a5fa';
-						ctx.fillText(atText, overlayPadding, nameY);
-
-						const atWidth = ctx.measureText(atText).width + Math.max(4, Math.round(minSide * 0.008));
-						const nameX = overlayPadding + atWidth;
+						ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+						ctx.shadowBlur = 12;
+						ctx.shadowOffsetY = 2;
 						const nameWidth = ctx.measureText(nameText).width;
-						ctx.strokeStyle = 'rgba(226, 232, 240, 0.6)';
+						const nameX = overlayPadding;
+						ctx.lineWidth = Math.max(3, Math.round(nameFontSize * 0.1));
+						ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
 						ctx.strokeText(nameText, nameX, nameY);
 						const nameGradient = ctx.createLinearGradient(nameX, nameY, nameX + nameWidth, nameY + nameFontSize);
-						nameGradient.addColorStop(0, '#86efac');
-						nameGradient.addColorStop(0.55, '#facc15');
-						nameGradient.addColorStop(1, '#fb7185');
+						
+						// Always use water gradient for stylized/black diamond
+						nameGradient.addColorStop(0, '#60a5fa');
+						nameGradient.addColorStop(1, '#34d399');
+						
 						ctx.fillStyle = nameGradient;
 						ctx.fillText(nameText, nameX, nameY);
 						ctx.restore();
@@ -2844,224 +2426,201 @@ export function generateProfilePage(
 							drawOverlayTag(expiryLabel, expiryX, tagY, expiryVariant);
 						}
 						if (Number.isFinite(EXPIRATION_MS) && EXPIRATION_MS > 0) {
-							const expiryDate = new Date(EXPIRATION_MS).toLocaleDateString('en-US', {
-								month: 'short',
-								day: 'numeric',
-								year: 'numeric',
-							});
+							const expiryDate = new Date(EXPIRATION_MS).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 							const dateSize = Math.max(14, Math.round(minSide * 0.04));
 							ctx.save();
 							ctx.font = '700 ' + dateSize + 'px Inter, system-ui, -apple-system, sans-serif';
-							ctx.textBaseline = 'alphabetic';
+							ctx.textBaseline = 'bottom';
 							ctx.textAlign = 'right';
-							ctx.strokeStyle = 'rgba(0, 0, 0, 0.68)';
-							ctx.lineWidth = Math.max(2, Math.round(dateSize * 0.2));
-							ctx.strokeText(expiryDate, srcWidth - overlayPadding, srcHeight - overlayPadding);
-							ctx.fillStyle = 'rgba(226, 232, 240, 0.95)';
-							ctx.fillText(expiryDate, srcWidth - overlayPadding, srcHeight - overlayPadding);
+							ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+							ctx.lineWidth = Math.max(2, Math.round(dateSize * 0.25));
+							// Position at bottom right with standard margin
+							const dateX = srcWidth - overlayPadding;
+							const dateY = srcHeight - overlayPadding;
+							ctx.strokeText(expiryDate, dateX, dateY);
+							ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+							ctx.fillText(expiryDate, dateX, dateY);
 							ctx.restore();
 						}
-					}
-
-					let logoImage = null;
-					try {
-						logoImage = await loadImageForCanvas(LOGO_DATA_URL);
-					} catch {}
-
-					// Place QR back in the lower-left corner.
-					const qrBadgeSize = Math.max(132, Math.round(Math.min(srcWidth, srcHeight) * 0.2));
-					const qrMargin = Math.max(16, Math.round(qrBadgeSize * 0.14));
-					const qrX = qrMargin;
-					const qrY = srcHeight - qrBadgeSize - qrMargin;
-					drawCornerBrandedQr(ctx, qrX, qrY, qrBadgeSize, PROFILE_URL, logoImage, qrSource);
-
-					// Upper-right brand lockup: shared sui.ski logo mark + ".sui.ski".
-					const brandIconSize = Math.max(40, Math.min(96, Math.round(Math.min(srcWidth, srcHeight) * 0.18)));
-					const brandPadding = Math.max(12, Math.round(Math.min(srcWidth, srcHeight) * 0.035));
-					const brandShiftDown = Math.max(6, Math.round(Math.min(srcWidth, srcHeight) * 0.018));
-					const brandX = srcWidth - brandPadding - brandIconSize;
-					const brandY = brandPadding + brandShiftDown;
-					if (logoImage) {
-						drawVisualIntoBox(
-							ctx,
-							logoImage,
-							brandX,
-							brandY,
-							brandIconSize,
-							brandIconSize,
-							Math.round(brandIconSize * 0.2),
-						);
 					} else {
-						drawSiteLogoGlyph(
-							ctx,
-							brandX,
-							brandY,
-							brandIconSize,
-						);
+						ctx.restore();
 					}
 
-						const nftTagSize = Math.max(13, Math.round(brandIconSize * 0.28));
-						const nftTagY = brandY + brandIconSize + Math.max(6, Math.round(nftTagSize * 0.42));
-						const brandTextGradient = ctx.createLinearGradient(
-							brandX,
-							brandY,
-							brandX + brandIconSize,
-							brandY + brandIconSize,
-						);
-						brandTextGradient.addColorStop(0, '#60a5fa');
-						brandTextGradient.addColorStop(1, '#a78bfa');
-						ctx.fillStyle = brandTextGradient;
-						ctx.font = '700 ' + nftTagSize + 'px Inter, system-ui, -apple-system, sans-serif';
-						ctx.textAlign = 'center';
-						ctx.textBaseline = 'alphabetic';
-						ctx.fillText('.sui.ski', brandX + brandIconSize / 2, nftTagY);
-						ctx.textAlign = 'left';
+				let logoImage = null;
+				try {
+					logoImage = await loadImageForCanvas(LOGO_DATA_URL);
+				} catch {}
 
-					// Draw TradePort market data badge if available
-					const hasListing = listing && listing.price;
-					const hasBestBid = bestBid && bestBid.price;
-					const hasSold = Boolean(lastSalePriceMist);
-					if (hasListing || hasBestBid || hasSold) {
-						let tradeportLogo = null;
-						try {
-							const rawLogo = await loadImageForCanvas(TRADEPORT_LOGO_URL);
-							const tempCanvas = document.createElement('canvas');
-							tempCanvas.width = rawLogo.width;
-							tempCanvas.height = rawLogo.height;
-							const tempCtx = tempCanvas.getContext('2d');
-							tempCtx.drawImage(rawLogo, 0, 0);
-							const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-							const data = imageData.data;
-							for (let i = 0; i < data.length; i += 4) {
-								const r = data[i];
-								const g = data[i + 1];
-								const b = data[i + 2];
-								const brightness = (r + g + b) / 3;
-								if (brightness > 240) {
-									data[i + 3] = 0;
-								}
-							}
-							tempCtx.putImageData(imageData, 0, 0);
-							tradeportLogo = tempCanvas;
-						} catch {}
+				// Place QR back in the lower-left corner.
+				const qrBadgeSize = Math.max(132, Math.round(Math.min(srcWidth, srcHeight) * 0.2));
+				const qrMargin = Math.max(16, Math.round(qrBadgeSize * 0.14));
+				const qrX = qrMargin;
+				const qrY = srcHeight - qrBadgeSize - qrMargin;
+				drawCornerBrandedQr(ctx, qrX, qrY, qrBadgeSize, PROFILE_URL, logoImage, qrSource);
 
-						const badgePadding = Math.max(10, Math.round(Math.min(srcWidth, srcHeight) * 0.015));
-						const priceTextSize = Math.max(16, Math.round(Math.min(srcWidth, srcHeight) * 0.04));
-						const labelTextSize = Math.max(14, Math.round(priceTextSize * 0.9));
-						const logoSize = Math.max(28, Math.round(priceTextSize * 3.0));
-						const labelLineHeight = labelTextSize + 3;
-						const valueLineHeight = priceTextSize + 2;
-
-						const formatSuiPrice = (mist) => {
-							const sui = Number(mist) / 1e9;
-							const whole = Math.floor(sui);
-							const decimal = sui - whole;
-							if (decimal < 0.05) {
-								return whole.toString();
-							}
-							return sui.toFixed(2);
-						};
-
-						const entries = [];
-						if (hasListing) {
-							const listPrice = formatSuiPrice(listing.price);
-							entries.push({ label: 'List:', suiValue: listPrice + ' SUI', color: '#c084fc' });
-						}
-						if (hasSold) {
-							const soldPrice = formatSuiPrice(lastSalePriceMist);
-							entries.push({ label: 'Sold:', suiValue: soldPrice + ' SUI', color: '#4ade80' });
-						} else if (hasBestBid) {
-							const bidPrice = formatSuiPrice(bestBid.price);
-							entries.push({ label: 'Offer:', suiValue: bidPrice + ' SUI', color: '#fbbf24' });
-						}
-
-						ctx.font = '700 ' + priceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
-						let maxWidth = 0;
-						for (const entry of entries) {
-							const labelWidth = ctx.measureText(entry.label).width;
-							const valueWidth = ctx.measureText(entry.suiValue).width;
-							maxWidth = Math.max(maxWidth, labelWidth, valueWidth);
-						}
-
-						const entryHeight = labelLineHeight + valueLineHeight;
-						const totalEntriesHeight = entries.length * entryHeight + (entries.length - 1) * 4;
-						const badgeWidth = logoSize + badgePadding + maxWidth + badgePadding;
-						const badgeHeight = Math.max(logoSize, totalEntriesHeight) + badgePadding * 2;
-						const badgeSpacing = Math.max(12, Math.round(qrMargin * 0.6));
-						const badgeX = qrX;
-						const badgeY = qrY - badgeHeight - badgeSpacing;
-
-						if (tradeportLogo) {
-							const logoX = badgeX + badgePadding;
-							const logoY = badgeY + (badgeHeight - logoSize) / 2;
-							ctx.drawImage(tradeportLogo, logoX, logoY, logoSize, logoSize);
-						}
-
-						ctx.textAlign = 'left';
-						ctx.textBaseline = 'top';
-
-						const textX = badgeX + badgePadding + logoSize + badgePadding;
-						const textStartY = badgeY + (badgeHeight - totalEntriesHeight) / 2;
-
-						ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
-						ctx.lineWidth = Math.max(5, Math.round(priceTextSize * 0.4));
-						ctx.lineJoin = 'round';
-						ctx.miterLimit = 2;
-						ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-						ctx.shadowBlur = Math.max(6, Math.round(priceTextSize * 0.5));
-						ctx.shadowOffsetX = 0;
-						ctx.shadowOffsetY = 1;
-
-						let currentY = textStartY;
-						for (let i = 0; i < entries.length; i++) {
-							const entry = entries[i];
-
-							ctx.font = '700 ' + labelTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
-							ctx.strokeText(entry.label, textX, currentY);
-							ctx.fillStyle = entry.color;
-							ctx.fillText(entry.label, textX, currentY);
-
-							currentY += labelLineHeight;
-
-							ctx.font = '800 ' + priceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
-							ctx.strokeText(entry.suiValue, textX, currentY);
-							ctx.fillStyle = entry.color;
-							ctx.fillText(entry.suiValue, textX, currentY);
-
-							currentY += valueLineHeight + 4;
-						}
-
-						ctx.shadowColor = 'transparent';
-						ctx.textAlign = 'left';
-					}
-
-					return canvas;
+				// Upper-right brand lockup: shared sui.ski logo mark + ".sui.ski".
+				const brandIconSize = isStylized ? Math.floor(nameFontSize * 0.88) : Math.max(40, Math.min(96, Math.round(Math.min(srcWidth, srcHeight) * 0.18)));
+				const brandPadding = Math.max(12, Math.round(Math.min(srcWidth, srcHeight) * 0.035));
+				const brandX = srcWidth - brandPadding - brandIconSize;
+				const brandY = isStylized ? nameY : brandPadding + Math.max(6, Math.round(Math.min(srcWidth, srcHeight) * 0.018));
+				if (logoImage) {
+					drawVisualIntoBox(ctx, logoImage, brandX, brandY, brandIconSize, brandIconSize, Math.round(brandIconSize * 0.2));
+				} else {
+					drawSiteLogoGlyph(ctx, brandX, brandY, brandIconSize);
 				}
 
-				async function applyTaggedIdentityToProfile() {
-					if (!identityVisual || !rawIdentityNftImage) return;
-					try {
-						const blackDiamondMode =
-							Boolean(document.body && document.body.classList.contains('diamond-watch-active')) ||
-							Boolean(typeof diamondWatching !== 'undefined' && diamondWatching);
-						const taggedCanvas = await buildTaggedIdentityCanvas(false, currentListing, currentBestBid, { blackDiamondMode, sales: currentSales, soldPriceMist: lastSoldPriceMist });
-						if (!taggedCanvas) return;
-						const taggedImg = new Image();
-						taggedImg.onload = () => {
-							const existingImg = identityVisual.querySelector('img');
-							if (existingImg) existingImg.remove();
-							taggedImg.className = 'identity-tagged-image';
-							taggedImg.style.width = '90%';
-							taggedImg.style.height = '90%';
-							taggedImg.style.objectFit = 'cover';
-							taggedImg.style.display = 'block';
-							taggedImg.style.position = 'absolute';
-							taggedImg.style.top = '5%';
-							taggedImg.style.left = '5%';
-							taggedImg.style.zIndex = '6';
-							taggedImg.style.borderRadius = '12px';
+				const nftTagSize = Math.max(13, Math.round(brandIconSize * 0.28));
+				const nftTagY = isStylized ? (nameY + nameFontSize) : (brandY + brandIconSize + Math.max(6, Math.round(nftTagSize * 0.42)));
+				const brandTextGradient = ctx.createLinearGradient(brandX, brandY, brandX + brandIconSize, brandY + brandIconSize);
+				brandTextGradient.addColorStop(0, '#60a5fa');
+				brandTextGradient.addColorStop(1, '#a78bfa');
+				ctx.fillStyle = brandTextGradient;
+				ctx.font = '700 ' + nftTagSize + 'px Inter, system-ui, -apple-system, sans-serif';
+				ctx.textAlign = 'center';
+				ctx.textBaseline = 'alphabetic';
+				ctx.fillText('.sui.ski', brandX + brandIconSize / 2, nftTagY);
+				ctx.textAlign = 'left';
+
+				// Draw TradePort market data badge if available
+				const listingPriceMist = Number(listing?.price || 0);
+				const bestBidPriceMist = Number(bestBid?.price || 0);
+				const soldPriceValueMist = Number(lastSalePriceMist || 0);
+				const hasListing = Number.isFinite(listingPriceMist) && listingPriceMist > 0;
+				const hasBestBid = Number.isFinite(bestBidPriceMist) && bestBidPriceMist > 0;
+				const hasSold = Number.isFinite(soldPriceValueMist) && soldPriceValueMist > 0;
+				const shouldShowSoldOnly = hasSold && (!hasListing || (saleEventMs > 0 && listingEventMs > 0 && saleEventMs >= listingEventMs));
+				if (hasListing || hasBestBid || hasSold) {
+					let tradeportLogo = null;
+					try { tradeportLogo = await loadImageForCanvas(TRADEPORT_LOGO_URL); } catch {}
+					const priceTextSize = Math.max(26, Math.round(Math.min(srcWidth, srcHeight) * 0.067));
+					const labelTextSize = Math.max(22, Math.round(priceTextSize * 0.88));
+					const logoSize = Math.max(28, Math.round(priceTextSize * 2.0));
+					const trimTrailingZeros = (value) => value.replace(/\\.?0+$/, '');
+					const formatSuiPrice = (mist) => {
+						const sui = Number(mist) / 1e9;
+						if (!Number.isFinite(sui) || sui <= 0) return '0';
+						if (sui >= 1000000) return trimTrailingZeros((sui / 1000000).toFixed(2)) + 'M';
+						if (sui >= 10000) return trimTrailingZeros((sui / 1000).toFixed(1)) + 'k';
+						if (sui >= 1) return trimTrailingZeros(sui.toFixed(2));
+						if (sui >= 0.1) return trimTrailingZeros(sui.toFixed(3));
+						if (sui >= 0.01) return trimTrailingZeros(sui.toFixed(4));
+						return trimTrailingZeros(sui.toFixed(6));
+					};
+					const entries = [];
+					if (shouldShowSoldOnly) {
+						const soldPrice = formatSuiPrice(soldPriceValueMist);
+						entries.push({ label: 'Sold:', priceNum: soldPrice, labelColor: '#4ade80', priceColor: '#ffffff', suiColor: '#60a5fa' });
+					} else {
+						if (hasListing) {
+							const listPrice = formatSuiPrice(listingPriceMist);
+							entries.push({ label: 'List:', priceNum: listPrice, labelColor: '#c084fc', priceColor: '#ffffff', suiColor: '#60a5fa' });
+						}
+						if (hasBestBid) {
+							const offerPrice = formatSuiPrice(bestBidPriceMist);
+							entries.push({ label: 'Offer:', priceNum: offerPrice, labelColor: '#8b5cf6', priceColor: '#ffffff', suiColor: '#60a5fa' });
+						}
+					}
+					ctx.font = '700 ' + priceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
+					let maxWidth = 0;
+					for (const entry of entries) {
+						const labelWidth = ctx.measureText(entry.label).width;
+						const valueWidth = ctx.measureText(entry.priceNum + ' SUI').width;
+						maxWidth = Math.max(maxWidth, labelWidth, valueWidth);
+					}
+					const qrBottom = qrY + qrBadgeSize;
+					const textGap = Math.max(6, Math.round(qrMargin * 0.4));
+					const textX = qrX + qrBadgeSize + textGap;
+					const availableWidth = (srcWidth - overlayPadding) - textX;
+					let priceFontScale = 1.0;
+					if (maxWidth > availableWidth) priceFontScale = availableWidth / maxWidth;
+					const scaledPriceTextSize = Math.floor(priceTextSize * priceFontScale);
+					const scaledLabelTextSize = Math.floor(labelTextSize * priceFontScale);
+					const scaledLabelLineHeight = scaledLabelTextSize + 3;
+					const scaledValueLineHeight = scaledPriceTextSize + 2;
+					const totalEntriesHeight = entries.length * (scaledLabelLineHeight + scaledValueLineHeight) + (entries.length - 1) * 4;
+					const textStartY = qrBottom - totalEntriesHeight;
+					if (tradeportLogo) {
+						const logoX = brandX + (brandIconSize - logoSize) / 2;
+						const logoY = nftTagY + Math.max(8, Math.round(nftTagSize * 0.6));
+						ctx.drawImage(tradeportLogo, logoX, logoY, logoSize, logoSize);
+					}
+					ctx.textAlign = 'left';
+					ctx.textBaseline = 'top';
+					ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
+					ctx.lineWidth = Math.max(5, Math.round(scaledPriceTextSize * 0.4));
+					ctx.lineJoin = 'round';
+					ctx.miterLimit = 2;
+					ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+					ctx.shadowBlur = Math.max(6, Math.round(scaledPriceTextSize * 0.5));
+					ctx.shadowOffsetX = 0;
+					ctx.shadowOffsetY = 1;
+					let currentY = textStartY;
+					for (let i = 0; i < entries.length; i++) {
+						const entry = entries[i];
+						ctx.font = '700 ' + scaledLabelTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
+						ctx.strokeText(entry.label, textX, currentY);
+						ctx.fillStyle = entry.labelColor;
+						ctx.fillText(entry.label, textX, currentY);
+						currentY += scaledLabelLineHeight;
+						ctx.font = '800 ' + scaledPriceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
+						const numText = entry.priceNum + ' ';
+						const suiText = 'SUI';
+						ctx.strokeText(numText + suiText, textX, currentY);
+						ctx.fillStyle = entry.priceColor;
+						ctx.fillText(numText, textX, currentY);
+						const numWidth = ctx.measureText(numText).width;
+						ctx.fillStyle = entry.suiColor;
+						ctx.fillText(suiText, textX + numWidth, currentY);
+						currentY += scaledValueLineHeight + 4;
+					}
+					ctx.shadowColor = 'transparent';
+					ctx.textAlign = 'left';
+				}
+				return canvas;
+			}
+
+			async function applyTaggedIdentityToProfile() {
+				if (!identityVisual || !rawIdentityNftImage) return;
+				try {
+					const blackDiamondMode =
+						Boolean(document.body && document.body.classList.contains('diamond-watch-active')) ||
+						Boolean(typeof diamondWatching !== 'undefined' && diamondWatching);
+					const taggedCanvas = await buildTaggedIdentityCanvas(false, currentListing, currentBestBid, {
+						blackDiamondMode,
+						stylizedMode,
+						sales: currentSales,
+						soldPriceMist: lastSoldPriceMist,
+						saleEventMs: lastSaleEventMs,
+						listingEventMs: lastListingEventMs,
+					});
+					if (!taggedCanvas) return;
+					const taggedImg = new Image();
+					taggedImg.onload = () => {
+						const existingImg = identityVisual.querySelector('img');
+						if (existingImg) existingImg.remove();
+						taggedImg.className = 'identity-tagged-image';
+						taggedImg.style.width = '90%';
+						taggedImg.style.height = '90%';
+						taggedImg.style.objectFit = 'cover';
+						taggedImg.style.display = 'block';
+						taggedImg.style.position = 'absolute';
+						taggedImg.style.top = '5%';
+						taggedImg.style.left = '5%';
+						taggedImg.style.zIndex = '6';
+						taggedImg.style.borderRadius = '12px';
 						identityVisual.appendChild(taggedImg);
 						if (identityCanvas) identityCanvas.style.display = 'none';
+
+						// Hide HTML elements that are now redundant in the stylized image
+						const nameWrap = document.getElementById('identity-name');
+						const headerExpiry = document.querySelector('.header-top-expiry-date');
+						if (stylizedMode || blackDiamondMode) {
+							if (nameWrap) nameWrap.style.opacity = '0';
+							if (headerExpiry) headerExpiry.style.visibility = 'hidden';
+						} else {
+							if (nameWrap) nameWrap.style.opacity = '1';
+							if (headerExpiry) headerExpiry.style.visibility = 'visible';
+						}
 
 						// Keep viewer in sync with tagged profile visual.
 						if (nftViewerImage) {
@@ -3869,7 +3428,8 @@ export function generateProfilePage(
 					try {
 						const response = await fetch('/api/nft-details?objectId=' + encodeURIComponent(resolvedNftId));
 						if (response.ok) {
-							const data = await response.json();
+						const data = await response.json();
+						const activeTokenId = String(NFT_ID || '').toLowerCase();
 							const displayUrl = data?.display?.image_url
 								|| data?.display?.image
 								|| data?.display?.avatar_url
@@ -4040,40 +3600,8 @@ export function generateProfilePage(
 				tx.setSender(senderAddress);
 				tx.setGasBudget(50000000);
 
-				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
-
 				let result;
-				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
-
-				// Pass Transaction object directly (modern wallets handle serialization)
-				if (signExecFeature?.signAndExecuteTransaction) {
-					result = await signExecFeature.signAndExecuteTransaction({
-						transaction: tx,
-						account: connectedAccount,
-						chain,
-						options: { showEffects: true }
-					});
-				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-						transactionBlock: tx,
-						account: connectedAccount,
-						chain,
-						options: { showEffects: true }
-					});
-				} else {
-					// Fallback for legacy wallets
-					const txBytes = await tx.build({ client: suiClient });
-					const phantomProvider = window.phantom?.sui;
-					if (phantomProvider?.signAndExecuteTransactionBlock) {
-						result = await phantomProvider.signAndExecuteTransactionBlock({
-							transactionBlock: txBytes,
-							options: { showEffects: true }
-						});
-					} else {
-						throw new Error('Wallet does not support transaction signing');
-					}
-				}
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					// Update UI
 					document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
@@ -4109,7 +3637,7 @@ export function generateProfilePage(
 				showOwnerInlineStatus('Only the NFT owner can set this as primary.', 'error');
 				return;
 			}
-			if (!connectedWallet || !connectedAccount) {
+			if (!canSign()) {
 				showOwnerInlineStatus('Please connect your wallet first.', 'error');
 				return;
 			}
@@ -4159,38 +3687,8 @@ export function generateProfilePage(
 				tx.setSender(senderAddress);
 				tx.setGasBudget(50000000);
 
-				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
-
 				let result;
-				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
-
-				if (signExecFeature?.signAndExecuteTransaction) {
-					result = await signExecFeature.signAndExecuteTransaction({
-						transaction: tx,
-						account: connectedAccount,
-						chain,
-						options: { showEffects: true }
-					});
-				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-						transactionBlock: tx,
-						account: connectedAccount,
-						chain,
-						options: { showEffects: true }
-					});
-				} else {
-					const txBytes = await tx.build({ client: suiClient });
-					const phantomProvider = window.phantom?.sui;
-					if (phantomProvider?.signAndExecuteTransactionBlock) {
-						result = await phantomProvider.signAndExecuteTransactionBlock({
-							transactionBlock: txBytes,
-							options: { showEffects: true }
-						});
-					} else {
-						throw new Error('Wallet does not support transaction signing');
-					}
-				}
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					connectedPrimaryName = FULL_NAME;
 					ownerDisplayAddress = connectedAddress;
@@ -4260,7 +3758,7 @@ export function generateProfilePage(
 		async function saveTargetAddress() {
 			hideStatus(modalStatus);
 
-			if (!connectedWallet || !connectedAccount) {
+			if (!canSign()) {
 				showStatus(modalStatus, 'Please connect your wallet first.', 'error');
 				return;
 			}
@@ -4332,40 +3830,8 @@ export function generateProfilePage(
 
 				showStatus(modalStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
-				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
-
 				let result;
-				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
-
-				// Pass Transaction object directly (modern wallets handle serialization)
-				if (signExecFeature?.signAndExecuteTransaction) {
-					result = await signExecFeature.signAndExecuteTransaction({
-						transaction: tx,
-						account: connectedAccount,
-						chain,
-						options: { showEffects: true }
-					});
-				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-						transactionBlock: tx,
-						account: connectedAccount,
-						chain,
-						options: { showEffects: true }
-					});
-				} else {
-					// Fallback for legacy wallets
-					const txBytes = await tx.build({ client: suiClient });
-					const phantomProvider = window.phantom?.sui;
-					if (phantomProvider?.signAndExecuteTransactionBlock) {
-						result = await phantomProvider.signAndExecuteTransactionBlock({
-							transactionBlock: txBytes,
-							options: { showEffects: true }
-						});
-					} else {
-						throw new Error('Wallet does not support transaction signing');
-					}
-				}
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 				showStatus(modalStatus, '<strong>Updated!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 
@@ -4479,39 +3945,8 @@ export function generateProfilePage(
 					jacketStatus.className = 'jacket-status';
 				}
 
-				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
 				let result;
-				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-				const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
-
-				const txOptions = { showEffects: true, showObjectChanges: true };
-				if (signExecFeature?.signAndExecuteTransaction) {
-					result = await signExecFeature.signAndExecuteTransaction({
-						transaction: tx,
-						account: connectedAccount,
-						chain,
-						options: txOptions,
-					});
-				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-						transactionBlock: tx,
-						account: connectedAccount,
-						chain,
-						options: txOptions,
-					});
-				} else {
-					const phantomProvider = window.phantom?.sui;
-					if (phantomProvider?.signAndExecuteTransactionBlock) {
-						const suiClient = getSuiClient();
-						const txBytes = await tx.build({ client: suiClient });
-						result = await phantomProvider.signAndExecuteTransactionBlock({
-							transactionBlock: txBytes,
-							options: txOptions,
-						});
-					} else {
-						throw new Error('Wallet does not support transaction signing');
-					}
-				}
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true } });
 
 				let listingId = null;
 				const objectChanges = result.objectChanges || [];
@@ -4667,7 +4102,112 @@ export function generateProfilePage(
 			if (e.target === sendModal) closeSendModal();
 		});
 
-		// Format SuiNS name with gradient suffix
+		const sendTabDirect = document.getElementById('send-tab-direct');
+		const sendTabLink = document.getElementById('send-tab-link');
+		const sendPanelDirect = document.getElementById('send-panel-direct');
+		const sendPanelLink = document.getElementById('send-panel-link');
+		function switchSendTab(tab) {
+			if (tab === 'direct') {
+				if (sendTabDirect) sendTabDirect.classList.add('active');
+				if (sendTabLink) sendTabLink.classList.remove('active');
+				if (sendPanelDirect) sendPanelDirect.classList.remove('hidden');
+				if (sendPanelLink) sendPanelLink.classList.add('hidden');
+			} else {
+				if (sendTabLink) sendTabLink.classList.add('active');
+				if (sendTabDirect) sendTabDirect.classList.remove('active');
+				if (sendPanelLink) sendPanelLink.classList.remove('hidden');
+				if (sendPanelDirect) sendPanelDirect.classList.add('hidden');
+			}
+		}
+		if (sendTabDirect) sendTabDirect.addEventListener('click', () => switchSendTab('direct'));
+		if (sendTabLink) sendTabLink.addEventListener('click', () => switchSendTab('link'));
+
+		const zkAmountInput = document.getElementById('zk-amount');
+		const zkAmountDown = document.getElementById('zk-amount-down');
+		const zkAmountUp = document.getElementById('zk-amount-up');
+		const zkCancelBtn = document.getElementById('zk-cancel-btn');
+		const zkGenerateBtn = document.getElementById('zk-generate-btn');
+		const zkStatus = document.getElementById('zk-status');
+		const zkResult = document.getElementById('zk-result');
+		if (zkCancelBtn) zkCancelBtn.addEventListener('click', closeSendModal);
+		if (zkAmountInput) {
+			zkAmountInput.addEventListener('input', () => {
+				zkAmountInput.value = zkAmountInput.value.replace(/[^0-9.]/g, '');
+			});
+			zkAmountInput.addEventListener('focus', () => { zkAmountInput.select(); });
+			zkAmountInput.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter') { e.preventDefault(); zkGenerateBtn?.click(); }
+			});
+		}
+		if (zkAmountDown && zkAmountInput) {
+			zkAmountDown.addEventListener('click', () => {
+				const current = parseFloat(zkAmountInput.value) || 1;
+				zkAmountInput.value = String(Math.max(1, Math.floor(current - 1)));
+			});
+		}
+		if (zkAmountUp && zkAmountInput) {
+			zkAmountUp.addEventListener('click', () => {
+				const current = parseFloat(zkAmountInput.value) || 0;
+				zkAmountInput.value = String(Math.floor(current + 1));
+			});
+		}
+		if (zkGenerateBtn) {
+			zkGenerateBtn.addEventListener('click', async () => {
+				if (!canSign()) {
+					showStatus(zkStatus, 'Connect wallet first', 'error');
+					return;
+				}
+				const suiAmount = zkAmountInput ? Number(zkAmountInput.value) : 0;
+				if (!Number.isFinite(suiAmount) || suiAmount <= 0) {
+					showStatus(zkStatus, 'Enter a valid amount', 'error');
+					return;
+				}
+				const mist = BigInt(Math.ceil(suiAmount * 1e9));
+				if (mist <= 0n) {
+					showStatus(zkStatus, 'Amount is too small', 'error');
+					return;
+				}
+				zkGenerateBtn.disabled = true;
+				showStatus(zkStatus, '<span class="loading"></span> Loading zkSend...', 'info');
+				if (zkResult) zkResult.style.display = 'none';
+				try {
+					const result = await SuiWalletKit.createSendLink({
+						sender: connectedAddress,
+						client: getSuiClient(),
+						mist: mist,
+					});
+					const linkUrl = result.link.getLink();
+					showStatus(zkStatus, '<span class="loading"></span> Approve in wallet...', 'info');
+					await SuiWalletKit.signAndExecute(result.tx);
+					hideStatus(zkStatus);
+					if (zkResult) {
+						zkResult.style.display = 'block';
+						zkResult.innerHTML = '<div class="zk-link-result">'
+							+ '<div class="zk-link-result-label">Claim Link</div>'
+							+ '<div class="zk-link-row">'
+							+ '<input type="text" readonly class="zk-link-input" id="zk-link-url" value="' + linkUrl.replace(/"/g, '&quot;') + '" />'
+							+ '<button class="zk-copy-btn" id="zk-copy-btn">Copy</button>'
+							+ '</div></div>';
+						const zkCopyBtn = document.getElementById('zk-copy-btn');
+						const zkLinkUrl = document.getElementById('zk-link-url');
+						if (zkCopyBtn && zkLinkUrl) {
+							zkCopyBtn.addEventListener('click', () => {
+								navigator.clipboard.writeText(zkLinkUrl.value).then(() => {
+									zkCopyBtn.textContent = 'Copied!';
+									setTimeout(() => { zkCopyBtn.textContent = 'Copy'; }, 2000);
+								});
+							});
+						}
+					}
+				} catch (error) {
+					const msg = error?.message || 'Failed to generate link';
+					showStatus(zkStatus, 'Failed: ' + msg, 'error');
+				} finally {
+					zkGenerateBtn.disabled = false;
+				}
+			});
+		}
+
 		function formatSuiName(name) {
 			if (!name) return '';
 			const cleanName = name.replace(/\\.sui$/i, '');
@@ -4789,25 +4329,36 @@ export function generateProfilePage(
 		}
 
 			// Initialize
+			try {
+				SuiWalletKit.renderModal('wk-modal')
+			} catch (e) {
+				console.error('Failed to initialize wallet modal:', e)
+			}
 			updatePortfolioLink(ownerDisplayAddress);
 			renderWalletBar();
 		updateGlobalWalletWidget();
 		updateEditButton();
-		restoreWalletConnection().then(restored => {
-			if (!restored && isInAppBrowser()) {
-				const wallets = getSuiWallets();
-				if (wallets.length > 0) {
-					connectToWallet(wallets[0]).catch(() => {});
-				} else {
-					setTimeout(() => {
-						if (!connectedAddress) {
-							const retryWallets = getSuiWallets();
-							if (retryWallets.length > 0) connectToWallet(retryWallets[0]).catch(() => {});
-						}
-					}, 500);
-				}
-			}
-		}).catch(() => {});
+
+		window.onProfileWalletConnected = function() {
+			checkEditPermission();
+			updateUIForWallet();
+			updateGlobalWalletWidget();
+			var conn = SuiWalletKit.$connection.value;
+			if (conn && conn.address) resolveWalletName(conn.address);
+		};
+
+		window.onProfileWalletDisconnected = function() {
+			canEdit = false;
+			connectedPrimaryName = null;
+			updateEditButton();
+			updateUIForWallet();
+			updateGlobalWalletWidget();
+		};
+
+		SuiWalletKit.detectWallets().then(function() {
+			SuiWalletKit.autoReconnect().catch(function() {});
+		}).catch(function() {});
+
 		fetchAndDisplayOwnerInfo();
 		updateGracePeriodOwnerInfo();
 		updateGracePeriodCountdown();
@@ -5068,11 +4619,10 @@ export function generateProfilePage(
 				try {
 					const suinsClient = await createSuinsClient();
 
-				const [record, marketRes, tradeportRes] = await Promise.all([
-					suinsClient.getNameRecord(name + '.sui').catch(() => null),
-					fetch('/api/marketplace/' + encodeURIComponent(name)).catch(() => null),
-					fetch('/api/tradeport/name/' + encodeURIComponent(name + '.sui')).catch(() => null)
-				]);
+					const [record, marketRes] = await Promise.all([
+						suinsClient.getNameRecord(name + '.sui').catch(() => null),
+						fetch('/api/marketplace/' + encodeURIComponent(name)).catch(() => null),
+					]);
 
 				let listing = null;
 				let listingPrice = null;
@@ -5087,21 +4637,9 @@ export function generateProfilePage(
 					}
 				}
 
-				if (!listing && tradeportRes && tradeportRes.ok) {
-					const tpData = await tradeportRes.json().catch(() => null);
-					if (tpData?.price || tpData?.listing?.price) {
-						const rawPrice = tpData.price || tpData.listing?.price;
-						listing = tpData.listing || tpData;
-						listingPrice = (Number(rawPrice) / 1e9).toFixed(2);
-						tradeportUrl = NFT_ID
-							? 'https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=' + encodeURIComponent(NFT_ID) + '&modalSlug=suins&nav=1'
-							: 'https://www.tradeport.xyz/sui/collection/suins?search=' + encodeURIComponent(name);
-					}
-				}
-
-					if (!record) {
-						if (listing) {
-							return remember({ name, status: 'listed', listingPrice, tradeportUrl, listing });
+						if (!record) {
+							if (listing) {
+								return remember({ name, status: 'listed', listingPrice, tradeportUrl, listing });
 						}
 						return remember({ name, status: 'available' });
 					}
@@ -5155,7 +4693,7 @@ export function generateProfilePage(
 			}
 
 		async function buyListedName(result) {
-			if (!connectedAddress || !connectedWallet) {
+			if (!canSign()) {
 				openWalletModal();
 				return;
 			}
@@ -5335,27 +4873,8 @@ export function generateProfilePage(
 
 				if (statusEl) statusEl.textContent = 'Confirm in wallet...';
 
-				const signExecFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction'];
-				const signExecBlockFeature = connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
-
 				let txResult;
-				if (signExecFeature?.signAndExecuteTransaction) {
-					txResult = await signExecFeature.signAndExecuteTransaction({
-						transaction: tx,
-						account: connectedAccount,
-						chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-						options: { showEffects: true },
-					});
-				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-					txResult = await signExecBlockFeature.signAndExecuteTransactionBlock({
-						transactionBlock: tx,
-						account: connectedAccount,
-						chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-						options: { showEffects: true },
-					});
-				} else {
-					throw new Error('Wallet does not support transaction signing');
-				}
+				txResult = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 				if (statusEl) statusEl.textContent = 'Purchased! Redirecting...';
 				closeSearch();
@@ -5561,12 +5080,7 @@ export function generateProfilePage(
 				showMessageStatus('Please approve the transaction in your wallet...', 'info', true);
 
 				// Sign and execute
-				const result = await signAndExecuteWithWallet(
-					tx,
-					suiClient,
-					connectedAccount,
-					NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet'
-				);
+				const result = await SuiWalletKit.signAndExecute(tx);
 
 				btnText.textContent = 'Confirming...';
 				showMessageStatus('Waiting for confirmation...', 'info', true);
@@ -6717,7 +6231,7 @@ export function generateProfilePage(
 
 			console.log('[Renewal] Starting renewal for:', nameToExtend, 'NFT:', nftIdToUse);
 
-			if (!connectedAddress || !connectedWallet) {
+			if (!canSign()) {
 				if (statusEl) {
 					statusEl.textContent = 'Please connect your wallet';
 					statusEl.className = 'renewal-status error';
@@ -6889,52 +6403,9 @@ export function generateProfilePage(
 					statusEl.textContent = 'Please sign in your wallet...';
 				}
 
-				// Sign and execute using wallet-standard (exactly like registration)
 				console.log('[Renewal] Signing transaction...');
 				let result = null;
-				const signExecFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction'];
-				const signExecBlockFeature = connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
-
-				if (signExecFeature?.signAndExecuteTransaction) {
-					result = await signExecFeature.signAndExecuteTransaction({
-						transaction: tx,
-						account: connectedAccount,
-						chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-						options: { showEffects: true },
-					});
-				} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-					result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-						transactionBlock: tx,
-						account: connectedAccount,
-						chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-						options: { showEffects: true },
-					});
-				} else {
-					// Legacy/direct wallet access needs pre-built bytes
-					const txBytes = await tx.build({ client: suiClient });
-					const phantomProvider = window.phantom?.sui;
-					if (phantomProvider?.signAndExecuteTransactionBlock) {
-						try {
-							result = await phantomProvider.signAndExecuteTransactionBlock({
-								transactionBlock: txBytes,
-								options: { showEffects: true }
-							});
-						} catch (e) {
-							// Try base64 format
-							const base64Tx = btoa(String.fromCharCode.apply(null, Array.from(txBytes)));
-							result = await phantomProvider.signAndExecuteTransactionBlock({
-								transactionBlock: base64Tx,
-								options: { showEffects: true }
-							});
-						}
-					} else if (window.suiWallet?.signAndExecuteTransactionBlock) {
-						result = await window.suiWallet.signAndExecuteTransactionBlock({
-							transactionBlock: tx,
-						});
-					} else {
-						throw new Error('No compatible Sui wallet found');
-					}
-				}
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 				console.log('[Renewal] Transaction result:', result);
 
@@ -7017,7 +6488,7 @@ export function generateProfilePage(
 		// Overview tab renewal event listeners
 		if (ovRenewalBtn) {
 			ovRenewalBtn.addEventListener('click', () => {
-				if (!connectedAddress || !connectedWallet) {
+				if (!canSign()) {
 					connectWallet();
 					return;
 				}
@@ -7026,7 +6497,7 @@ export function generateProfilePage(
 		}
 		if (ovRenewalSavings) {
 			ovRenewalSavings.addEventListener('click', () => {
-				if (!connectedAddress || !connectedWallet) {
+				if (!canSign()) {
 					if (ovRenewalStatus) {
 						ovRenewalStatus.textContent = 'Connect wallet first';
 						ovRenewalStatus.className = 'renewal-status error';
@@ -7045,7 +6516,7 @@ export function generateProfilePage(
 				event.preventDefault();
 				event.stopPropagation();
 				if (expiryQuickRenewBtn.disabled) return;
-				if (!connectedAddress || !connectedWallet) {
+				if (!canSign()) {
 					connectWallet();
 					return;
 				}
@@ -7089,7 +6560,7 @@ export function generateProfilePage(
 		}
 		if (renewalBtn) {
 			renewalBtn.addEventListener('click', () => {
-				if (!connectedAddress || !connectedWallet) {
+				if (!canSign()) {
 					connectWallet();
 					return;
 				}
@@ -7198,7 +6669,7 @@ export function generateProfilePage(
 				return;
 			}
 
-			if (!connectedWallet) {
+			if (!canSign()) {
 				showBidBountyStatus(createBountyStatus, 'Wallet not detected. Please reconnect.', 'error');
 				return;
 			}
@@ -7254,36 +6725,19 @@ export function generateProfilePage(
 				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
 
 				let result = null;
-				const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-				const signFeature = connectedWallet.features?.['sui:signTransaction'];
-
-				if (signExecFeature?.signAndExecuteTransaction) {
-					showBidBountyStatus(createBountyStatus, 'Sign transaction in wallet...', 'loading');
-					try {
-						result = await signExecFeature.signAndExecuteTransaction({
-							transaction: txWrapper,
-							account: connectedAccount,
-							chain,
-							options: { showEffects: true, showObjectChanges: true },
-						});
-					} catch (error) {
-						console.warn('signAndExecuteTransaction failed, falling back to manual execution:', error);
-					}
+				showBidBountyStatus(createBountyStatus, 'Sign transaction in wallet...', 'loading');
+				try {
+					result = await SuiWalletKit.signAndExecute(txWrapper, { txOptions: { showEffects: true, showObjectChanges: true } });
+				} catch (error) {
+					console.warn('signAndExecute failed, falling back to manual execution:', error);
 				}
 
 				if (!result) {
-					if (!signFeature) {
-						throw new Error('Wallet does not support transaction execution on this device');
-					}
 					showBidBountyStatus(createBountyStatus, 'Submitting transaction...', 'loading');
-					const { signature } = await signFeature.signTransaction({
-						transaction: txWrapper,
-						account: connectedAccount,
-						chain,
-					});
-					result = await suiClient.executeTransactionBlock({
-						transactionBlock: builtTxBytes,
-						signature,
+					const signResult = await SuiWalletKit.signTransaction(txWrapper);
+					result = await suiClient.executeTransaction({
+						transaction: builtTxBytes,
+						signature: signResult.signature,
 						options: { showEffects: true, showObjectChanges: true },
 					});
 				}
@@ -8261,6 +7715,7 @@ function shortAddr(addr) {
 		const marketplaceListingRow = document.getElementById('marketplace-listing-row');
 		const marketplaceBidRow = document.getElementById('marketplace-bid-row');
 		const marketplaceListingPrice = document.getElementById('marketplace-listing-price');
+		const marketplaceLister = document.getElementById('marketplace-lister');
 		const marketplaceBidPrice = document.getElementById('marketplace-bid-price');
 		const marketplaceBidder = document.getElementById('marketplace-bidder');
 		const marketplaceAcceptBidBtn = document.getElementById('marketplace-accept-bid-btn');
@@ -8290,8 +7745,10 @@ function shortAddr(addr) {
 			const marketplaceActivity = document.getElementById('marketplace-activity');
 			const marketplaceActivityList = document.getElementById('marketplace-activity-list');
 			const marketplaceActivityLink = document.getElementById('marketplace-activity-link');
+			const marketplaceSoldRow = document.getElementById('marketplace-sold-row');
+			const marketplaceSoldPrice = document.getElementById('marketplace-sold-price');
+			const marketplaceSeller = document.getElementById('marketplace-seller');
 
-				let currentBestBid = null;
 				let resolvingNftOwnerForMarketplace = false;
 				let bidInputTouched = false;
 				let listInputTouched = false;
@@ -8428,10 +7885,11 @@ function shortAddr(addr) {
 				}
 
 			function getBidMinimumSui() {
-				const BID_FLOOR_SUI = 0.01;
+				const BID_FLOOR_SUI = 0;
 				const bestOfferSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
 				const bestOfferBaselineSui = bestOfferSui > 0 ? (Math.round((bestOfferSui + 0.01) * 100) / 100) : BID_FLOOR_SUI;
-				return Math.max(BID_FLOOR_SUI, bestOfferBaselineSui);
+				const lastSaleSui = lastSoldPriceMist ? (Number(lastSoldPriceMist) / 1e9) : 0;
+				return Math.max(BID_FLOOR_SUI, bestOfferBaselineSui, lastSaleSui);
 			}
 
 			function getRoundedBidAmountSuiOrNull() {
@@ -8475,11 +7933,18 @@ function shortAddr(addr) {
 
 			function setBidInputDefaultFromBestOffer(force = false) {
 				if (!marketplaceBidAmountInput) return;
-				const nextBidSui = getBidMinimumSui();
+				const minBidSui = getBidMinimumSui();
+				const bestOfferSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
+				const regCostSui = Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0 ? profileRegistrationCostSui : 0.01;
+				const nextBidSui = Math.max(
+					minBidSui,
+					bestOfferSui > 0 ? (bestOfferSui + 0.01) : 0,
+					regCostSui,
+				);
 				const currentInput = parseFloat(marketplaceBidAmountInput.value);
 				const hasInput = Number.isFinite(currentInput) && currentInput > 0;
 
-				marketplaceBidAmountInput.min = String(nextBidSui);
+				marketplaceBidAmountInput.min = String(minBidSui);
 
 				if (force || !bidInputTouched || !hasInput || currentInput < nextBidSui) {
 					marketplaceBidAmountInput.value = String(nextBidSui);
@@ -8524,6 +7989,26 @@ function shortAddr(addr) {
 					marketplaceBidder.removeAttribute('href');
 					marketplaceBidder.setAttribute('aria-disabled', 'true');
 					marketplaceBidder.classList.add('inactive');
+				}
+			}
+
+			function setMarketplaceListerLink(address, resolvedName = '') {
+				if (!marketplaceLister) return;
+				const hasAddress = Boolean(address && typeof address === 'string' && address.startsWith('0x'));
+				const displayRaw = resolvedName || (hasAddress ? getBidderFallback(address) : '--');
+				const display = /.sui$/i.test(displayRaw) ? displayRaw.replace(/.sui$/i, '') : displayRaw;
+				marketplaceLister.textContent = display;
+				marketplaceLister.title = hasAddress ? address : '';
+
+				const href = getBidderProfileHref(address, resolvedName);
+				if (href) {
+					marketplaceLister.href = href;
+					marketplaceLister.setAttribute('aria-disabled', 'false');
+					marketplaceLister.classList.remove('inactive');
+				} else {
+					marketplaceLister.removeAttribute('href');
+					marketplaceLister.setAttribute('aria-disabled', 'true');
+					marketplaceLister.classList.add('inactive');
 				}
 			}
 
@@ -8624,6 +8109,12 @@ function shortAddr(addr) {
 					marketplaceActivityList.innerHTML = '<div class="marketplace-activity-empty">' + escapeHtmlJs(message) + '</div>';
 				}
 
+				function parseMarketEventTimeMs(value) {
+					if (!value) return 0;
+					const ms = Date.parse(String(value));
+					return Number.isFinite(ms) ? ms : 0;
+				}
+
 				async function renderMarketplaceActivity(data) {
 					if (!marketplaceActivity || !marketplaceActivityList) return;
 
@@ -8678,6 +8169,84 @@ function shortAddr(addr) {
 
 						const activityData = await activityResponse.json();
 						const actions = Array.isArray(activityData?.actions) ? activityData.actions : [];
+						let derivedSoldPriceMist = null;
+						let derivedSaleEventMs = 0;
+						let derivedListingEventMs = 0;
+						for (const action of actions) {
+							const actionType = String(action?.type || '').replace(/-/g, '_').toLowerCase();
+							const actionMs = parseMarketEventTimeMs(action?.blockTime || action?.block_time || '');
+							if (actionType === 'accept_bid' || actionType === 'buy' || actionType === 'sale') {
+								const actionPrice = Number(action?.price || 0);
+								if (!Number.isFinite(actionPrice) || actionPrice <= 0) continue;
+								if (actionMs > 0 && actionMs >= derivedSaleEventMs) {
+									derivedSaleEventMs = actionMs;
+									derivedSoldPriceMist = actionPrice;
+								} else if (!derivedSoldPriceMist) {
+									derivedSoldPriceMist = actionPrice;
+								}
+								continue;
+							}
+							if (
+								actionType === 'list'
+								|| actionType === 'listed'
+								|| actionType === 'relist'
+								|| actionType === 'create_listing'
+							) {
+								if (actionMs > derivedListingEventMs) derivedListingEventMs = actionMs;
+							}
+						}
+
+						const filteredActions = actions.filter((action) => {
+							if (!derivedSaleEventMs) return true;
+							const actionType = String(action?.type || '').replace(/-/g, '_').toLowerCase();
+							if (actionType !== 'bid' && actionType !== 'cancel_bid') return true;
+							const actionMs = parseMarketEventTimeMs(action?.blockTime || action?.block_time || '');
+							if (!actionMs) return true;
+							return actionMs >= derivedSaleEventMs;
+						});
+
+						const sawBidEvents = actions.some((action) => String(action?.type || '').replace(/-/g, '_').toLowerCase() === 'bid');
+						const hasBidAfterSale = actions.some((action) => {
+							const actionType = String(action?.type || '').replace(/-/g, '_').toLowerCase();
+							if (actionType !== 'bid') return false;
+							const actionMs = parseMarketEventTimeMs(action?.blockTime || action?.block_time || '');
+							if (!actionMs) return true;
+							return !derivedSaleEventMs || actionMs >= derivedSaleEventMs;
+						});
+						let clearedStaleBestBid = false;
+						if (derivedSaleEventMs > 0 && sawBidEvents && !hasBidAfterSale) {
+							currentBestBid = null;
+							if (marketplaceBidRow) marketplaceBidRow.style.display = 'none';
+							if (marketplaceBidder) setMarketplaceBidderLink('', '');
+							clearedStaleBestBid = true;
+						}
+
+						let shouldRetagIdentity = false;
+						let shouldRefreshBidDefaults = false;
+						if (derivedSoldPriceMist && Number(lastSoldPriceMist || 0) !== derivedSoldPriceMist) {
+							lastSoldPriceMist = derivedSoldPriceMist;
+							shouldRetagIdentity = true;
+							shouldRefreshBidDefaults = true;
+						}
+						if (derivedSaleEventMs && derivedSaleEventMs !== lastSaleEventMs) {
+							lastSaleEventMs = derivedSaleEventMs;
+							shouldRetagIdentity = true;
+							shouldRefreshBidDefaults = true;
+						}
+						if (derivedListingEventMs !== lastListingEventMs) {
+							lastListingEventMs = derivedListingEventMs;
+							shouldRetagIdentity = true;
+						}
+						if (clearedStaleBestBid) {
+							shouldRefreshBidDefaults = true;
+						}
+						if (shouldRefreshBidDefaults) {
+							setBidInputDefaultFromBestOffer();
+							updateMarketplaceButton();
+						}
+						if (shouldRetagIdentity) {
+							applyTaggedIdentityToProfile();
+						}
 						const dayMs = 24 * 60 * 60 * 1000;
 						const hasExpiry = Number.isFinite(EXPIRATION_MS) && EXPIRATION_MS > 0;
 						let expirySummary = '';
@@ -8702,8 +8271,8 @@ function shortAddr(addr) {
 								}
 							: null;
 						const displayActions = syntheticExpiryAction
-							? [syntheticExpiryAction, ...actions]
-							: actions;
+							? [syntheticExpiryAction, ...filteredActions]
+							: filteredActions;
 
 						if (displayActions.length === 0) {
 							marketplaceActivity.style.display = 'block';
@@ -8715,15 +8284,33 @@ function shortAddr(addr) {
 						const renderNonce = ++marketplaceActivityRenderNonce;
 
 						function normalizeActionType(type) {
-							return String(type || '').replace(/-/g, '_');
+							return String(type || '').toLowerCase().replace(/-/g, '_');
+						}
+
+						const actionWindow = displayActions.slice(0, 10);
+						const hasMintInWindow = actionWindow.some((action) =>
+							normalizeActionType(action?.type).toLowerCase() === 'mint',
+						);
+						if (!hasMintInWindow) {
+							const mintAction = displayActions.find((action) =>
+								normalizeActionType(action?.type).toLowerCase() === 'mint',
+							);
+							if (mintAction) {
+								if (actionWindow.length >= 10) {
+									actionWindow[actionWindow.length - 1] = mintAction;
+								} else {
+									actionWindow.push(mintAction);
+								}
+							}
 						}
 
 						function getActionLabel(type) {
 							const normalized = normalizeActionType(type);
 							const labels = {
 								sale: 'Buy',
-								list: 'Listed',
-								delist: 'Delisted',
+								list: 'List',
+								relist: 'Relist',
+								delist: 'Delist',
 								bid: 'Offer',
 								cancel_bid: 'Offer Cancelled',
 								accept_bid: 'Sale',
@@ -8780,8 +8367,7 @@ function shortAddr(addr) {
 
 						marketplaceActivity.style.display = 'block';
 						let lastYear = 0;
-						marketplaceActivityList.innerHTML = displayActions
-							.slice(0, 10)
+						marketplaceActivityList.innerHTML = actionWindow
 							.map((action) => {
 								let yearHeader = '';
 								const year = getActivityYear(action.blockTime);
@@ -8806,9 +8392,9 @@ function shortAddr(addr) {
 
 								const customAmount = typeof action.expirySummary === 'string' ? action.expirySummary : '';
 								const amountContent = customAmount
-									? escapeHtmlJs(customAmount)
+									? '<span class="marketplace-activity-amount-text">' + escapeHtmlJs(customAmount) + '</span>'
 									: action.price > 0
-										? formatMarketplaceBidSuiDisplay(Number(action.price) / 1e9) + ' SUI'
+										? '<span class="marketplace-activity-amount-num">' + escapeHtmlJs(formatMarketplaceBidSuiDisplay(Number(action.price) / 1e9)) + '</span><span class="marketplace-activity-amount-sui"> SUI</span>'
 										: '';
 								const priceDisplay = '<span class="marketplace-activity-amount">' + amountContent + '</span>';
 
@@ -8860,6 +8446,9 @@ function shortAddr(addr) {
 									if (display) {
 										node.textContent = display.endsWith('.sui') ? display.slice(0, -4) : display;
 										node.setAttribute('title', address);
+										if (connectedAddress && address.toLowerCase() === connectedAddress.toLowerCase()) {
+											node.classList.add('premium-purple');
+										}
 									}
 								});
 							}
@@ -8922,14 +8511,38 @@ function shortAddr(addr) {
 				return '';
 			}
 
-			function formatMarketplaceBidSuiDisplay(amountSui) {
-				if (!Number.isFinite(amountSui) || amountSui <= 0) return '--';
-				const nearestInt = Math.round(amountSui);
-				if (Math.abs(amountSui - nearestInt) < 0.05) {
-					return String(nearestInt);
+				function formatMarketplaceBidSuiDisplay(amountSui) {
+					if (!Number.isFinite(amountSui) || amountSui <= 0) return '--';
+					const nearestInt = Math.round(amountSui);
+					const diffFromWhole = Math.abs(amountSui - nearestInt);
+					const absSui = Math.abs(amountSui);
+
+				if (absSui >= 0.05) {
+					const fivePercentOfValue = absSui * 0.05;
+					if (diffFromWhole < fivePercentOfValue) {
+						return String(nearestInt);
+					}
 				}
-				return amountSui.toFixed(2);
-			}
+
+					if (absSui >= 1) {
+						return trimTrailingZeros(amountSui.toFixed(2));
+					}
+					if (absSui >= 0.1) {
+						return trimTrailingZeros(amountSui.toFixed(3));
+					}
+					return amountSui.toFixed(2);
+				}
+
+				function formatMarketplaceListingSuiDisplay(amountSui) {
+					if (!Number.isFinite(amountSui) || amountSui <= 0) return '--';
+					if (amountSui >= 1000000) return trimTrailingZeros((amountSui / 1000000).toFixed(2)) + 'M';
+					if (amountSui >= 10000) return trimTrailingZeros((amountSui / 1000).toFixed(1)) + 'k';
+					if (amountSui >= 1000) return trimTrailingZeros(amountSui.toFixed(0));
+					if (amountSui >= 100) return trimTrailingZeros(amountSui.toFixed(1));
+					return formatMarketplaceBidSuiDisplay(amountSui);
+				}
+
+				const trimTrailingZeros = (value) => value.replace(/[.]?0+$/, '');
 
 			function getRoundedListAmountSuiOrNull() {
 				if (!marketplaceListAmountInput) return null;
@@ -9024,8 +8637,7 @@ function shortAddr(addr) {
 				const meetsMinimum = roundedListAmountSui >= minimumSui;
 				const canList = Boolean(
 					isConnectedProfileOwner()
-					&& connectedAddress
-					&& connectedWallet
+					&& canSign()
 					&& listingTokenId
 					&& roundedListAmountSui > 0
 					&& meetsMinimum,
@@ -9067,7 +8679,7 @@ function shortAddr(addr) {
 					}
 
 				if (marketplaceBuyBtn && marketplaceBuyText && currentListing) {
-					const priceInSui = (currentListing.price / 1e9).toFixed(2);
+					const priceInSui = formatMarketplaceListingSuiDisplay(currentListing.price / 1e9);
 					if (isOwner) {
 						marketplaceBuyBtn.style.display = 'none';
 					} else if (connectedAddress) {
@@ -9086,6 +8698,9 @@ function shortAddr(addr) {
 				}
 				if (marketplaceBidEstimate) {
 					marketplaceBidEstimate.style.display = isOwner ? 'none' : 'inline-flex';
+				}
+				if (marketplaceBidMaxBtn) {
+					marketplaceBidMaxBtn.style.display = connectedAddress && !isOwner ? 'block' : 'none';
 				}
 					if (marketplacePlaceBidBtn && marketplaceBidText) {
 						if (!connectedAddress && !isOwner) {
@@ -9169,14 +8784,14 @@ function shortAddr(addr) {
 						return;
 					}
 					const data = await response.json();
+					const activeTokenId = String(NFT_ID || '').toLowerCase();
 
 						// Fallback if bestBid is not explicitly populated by API.
 						let resolvedBestBid = data.bestBid && data.bestBid.price ? data.bestBid : null;
-						if (!resolvedBestBid && Array.isArray(data?.nfts)) {
-						const preferredTokenId = String(NFT_ID || '').toLowerCase();
-						for (const nft of data.nfts) {
-							const tokenId = String(nft?.tokenId || nft?.token_id || '');
-							if (preferredTokenId && tokenId && tokenId.toLowerCase() !== preferredTokenId) continue;
+							if (!resolvedBestBid && Array.isArray(data?.nfts)) {
+							for (const nft of data.nfts) {
+								const tokenId = String(nft?.tokenId || nft?.token_id || '');
+								if (activeTokenId && tokenId && tokenId.toLowerCase() !== activeTokenId) continue;
 							const bids = Array.isArray(nft?.bids) ? nft.bids : [];
 							for (const bid of bids) {
 								const price = Number(bid?.price || 0);
@@ -9186,28 +8801,29 @@ function shortAddr(addr) {
 								}
 							}
 						}
-						if (!resolvedBestBid) {
-							try {
-								const normalizedName = String(NAME || '').endsWith('.sui') ? String(NAME) : (String(NAME) + '.sui');
-								const tradeportBestBidResponse = await fetch('/api/tradeport/name/' + encodeURIComponent(normalizedName));
-								if (tradeportBestBidResponse.ok) {
-									const tradeportPayload = await tradeportBestBidResponse.json().catch(() => null);
-									const tradeportBestBid = extractBestBidFromTradeportPayload(tradeportPayload);
-									if (tradeportBestBid?.price) {
-										resolvedBestBid = tradeportBestBid;
-									}
-								}
-							} catch (fallbackErr) {
-								console.log('Tradeport bid fallback failed:', fallbackErr);
-							}
 						}
-					}
 
 				lastSoldPriceMist = null;
+				lastSaleEventMs = 0;
+				lastListingEventMs = 0;
 				if (data.bestListing && data.bestListing.price) {
 					currentListing = data.bestListing;
-					const priceInSui = (data.bestListing.price / 1e9).toFixed(2);
-					marketplaceListingPrice.textContent = priceInSui + ' SUI';
+					const priceInSui = formatMarketplaceListingSuiDisplay(data.bestListing.price / 1e9);
+					const listingAmountEl = marketplaceListingPrice.querySelector('.price-amount');
+					const listingSuiEl = marketplaceListingPrice.querySelector('.price-sui');
+					if (listingAmountEl) listingAmountEl.textContent = priceInSui;
+					if (listingSuiEl) listingSuiEl.textContent = ' ' + 'SUI';
+					if (marketplaceLister) {
+						const sellerAddress = typeof data.bestListing.seller === 'string' ? data.bestListing.seller : '';
+						setMarketplaceListerLink(sellerAddress);
+						if (sellerAddress) {
+							resolveBidderDisplay(sellerAddress).then((display) => {
+								if (currentListing?.seller === sellerAddress) {
+									setMarketplaceListerLink(sellerAddress, display);
+								}
+							});
+						}
+					}
 					marketplaceListingRow.style.display = 'flex';
 					marketplaceBuyBtn.style.display = 'block';
 					setListInputDefault();
@@ -9215,16 +8831,35 @@ function shortAddr(addr) {
 					currentListing = null;
 					marketplaceListingRow.style.display = 'none';
 					marketplaceBuyBtn.style.display = 'none';
+					if (marketplaceLister) setMarketplaceListerLink('', '');
 					setListInputDefault(true);
 				}
 
-				const sales = data.sales || [];
-				currentSales = sales;
+					const sales = data.sales || [];
+					currentSales = sales;
+					for (const sale of sales) {
+						const saleTokenId = String(sale?.tokenId || sale?.token_id || '').toLowerCase();
+						if (activeTokenId && saleTokenId && saleTokenId !== activeTokenId) continue;
+						const salePrice = Number(sale?.price || 0);
+						if (!Number.isFinite(salePrice) || salePrice <= 0) continue;
+						const saleTimeMs = parseMarketEventTimeMs(sale?.blockTime || sale?.block_time || '');
+						if (saleTimeMs > 0 && saleTimeMs >= lastSaleEventMs) {
+							lastSaleEventMs = saleTimeMs;
+							lastSoldPriceMist = salePrice;
+							continue;
+						}
+						if (!lastSoldPriceMist) {
+							lastSoldPriceMist = salePrice;
+						}
+					}
 
 				if (resolvedBestBid && resolvedBestBid.price) {
 					currentBestBid = resolvedBestBid;
 					const bidInSui = formatMarketplaceBidSuiDisplay(Number(resolvedBestBid.price) / 1e9);
-					marketplaceBidPrice.textContent = bidInSui + ' SUI';
+					const bidAmountEl = marketplaceBidPrice.querySelector('.price-amount');
+					const bidSuiEl = marketplaceBidPrice.querySelector('.price-sui');
+					if (bidAmountEl) bidAmountEl.textContent = bidInSui;
+					if (bidSuiEl) bidSuiEl.textContent = ' ' + 'SUI';
 					marketplaceBidRow.style.display = 'grid';
 					if (marketplaceBidder) {
 						const bidderAddress = resolvedBestBid.bidder || '';
@@ -9244,6 +8879,30 @@ function shortAddr(addr) {
 					}
 					setBidInputDefaultFromBestOffer();
 				}
+
+				if (lastSoldPriceMist && lastSaleEventMs > 0) {
+					const soldInSui = formatMarketplaceBidSuiDisplay(lastSoldPriceMist / 1e9);
+					const soldAmountEl = marketplaceSoldPrice.querySelector('.price-amount');
+					const soldSuiEl = marketplaceSoldPrice.querySelector('.price-sui');
+					if (soldAmountEl) soldAmountEl.textContent = soldInSui;
+					if (soldSuiEl) soldSuiEl.textContent = ' ' + 'SUI';
+					marketplaceSoldRow.style.display = 'flex';
+					const latestSale = sales.find(s => Number(s?.price || 0) === lastSoldPriceMist);
+					if (latestSale && latestSale.receiver) {
+						const sellerAddress = latestSale.receiver;
+						marketplaceSeller.href = 'https://sui.ski';
+						marketplaceSeller.setAttribute('data-activity-address', sellerAddress);
+						marketplaceSeller.textContent = getBidderFallback(sellerAddress);
+						resolveBidderDisplay(sellerAddress).then((display) => {
+							if (marketplaceSeller.getAttribute('data-activity-address') === sellerAddress) {
+								marketplaceSeller.textContent = display;
+							}
+						});
+					}
+				} else {
+					marketplaceSoldRow.style.display = 'none';
+				}
+
 				setListInputDefault();
 				updateMarketplaceButton();
 				renderMarketplaceActivity(data).catch((error) => {
@@ -9276,7 +8935,7 @@ function shortAddr(addr) {
 
 		if (marketplaceBuyBtn) {
 			marketplaceBuyBtn.addEventListener('click', async () => {
-				if (!connectedAddress || !connectedWallet || !currentListing) {
+				if (!canSign() || !currentListing) {
 					marketplaceStatus.textContent = 'Connect wallet first';
 					marketplaceStatus.className = 'marketplace-status error';
 					return;
@@ -9368,28 +9027,8 @@ function shortAddr(addr) {
 
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
-					// Sign and execute
-					const signExecFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction'];
-					const signExecBlockFeature = connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
-
 					let result;
-					if (signExecFeature?.signAndExecuteTransaction) {
-						result = await signExecFeature.signAndExecuteTransaction({
-							transaction: tx,
-							account: connectedAccount,
-							chain: 'sui:mainnet',
-							options: { showEffects: true },
-						});
-					} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-						result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-							transactionBlock: tx,
-							account: connectedAccount,
-							chain: 'sui:mainnet',
-							options: { showEffects: true },
-						});
-					} else {
-						throw new Error('Wallet does not support transaction signing');
-					}
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -9423,7 +9062,7 @@ function shortAddr(addr) {
 
 			if (marketplaceListBtn) {
 				marketplaceListBtn.addEventListener('click', async () => {
-				if (!connectedAddress || !connectedWallet) {
+				if (!canSign()) {
 					marketplaceStatus.textContent = 'Connect wallet first';
 					marketplaceStatus.className = 'marketplace-status error';
 					return;
@@ -9490,27 +9129,8 @@ function shortAddr(addr) {
 
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
-					const signExecFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction'];
-					const signExecBlockFeature = connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
-
 					let result;
-					if (signExecFeature?.signAndExecuteTransaction) {
-						result = await signExecFeature.signAndExecuteTransaction({
-							transaction: tx,
-							account: connectedAccount,
-							chain: 'sui:mainnet',
-							options: { showEffects: true },
-						});
-					} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-						result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-							transactionBlock: tx,
-							account: connectedAccount,
-							chain: 'sui:mainnet',
-							options: { showEffects: true },
-						});
-					} else {
-						throw new Error('Wallet does not support transaction signing');
-					}
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -9545,7 +9165,7 @@ function shortAddr(addr) {
 
 			if (marketplacePlaceBidBtn) {
 				marketplacePlaceBidBtn.addEventListener('click', async () => {
-					if (!connectedAddress || !connectedWallet) {
+					if (!canSign()) {
 						if (marketplacePlaceBidBtn.classList.contains('connect-wallet')) {
 							const bidAmountSui = getRoundedBidAmountSuiOrNull();
 							if (bidAmountSui && bidAmountSui > 0) {
@@ -9625,27 +9245,8 @@ function shortAddr(addr) {
 
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
-					const signExecFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction'];
-					const signExecBlockFeature = connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
-
 					let result;
-					if (signExecFeature?.signAndExecuteTransaction) {
-						result = await signExecFeature.signAndExecuteTransaction({
-							transaction: tx,
-							account: connectedAccount,
-							chain: 'sui:mainnet',
-							options: { showEffects: true },
-						});
-					} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-						result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-							transactionBlock: tx,
-							account: connectedAccount,
-							chain: 'sui:mainnet',
-							options: { showEffects: true },
-						});
-					} else {
-						throw new Error('Wallet does not support transaction signing');
-					}
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -9830,7 +9431,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 		if (marketplaceAcceptBidBtn) {
 			marketplaceAcceptBidBtn.addEventListener('click', async () => {
-				if (!connectedAddress || !connectedWallet || !currentBestBid?.id) {
+				if (!canSign() || !currentBestBid?.id) {
 					marketplaceStatus.textContent = 'Connect wallet first';
 					marketplaceStatus.className = 'marketplace-status error';
 					return;
@@ -9894,27 +9495,8 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 						marketplaceStatus.textContent = 'Waiting for wallet...';
 
-					const signExecFeature = connectedWallet?.features?.['sui:signAndExecuteTransaction'];
-					const signExecBlockFeature = connectedWallet?.features?.['sui:signAndExecuteTransactionBlock'];
-
 					let result;
-					if (signExecFeature?.signAndExecuteTransaction) {
-						result = await signExecFeature.signAndExecuteTransaction({
-							transaction: tx,
-							account: connectedAccount,
-							chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-							options: { showEffects: true },
-						});
-					} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-						result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-							transactionBlock: tx,
-							account: connectedAccount,
-							chain: NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet',
-							options: { showEffects: true },
-						});
-					} else {
-						throw new Error('Wallet does not support transaction signing');
-					}
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -10077,36 +9659,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 					const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
 					let result;
-					const signExecFeature = connectedWallet.features?.['sui:signAndExecuteTransaction'];
-					const signExecBlockFeature = connectedWallet.features?.['sui:signAndExecuteTransactionBlock'];
-
-					if (signExecFeature?.signAndExecuteTransaction) {
-						result = await signExecFeature.signAndExecuteTransaction({
-							transaction: tx,
-							account: connectedAccount,
-							chain,
-							options: { showEffects: true },
-						});
-					} else if (signExecBlockFeature?.signAndExecuteTransactionBlock) {
-						result = await signExecBlockFeature.signAndExecuteTransactionBlock({
-							transactionBlock: tx,
-							account: connectedAccount,
-							chain,
-							options: { showEffects: true },
-						});
-					} else {
-						const phantomProvider = window.phantom?.sui;
-						if (phantomProvider?.signAndExecuteTransactionBlock) {
-							const suiClient = getSuiClient();
-							const txBytes = await tx.build({ client: suiClient });
-							result = await phantomProvider.signAndExecuteTransactionBlock({
-								transactionBlock: txBytes,
-								options: { showEffects: true },
-							});
-						} else {
-							throw new Error('Wallet does not support transaction signing');
-						}
-					}
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					const digest = result.digest || '';
 					auctionStatus.innerHTML = 'Purchased! ' + renderTxExplorerLinks(digest, true);
@@ -10188,10 +9741,10 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 	</div>
 
 	<script>
-		const NETWORK = ${serializeJson(network)};
-		const NAME = ${serializeJson(cleanName)};
-		const TARGET_ADDRESS = ${serializeJson(record.address || '')};
-		const OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
+		const GLOBAL_NETWORK = ${serializeJson(network)};
+		const GLOBAL_NAME = ${serializeJson(cleanName)};
+		const GLOBAL_TARGET_ADDRESS = ${serializeJson(record.address || '')};
+		const GLOBAL_OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
 
 		const ENABLE_UPLOAD = false;
 		const ENABLE_BOUNTIES = false;
@@ -10208,9 +9761,6 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 		const SUBSCRIPTIONS_KEY = 'sui_ski_subscriptions';
 		const SUBSCRIPTIONS_BLOB_KEY = 'sui_ski_subscriptions_blob';
-		let sealClient = null;
-		let sealConfigData = null;
-		let sealInitialized = false;
 
 		// Local cache (also encrypted on Walrus for cross-device sync)
 		function getLocalSubscriptions() {
@@ -10223,10 +9773,6 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 		function saveLocalSubscriptions(subs) {
 			localStorage.setItem(SUBSCRIPTIONS_KEY, JSON.stringify(subs));
-			// Trigger Walrus sync if wallet connected
-			if (window.connectedAddress && sealInitialized) {
-				syncSubscriptionsToWalrus(subs);
-			}
 		}
 
 		function getBlobInfo() {
@@ -10241,68 +9787,14 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			localStorage.setItem(SUBSCRIPTIONS_BLOB_KEY, JSON.stringify(info));
 		}
 
-		async function initSealSdk() {
-			if (sealInitialized) return true;
-			if (!SealClient || !fromHex) return false;
-			try {
-				const res = await fetch('/api/vault/config');
-				sealConfigData = await res.json();
-				const suiClient = getSuiClient();
-				sealClient = new SealClient({
-					suiClient,
-					serverConfigs: sealConfigData.seal.keyServers.map(id => ({ objectId: id, weight: 1 })),
-					verifyKeyServers: false,
-				});
-				sealInitialized = true;
-				return true;
-			} catch (err) {
-				console.error('Failed to init Seal:', err);
-				return false;
-			}
-		}
-
 		async function encryptSubscriptions(subs, subscriberAddress) {
-			if (!sealClient) await initSealSdk();
-			if (!sealClient || !sealConfigData?.seal?.packageId) {
-				console.warn('SealClient not available, falling back to base64');
-				const data = JSON.stringify({
-					subscriptions: subs,
-					subscriberAddress: subscriberAddress,
-					encryptedAt: Date.now(),
-					version: 1,
-				});
-				return btoa(unescape(encodeURIComponent(data)));
-			}
-
-			try {
-				const packageId = sealConfigData.seal.packageId;
-				const data = JSON.stringify({
-					subscriptions: subs,
-					subscriberAddress: subscriberAddress,
-					encryptedAt: Date.now(),
-					version: 1,
-				});
-				const plaintext = new TextEncoder().encode(data);
-				const policyId = subscriberAddress.startsWith('0x') ? subscriberAddress.slice(2) : subscriberAddress;
-
-				const { encryptedObject } = await sealClient.encrypt({
-					threshold: 2,
-					packageId: fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
-					id: fromHex(policyId),
-					data: plaintext,
-				});
-
-				return btoa(String.fromCharCode.apply(null, encryptedObject.data));
-			} catch (error) {
-				console.error('Seal encryption failed:', error);
-				const data = JSON.stringify({
-					subscriptions: subs,
-					subscriberAddress: subscriberAddress,
-					encryptedAt: Date.now(),
-					version: 1,
-				});
-				return btoa(unescape(encodeURIComponent(data)));
-			}
+			const data = JSON.stringify({
+				subscriptions: subs,
+				subscriberAddress: subscriberAddress,
+				encryptedAt: Date.now(),
+				version: 1,
+			});
+			return btoa(unescape(encodeURIComponent(data)));
 		}
 
 		// Decrypt subscriptions (simplified)
@@ -10513,6 +10005,95 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				}
 			}
 
+		// ===== BLACK DIAMOND VAULT (Seal + Walrus) =====
+		// Persistent list of "Black Diamonds" (watched names) for the connected wallet.
+		window.userVaultNames = new Set();
+		let vaultLoading = false;
+
+		async function loadUserVault() {
+			if (!window.connectedAddress || vaultLoading) return;
+			vaultLoading = true;
+			try {
+				// Try loading from Walrus/Seal via existing subscription logic
+				let persistentList = null;
+				try {
+					persistentList = await loadSubscriptionsFromWalrus();
+				} catch (e) {
+					console.warn('Walrus vault load failed, falling back to local');
+				}
+
+				if (persistentList && Array.isArray(persistentList)) {
+					window.userVaultNames = new Set(persistentList.map(s => s.targetName.replace(/.sui$/i, '').toLowerCase()));
+				} else {
+					const local = getLocalSubscriptions();
+					window.userVaultNames = new Set(local.map(s => s.targetName.replace(/.sui$/i, '').toLowerCase()));
+				}
+
+				// Synchronize the current page's diamond state
+				const currentClean = NAME.toLowerCase();
+				const isBlackDiamond = window.userVaultNames.has(currentClean);
+				
+				if (isBlackDiamond !== diamondWatching) {
+					updateDiamondState(isBlackDiamond);
+				}
+
+				renderVaultList();
+			} catch (err) {
+				console.error('Failed to load user vault:', err);
+			} finally {
+				vaultLoading = false;
+			}
+		}
+		window.loadUserVault = loadUserVault;
+
+		function renderVaultList() {
+			const container = document.getElementById('vault-names-list');
+			const module = document.getElementById('vault-list-module');
+			if (!container) return;
+
+			// Only show the vault list to the owner of the profile
+			const isProfileOwner = window.connectedAddress && (
+				window.connectedAddress.toLowerCase() === String(OWNER_ADDRESS).toLowerCase() ||
+				window.connectedAddress.toLowerCase() === String(TARGET_ADDRESS).toLowerCase()
+			);
+
+			if (!isProfileOwner || window.userVaultNames.size === 0) {
+				if (module) module.style.display = 'none';
+				return;
+			}
+
+			if (module) module.style.display = 'block';
+			
+			const names = Array.from(window.userVaultNames).sort();
+			container.innerHTML = names.map(name => {
+				const profileUrl = 'https://' + encodeURIComponent(name) + '.sui.ski';
+				return '<a href="' + profileUrl + '" class="linked-name-chip primary">' +
+					'<svg viewBox="0 0 24 24" width="12" height="12" style="margin-right:4px;"><path d="M12 2L22 12L12 22L2 12Z" fill="currentColor"/></svg>' +
+					'<span class="chip-name">' + name + '.sui</span>' +
+					'</a>';
+			}).join('');
+		}
+		window.renderVaultList = renderVaultList;
+
+		async function syncVaultAction(name, action) {
+			const cleanName = name.replace(/.sui$/i, '').toLowerCase();
+			if (action === 'watch') {
+				window.userVaultNames.add(cleanName);
+				await subscribeToName(cleanName + '.sui', '');
+			} else {
+				window.userVaultNames.delete(cleanName);
+				unsubscribeFromName(cleanName + '.sui');
+			}
+			
+			// Sync to Walrus if connected
+			if (window.connectedAddress) {
+				const subs = getLocalSubscriptions();
+				await syncSubscriptionsToWalrus(subs);
+			}
+			
+			renderVaultList();
+		}
+
 		function updateDiamondState(watching) {
 			const btn = document.getElementById('vault-diamond-btn');
 			const wasWatching = diamondWatching;
@@ -10538,29 +10119,15 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			}
 		}
 
-		async function encryptVaultData(vaultData) {
-			if (!sealClient) await initSealSdk();
-			if (!sealClient || !sealConfigData?.seal?.packageId) return null;
-			try {
-				const packageId = sealConfigData.seal.packageId;
-				const policyId = vaultData.ownerAddress.startsWith('0x')
-					? vaultData.ownerAddress.slice(2) : vaultData.ownerAddress;
-				const plaintext = new TextEncoder().encode(JSON.stringify(vaultData));
-				const { encryptedObject } = await sealClient.encrypt({
-					threshold: 2,
-					packageId: fromHex(packageId.startsWith('0x') ? packageId.slice(2) : packageId),
-					id: fromHex(policyId),
-					data: plaintext,
-				});
-				return btoa(String.fromCharCode.apply(null, encryptedObject.data));
-			} catch (err) {
-				console.error('Vault encryption failed:', err);
-				return null;
-			}
-		}
-
 		async function checkWatchingState() {
 			if (!connectedAddress) return;
+			// Use the cached vault list if we have it
+			if (window.userVaultNames.size > 0) {
+				const isWatching = window.userVaultNames.has(NAME.toLowerCase());
+				updateDiamondState(isWatching);
+				return;
+			}
+			
 			try {
 				const res = await fetch('/api/vault/watching?address=' + encodeURIComponent(connectedAddress) + '&name=' + encodeURIComponent(NAME));
 				const data = await res.json();
@@ -10572,7 +10139,10 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 		async function toggleVaultDiamond() {
 			if (diamondBusy) return;
-			if (!connectedAddress) return;
+			if (!connectedAddress) {
+				await connectWallet();
+				if (!connectedAddress) return;
+			}
 
 			const btn = document.getElementById('vault-diamond-btn');
 			if (!btn) return;
@@ -10596,37 +10166,10 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				const toggleData = await toggleRes.json();
 				if (toggleData.error) throw new Error(toggleData.error);
 
+				// Update local and remote state
+				await syncVaultAction(NAME, action === 'watch' ? 'watch' : 'unwatch');
 				updateDiamondState(action === 'watch');
 
-				initSealSdk().then(async (ready) => {
-					if (!ready) return;
-					try {
-						const vaultData = {
-							bookmarks: (toggleData.meta?.names || []).map(n => ({
-								name: n,
-								address: '',
-								addedAt: Date.now(),
-							})),
-							ownerAddress: connectedAddress,
-							version: toggleData.meta?.version || 1,
-							updatedAt: Date.now(),
-						};
-						const encrypted = await encryptVaultData(vaultData);
-						if (encrypted) {
-							fetch('/api/vault/sync', {
-								method: 'POST',
-								headers: { 'Content-Type': 'application/json' },
-								body: JSON.stringify({
-									encryptedBlob: encrypted,
-									ownerAddress: connectedAddress,
-									meta: toggleData.meta,
-								}),
-							}).catch(err => console.error('Vault sync failed:', err));
-						}
-					} catch (err) {
-						console.error('Vault encryption failed:', err);
-					}
-				});
 			} catch (err) {
 				console.error('Vault toggle failed:', err);
 			} finally {
@@ -10637,8 +10180,6 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 		const vaultDiamondBtn = document.getElementById('vault-diamond-btn');
 		if (vaultDiamondBtn) vaultDiamondBtn.addEventListener('click', toggleVaultDiamond);
-
-		initSealSdk();
 
 		// ========================================
 		// Privacy Tab Handlers
@@ -10908,15 +10449,20 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				});
 			}
 
-			tabs.forEach(tab => {
-				tab.addEventListener('click', () => {
-					tabs.forEach(t => t.classList.remove('active'));
-					tab.classList.add('active');
-					const target = tab.dataset.tab;
-					if (tabSwap) tabSwap.style.display = target === 'swap' ? 'block' : 'none';
-					if (tabCrosschain) tabCrosschain.style.display = target === 'crosschain' ? 'block' : 'none';
+				tabs.forEach(tab => {
+					tab.addEventListener('click', () => {
+						tabs.forEach(t => t.classList.remove('active'));
+						tab.classList.add('active');
+						const target = tab.dataset.tab;
+						if (tabSwap) tabSwap.style.display = target === 'swap' ? 'block' : 'none';
+						if (tabCrosschain) tabCrosschain.style.display = target === 'crosschain' ? 'block' : 'none';
+						if (target === 'crosschain') {
+							syncCrosschainTargetFromWallet();
+							refreshCrosschainStatus();
+							fetchCCQuote();
+						}
+					});
 				});
-			});
 
 			document.addEventListener('click', (e) => {
 				if (!swapPanel || swapPanel.style.display === 'none') return;
@@ -10926,6 +10472,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			});
 
 			const ccSolAmount = document.getElementById('cc-sol-amount');
+			const ccTarget = document.getElementById('cc-target');
 			const ccRateValue = document.getElementById('cc-rate-value');
 			const ccOutput = document.getElementById('cc-output');
 			const ccFee = document.getElementById('cc-fee');
@@ -10933,39 +10480,127 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			const ccDeposit = document.getElementById('cc-deposit');
 			const ccDepositAddr = document.getElementById('cc-deposit-addr');
 			const ccCopyAddr = document.getElementById('cc-copy-addr');
-			const ccSolTx = document.getElementById('cc-sol-tx');
-			const ccConfirmBtn = document.getElementById('cc-confirm-btn');
-			const ccStatus = document.getElementById('cc-status');
-			let ccQuoteData = null;
+				const ccSolTx = document.getElementById('cc-sol-tx');
+				const ccConfirmBtn = document.getElementById('cc-confirm-btn');
+				const ccStatus = document.getElementById('cc-status');
+				let ccQuoteData = null;
 
-			async function fetchCCQuote() {
-				const amount = parseFloat(ccSolAmount?.value || '');
-				if (!Number.isFinite(amount) || amount <= 0) {
+				function shortSuiTarget(value) {
+					const v = String(value || '').trim();
+					if (!v) return '';
+					if (v.startsWith('0x') && v.length > 16) {
+						return v.slice(0, 6) + '...' + v.slice(-4);
+					}
+					return v;
+				}
+
+				function syncCrosschainTargetFromWallet() {
+					if (!ccTarget) return;
+					const currentValue = String(ccTarget.value || '').trim();
+					if (currentValue) return;
+					const preferred = String(window.connectedPrimaryName || '').trim();
+					const connected = String(window.connectedAddress || '').trim();
+					if (preferred) {
+						ccTarget.value = preferred;
+						return;
+					}
+					if (connected) {
+						ccTarget.value = connected;
+					}
+				}
+
+				function getCrosschainTargetValue() {
+					const inputValue = String(ccTarget?.value || '').trim();
+					if (inputValue) return inputValue;
+					const preferred = String(window.connectedPrimaryName || '').trim();
+					if (preferred) return preferred;
+					return String(window.connectedAddress || '').trim();
+				}
+
+				async function parseApiError(res, fallback) {
+					try {
+						const payload = await res.json();
+						if (payload && typeof payload.error === 'string' && payload.error) {
+							return payload.error;
+						}
+					} catch {}
+					return fallback + ' (' + res.status + ')';
+				}
+
+				async function refreshCrosschainStatus() {
+					try {
+						const res = await fetch('/api/sol-swap/status');
+						const data = await res.json().catch(() => null);
+						if (!res.ok) {
+							if (ccStatus) {
+								ccStatus.textContent = 'Cross-chain status unavailable right now.';
+								ccStatus.className = 'cc-status error';
+							}
+							return;
+						}
+						if (data?.active) {
+							if (ccStatus && !ccQuoteData) {
+								ccStatus.textContent = '';
+								ccStatus.className = 'cc-status';
+							}
+							return;
+						}
+						if (ccStatus) {
+							ccStatus.textContent = 'Cross-chain swap is not configured yet.';
+							ccStatus.className = 'cc-status error';
+						}
+						if (ccQuoteBtn) ccQuoteBtn.disabled = true;
+					} catch {
+						if (ccStatus) {
+							ccStatus.textContent = 'Cross-chain status unavailable right now.';
+							ccStatus.className = 'cc-status error';
+						}
+					}
+				}
+
+				async function fetchCCQuote() {
+					const amount = parseFloat(ccSolAmount?.value || '');
+					if (!Number.isFinite(amount) || amount <= 0) {
 					if (ccRateValue) ccRateValue.textContent = '--';
 					if (ccOutput) ccOutput.textContent = '-- SUI';
 					if (ccFee) ccFee.textContent = '';
 					if (ccQuoteBtn) ccQuoteBtn.disabled = true;
 					ccQuoteData = null;
 					return;
-				}
+					}
 
-				try {
-					const res = await fetch('/api/sol-swap/quote?direction=sol_to_sui&amount=' + amount);
-					const data = await res.json();
-					if (data.error) throw new Error(data.error);
+					try {
+						const res = await fetch('/api/sol-swap/quote?direction=sol_to_sui&amount=' + amount);
+						if (!res.ok) throw new Error(await parseApiError(res, 'Quote unavailable'));
+						const data = await res.json().catch(() => null);
+						if (!data || typeof data !== 'object') throw new Error('Quote unavailable');
+						if (data.error) throw new Error(data.error);
 
-					ccQuoteData = data;
-					if (ccRateValue) ccRateValue.textContent = '1 SOL = ' + data.rate.toFixed(4) + ' SUI';
-					if (ccOutput) ccOutput.textContent = data.outputAmount.toFixed(4) + ' SUI';
-					if (ccFee) ccFee.textContent = 'Fee: ' + data.fee.toFixed(4) + ' SUI (' + (data.feeBps / 100) + '%)';
-					if (ccQuoteBtn) ccQuoteBtn.disabled = !data.solanaDepositAddress;
-				} catch (err) {
-					if (ccRateValue) ccRateValue.textContent = 'Error';
-					if (ccOutput) ccOutput.textContent = '-- SUI';
-					if (ccQuoteBtn) ccQuoteBtn.disabled = true;
-					ccQuoteData = null;
+						ccQuoteData = data;
+						if (ccRateValue) ccRateValue.textContent = '1 SOL = ' + data.rate.toFixed(4) + ' SUI';
+						if (ccOutput) ccOutput.textContent = data.outputAmount.toFixed(4) + ' SUI';
+						if (ccFee) ccFee.textContent = 'Fee: ' + data.fee.toFixed(4) + ' SUI (' + (data.feeBps / 100) + '%)';
+						if (ccQuoteBtn) ccQuoteBtn.disabled = !data.solanaDepositAddress;
+						if (ccStatus) {
+							if (!data.solanaDepositAddress) {
+								ccStatus.textContent = 'Cross-chain deposit address is not configured yet.';
+								ccStatus.className = 'cc-status error';
+							} else {
+								ccStatus.textContent = '';
+								ccStatus.className = 'cc-status';
+							}
+						}
+					} catch (err) {
+						if (ccRateValue) ccRateValue.textContent = 'Unavailable';
+						if (ccOutput) ccOutput.textContent = '-- SUI';
+						if (ccQuoteBtn) ccQuoteBtn.disabled = true;
+						if (ccStatus) {
+							ccStatus.textContent = err?.message || 'Quote unavailable right now.';
+							ccStatus.className = 'cc-status error';
+						}
+						ccQuoteData = null;
+					}
 				}
-			}
 
 			if (ccSolAmount) {
 				let debounceTimer = null;
@@ -10978,9 +10613,9 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			if (ccQuoteBtn) {
 				ccQuoteBtn.addEventListener('click', async () => {
 					if (!ccQuoteData || !ccQuoteData.solanaDepositAddress) return;
-
-					if (!window.connectedAddress) {
-						if (ccStatus) { ccStatus.textContent = 'Connect wallet first'; ccStatus.className = 'cc-status error'; }
+					const destinationTarget = getCrosschainTargetValue();
+					if (!destinationTarget) {
+						if (ccStatus) { ccStatus.textContent = 'Enter a Sui address or name'; ccStatus.className = 'cc-status error'; }
 						return;
 					}
 
@@ -10988,20 +10623,30 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 						ccQuoteBtn.disabled = true;
 						ccQuoteBtn.textContent = 'Requesting...';
 
-						const res = await fetch('/api/sol-swap/request', {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
+							const res = await fetch('/api/sol-swap/request', {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
 							body: JSON.stringify({
 								solAmount: ccQuoteData.inputAmount,
-								suiAddress: window.connectedAddress,
-							}),
-						});
-						const data = await res.json();
-						if (data.error) throw new Error(data.error);
+									suiTarget: destinationTarget,
+									suiAddress: window.connectedAddress || undefined,
+								}),
+							});
+							if (!res.ok) throw new Error(await parseApiError(res, 'Request failed'));
+							const data = await res.json().catch(() => null);
+							if (!data || typeof data !== 'object') throw new Error('Request failed');
+							if (data.error) throw new Error(data.error);
+						if (ccQuoteData) ccQuoteData.requestId = data.requestId || null;
 
 						if (ccDepositAddr) ccDepositAddr.textContent = data.depositAddress;
 						if (ccDeposit) ccDeposit.style.display = 'flex';
-						if (ccStatus) { ccStatus.textContent = 'Send ' + data.solAmount + ' SOL to the address below'; ccStatus.className = 'cc-status'; }
+						if (ccStatus) {
+							const destinationSummary = data.suiTarget
+								? data.suiTarget + ' (' + shortSuiTarget(data.suiAddress) + ')'
+								: shortSuiTarget(data.suiAddress);
+							ccStatus.textContent = 'Send ' + data.solAmount + ' SOL to the address below. Destination: ' + destinationSummary;
+							ccStatus.className = 'cc-status';
+						}
 					} catch (err) {
 						if (ccStatus) { ccStatus.textContent = err.message || 'Request failed'; ccStatus.className = 'cc-status error'; }
 					} finally {
@@ -11038,13 +10683,15 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					if (ccStatus) { ccStatus.textContent = 'Verifying Solana transaction...'; ccStatus.className = 'cc-status'; }
 
 					try {
-						const res = await fetch('/api/sol-swap/confirm', {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({ requestId: ccQuoteData?.requestId || 'unknown', solTxSignature: sig }),
-						});
-						const data = await res.json();
-						if (data.error) throw new Error(data.error);
+							const res = await fetch('/api/sol-swap/confirm', {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({ requestId: ccQuoteData?.requestId || 'unknown', solTxSignature: sig }),
+							});
+							if (!res.ok) throw new Error(await parseApiError(res, 'Confirmation failed'));
+							const data = await res.json().catch(() => null);
+							if (!data || typeof data !== 'object') throw new Error('Confirmation failed');
+							if (data.error) throw new Error(data.error);
 
 						if (ccStatus) {
 							ccStatus.textContent = 'Verification submitted. SUI will be sent to your wallet shortly.';
@@ -11056,10 +10703,14 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 						ccConfirmBtn.textContent = 'Confirm & Receive SUI';
 						ccConfirmBtn.disabled = false;
 					}
-				});
-			}
-		})();
-	</script>
+					});
+				}
+
+				refreshCrosschainStatus();
+				syncCrosschainTargetFromWallet();
+				fetchCCQuote();
+			})();
+		</script>
 
 </body>
 </html>`

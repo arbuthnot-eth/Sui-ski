@@ -34,7 +34,9 @@ import type {
 	UserConversationStore,
 } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
+import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
+import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
 
 const NONCE_EXPIRY_MS = 5 * 60 * 1000
 const MAX_MESSAGE_SIZE_BYTES = 1024 * 1024
@@ -525,7 +527,11 @@ async function migrateLegacyMessages(
 	}
 }
 
-export async function handleAppRequest(request: Request, env: Env): Promise<Response> {
+export async function handleAppRequest(
+	request: Request,
+	env: Env,
+	session?: { address: string | null; verified: boolean },
+): Promise<Response> {
 	const url = new URL(request.url)
 	let path = url.pathname
 
@@ -541,7 +547,7 @@ export async function handleAppRequest(request: Request, env: Env): Promise<Resp
 
 	// All other routes serve the SPA shell
 	// The client-side router handles the actual navigation
-	return htmlResponse(generateAppShell(env, path))
+	return htmlResponse(generateAppShell(env, path, session))
 }
 
 /**
@@ -647,7 +653,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 			})
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Unknown error'
-			return jsonResponse({ error: 'Failed to fetch conversations: ' + message }, 500)
+			return jsonResponse({ error: `Failed to fetch conversations: ${message}` }, 500)
 		}
 	}
 
@@ -688,7 +694,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 			})
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Unknown error'
-			return jsonResponse({ error: 'Failed to fetch conversation: ' + message }, 500)
+			return jsonResponse({ error: `Failed to fetch conversation: ${message}` }, 500)
 		}
 	}
 
@@ -1487,7 +1493,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 			})
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Unknown error'
-			return jsonResponse({ error: 'Failed to fetch inbox: ' + message }, 500)
+			return jsonResponse({ error: `Failed to fetch inbox: ${message}` }, 500)
 		}
 	}
 
@@ -1791,7 +1797,11 @@ async function handleLlmApi(request: Request, env: Env, url: URL): Promise<Respo
  * Generate the PWA app shell HTML
  * This serves as the SPA container with client-side routing
  */
-function generateAppShell(env: Env, currentPath: string): string {
+function generateAppShell(
+	env: Env,
+	currentPath: string,
+	session?: { address: string | null; verified: boolean },
+): string {
 	const title = getPageTitle(currentPath)
 
 	return `<!DOCTYPE html>
@@ -1804,16 +1814,18 @@ function generateAppShell(env: Env, currentPath: string): string {
 	<meta name="theme-color" content="#000">
 	
 	<style>
+		${generateWalletUiCss()}
 		${getAppStyles()}
 	</style>
 </head>
 <body>
+	<div id="wk-modal"></div>
 	<div id="app">
 		${generateAppContent(currentPath, env)}
 	</div>
 
 	<script>
-		${getAppScript(env)}
+		${getAppScript(env, session)}
 	</script>
 </body>
 </html>`
@@ -2495,47 +2507,53 @@ function generateSettingsPage(env: Env): string {
 	`
 }
 
-function getAppScript(_env: Env): string {
+function getAppScript(env: Env, session?: { address: string | null; verified: boolean }): string {
 	return `
 		${generateWalletSessionJs()}
+		var __skiServerSession = ${session?.address ? JSON.stringify({ address: session.address, verified: session.verified }) : 'null'};
+		if (__skiServerSession && __skiServerSession.address) { initSessionFromServer(__skiServerSession); }
+		
+		${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
+		${generateWalletUiJs({ onConnect: 'onAppWalletConnected', onDisconnect: 'onAppWalletDisconnected' })}
+
 		let connectedAddress = null;
-		let suiWallet = null;
 
-		async function connectWallet() {
-			const btn = document.getElementById('connect-wallet');
+		function onAppWalletConnected() {
+			const conn = SuiWalletKit.$connection.value;
+			if (!conn || !conn.address) return;
+			connectedAddress = conn.address;
+			
 			const text = document.getElementById('wallet-text');
+			const btn = document.getElementById('connect-wallet');
+			if (text) text.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
+			if (btn) btn.classList.add('wallet-connected');
+		}
 
+		function onAppWalletDisconnected() {
+			connectedAddress = null;
+			const text = document.getElementById('wallet-text');
+			const btn = document.getElementById('connect-wallet');
+			if (text) text.textContent = 'Connect';
+			if (btn) btn.classList.remove('wallet-connected');
+		}
+
+		window.connectWallet = function() {
 			if (connectedAddress) {
-				connectedAddress = null;
-				suiWallet = null;
-				text.textContent = 'Connect';
-				btn.classList.remove('wallet-connected');
-				disconnectWalletSession();
+				SuiWalletKit.disconnect();
 				return;
 			}
+			SuiWalletKit.openModal();
+		};
 
-			try {
-				// Check for Sui wallet
-				if (typeof window.sui === 'undefined') {
-					alert('Please install a Sui wallet (Sui Wallet, Suiet, etc.)');
-					return;
-				}
-
-				const wallet = window.sui;
-				const response = await wallet.connect();
-				connectedAddress = response.accounts[0]?.address;
-				suiWallet = wallet;
-
-				if (connectedAddress) {
-					text.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
-					btn.classList.add('wallet-connected');
-					connectWalletSession('Sui Wallet', connectedAddress);
-				}
-			} catch (error) {
-				console.error('Wallet connection failed:', error);
-				alert('Failed to connect wallet');
+		SuiWalletKit.renderModal('wk-modal');
+		
+		SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
+			if (conn && conn.status === 'connected') {
+				onAppWalletConnected();
+			} else {
+				onAppWalletDisconnected();
 			}
-		}
+		});
 
 		// Client-side routing
 		document.addEventListener('click', (e) => {
@@ -2554,58 +2572,14 @@ function getAppScript(_env: Env): string {
 			window.location.reload();
 		});
 
-		// Check for existing wallet connection
-		if (typeof window.sui !== 'undefined') {
-			window.sui.hasPermissions().then((hasPerms) => {
-				if (hasPerms) {
-					window.sui.getAccounts().then((accounts) => {
-						if (accounts?.length > 0) {
-							connectedAddress = accounts[0].address;
-							suiWallet = window.sui;
-							const text = document.getElementById('wallet-text');
-							const btn = document.getElementById('connect-wallet');
-							text.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
-							btn.classList.add('wallet-connected');
-							connectWalletSession('Sui Wallet', connectedAddress);
-						}
-					});
-				} else {
-					const hint = getWalletSession();
-					if (hint) {
-						window.sui.connect().then((response) => {
-							const addr = response.accounts?.[0]?.address;
-							if (addr) {
-								connectedAddress = addr;
-								suiWallet = window.sui;
-								const text = document.getElementById('wallet-text');
-								const btn = document.getElementById('connect-wallet');
-								text.textContent = addr.slice(0, 6) + '...' + addr.slice(-4);
-								btn.classList.add('wallet-connected');
-								connectWalletSession('Sui Wallet', addr);
-							}
-						}).catch(() => {});
-					}
-				}
-			});
-		} else {
-			const hint = getWalletSession();
-			if (hint) {
-				setTimeout(() => {
-					if (typeof window.sui !== 'undefined') {
-						window.sui.connect().then((response) => {
-							const addr = response.accounts?.[0]?.address;
-							if (addr) {
-								connectedAddress = addr;
-								suiWallet = window.sui;
-								const text = document.getElementById('wallet-text');
-								const btn = document.getElementById('connect-wallet');
-								text.textContent = addr.slice(0, 6) + '...' + addr.slice(-4);
-								btn.classList.add('wallet-connected');
-							}
-						}).catch(() => {});
-					}
-				}, 500);
-			}
+		// Initial state
+		const initialConn = SuiWalletKit.$connection.value;
+		if (initialConn && initialConn.status === 'connected') {
+			onAppWalletConnected();
 		}
+
+		SuiWalletKit.detectWallets().then(function() {
+			SuiWalletKit.autoReconnect();
+		});
 	`
 }

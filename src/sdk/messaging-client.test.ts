@@ -28,7 +28,7 @@ const createMockSuiNSResolver = (mappings: Record<string, string>) => ({
 		if (nameOrAddress.startsWith('0x')) {
 			return nameOrAddress
 		}
-		const name = nameOrAddress.replace(/^@/, '').replace(/\.sui$/i, '') + '.sui'
+		const name = `${nameOrAddress.replace(/^@/, '').replace(/\.sui$/i, '')}.sui`
 		return mappings[name] || null
 	},
 })

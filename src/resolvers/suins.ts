@@ -115,24 +115,26 @@ export async function resolveSuiNS(
 			return { found: false, error: `Name "${suinsName}" not found`, available: true }
 		}
 
-		// Get the NFT owner (different from target address)
 		let ownerAddress: string | undefined
-		try {
-			// @ts-expect-error - getNameObject exists at runtime but not in type definitions
-			const nameObject = await suinsClient.getNameObject(suinsName, { showOwner: true })
-			if (nameObject?.owner) {
-				// Owner can be AddressOwner or ObjectOwner
-				if (typeof nameObject.owner === 'string') {
-					ownerAddress = nameObject.owner
-				} else if ('AddressOwner' in nameObject.owner) {
-					ownerAddress = nameObject.owner.AddressOwner
-				} else if ('ObjectOwner' in nameObject.owner) {
-					ownerAddress = nameObject.owner.ObjectOwner
+		if (nameRecord.nftId) {
+			try {
+				const nftObject = await suiClient.getObject({
+					id: nameRecord.nftId,
+					options: { showOwner: true },
+				})
+				if (nftObject.data?.owner) {
+					const owner = nftObject.data.owner
+					if (typeof owner === 'string') {
+						ownerAddress = owner
+					} else if ('AddressOwner' in owner) {
+						ownerAddress = owner.AddressOwner
+					} else if ('ObjectOwner' in owner) {
+						ownerAddress = owner.ObjectOwner
+					}
 				}
+			} catch (e) {
+				console.log('Could not fetch NFT owner:', e)
 			}
-		} catch (e) {
-			// Owner fetch is optional, continue without it
-			console.log('Could not fetch NFT owner:', e)
 		}
 
 		// Check expiration status
