@@ -14,14 +14,6 @@ ${generateWalletTxJs()}
 
 var __signReady = false;
 var __TransactionClass = null;
-var __SuiClientClass = null;
-var __suiClient = null;
-
-var __RPC_URLS = {
-	mainnet: 'https://fullnode.mainnet.sui.io:443',
-	testnet: 'https://fullnode.testnet.sui.io:443',
-	devnet: 'https://fullnode.devnet.sui.io:443',
-};
 
 function __notifyReady() {
 	if (__signReady || !window.parent || window.parent === window) return;
@@ -46,18 +38,9 @@ function __bytesToBase64(bytes) {
 
 async function __getTransactionClass() {
 	if (__TransactionClass) return __TransactionClass;
-	var mod = await import('https://esm.sh/@mysten/sui@2/transactions');
+	var mod = await import('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle');
 	__TransactionClass = mod.Transaction;
 	return __TransactionClass;
-}
-
-async function __getSuiClient() {
-	if (__suiClient) return __suiClient;
-	var mod = await import('https://esm.sh/@mysten/sui@2/client');
-	var ClientClass = mod.SuiClient || mod.SuiJsonRpcClient;
-	var network = SuiWalletKit.__config.network || 'mainnet';
-	__suiClient = new ClientClass({ url: __RPC_URLS[network] || __RPC_URLS.mainnet });
-	return __suiClient;
 }
 
 window.addEventListener('message', function(e) {
@@ -79,18 +62,8 @@ window.addEventListener('message', function(e) {
 			try { parsed = JSON.parse(txData); } catch (_e) {}
 			var tx = Tx.from(parsed);
 
-			var result;
-			try {
-				var client = await __getSuiClient();
-				console.log('[SignBridge] Building transaction...');
-				var builtBytes = await tx.build({ client: client });
-				console.log('[SignBridge] Signing transaction...');
-				result = await SuiWalletKit.signAndExecute(builtBytes, { txOptions: execOptions });
-			} catch (buildErr) {
-				console.error('[SignBridge] Build/Sign error:', buildErr);
-				// Fallback: try signing the raw object if building failed
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: execOptions });
-			}
+			console.log('[SignBridge] Signing transaction...');
+			var result = await SuiWalletKit.signAndExecute(tx, { txOptions: execOptions });
 
 			console.log('[SignBridge] result:', result);
 

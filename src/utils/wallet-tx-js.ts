@@ -72,9 +72,9 @@ export function generateWalletTxJs(): string {
 
     async function __skiSerializeForWallet(txInput) {
       if (typeof txInput === 'string') return txInput;
-      if (txInput instanceof Uint8Array) return txInput;
+      if (txInput instanceof Uint8Array) return __wkBytesToBase64(txInput);
       if (txInput && typeof txInput.serialize === 'function') {
-        return await txInput.serialize();
+        return __wkBytesToBase64(await txInput.serialize());
       }
       return txInput;
     }
@@ -99,15 +99,61 @@ export function generateWalletTxJs(): string {
       var chain = (options && options.chain) || __wkChain;
       var txOptions = options && options.txOptions;
 
+      console.log('[SuiWalletKit] signAndExecute', {
+        wallet: wallet.name,
+        chain: chain,
+        txLength: typeof txBytes === 'string' ? txBytes.length : (txBytes.byteLength || 'unknown'),
+        hasAccount: !!account,
+        hasOptions: !!txOptions
+      });
+
+      async function __wkTryCalls(calls) {
+        var lastErr = null;
+        for (var i = 0; i < calls.length; i++) {
+          try {
+            return await calls[i]();
+          } catch (err) {
+            lastErr = err;
+          }
+        }
+        if (lastErr) throw lastErr;
+        throw new Error('No compatible signing method found.');
+      }
+
       var signExecFeature = wallet.features && wallet.features['sui:signAndExecuteTransaction'];
       if (signExecFeature && signExecFeature.signAndExecuteTransaction) {
         try {
-          return await signExecFeature.signAndExecuteTransaction({
-            transaction: txBytes,
-            account: account,
-            chain: chain,
-            options: txOptions,
-          });
+          return await __wkTryCalls([
+            function() {
+              return signExecFeature.signAndExecuteTransaction({
+                transaction: txBytes,
+                account: account,
+                chain: chain,
+                options: txOptions,
+              });
+            },
+            function() {
+              return signExecFeature.signAndExecuteTransaction({
+                transaction: txBytes,
+                account: account,
+                options: txOptions,
+              });
+            },
+            function() {
+              return signExecFeature.signAndExecuteTransaction({
+                transactionBlock: txBytes,
+                account: account,
+                chain: chain,
+                options: txOptions,
+              });
+            },
+            function() {
+              return signExecFeature.signAndExecuteTransaction({
+                transactionBlock: txBytes,
+                options: txOptions,
+              });
+            },
+          ]);
         } catch (err) {
           console.warn('signAndExecuteTransaction failed:', err.message);
         }
@@ -116,12 +162,35 @@ export function generateWalletTxJs(): string {
       var signExecBlockFeature = wallet.features && wallet.features['sui:signAndExecuteTransactionBlock'];
       if (signExecBlockFeature && signExecBlockFeature.signAndExecuteTransactionBlock) {
         try {
-          return await signExecBlockFeature.signAndExecuteTransactionBlock({
-            transactionBlock: txBytes,
-            account: account,
-            chain: chain,
-            options: txOptions,
-          });
+          return await __wkTryCalls([
+            function() {
+              return signExecBlockFeature.signAndExecuteTransactionBlock({
+                transactionBlock: txBytes,
+                account: account,
+                chain: chain,
+                options: txOptions,
+              });
+            },
+            function() {
+              return signExecBlockFeature.signAndExecuteTransactionBlock({
+                transactionBlock: txBytes,
+                account: account,
+                options: txOptions,
+              });
+            },
+            function() {
+              return signExecBlockFeature.signAndExecuteTransactionBlock({
+                transactionBlock: txBytes,
+                options: txOptions,
+              });
+            },
+            function() {
+              return signExecBlockFeature.signAndExecuteTransactionBlock({
+                transaction: txBytes,
+                options: txOptions,
+              });
+            },
+          ]);
         } catch (err) {
           console.warn('signAndExecuteTransactionBlock failed:', err.message);
         }
@@ -130,24 +199,63 @@ export function generateWalletTxJs(): string {
       var phantom = __wkGetPhantomProvider();
       if (phantom && phantom.signAndExecuteTransactionBlock) {
         try {
-          return await phantom.signAndExecuteTransactionBlock({
-            transactionBlock: txBytes,
-            options: txOptions,
-          });
+          return await __wkTryCalls([
+            function() {
+              return phantom.signAndExecuteTransactionBlock({
+                transactionBlock: txBytes,
+                options: txOptions,
+              });
+            },
+            function() {
+              return phantom.signAndExecuteTransactionBlock({
+                transaction: txBytes,
+                options: txOptions,
+              });
+            },
+            function() {
+              var b64 = (txBytes instanceof Uint8Array) ? __wkBytesToBase64(txBytes) : txBytes;
+              return phantom.signAndExecuteTransactionBlock({
+                transactionBlock: b64,
+                options: txOptions,
+              });
+            },
+            function() {
+              var b64 = (txBytes instanceof Uint8Array) ? __wkBytesToBase64(txBytes) : txBytes;
+              return phantom.signAndExecuteTransactionBlock({
+                transaction: b64,
+                options: txOptions,
+              });
+            },
+          ]);
         } catch (_e) {
-          var b64 = (txBytes instanceof Uint8Array) ? __wkBytesToBase64(txBytes) : txBytes;
-          return await phantom.signAndExecuteTransactionBlock({
-            transactionBlock: b64,
-            options: txOptions,
-          });
+          // Continue to other wallet fallbacks.
         }
       }
 
       if (window.suiWallet && window.suiWallet.signAndExecuteTransactionBlock) {
-        return await window.suiWallet.signAndExecuteTransactionBlock({
-          transactionBlock: txBytes,
-          options: txOptions,
-        });
+        try {
+          return await __wkTryCalls([
+            function() {
+              return window.suiWallet.signAndExecuteTransactionBlock({
+                transactionBlock: txBytes,
+                options: txOptions,
+              });
+            },
+            function() {
+              return window.suiWallet.signAndExecuteTransactionBlock({
+                transaction: txBytes,
+                options: txOptions,
+              });
+            },
+            function() {
+              var b64 = (txBytes instanceof Uint8Array) ? __wkBytesToBase64(txBytes) : txBytes;
+              return window.suiWallet.signAndExecuteTransactionBlock({
+                transactionBlock: b64,
+                options: txOptions,
+              });
+            },
+          ]);
+        } catch (_e) {}
       }
 
       throw new Error('No compatible signing method found. Install a Sui wallet extension.');
