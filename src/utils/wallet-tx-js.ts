@@ -3,7 +3,12 @@ export function generateWalletTxJs(): string {
     var __wkChain = 'sui:' + SuiWalletKit.__config.network;
 
     function __wkBytesToBase64(bytes) {
-      return btoa(String.fromCharCode.apply(null, Array.from(bytes)));
+      var CHUNK = 8192;
+      var parts = [];
+      for (var i = 0; i < bytes.length; i += CHUNK) {
+        parts.push(String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK, bytes.length))));
+      }
+      return btoa(parts.join(''));
     }
 
     function __wkGetPhantomProvider() {
@@ -60,12 +65,24 @@ export function generateWalletTxJs(): string {
       if (typeof txInput === 'string') return txInput;
       if (txInput instanceof Uint8Array) return __wkBytesToBase64(txInput);
       if (txInput && typeof txInput.serialize === 'function') {
-        return await txInput.serialize();
+        return __wkBytesToBase64(await txInput.serialize());
       }
       if (txInput && typeof txInput.toJSON === 'function') {
         return JSON.stringify(await txInput.toJSON());
       }
       throw new Error('Cannot serialize transaction for sign bridge. Got: ' + typeof txInput);
+    }
+
+    async function __skiSerializeForWallet(txInput) {
+      if (typeof txInput === 'string') return txInput;
+      if (txInput instanceof Uint8Array) return txInput;
+      if (txInput && typeof txInput.serialize === 'function') {
+        return await txInput.serialize();
+      }
+      if (txInput && typeof txInput.toJSON === 'function') {
+        return JSON.stringify(await txInput.toJSON());
+      }
+      return txInput;
     }
 
     function __skiIsSessionBridge() {
@@ -81,145 +98,76 @@ export function generateWalletTxJs(): string {
       return SuiWalletKit.__skiSignFrame;
     }
 
+    async function __skiWalletSignAndExecute(txInput, conn, options) {
+      var txBytes = await __skiSerializeForWallet(txInput);
+      var wallet = conn.wallet;
+      var account = (options && options.account) || conn.account;
+      var chain = (options && options.chain) || __wkChain;
+      var txOptions = options && options.txOptions;
+
+      var signExecFeature = wallet.features && wallet.features['sui:signAndExecuteTransaction'];
+      if (signExecFeature && signExecFeature.signAndExecuteTransaction) {
+        return await signExecFeature.signAndExecuteTransaction({
+          transaction: txBytes,
+          account: account,
+          chain: chain,
+          options: txOptions,
+        });
+      }
+
+      var signExecBlockFeature = wallet.features && wallet.features['sui:signAndExecuteTransactionBlock'];
+      if (signExecBlockFeature && signExecBlockFeature.signAndExecuteTransactionBlock) {
+        return await signExecBlockFeature.signAndExecuteTransactionBlock({
+          transactionBlock: txBytes,
+          account: account,
+          chain: chain,
+          options: txOptions,
+        });
+      }
+
+      var phantom = __wkGetPhantomProvider();
+      if (phantom && phantom.signAndExecuteTransactionBlock) {
+        try {
+          return await phantom.signAndExecuteTransactionBlock({
+            transactionBlock: txBytes,
+          });
+        } catch (_e) {
+          var b64 = (txBytes instanceof Uint8Array) ? __wkBytesToBase64(txBytes) : txBytes;
+          return await phantom.signAndExecuteTransactionBlock({
+            transactionBlock: b64,
+          });
+        }
+      }
+
+      if (window.suiWallet && window.suiWallet.signAndExecuteTransactionBlock) {
+        return await window.suiWallet.signAndExecuteTransactionBlock({
+          transactionBlock: txBytes,
+        });
+      }
+
+      throw new Error('No compatible signing method found. Install a Sui wallet extension.');
+    }
+
     SuiWalletKit.signAndExecute = async function signAndExecute(txInput, options) {
-      // Serialize Transaction object to bytes for wallet compatibility
-      var txBytes = txInput;
-      if (txInput && typeof txInput.serialize === 'function') {
-        txBytes = await txInput.serialize();
-      }
-
       if (__skiIsSessionBridge()) {
         var frame = await __skiEnsureBridge();
         var b64 = await __skiSerializeTx(txInput);
         var txOptions = (options && options.txOptions) || {};
-        var result = await __skiPostAndWait(frame, b64, txOptions);
-        return result;
+        return await __skiPostAndWait(frame, b64, txOptions);
       }
-      var conn = __wkGetWallet();
-      var wallet = conn.wallet;
-      var account = (options && options.account) || conn.account;
-      var chain = (options && options.chain) || __wkChain;
-      var txOptions = options && options.txOptions;
-
-      var signExecFeature = wallet.features && wallet.features['sui:signAndExecuteTransaction'];
-      if (signExecFeature && signExecFeature.signAndExecuteTransaction) {
-        return await signExecFeature.signAndExecuteTransaction({
-          transaction: txBytes,
-          account: account,
-          chain: chain,
-          options: txOptions,
-        });
-      }
-
-      var signExecBlockFeature = wallet.features && wallet.features['sui:signAndExecuteTransactionBlock'];
-      if (signExecBlockFeature && signExecBlockFeature.signAndExecuteTransactionBlock) {
-        return await signExecBlockFeature.signAndExecuteTransactionBlock({
-          transactionBlock: txBytes,
-          account: account,
-          chain: chain,
-          options: txOptions,
-        });
-      }
-
-      var phantom = __wkGetPhantomProvider();
-      if (phantom && phantom.signAndExecuteTransactionBlock) {
-        try {
-          return await phantom.signAndExecuteTransactionBlock({
-            transactionBlock: txBytes,
-          });
-        } catch (_e) {
-          var b64 = (txBytes instanceof Uint8Array) ? __wkBytesToBase64(txBytes) : txBytes;
-          return await phantom.signAndExecuteTransactionBlock({
-            transactionBlock: b64,
-          });
-        }
-      }
-
-      if (window.suiWallet && window.suiWallet.signAndExecuteTransactionBlock) {
-        return await window.suiWallet.signAndExecuteTransactionBlock({
-          transactionBlock: txBytes,
-        });
-      }
-
-      throw new Error('No compatible signing method found. Install a Sui wallet extension.');
+      return await __skiWalletSignAndExecute(txInput, __wkGetWallet(), options);
     };
 
-    SuiWalletKit.signAndExecuteFromBytes = async function signAndExecuteFromBytes(txInput, options) {
-      // Serialize Transaction object to bytes for wallet compatibility
-      var txBytes = txInput;
-      if (txInput && typeof txInput.serialize === 'function') {
-        txBytes = await txInput.serialize();
-      }
-
-      if (__skiIsSessionBridge()) {
-        var frame = await __skiEnsureBridge();
-        var b64 = await __skiSerializeTx(txInput);
-        var txOptions = (options && options.txOptions) || {};
-        var result = await __skiPostAndWait(frame, b64, txOptions);
-        return result;
-      }
-      var conn = __wkGetWallet();
-      var wallet = conn.wallet;
-      var account = (options && options.account) || conn.account;
-      var chain = (options && options.chain) || __wkChain;
-      var txOptions = options && options.txOptions;
-
-      var signExecFeature = wallet.features && wallet.features['sui:signAndExecuteTransaction'];
-      if (signExecFeature && signExecFeature.signAndExecuteTransaction) {
-        return await signExecFeature.signAndExecuteTransaction({
-          transaction: txBytes,
-          account: account,
-          chain: chain,
-          options: txOptions,
-        });
-      }
-
-      var signExecBlockFeature = wallet.features && wallet.features['sui:signAndExecuteTransactionBlock'];
-      if (signExecBlockFeature && signExecBlockFeature.signAndExecuteTransactionBlock) {
-        return await signExecBlockFeature.signAndExecuteTransactionBlock({
-          transactionBlock: txBytes,
-          account: account,
-          chain: chain,
-          options: txOptions,
-        });
-      }
-
-      var phantom = __wkGetPhantomProvider();
-      if (phantom && phantom.signAndExecuteTransactionBlock) {
-        try {
-          return await phantom.signAndExecuteTransactionBlock({
-            transactionBlock: txBytes,
-          });
-        } catch (_e) {
-          var b64 = (txBytes instanceof Uint8Array) ? __wkBytesToBase64(txBytes) : txBytes;
-          return await phantom.signAndExecuteTransactionBlock({
-            transactionBlock: b64,
-          });
-        }
-      }
-
-      if (window.suiWallet && window.suiWallet.signAndExecuteTransactionBlock) {
-        return await window.suiWallet.signAndExecuteTransactionBlock({
-          transactionBlock: txBytes,
-        });
-      }
-
-      throw new Error('No compatible signing method found. Install a Sui wallet extension.');
-    };
+    SuiWalletKit.signAndExecuteFromBytes = SuiWalletKit.signAndExecute;
 
     SuiWalletKit.signTransaction = async function signTransaction(txInput, options) {
-      // Serialize Transaction object to bytes for wallet compatibility
-      var txBytes = txInput;
-      if (txInput && typeof txInput.serialize === 'function') {
-        txBytes = await txInput.serialize();
-      }
-
       if (__skiIsSessionBridge()) {
         var frame = await __skiEnsureBridge();
         var b64 = await __skiSerializeTx(txInput);
-        var result = await __skiPostAndWait(frame, b64, {});
-        return result;
+        return await __skiPostAndWait(frame, b64, {});
       }
+
+      var txBytes = await __skiSerializeForWallet(txInput);
       var conn = __wkGetWallet();
       var wallet = conn.wallet;
       var account = (options && options.account) || conn.account;
