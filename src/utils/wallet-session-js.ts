@@ -52,15 +52,15 @@ export function generateWalletSessionJs(): string {
             credentials: 'include',
           });
         });
-      }).then(function(r) { return r.json(); }).then(function(data) {
+      }).then(function(r) {
+        if (!r.ok) throw new Error('Key-In verification failed (status ' + r.status + ')');
+        return r.json();
+      }).then(function(data) {
         if (data.sessionId) {
           localStorage.setItem(__SESSION_KEY, data.sessionId);
           localStorage.setItem(__WALLET_NAME_KEY, walletName);
         }
         return true;
-      }).catch(function() {
-        connectWalletSession(walletName, address);
-        return false;
       });
     }
 
@@ -77,6 +77,14 @@ export function generateWalletSessionJs(): string {
       if (typeof SuiWalletKit !== 'undefined' && SuiWalletKit.initFromSession) {
         SuiWalletKit.initFromSession(sessionData.address, sessionData.walletName || '');
       }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.connectWalletSession = connectWalletSession;
+      window.disconnectWalletSession = disconnectWalletSession;
+      window.challengeAndConnect = challengeAndConnect;
+      window.getWalletSession = getWalletSession;
+      window.initSessionFromServer = initSessionFromServer;
     }
   `
 }

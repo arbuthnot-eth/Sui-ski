@@ -10,6 +10,9 @@ const PHANTOM_ICON =
 const SUI_WALLET_ICON =
 	'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cmVjdCB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIGZpbGw9IiM2RkJDRjAiIHJ4PSI4Ii8+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTI4LjYsMTUuM2MtLjktMy4yLTQuNi01LjUtOS4yLTUuNXMtOC4zLDIuMy05LjIsNS41Yy0uMi44LS4zLDEuNi0uMywyLjRzLjEsMS43LjMsMi41Yy45LDMuMiw0LjYsNS41LDkuMiw1LjVzOC4zLTIuMyw5LjItNS41Yy4yLS44LjMtMS42LjMtMi41cy0uMS0xLjYtLjMtMi40WiIvPjxwYXRoIGZpbGw9IiM2RkJDRjAiIGQ9Ik0xOS40LDE0LjVjLTIuNCwwLTQuMywxLjQtNC4zLDMuMXMxLjksMy4xLDQuMywzLjEsNC4zLTEuNCw0LjMtMy4xLTEuOS0zLjEtNC4zLTMuMVoiLz48L3N2Zz4='
 
+const PASSKEY_ICON =
+	'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cmVjdCB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHJ4PSI4IiBmaWxsPSIjMTExODI3Ii8+PHBhdGggZmlsbD0iIzYwQTVGQSIgZD0iTTI0IDE3YTYgNiAwIDEgMC04IDUuNjZWMjdoM3YtNGg0djRoM3YtNmgtNS4xQTMuOTkgMy45OSAwIDAgMSAyNCAxN1ptLTYtMmEyIDIgMCAxIDEgMCA0IDIgMiAwIDAgMSAwLTRaIi8+PC9zdmc+'
+
 export function generateWalletKitJs(config: WalletKitConfig): string {
 	const network = config.network || 'mainnet'
 	const autoConnect = config.autoConnect !== false
@@ -144,15 +147,12 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
           var account = accounts[i];
           if (!__wkIsSuiAccount(account)) continue;
           var normalizedAddress = __wkNormalizeAccountAddress(account);
-          if (!normalizedAddress) { result.push(account); continue; }
-          if (typeof account.address === 'string' && account.address === normalizedAddress) {
-            result.push(account);
-          } else {
-            var copy = {};
-            for (var k in account) copy[k] = account[k];
-            copy.address = normalizedAddress;
-            result.push(copy);
+          if (normalizedAddress && account && typeof account === 'object') {
+            if (typeof account.address !== 'string' || account.address !== normalizedAddress) {
+              try { account.address = normalizedAddress; } catch (e) {}
+            }
           }
+          result.push(account);
         }
         return result;
       }
@@ -211,17 +211,332 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
       var __wkWalletsApi = null;
       try { if (typeof getWallets === 'function') __wkWalletsApi = getWallets(); } catch (e) {}
 
-      var __wkWindowWallets = [
-        { check: function() { return window.sui; }, name: 'Sui Wallet', icon: ${JSON.stringify(SUI_WALLET_ICON)} },
-        { check: function() { return window.phantom && window.phantom.sui; }, name: 'Phantom', icon: ${JSON.stringify(PHANTOM_ICON)} },
+      var __wkPasskeySdk = null;
+      var __wkPasskeyStorageKey = 'sui_ski_passkey_public_key_b64_v1';
+      var __wkPasskeyWalletName = 'Passkey Wallet';
+      var __wkPasskeyRuntime = {
+        provider: null,
+        keypair: null,
+        client: null,
+        account: null
+      };
+
+      function __wkHasPasskeySupport() {
+        try {
+          return typeof window.PublicKeyCredential !== 'undefined'
+            && !!navigator.credentials
+            && typeof navigator.credentials.get === 'function'
+            && typeof navigator.credentials.create === 'function';
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function __wkGetRpcUrlForNetwork() {
+        if (__wkNetwork === 'testnet') return 'https://fullnode.testnet.sui.io:443';
+        if (__wkNetwork === 'devnet') return 'https://fullnode.devnet.sui.io:443';
+        return 'https://fullnode.mainnet.sui.io:443';
+      }
+
+      function __wkGetPasskeyRpId() {
+        var host = window.location && window.location.hostname ? String(window.location.hostname) : '';
+        if (!host) return 'sui.ski';
+        if (host === 'sui.ski' || host.endsWith('.sui.ski')) return 'sui.ski';
+        return host;
+      }
+
+      function __wkBytesToB64(bytes) {
+        if (!bytes || typeof bytes.length !== 'number') return '';
+        var CHUNK = 8192;
+        var parts = [];
+        for (var i = 0; i < bytes.length; i += CHUNK) {
+          parts.push(String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK, bytes.length))));
+        }
+        return btoa(parts.join(''));
+      }
+
+      function __wkB64ToBytes(value) {
+        if (!value || typeof value !== 'string') return null;
+        var raw = atob(value);
+        var out = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+        return out;
+      }
+
+      var __wkPasskeyCookieName = 'passkey_pk';
+
+      function __wkSetPasskeyCookie(b64Value) {
+        var domain = '';
+        try {
+          var host = window.location.hostname;
+          if (host === 'sui.ski' || host.endsWith('.sui.ski')) domain = '; domain=.sui.ski';
+        } catch (_e) {}
+        document.cookie = __wkPasskeyCookieName + '=' + encodeURIComponent(b64Value) + domain + '; path=/; max-age=31536000; secure; samesite=lax';
+      }
+
+      function __wkGetPasskeyCookie() {
+        try {
+          var cookies = document.cookie.split('; ');
+          for (var i = 0; i < cookies.length; i++) {
+            if (cookies[i].indexOf(__wkPasskeyCookieName + '=') === 0) {
+              return decodeURIComponent(cookies[i].slice(__wkPasskeyCookieName.length + 1));
+            }
+          }
+          return '';
+        } catch (_e) { return ''; }
+      }
+
+      function __wkClearPasskeyCookie() {
+        var domain = '';
+        try {
+          var host = window.location.hostname;
+          if (host === 'sui.ski' || host.endsWith('.sui.ski')) domain = '; domain=.sui.ski';
+        } catch (_e) {}
+        document.cookie = __wkPasskeyCookieName + '=' + domain + '; path=/; max-age=0; secure; samesite=lax';
+      }
+
+      function __wkCreatePasskeyAccount(address, publicKey) {
+        return {
+          address: address,
+          publicKey: publicKey,
+          chains: ['sui:mainnet', 'sui:testnet', 'sui:devnet']
+        };
+      }
+
+      function __wkClearPasskeyRuntime() {
+        __wkPasskeyRuntime.provider = null;
+        __wkPasskeyRuntime.keypair = null;
+        __wkPasskeyRuntime.client = null;
+        __wkPasskeyRuntime.account = null;
+        try { localStorage.removeItem(__wkPasskeyStorageKey); } catch (_e) {}
+        __wkClearPasskeyCookie();
+      }
+
+      async function __wkLoadPasskeySdk() {
+        if (__wkPasskeySdk) return __wkPasskeySdk;
+        var passkeyModule = await import('https://esm.sh/@mysten/sui@2.2.0/keypairs/passkey?bundle');
+        var clientModule = await import('https://esm.sh/@mysten/sui@2.2.0/client?bundle');
+        var PasskeyKeypair = passkeyModule && passkeyModule.PasskeyKeypair;
+        var BrowserPasskeyProvider = passkeyModule && passkeyModule.BrowserPasskeyProvider;
+        var SuiClient = clientModule && (clientModule.SuiClient || clientModule.SuiJsonRpcClient);
+        if (!PasskeyKeypair || !BrowserPasskeyProvider || !SuiClient) {
+          throw new Error('Passkey SDK unavailable in this browser');
+        }
+        __wkPasskeySdk = {
+          PasskeyKeypair: PasskeyKeypair,
+          BrowserPasskeyProvider: BrowserPasskeyProvider,
+          SuiClient: SuiClient
+        };
+        return __wkPasskeySdk;
+      }
+
+      function __wkSetPasskeyKeypair(keypair, provider) {
+        var publicKey = keypair && typeof keypair.getPublicKey === 'function' ? keypair.getPublicKey() : null;
+        var address = publicKey && typeof publicKey.toSuiAddress === 'function' ? publicKey.toSuiAddress() : '';
+        if (!address && keypair && typeof keypair.toSuiAddress === 'function') {
+          address = keypair.toSuiAddress();
+        }
+        if (!address) throw new Error('Failed to derive passkey wallet address');
+        var account = __wkCreatePasskeyAccount(address, publicKey || null);
+        __wkPasskeyRuntime.provider = provider;
+        __wkPasskeyRuntime.keypair = keypair;
+        __wkPasskeyRuntime.account = account;
+        if (!__wkPasskeyRuntime.client) {
+          __wkPasskeyRuntime.client = new __wkPasskeySdk.SuiClient({ url: __wkGetRpcUrlForNetwork() });
+        }
+        if (publicKey && typeof publicKey.toRawBytes === 'function') {
+          try {
+            var rawBytes = publicKey.toRawBytes();
+            if (rawBytes && rawBytes.length > 0) {
+              var b64Pk = __wkBytesToB64(rawBytes);
+              localStorage.setItem(__wkPasskeyStorageKey, b64Pk);
+              __wkSetPasskeyCookie(b64Pk);
+            }
+          } catch (e) {}
+        }
+        return account;
+      }
+
+      async function __wkConnectPasskeyWallet() {
+        if (!__wkHasPasskeySupport()) {
+          throw new Error('Passkeys are not supported in this browser');
+        }
+        var sdk = await __wkLoadPasskeySdk();
+        var provider = new sdk.BrowserPasskeyProvider('sui.ski', {
+          rp: {
+            id: __wkGetPasskeyRpId(),
+            name: 'sui.ski'
+          },
+          timeout: 120000,
+          authenticatorSelection: {
+            authenticatorAttachment: 'platform',
+            residentKey: 'required',
+            requireResidentKey: true,
+            userVerification: 'required'
+          }
+        });
+
+        var storedPk = '';
+        try { storedPk = localStorage.getItem(__wkPasskeyStorageKey) || ''; } catch (_e) {}
+        if (!storedPk) storedPk = __wkGetPasskeyCookie();
+        if (storedPk) {
+          try {
+            var restored = new sdk.PasskeyKeypair(__wkB64ToBytes(storedPk), provider);
+            var restoredAccount = __wkSetPasskeyKeypair(restored, provider);
+            return { accounts: [restoredAccount] };
+          } catch (_e) {
+            try { localStorage.removeItem(__wkPasskeyStorageKey); } catch (_ignore) {}
+            __wkClearPasskeyCookie();
+            __wkClearPasskeyRuntime();
+          }
+        }
+
+        if (!sdk.PasskeyKeypair || typeof sdk.PasskeyKeypair.getPasskeyInstance !== 'function') {
+          throw new Error('Passkey wallet creation is unavailable');
+        }
+        var created = await sdk.PasskeyKeypair.getPasskeyInstance(provider);
+        var createdAccount = __wkSetPasskeyKeypair(created, provider);
+        return { accounts: [createdAccount] };
+      }
+
+      async function __wkEnsurePasskeyWallet() {
+        if (__wkPasskeyRuntime.keypair && __wkPasskeyRuntime.account) return __wkPasskeyRuntime;
+        await __wkConnectPasskeyWallet();
+        if (__wkPasskeyRuntime.keypair && __wkPasskeyRuntime.account) return __wkPasskeyRuntime;
+        throw new Error('Failed to connect passkey wallet');
+      }
+
+      async function __wkPasskeyTryCalls(calls, fallbackMessage) {
+        var lastErr = null;
+        for (var i = 0; i < calls.length; i++) {
+          try {
+            var result = await calls[i]();
+            if (typeof result !== 'undefined') return result;
+          } catch (err) {
+            lastErr = err;
+          }
+        }
+        if (lastErr && lastErr.message) throw new Error(lastErr.message);
+        throw new Error(fallbackMessage || 'Passkey wallet operation failed');
+      }
+
+      async function __wkPasskeySignAndExecute(input) {
+        var runtime = await __wkEnsurePasskeyWallet();
+        var keypair = runtime.keypair;
+        var client = runtime.client;
+        var tx = input && (input.transaction || input.transactionBlock);
+        var options = input && input.options;
+        if (!tx) throw new Error('Missing transaction for passkey execution');
+        return __wkPasskeyTryCalls([
+          async function() {
+            if (!client || typeof client.signAndExecuteTransaction !== 'function') return undefined;
+            return client.signAndExecuteTransaction({ signer: keypair, transaction: tx, options: options || {} });
+          },
+          async function() {
+            if (!client || typeof client.signAndExecuteTransactionBlock !== 'function') return undefined;
+            return client.signAndExecuteTransactionBlock({ signer: keypair, transactionBlock: tx, options: options || {} });
+          },
+          async function() {
+            if (!client || typeof client.signAndExecuteTransaction !== 'function') return undefined;
+            return client.signAndExecuteTransaction({ signer: keypair, transactionBlock: tx, options: options || {} });
+          },
+        ], 'Passkey wallet cannot execute this transaction');
+      }
+
+      async function __wkPasskeySignTransaction(input) {
+        var runtime = await __wkEnsurePasskeyWallet();
+        var keypair = runtime.keypair;
+        var client = runtime.client;
+        var tx = input && (input.transaction || input.transactionBlock);
+        if (!tx) throw new Error('Missing transaction for passkey signing');
+        return __wkPasskeyTryCalls([
+          async function() {
+            if (!keypair || typeof keypair.signTransaction !== 'function') return undefined;
+            return keypair.signTransaction(tx);
+          },
+          async function() {
+            if (!keypair || typeof keypair.signTransactionBlock !== 'function') return undefined;
+            return keypair.signTransactionBlock(tx);
+          },
+          async function() {
+            if (!client || typeof client.signTransaction !== 'function') return undefined;
+            return client.signTransaction({ signer: keypair, transaction: tx });
+          },
+          async function() {
+            if (!client || typeof client.signTransactionBlock !== 'function') return undefined;
+            return client.signTransactionBlock({ signer: keypair, transactionBlock: tx });
+          },
+        ], 'Passkey wallet cannot sign this transaction');
+      }
+
+      async function __wkPasskeySignPersonalMessage(input) {
+        var runtime = await __wkEnsurePasskeyWallet();
+        var keypair = runtime.keypair;
+        var message = input && input.message ? input.message : input;
+        if (!message || (typeof message.length !== 'number' && typeof message.byteLength !== 'number')) {
+          throw new Error('Missing message bytes for passkey signing');
+        }
+        if (keypair && typeof keypair.signPersonalMessage === 'function') {
+          try { return await keypair.signPersonalMessage({ message: message }); } catch (_e) {}
+          return keypair.signPersonalMessage(message);
+        }
+        throw new Error('Passkey wallet does not support personal message signing');
+      }
+
+      function __wkCreatePasskeyWallet() {
+        return {
+          name: __wkPasskeyWalletName,
+          icon: ${JSON.stringify(PASSKEY_ICON)},
+          chains: ['sui:mainnet', 'sui:testnet', 'sui:devnet'],
+          features: {
+            'standard:connect': { connect: __wkConnectPasskeyWallet },
+            'standard:disconnect': { disconnect: __wkClearPasskeyRuntime },
+            'sui:signAndExecuteTransaction': { signAndExecuteTransaction: __wkPasskeySignAndExecute },
+            'sui:signAndExecuteTransactionBlock': { signAndExecuteTransactionBlock: __wkPasskeySignAndExecute },
+            'sui:signTransaction': { signTransaction: __wkPasskeySignTransaction },
+            'sui:signTransactionBlock': { signTransactionBlock: __wkPasskeySignTransaction },
+            'sui:signPersonalMessage': { signPersonalMessage: __wkPasskeySignPersonalMessage }
+          },
+          get accounts() {
+            return __wkPasskeyRuntime.account ? [__wkPasskeyRuntime.account] : [];
+          },
+          __isPasskey: true
+        };
+      }
+
+	      var __wkWindowWallets = [
+	        { check: function() { return window.sui; }, name: 'Sui Wallet', icon: ${JSON.stringify(SUI_WALLET_ICON)} },
+	        { check: function() { return window.phantom && window.phantom.sui; }, name: 'Phantom', icon: ${JSON.stringify(PHANTOM_ICON)} },
         { check: function() { return window.suiWallet; }, name: 'Sui Wallet', icon: ${JSON.stringify(SUI_WALLET_ICON)} },
         { check: function() { return (window.mystenWallet && (window.mystenWallet.sui || window.mystenWallet)) || null; }, name: 'Sui Wallet', icon: ${JSON.stringify(SUI_WALLET_ICON)} },
         { check: function() { return window.slush || null; }, name: 'Slush', icon: 'https://slush.app/favicon.ico' },
         { check: function() { return window.suiet || null; }, name: 'Suiet', icon: 'https://suiet.app/favicon.ico' },
         { check: function() { return window.martian && window.martian.sui; }, name: 'Martian', icon: 'https://martianwallet.xyz/favicon.ico' },
         { check: function() { return window.ethos || null; }, name: 'Ethos', icon: 'https://ethoswallet.xyz/favicon.ico' },
-        { check: function() { return window.okxwallet && window.okxwallet.sui; }, name: 'OKX Wallet', icon: 'https://static.okx.com/cdn/assets/imgs/226/EB771A4D4E5CC234.png' }
-      ];
+	        { check: function() { return window.okxwallet && window.okxwallet.sui; }, name: 'OKX Wallet', icon: 'https://static.okx.com/cdn/assets/imgs/226/EB771A4D4E5CC234.png' }
+	      ];
+
+	      function __wkWalletPriority(wallet) {
+	        if (!wallet) return 50;
+	        if (wallet.__isPasskey) return 99;
+	        var name = wallet.name ? String(wallet.name).toLowerCase() : '';
+	        if (name === 'phantom') return 0;
+	        if (name === 'sui wallet' || name === 'slush' || name === 'suiet' || name === 'martian' || name === 'ethos') return 1;
+	        if (name.indexOf('okx') !== -1) return 2;
+	        return 10;
+	      }
+
+	      function __wkSortWallets(wallets) {
+	        if (!Array.isArray(wallets)) return [];
+	        return wallets.slice().sort(function(a, b) {
+	          var pa = __wkWalletPriority(a);
+	          var pb = __wkWalletPriority(b);
+	          if (pa !== pb) return pa - pb;
+	          var an = a && a.name ? String(a.name) : '';
+	          var bn = b && b.name ? String(b.name) : '';
+	          return an.localeCompare(bn);
+	        });
+	      }
 
       function getSuiWallets() {
         var wallets = [];
@@ -288,8 +603,14 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
           } catch (e) {}
         }
 
-        return wallets;
-      }
+        if (wallets.length === 0 && __wkHasPasskeySupport()) {
+          var passkeyWallet = __wkCreatePasskeyWallet();
+          wallets.push(passkeyWallet);
+          seenNames[passkeyWallet.name] = true;
+        }
+
+	        return __wkSortWallets(wallets);
+	      }
 
       function __wkIsMobileDevice() {
         try {
@@ -647,9 +968,12 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         });
       }
 
-      function __wkFinishConnect(wallet, accounts) {
-        var account = accounts[0];
-        var address = account.address;
+	      function __wkFinishConnect(wallet, accounts) {
+	        var account = accounts[0];
+	        var address = __wkNormalizeAccountAddress(account);
+	        if (!address && account && typeof account.address === 'string') {
+	          address = account.address;
+        }
         $connection.set({
           wallet: wallet,
           account: account,
@@ -659,20 +983,16 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         });
         var existingSession = typeof getWalletSession === 'function' ? getWalletSession() : null;
         var hasSessionCookie = document.cookie.indexOf('session_id=') !== -1;
-        if (existingSession && existingSession.address === address && hasSessionCookie) {
-          __sessionReady = Promise.resolve(true);
-          return;
-        }
-        if (typeof challengeAndConnect === 'function') {
-          __sessionReady = challengeAndConnect(wallet.name, address, function(messageBytes) {
-            return __wkSignPersonalMessage(wallet, account, messageBytes);
-          });
-        } else if (typeof connectWalletSession === 'function') {
-          connectWalletSession(wallet.name, address);
-          __sessionReady = Promise.resolve(true);
-        } else {
-          __sessionReady = Promise.resolve(true);
-        }
+	        if (existingSession && existingSession.address === address && hasSessionCookie) {
+	          __sessionReady = Promise.resolve(true);
+	          return;
+	        }
+	        if (typeof connectWalletSession === 'function') {
+	          connectWalletSession(wallet.name, address);
+	          __sessionReady = Promise.resolve(true);
+	        } else {
+	          __sessionReady = Promise.resolve(true);
+	        }
       }
 
       function initFromSession(address, walletName) {
@@ -703,56 +1023,95 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         }
       }
 
-      function autoReconnect() {
-        if (!__wkAutoConnect) return Promise.resolve(false);
-        return new Promise(function(resolve) {
-          (async function() {
-            try {
-              var session = typeof getWalletSession === 'function' ? getWalletSession() : null;
-              if (!session || !session.walletName) { resolve(false); return; }
+      function connectPasskey() {
+        if (!__wkHasPasskeySupport()) return Promise.reject(new Error('Passkeys not supported'));
+        return connect(__wkCreatePasskeyWallet());
+      }
 
-              if (__wkIsSubdomain() && session.address) {
-                initFromSession(session.address, session.walletName);
-                __wkInitSignBridge();
-                resolve(true);
-                return;
-              }
+	      function autoReconnect() {
+	        if (!__wkAutoConnect) return Promise.resolve(false);
+	        return new Promise(function(resolve) {
+	          (async function() {
+	            try {
+	              var session = typeof getWalletSession === 'function' ? getWalletSession() : null;
+	              if (!session || !session.walletName) { resolve(false); return; }
 
-              await new Promise(function(r) { setTimeout(r, 300); });
+	              await new Promise(function(r) { setTimeout(r, 300); });
 
-              var wallets = getSuiWallets();
-              var match = null;
-              for (var i = 0; i < wallets.length; i++) {
-                if (wallets[i].name === session.walletName) { match = wallets[i]; break; }
-              }
-              if (!match) {
-                if (__wkIsInAppBrowser()) {
-                  for (var attempt = 0; attempt < 5; attempt++) {
-                    await new Promise(function(r) { setTimeout(r, 300); });
-                    wallets = getSuiWallets();
-                    for (var j = 0; j < wallets.length; j++) {
-                      if (wallets[j].name === session.walletName) { match = wallets[j]; break; }
-                    }
-                    if (match) break;
-                  }
-                }
-                if (!match) {
-                  if (session.address) {
-                    initFromSession(session.address, session.walletName);
-                    resolve(true);
-                  } else {
-                    resolve(false);
-                  }
-                  return;
-                }
-              }
+	              var wallets = getSuiWallets();
+	              var keyWallets = wallets.filter(function(w) { return !w.__isPasskey; });
+	              var match = null;
+	              if (session.walletName && session.walletName !== __wkPasskeyWalletName) {
+	                for (var i = 0; i < keyWallets.length; i++) {
+	                  if (keyWallets[i].name === session.walletName) { match = keyWallets[i]; break; }
+	                }
+	              }
+	              if (!match) {
+	                for (var p = 0; p < keyWallets.length; p++) {
+	                  if (String(keyWallets[p].name || '') === 'Phantom') { match = keyWallets[p]; break; }
+	                }
+	              }
+	              if (!match && keyWallets.length > 0) {
+	                match = keyWallets[0];
+	              }
 
-              await connect(match);
-              resolve(true);
-            } catch (e) {
-              resolve(false);
-            }
-          })();
+	              if (!match) {
+	                if (__wkIsInAppBrowser()) {
+	                  for (var attempt = 0; attempt < 5; attempt++) {
+	                    await new Promise(function(r) { setTimeout(r, 300); });
+	                    wallets = getSuiWallets();
+	                    keyWallets = wallets.filter(function(w) { return !w.__isPasskey; });
+	                    if (session.walletName && session.walletName !== __wkPasskeyWalletName) {
+	                      for (var j = 0; j < keyWallets.length; j++) {
+	                        if (keyWallets[j].name === session.walletName) { match = keyWallets[j]; break; }
+	                      }
+	                    }
+	                    if (!match) {
+	                      for (var pp = 0; pp < keyWallets.length; pp++) {
+	                        if (String(keyWallets[pp].name || '') === 'Phantom') { match = keyWallets[pp]; break; }
+	                      }
+	                    }
+	                    if (!match && keyWallets.length > 0) {
+	                      match = keyWallets[0];
+	                    }
+	                    if (match) break;
+	                  }
+	                }
+	              }
+
+	              if (match) {
+	                try {
+	                  await connect(match);
+	                  resolve(true);
+	                  return;
+	                } catch (_walletReconnectErr) {}
+	              }
+
+	              if (session.walletName === __wkPasskeyWalletName && __wkHasPasskeySupport()) {
+	                try {
+	                  await connectPasskey();
+	                  resolve(true);
+	                  return;
+	                } catch (_passkeyErr) {}
+	              }
+
+	              if (__wkIsSubdomain() && session.address) {
+	                initFromSession(session.address, session.walletName);
+	                __wkInitSignBridge();
+	                resolve(true);
+	                return;
+	              }
+
+	              if (session.address) {
+	                initFromSession(session.address, session.walletName);
+	                resolve(true);
+	                return;
+	              }
+	              resolve(false);
+	            } catch (e) {
+	              resolve(false);
+	            }
+	          })();
         });
       }
 
@@ -782,6 +1141,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         getSuiWallets: getSuiWallets,
         detectWallets: detectWallets,
         connect: connect,
+        connectPasskey: connectPasskey,
         disconnect: disconnect,
         autoReconnect: autoReconnect,
         setPrimaryName: setPrimaryName,
@@ -796,5 +1156,9 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         __normalizeAccountAddress: __wkNormalizeAccountAddress
       };
     })();
+
+    if (typeof window !== 'undefined') {
+      window.SuiWalletKit = SuiWalletKit;
+    }
   `
 }

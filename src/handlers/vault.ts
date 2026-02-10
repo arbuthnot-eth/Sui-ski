@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import type { Env } from '../types'
 import { jsonResponse } from '../utils/response'
 import type { VaultMeta } from '../utils/vault'
@@ -14,6 +14,11 @@ type VaultEnv = {
 	Bindings: Env
 	Variables: {
 		env: Env
+		session: {
+			address: string | null
+			walletName: string | null
+			verified: boolean
+		}
 	}
 }
 
@@ -22,6 +27,44 @@ const SUI_ADDRESS_PREFIX = '0x'
 
 function isValidSuiAddress(address: string): boolean {
 	return address.startsWith(SUI_ADDRESS_PREFIX) && address.length === SUI_ADDRESS_LENGTH
+}
+
+function normalizeAddress(address: string): string {
+	return address.trim().toLowerCase()
+}
+
+function getCookieValue(cookieHeader: string, name: string): string | null {
+	const cookie = cookieHeader
+		.split(';')
+		.map((part) => part.trim())
+		.find((part) => part.startsWith(`${name}=`))
+	if (!cookie) return null
+	const rawValue = cookie.slice(name.length + 1)
+	return rawValue ? decodeURIComponent(rawValue) : null
+}
+
+async function getVerifiedSessionAddress(c: Context<VaultEnv>) {
+	const env = c.get('env') as Env
+	const cookieHeader = c.req.header('Cookie') || ''
+	const sessionId = getCookieValue(cookieHeader, 'session_id')
+	if (!sessionId) return null
+
+	const stub = env.WALLET_SESSIONS.getByName('global')
+	const info = await stub.getSessionInfo(sessionId)
+	if (!info?.verified) return null
+	if (!isValidSuiAddress(info.address)) return null
+	return info.address
+}
+
+function sanitizeMeta(meta: Partial<VaultMeta>): VaultMeta {
+	const version = Math.max(1, Number(meta.version) || 1)
+	const count = Math.max(0, Math.floor(Number(meta.count) || 0))
+	const updatedAt = Number(meta.updatedAt) || Date.now()
+	return {
+		version,
+		updatedAt,
+		count,
+	}
 }
 
 export const vaultRoutes = new Hono<VaultEnv>()
@@ -46,33 +89,29 @@ vaultRoutes.get('/config', (c) => {
 
 vaultRoutes.get('/', async (c) => {
 	const env = c.get('env')
-	const address = c.req.query('address')
-	if (!address) return jsonResponse({ error: 'address query parameter required' }, 400)
-	if (!isValidSuiAddress(address))
-		return jsonResponse(
-			{
-				error: `Invalid Sui address: expected ${SUI_ADDRESS_LENGTH} hex chars starting with ${SUI_ADDRESS_PREFIX}`,
-			},
-			400,
-		)
+	const ownerAddress = await getVerifiedSessionAddress(c)
+	if (!ownerAddress) return jsonResponse({ error: 'Verified wallet session required' }, 401)
 
 	const [encryptedBlob, metaJson] = await Promise.all([
-		env.CACHE.get(vaultKey(address)),
-		env.CACHE.get(vaultMetaKey(address)),
+		env.CACHE.get(vaultKey(ownerAddress)),
+		env.CACHE.get(vaultMetaKey(ownerAddress)),
 	])
 
 	if (!encryptedBlob || !metaJson) return jsonResponse({ found: false })
 
-	const meta: VaultMeta = JSON.parse(metaJson)
+	const meta = sanitizeMeta(JSON.parse(metaJson) as VaultMeta)
 	return jsonResponse({ found: true, encryptedBlob, meta })
 })
 
 vaultRoutes.post('/sync', async (c) => {
 	const env = c.get('env')
+	const ownerAddress = await getVerifiedSessionAddress(c)
+	if (!ownerAddress) return jsonResponse({ error: 'Verified wallet session required' }, 401)
 	const body = await c.req.json<{ encryptedBlob: string; ownerAddress: string; meta: VaultMeta }>()
 
-	if (!body.ownerAddress) return jsonResponse({ error: 'ownerAddress is required' }, 400)
-	if (!isValidSuiAddress(body.ownerAddress))
+	if (body.ownerAddress && normalizeAddress(body.ownerAddress) !== normalizeAddress(ownerAddress))
+		return jsonResponse({ error: 'ownerAddress must match authenticated wallet session' }, 403)
+	if (body.ownerAddress && !isValidSuiAddress(body.ownerAddress))
 		return jsonResponse(
 			{
 				error: `Invalid ownerAddress: expected ${SUI_ADDRESS_LENGTH} hex chars starting with ${SUI_ADDRESS_PREFIX}`,
@@ -86,57 +125,58 @@ vaultRoutes.post('/sync', async (c) => {
 			400,
 		)
 	if (!body.meta) return jsonResponse({ error: 'meta is required' }, 400)
-	if (body.meta.count > VAULT_MAX_BOOKMARKS)
+	const nextMeta = sanitizeMeta(body.meta)
+	if (nextMeta.count > VAULT_MAX_BOOKMARKS)
 		return jsonResponse(
-			{ error: `Bookmark count ${body.meta.count} exceeds max of ${VAULT_MAX_BOOKMARKS}` },
+			{ error: `Bookmark count ${nextMeta.count} exceeds max of ${VAULT_MAX_BOOKMARKS}` },
 			400,
 		)
 
 	await Promise.all([
-		env.CACHE.put(vaultKey(body.ownerAddress), body.encryptedBlob, {
+		env.CACHE.put(vaultKey(ownerAddress), body.encryptedBlob, {
 			expirationTtl: VAULT_TTL_SECONDS,
 		}),
-		env.CACHE.put(vaultMetaKey(body.ownerAddress), JSON.stringify(body.meta), {
-			expirationTtl: VAULT_TTL_SECONDS,
-		}),
+		env.CACHE.put(
+			vaultMetaKey(ownerAddress),
+			JSON.stringify({ ...nextMeta, updatedAt: Date.now() }),
+			{
+				expirationTtl: VAULT_TTL_SECONDS,
+			},
+		),
 	])
 
 	return jsonResponse({ success: true })
 })
 
 vaultRoutes.get('/watching', async (c) => {
-	const env = c.get('env')
-	const address = c.req.query('address')
-	const name = c.req.query('name')
-	if (!address || !name) return jsonResponse({ error: 'address and name parameters required' }, 400)
-	if (!isValidSuiAddress(address))
-		return jsonResponse(
-			{
-				error: `Invalid Sui address: expected ${SUI_ADDRESS_LENGTH} hex chars starting with ${SUI_ADDRESS_PREFIX}`,
-			},
-			400,
-		)
-
-	const metaJson = await env.CACHE.get(vaultMetaKey(address))
-	if (!metaJson) return jsonResponse({ watching: false })
-
-	const meta: VaultMeta = JSON.parse(metaJson)
-	const watching = Array.isArray(meta.names) && meta.names.includes(name)
-	return jsonResponse({ watching })
+	const ownerAddress = await getVerifiedSessionAddress(c)
+	if (!ownerAddress) return jsonResponse({ error: 'Verified wallet session required' }, 401)
+	return jsonResponse(
+		{
+			error:
+				'Deprecated endpoint. Determine watching state by decrypting your wallet vault blob client-side.',
+		},
+		410,
+	)
 })
 
 vaultRoutes.post('/toggle-watch', async (c) => {
 	const env = c.get('env')
+	const ownerAddress = await getVerifiedSessionAddress(c)
+	if (!ownerAddress) return jsonResponse({ error: 'Verified wallet session required' }, 401)
 	const body = await c.req.json<{
 		ownerAddress: string
 		name: string
 		action: 'watch' | 'unwatch'
 		encryptedBlob?: string
+		meta?: VaultMeta
 	}>()
 
-	if (!body.ownerAddress || !body.name || !body.action)
-		return jsonResponse({ error: 'ownerAddress, name, and action are required' }, 400)
-	if (!isValidSuiAddress(body.ownerAddress))
+	if (!body.name || !body.action)
+		return jsonResponse({ error: 'name and action are required' }, 400)
+	if (body.ownerAddress && normalizeAddress(body.ownerAddress) !== normalizeAddress(ownerAddress))
+		return jsonResponse({ error: 'ownerAddress must match authenticated wallet session' }, 403)
+	if (body.ownerAddress && !isValidSuiAddress(body.ownerAddress))
 		return jsonResponse(
 			{
 				error: `Invalid ownerAddress: expected ${SUI_ADDRESS_LENGTH} hex chars starting with ${SUI_ADDRESS_PREFIX}`,
@@ -144,69 +184,43 @@ vaultRoutes.post('/toggle-watch', async (c) => {
 			400,
 		)
 
-	const metaJson = await env.CACHE.get(vaultMetaKey(body.ownerAddress))
-	const meta: VaultMeta = metaJson
-		? JSON.parse(metaJson)
-		: { version: 1, updatedAt: Date.now(), count: 0, names: [] }
+	if (!body.encryptedBlob || !body.meta)
+		return jsonResponse(
+			{
+				error:
+					'toggle-watch requires encryptedBlob + meta and no longer stores plaintext bookmark names',
+			},
+			410,
+		)
+	if (body.encryptedBlob.length > VAULT_BLOB_MAX_BYTES)
+		return jsonResponse(
+			{ error: `encryptedBlob exceeds max size of ${VAULT_BLOB_MAX_BYTES} bytes` },
+			400,
+		)
+	const meta = sanitizeMeta(body.meta)
+	if (meta.count > VAULT_MAX_BOOKMARKS)
+		return jsonResponse({ error: `Vault full: max ${VAULT_MAX_BOOKMARKS} bookmarks` }, 400)
 
-	if (!Array.isArray(meta.names)) meta.names = []
-
-	if (body.action === 'watch') {
-		if (!meta.names.includes(body.name)) {
-			if (meta.names.length >= VAULT_MAX_BOOKMARKS)
-				return jsonResponse({ error: `Vault full: max ${VAULT_MAX_BOOKMARKS} bookmarks` }, 400)
-			meta.names.push(body.name)
-			meta.count = meta.names.length
-		}
-	} else {
-		const idx = meta.names.indexOf(body.name)
-		if (idx !== -1) {
-			meta.names.splice(idx, 1)
-			meta.count = meta.names.length
-		}
-	}
-
-	meta.updatedAt = Date.now()
-
-	const writes: Promise<void>[] = [
-		env.CACHE.put(vaultMetaKey(body.ownerAddress), JSON.stringify(meta), {
+	await Promise.all([
+		env.CACHE.put(vaultKey(ownerAddress), body.encryptedBlob, {
 			expirationTtl: VAULT_TTL_SECONDS,
 		}),
-	]
-
-	if (body.encryptedBlob) {
-		if (body.encryptedBlob.length > VAULT_BLOB_MAX_BYTES)
-			return jsonResponse(
-				{ error: `encryptedBlob exceeds max size of ${VAULT_BLOB_MAX_BYTES} bytes` },
-				400,
-			)
-		writes.push(
-			env.CACHE.put(vaultKey(body.ownerAddress), body.encryptedBlob, {
-				expirationTtl: VAULT_TTL_SECONDS,
-			}),
-		)
-	}
-
-	await Promise.all(writes)
+		env.CACHE.put(vaultMetaKey(ownerAddress), JSON.stringify({ ...meta, updatedAt: Date.now() }), {
+			expirationTtl: VAULT_TTL_SECONDS,
+		}),
+	])
 
 	return jsonResponse({ success: true, watching: body.action === 'watch', meta })
 })
 
 vaultRoutes.get('/meta', async (c) => {
 	const env = c.get('env')
-	const address = c.req.query('address')
-	if (!address) return jsonResponse({ error: 'address query parameter required' }, 400)
-	if (!isValidSuiAddress(address))
-		return jsonResponse(
-			{
-				error: `Invalid Sui address: expected ${SUI_ADDRESS_LENGTH} hex chars starting with ${SUI_ADDRESS_PREFIX}`,
-			},
-			400,
-		)
+	const ownerAddress = await getVerifiedSessionAddress(c)
+	if (!ownerAddress) return jsonResponse({ error: 'Verified wallet session required' }, 401)
 
-	const metaJson = await env.CACHE.get(vaultMetaKey(address))
+	const metaJson = await env.CACHE.get(vaultMetaKey(ownerAddress))
 	if (!metaJson) return jsonResponse({ found: false })
 
-	const meta: VaultMeta = JSON.parse(metaJson)
+	const meta = sanitizeMeta(JSON.parse(metaJson) as VaultMeta)
 	return jsonResponse({ found: true, ...meta })
 })

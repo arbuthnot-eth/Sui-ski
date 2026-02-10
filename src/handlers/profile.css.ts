@@ -1902,13 +1902,27 @@ export const profileStyles = `
 			color: #d1fae5;
 		}
 		.target-preview .target-self-btn {
-			height: 20px;
+			height: 24px;
 			width: auto;
-			padding: 0 7px !important;
-			border-radius: 6px;
-			font-size: 0.64rem;
-			font-weight: 700;
-			letter-spacing: 0.02em;
+			min-width: 44px;
+			padding: 0 10px !important;
+			border-radius: 999px;
+			font-size: 0.67rem;
+			font-weight: 600;
+			letter-spacing: 0.01em;
+			line-height: 1;
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.18), rgba(59, 130, 246, 0.08));
+			border-color: rgba(96, 165, 250, 0.36);
+			color: #dbeafe;
+			box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.18);
+		}
+		.target-preview .target-self-btn:hover:not(:disabled) {
+			background: linear-gradient(135deg, rgba(96, 165, 250, 0.28), rgba(59, 130, 246, 0.18));
+			border-color: rgba(147, 197, 253, 0.58);
+			color: #eff6ff;
+		}
+		.target-preview .target-self-btn:disabled {
+			opacity: 0.5;
 		}
 		.target-meta-item .target-preview {
 			max-width: 220px;
@@ -2079,8 +2093,8 @@ export const profileStyles = `
 		}
 		.target-self-btn {
 			width: auto;
-			height: 20px;
-			padding: 0 7px !important;
+			height: 24px;
+			padding: 0 10px !important;
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
@@ -3798,7 +3812,7 @@ export const profileStyles = `
 		}
 			.marketplace-list-top-row {
 				display: flex;
-				align-items: center;
+				align-items: flex-start;
 				justify-content: flex-end;
 				gap: 4px;
 				width: 100%;
@@ -4164,12 +4178,16 @@ export const profileStyles = `
 			}
 			.marketplace-list-estimate {
 				display: inline-flex;
-				align-items: center;
+				flex-direction: column;
+				align-items: flex-end;
 				justify-content: flex-end;
 				font-size: 0.66rem;
-				min-height: 18px;
+				min-height: 0;
 				margin: 0;
-				white-space: nowrap;
+				white-space: normal;
+				text-align: right;
+				line-height: 1.2;
+				gap: 2px;
 				flex: 0 0 auto;
 			}
 			.marketplace-list-estimate:empty {
@@ -4179,6 +4197,11 @@ export const profileStyles = `
 				color: #ffffff;
 				font-family: var(--font-mono, ui-monospace, monospace);
 				font-weight: 500;
+			}
+			.marketplace-list-split {
+				color: #a5b4fc;
+				font-size: 0.58rem;
+				letter-spacing: 0.01em;
 			}
 		.marketplace-status {
 			text-align: center;
@@ -7514,26 +7537,42 @@ export const profileStyles = `
 		}
 
 		/* Search Button (in wallet bar) */
-		.search-btn {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			padding: 10px 16px;
+			.search-btn {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 10px 16px;
 			background: linear-gradient(135deg, rgba(96, 165, 250, 0.10), rgba(167, 139, 250, 0.08));
 			border: 1px solid rgba(96, 165, 250, 0.28);
 			border-radius: 10px;
 			cursor: pointer;
 			transition: all 0.25s ease;
-			color: var(--text);
-			font-size: 0.84rem;
-			font-weight: 600;
-			flex: 1;
-			min-width: 220px;
-			justify-content: flex-start;
-		}
-		.search-btn:hover {
-			border-color: rgba(96, 165, 250, 0.45);
-			background: linear-gradient(135deg, rgba(96, 165, 250, 0.16), rgba(167, 139, 250, 0.12));
+				color: var(--text);
+				font-size: 0.84rem;
+				font-weight: 600;
+				flex: 0 1 auto;
+				width: clamp(170px, 22vw, 260px);
+				min-width: 170px;
+				max-width: 260px;
+				justify-content: flex-start;
+			}
+			.search-btn span {
+				min-width: 0;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			@media (max-width: 1200px) {
+				.search-btn {
+					width: clamp(150px, 20vw, 220px);
+					min-width: 150px;
+					max-width: 220px;
+					padding: 10px 12px;
+				}
+			}
+			.search-btn:hover {
+				border-color: rgba(96, 165, 250, 0.45);
+				background: linear-gradient(135deg, rgba(96, 165, 250, 0.16), rgba(167, 139, 250, 0.12));
 			color: #60a5fa;
 			box-shadow: 0 0 24px rgba(96, 165, 250, 0.12);
 		}
@@ -8591,6 +8630,9 @@ export const profileStyles = `
 			border-color: var(--accent);
 			font-weight: 600;
 		}
+		.linked-name-chip.current .linked-name-text {
+			color: #c084fc;
+		}
 		/* Primary name highlighting */
 		.linked-name-chip.primary {
 			background: linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(251, 191, 36, 0.15));
@@ -8719,6 +8761,10 @@ export const profileStyles = `
 			background: rgba(107, 114, 128, 0.2);
 			color: #9ca3af;
 		}
+		.linked-name-tag.purple {
+			background: rgba(168, 85, 247, 0.2);
+			color: #c084fc;
+		}
 		.linked-names-empty {
 			color: var(--text-muted);
 			font-size: 0.75rem;
@@ -8808,6 +8854,9 @@ export const profileStyles = `
 			color: #60a5fa;
 			margin-left: auto;
 			white-space: nowrap;
+		}
+		.linked-name-price.listed {
+			color: #c084fc;
 		}
 		.linked-name-chip.dimmed {
 			opacity: 0.35;
@@ -10249,54 +10298,51 @@ export const profileStyles = `
 /* Keep the fixed bottom footer compact on phones */
 @media (max-width: 600px) {
 	body {
-		padding-bottom: 90px;
+		padding-bottom: 56px;
 	}
 	#crypto-tracker {
-		flex-direction: column !important;
+		flex-direction: row !important;
 		align-items: center !important;
-		gap: 4px !important;
-		padding: 8px 10px calc(8px + env(safe-area-inset-bottom)) !important;
-		font-size: 0.68rem !important;
-		line-height: 1.2;
+		justify-content: center !important;
+		gap: 0 !important;
+		height: 36px !important;
+		min-height: 36px !important;
+		max-height: 36px !important;
+		padding: 0 12px !important;
+		font-size: 0.72rem !important;
+		line-height: 1 !important;
 		left: 0 !important;
 		right: 0 !important;
 		width: 100% !important;
 		max-width: 100vw !important;
+		overflow: hidden;
 	}
-			#crypto-tracker .tracker-line {
-				display: flex;
-				flex-direction: column;
-				align-items: center;
-				gap: 4px;
-				width: 100%;
-			}
-			#crypto-tracker .tracker-line > .tracker-sep {
-				display: none;
-			}
-			#crypto-tracker .tracker-built-on {
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				flex-wrap: wrap;
-				gap: 2px 6px;
-				font-size: 0.62rem;
-				line-height: 1.1;
-				white-space: normal;
-			}
-			#crypto-tracker .tracker-built-on .tracker-sep {
-				display: none;
-			}
-		}
-		@media (max-width: 380px) {
-			#crypto-tracker {
-				padding: 6px 8px calc(6px + env(safe-area-inset-bottom)) !important;
-				font-size: 0.62rem !important;
-			}
-			#crypto-tracker .tracker-built-on {
-				gap: 2px 5px;
-				font-size: 0.56rem;
-			}
-		}
+	#crypto-tracker .tracker-line {
+		display: inline-flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		gap: 0;
+		width: auto;
+		max-width: 100%;
+	}
+	#crypto-tracker .tracker-line > .tracker-sep,
+	#crypto-tracker .tracker-built-on {
+		display: none !important;
+	}
+}
+@media (max-width: 380px) {
+	body {
+		padding-bottom: 52px;
+	}
+	#crypto-tracker {
+		height: 34px !important;
+		min-height: 34px !important;
+		max-height: 34px !important;
+		padding: 0 10px !important;
+		font-size: 0.68rem !important;
+	}
+}
 
 		/* ========== BOUNTY SECTION ========== */
 		.bounty-section {

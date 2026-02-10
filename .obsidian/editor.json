@@ -1,0 +1,10 @@
+{
+	"tabSize": 4,
+	"useTab": false,
+	"lineWrap": true,
+	"readableLineLength": true,
+	"foldHeading": true,
+	"foldIndent": true,
+	"showLineNumber": false,
+	"rightToLeft": false
+}

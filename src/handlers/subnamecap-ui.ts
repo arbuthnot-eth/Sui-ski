@@ -1,4 +1,6 @@
 import type { Env } from '../types'
+import { generateLogoSvg } from '../utils/og-image'
+import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
@@ -18,7 +20,29 @@ export function generateSubnameCapPage(env: Env): string {
 	<meta name="description" content="Manage SuiNS subdomain delegation with SubnameCaps">
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 	<style>${subnameCapStyles}
-	${generateWalletUiCss()}</style>
+	${generateWalletUiCss()}
+.wallet-profile-btn {
+	width: 32px;
+	height: 32px;
+	border-radius: 8px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(96, 165, 250, 0.12);
+	border: 1px solid rgba(96, 165, 250, 0.35);
+	cursor: pointer;
+	transition: all 0.2s ease;
+	padding: 0;
+}
+.wallet-profile-btn svg {
+	width: 16px;
+	height: 16px;
+}
+.wallet-profile-btn:hover {
+	background: rgba(96, 165, 250, 0.2);
+	border-color: rgba(96, 165, 250, 0.55);
+}
+	</style>
 </head>
 <body>
 	<div class="container">
@@ -29,6 +53,9 @@ export function generateSubnameCapPage(env: Env): string {
 			<div class="header-actions">
 				<span class="status-dot ${subdomainsPackageId ? 'online' : 'offline'}"></span>
 				<span style="font-size: 0.8rem; color: var(--text-muted);">${network}</span>
+				<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile">
+					${generateLogoSvg(18)}
+				</button>
 				<div id="wk-widget"></div>
 			</div>
 		</div>
@@ -923,16 +950,18 @@ export function generateSubnameCapPage(env: Env): string {
 			}
 		};
 
-		SuiWalletKit.renderModal('wk-modal');
-		SuiWalletKit.renderWidget('wk-widget');
-
-		window.onWalletConnected = function() {
+		window.onSubnameCapWalletConnected = function() {
 			loadMyCaps();
 		};
+		window.onSubnameCapWalletDisconnected = function() {};
 
-		SuiWalletKit.detectWallets().then(function() {
-			SuiWalletKit.autoReconnect();
-		});
+		${generateSharedWalletMountJs({
+			network: env.SUI_NETWORK,
+			onConnect: 'onSubnameCapWalletConnected',
+			onDisconnect: 'onSubnameCapWalletDisconnected',
+			profileButtonId: 'wallet-profile-btn',
+			profileFallbackHref: 'https://sui.ski',
+		})}
 	</script>
 </body>
 </html>`

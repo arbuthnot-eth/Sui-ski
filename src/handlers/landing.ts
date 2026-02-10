@@ -9,6 +9,7 @@ import { generateLogoSvg, getDefaultOgImageUrl } from '../utils/og-image'
 import { calculateRegistrationPrice, formatPricingResponse, getBasePricing } from '../utils/pricing'
 import { jsonResponse } from '../utils/response'
 import { getDefaultRpcUrl } from '../utils/rpc'
+import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import { renderSocialMeta } from '../utils/social'
 import { getGatewayStatus } from '../utils/status'
 import { generateWalletKitJs } from '../utils/wallet-kit-js'
@@ -540,7 +541,8 @@ apiRoutes.get('/suggest-names', async (c) => {
 	if (!query || query.length < 3) {
 		return jsonResponse({ error: 'Query parameter required (min 3 chars)' }, 400)
 	}
-	return handleNameSuggestions(query, c.get('env'))
+	const mode = normalizeSuggestionMode(c.req.query('mode'))
+	return handleNameSuggestions(query, c.get('env'), mode)
 })
 
 apiRoutes.get('/featured-names', async (c) => {
@@ -604,6 +606,7 @@ interface NameInfo {
 	expirationMs: number | null
 	targetAddress: string | null
 	isPrimary: boolean
+	isListed: boolean
 }
 
 interface LinkedNamesCache {
@@ -704,12 +707,222 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 							expirationMs,
 							targetAddress: null,
 							isPrimary: false,
+							isListed: false,
 						})
 					}
 				}
 
 				cursor = response.hasNextPage ? response.nextCursor : null
 			} while (cursor)
+		}
+
+		// Step 1b: Query marketplace listing objects (catches listed NFTs with ObjectOwner)
+		// When NFTs are listed on marketplaces like Tradeport, they become ObjectOwner
+		// and won't appear in getOwnedObjects results
+		const MARKETPLACE_LISTING_TYPES: Record<string, string[]> = {
+			mainnet: [
+				'0xff2251ea99230ed1cbe3a347a209352711c6723fcdcd9286e16636e65bb55cab::tradeport_listings::SimpleListing',
+			],
+			testnet: [],
+		}
+
+		const listingTypes = MARKETPLACE_LISTING_TYPES[env.SUI_NETWORK] || []
+		for (const listingType of listingTypes) {
+			let cursor: string | null | undefined
+			do {
+				const response = await client
+					.getOwnedObjects({
+						owner: address,
+						filter: { StructType: listingType },
+						options: { showContent: true, showType: true },
+						cursor: cursor || undefined,
+						limit: 50,
+					})
+					.catch(() => null)
+				if (!response) break
+
+				for (const item of response.data) {
+					if (item.data?.content?.dataType !== 'moveObject') continue
+
+					const fields = (item.data.content as any).fields
+					const innerFields = fields?.inner?.fields || fields
+					const nftId = innerFields?.nft_id || innerFields?.token_id
+
+					if (!nftId || seenNftIds.has(nftId)) continue
+
+					// Fetch the actual NFT object to get domain info
+					try {
+						const nftResponse = await client.getObject({
+							id: nftId,
+							options: { showContent: true, showType: true },
+						})
+						if (nftResponse.data?.content?.dataType !== 'moveObject') continue
+
+						const nftFields = (nftResponse.data.content as any).fields
+						const isSubdomain = nftResponse.data.type?.includes('subdomain_registration')
+
+						let name: string | undefined
+						let expirationMs: number | null = null
+
+						if (isSubdomain) {
+							const inner = nftFields?.nft?.fields
+							name = inner?.domain_name || inner?.name
+							expirationMs = inner?.expiration_timestamp_ms
+								? Number(inner.expiration_timestamp_ms)
+								: null
+						} else {
+							name = nftFields?.domain_name || nftFields?.name
+							expirationMs = nftFields?.expiration_timestamp_ms
+								? Number(nftFields.expiration_timestamp_ms)
+								: null
+						}
+
+						if (name) {
+							seenNftIds.add(nftId)
+							allNames.push({
+								name: String(name),
+								nftId: nftId,
+								expirationMs,
+								targetAddress: null,
+								isPrimary: false,
+								isListed: true,
+							})
+						}
+					} catch {
+						// Failed to fetch NFT details, skip
+					}
+				}
+
+				cursor = response.hasNextPage ? response.nextCursor : null
+			} while (cursor)
+		}
+
+		// Step 1c: Query events for SuiNS registrations by this address
+		// This catches names registered by this address that may have been transferred
+		const SUINS_REGISTRATION_EVENTS: Record<string, string> = {
+			mainnet:
+				'0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::RegistrationCreated',
+			testnet:
+				'0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93::suins_registration::RegistrationCreated',
+		}
+
+		const eventType = SUINS_REGISTRATION_EVENTS[env.SUI_NETWORK]
+		if (eventType) {
+			try {
+				const eventsResponse = await client.queryEvents({
+					query: {
+						MoveEventType: eventType,
+					},
+					limit: 100,
+				})
+
+				for (const event of eventsResponse.data) {
+					const sender = event.sender
+					if (sender !== address) continue
+
+					const parsedJson = (event.parsedJson as any) || {}
+					const nftId = parsedJson.nft_id || parsedJson.id
+					if (!nftId || seenNftIds.has(nftId)) continue
+
+					// Fetch the NFT object to get current state
+					try {
+						const nftResponse = await client.getObject({
+							id: nftId,
+							options: { showContent: true, showType: true },
+						})
+						if (nftResponse.data?.content?.dataType !== 'moveObject') continue
+
+						const fields = (nftResponse.data.content as any).fields
+						const name = fields?.domain_name || fields?.name
+						const expirationMs = fields?.expiration_timestamp_ms
+							? Number(fields.expiration_timestamp_ms)
+							: null
+
+						if (name) {
+							seenNftIds.add(nftId)
+							allNames.push({
+								name: String(name),
+								nftId: nftId,
+								expirationMs,
+								targetAddress: null,
+								isPrimary: false,
+								isListed: false,
+							})
+						}
+					} catch {
+						// Failed to fetch NFT, may have been burned or is invalid
+					}
+				}
+			} catch {
+				// Event query failed, continue without event-based results
+			}
+		}
+
+		// Step 1d: Indexer query for listed names (existing implementation)
+		try {
+			const listedQuery = `query GetListedNames($address: String!, $collectionId: uuid!) {
+				sui {
+					nfts(where: {
+						collection_id: {_eq: $collectionId}
+						listings: {listed: {_eq: true}, seller: {_eq: $address}}
+					}, limit: 50) {
+						name
+						token_id
+						owner
+						listings(where: {listed: {_eq: true}}) {
+							price
+							seller
+						}
+					}
+				}
+			}`
+
+			const listedResponse = await fetch(INDEXER_API_URL, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'x-api-user': INDEXER_API_USER,
+					'x-api-key': env.INDEXER_API_KEY || '',
+				},
+				body: JSON.stringify({
+					query: listedQuery,
+					variables: { address, collectionId: SUINS_COLLECTION_ID },
+				}),
+			})
+
+			if (listedResponse.ok) {
+				const listedData = (await listedResponse.json()) as {
+					data?: {
+						sui?: {
+							nfts?: Array<{
+								name: string
+								token_id: string
+								owner: string
+								listings: Array<{ price: string; seller: string }>
+							}>
+						}
+					}
+				}
+				const listedNfts = listedData?.data?.sui?.nfts || []
+				for (const nft of listedNfts) {
+					if (!nft.token_id || seenNftIds.has(nft.token_id)) continue
+					seenNftIds.add(nft.token_id)
+
+					const name = nft.name?.replace(/\.sui$/, '')
+					if (!name) continue
+
+					allNames.push({
+						name,
+						nftId: nft.token_id,
+						expirationMs: null,
+						targetAddress: null,
+						isPrimary: false,
+						isListed: true,
+					})
+				}
+			}
+		} catch {
+			// Indexer failure should not break the primary flow
 		}
 
 		// Step 2: Use SuinsClient.getNameRecord to resolve each name to its target address
@@ -1714,9 +1927,125 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const SUGGESTION_MODEL = 'google/gemini-2.0-flash-001'
 const SUGGESTION_CACHE_TTL_MS = 3600000
 const MAX_SUGGESTION_CACHE_SIZE = 200
-const MAX_SUGGESTIONS = 10
+const MAX_SUGGESTIONS = 24
+const SUGGESTION_NAME_RE = /^[a-z0-9-]{3,18}$/
+type SuggestionMode = 'x402' | 'related'
+const SUGGESTION_X402_SEEDS = [
+	'x402',
+	'x402ai',
+	'x402pay',
+	'x402agent',
+	'x402wallet',
+	'x402app',
+	'x402hub',
+	'x402sdk',
+	'x402kit',
+	'x402labs',
+]
+const SUGGESTION_AI_SEEDS = [
+	'ai',
+	'agent',
+	'agents',
+	'aikit',
+	'aiwallet',
+	'payai',
+	'agentai',
+	'miniai',
+	'quickai',
+	'liteai',
+]
+const SUGGESTION_FALLBACK_SUFFIXES = ['ai', 'agent', 'agents', 'app', 'hub', 'sdk', 'kit', 'labs']
 
 const suggestionMemCache = new Map<string, { data: string[]; exp: number }>()
+
+function normalizeSuggestionMode(value: string | undefined): SuggestionMode {
+	return value === 'related' ? 'related' : 'x402'
+}
+
+function normalizeSuggestionName(value: string): string | null {
+	const cleaned = value
+		.toLowerCase()
+		.trim()
+		.replace(/\.sui$/i, '')
+		.replace(/[^a-z0-9-]/g, '')
+		.replace(/-{2,}/g, '-')
+		.replace(/^-+/, '')
+		.replace(/-+$/, '')
+	if (!SUGGESTION_NAME_RE.test(cleaned)) return null
+	return cleaned
+}
+
+function buildX402PriorityCandidates(base: string): string[] {
+	const normalizedBase = normalizeSuggestionName(base)
+	if (!normalizedBase) return [...SUGGESTION_X402_SEEDS]
+	const candidates = [
+		`x402${normalizedBase}`,
+		`${normalizedBase}x402`,
+		`x402-${normalizedBase}`,
+		`${normalizedBase}-x402`,
+		`x402${normalizedBase}ai`,
+		`${normalizedBase}x402ai`,
+	]
+	for (const suffix of SUGGESTION_FALLBACK_SUFFIXES) {
+		candidates.push(`${normalizedBase}${suffix}`)
+		candidates.push(`x402${normalizedBase}${suffix}`)
+	}
+	return candidates
+}
+
+function rankSuggestion(name: string, query: string, mode: SuggestionMode): number {
+	let score = 0
+	if (name === query) score += 7000
+	if (mode === 'related') {
+		if (name.startsWith(query)) score += 380
+		if (name.includes(query)) score += 220
+		if (query.startsWith(name)) score += 140
+		if (name.includes('x402')) score -= 2200
+		if (name.length <= 6) score += 360
+		else if (name.length <= 8) score += 220
+		else if (name.length <= 12) score += 100
+		if (/\d/.test(name)) score -= 60
+	} else {
+		if (name.includes('x402')) score += 1200
+		if (name.startsWith('x402')) score += 500
+		if (name.includes('ai')) score += 220
+		if (name.includes('agent')) score += 180
+		if (name.length <= 8) score += 120
+		if (name.length <= 12) score += 40
+	}
+	if (name.includes('-')) score -= 15
+	return score
+}
+
+function finalizeSuggestions(query: string, values: string[], mode: SuggestionMode): string[] {
+	const normalizedQuery = normalizeSuggestionName(query)
+	const seen = new Set<string>()
+	const normalized: string[] = []
+	for (const candidate of values) {
+		const clean = normalizeSuggestionName(candidate)
+		if (mode === 'related' && clean?.includes('x402')) continue
+		if (!clean || seen.has(clean)) continue
+		seen.add(clean)
+		normalized.push(clean)
+	}
+	if (!normalizedQuery) return normalized.slice(0, MAX_SUGGESTIONS)
+	const sorted = normalized
+		.filter((name) => !!name)
+		.sort((a, b) => {
+			const scoreDiff = rankSuggestion(b, normalizedQuery, mode) - rankSuggestion(a, normalizedQuery, mode)
+			if (scoreDiff !== 0) return scoreDiff
+			if (a.length !== b.length) return a.length - b.length
+			return a.localeCompare(b)
+		})
+	if (mode === 'related') {
+		const withoutQuery = sorted.filter((name) => name !== normalizedQuery)
+		if (withoutQuery.length > 0) return withoutQuery.slice(0, MAX_SUGGESTIONS)
+		return sorted.slice(0, MAX_SUGGESTIONS)
+	}
+	if (normalizedQuery.includes('x402')) return sorted.slice(0, MAX_SUGGESTIONS)
+	const withoutQuery = sorted.filter((name) => name !== normalizedQuery)
+	return [...withoutQuery.slice(0, MAX_SUGGESTIONS - 1), normalizedQuery]
+}
 
 async function fetchBraveContext(query: string, apiKey: string): Promise<string[]> {
 	const context: string[] = []
@@ -1768,18 +2097,26 @@ async function fetchAISuggestions(
 	query: string,
 	braveContext: string[],
 	apiKey: string,
+	mode: SuggestionMode,
 ): Promise<string[]> {
 	const contextBlock =
 		braveContext.length > 0
 			? `\nWeb context for "${query}":\n${braveContext.slice(0, 10).join('\n')}`
 			: ''
+	const strategyBlock =
+		mode === 'related'
+			? `- Focus on names related to "${query}" from mainstream search context
+- Include many single-word premium names someone would actually pay for
+- Avoid "x402" or anything that looks like x402 derivatives`
+			: `- Prioritize cheap-feeling, utility-style names
+- Make most suggestions include "x402" (prefix/suffix/infix)`
 
 	const res = await fetch(OPENROUTER_URL, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
 		body: JSON.stringify({
 			model: SUGGESTION_MODEL,
-			max_tokens: 150,
+			max_tokens: 260,
 			temperature: 0.8,
 			messages: [
 				{
@@ -1787,13 +2124,14 @@ async function fetchAISuggestions(
 					content: `You are a domain name suggestion engine for .sui blockchain names. A user searched: "${query}"
 ${contextBlock}
 
-Suggest ${MAX_SUGGESTIONS - 1} single-word .sui domain names this person would want to own. Think about:
+Suggest ${MAX_SUGGESTIONS + 8} .sui names this person would want to own. Think about:
 - Synonyms and closely related concepts
 - Industry/niche terms someone interested in "${query}" identifies with
 - Short, brandable, memorable words
 - Words that signal identity, status, or expertise in this area
+${strategyBlock}
 
-Rules: each suggestion must be ONE word, 3-15 lowercase letters only (a-z), no numbers/hyphens. Return ONLY a JSON array of strings, nothing else.`,
+Rules: each suggestion must be 3-18 chars, lowercase a-z 0-9 and optional hyphens. Return ONLY a JSON array of strings, nothing else.`,
 				},
 			],
 		}),
@@ -1810,68 +2148,90 @@ Rules: each suggestion must be ONE word, 3-15 lowercase letters only (a-z), no n
 	const valid: string[] = []
 	for (const item of parsed) {
 		if (typeof item !== 'string') continue
-		const cleaned = item.toLowerCase().trim()
-		if (cleaned.length >= 3 && cleaned.length <= 15 && /^[a-z]+$/.test(cleaned)) {
-			valid.push(cleaned)
-		}
+		const cleaned = normalizeSuggestionName(item)
+		if (cleaned) valid.push(cleaned)
 	}
 	return valid
 }
 
-async function handleNameSuggestions(query: string, env: Env): Promise<Response> {
-	const key = query.toLowerCase()
+async function handleNameSuggestions(
+	query: string,
+	env: Env,
+	mode: SuggestionMode = 'x402',
+): Promise<Response> {
+	const normalizedQueryRaw =
+		normalizeSuggestionName(query) ||
+		query
+			.toLowerCase()
+			.replace(/[^a-z0-9-]/g, '')
+			.slice(0, 18)
+	const normalizedQuery = normalizedQueryRaw.length >= 3 ? normalizedQueryRaw : mode === 'related' ? 'name' : 'x402'
+	const key = `${mode}:${normalizedQuery}`
 	const cached = suggestionMemCache.get(key)
 	if (cached && cached.exp > Date.now()) {
-		return jsonResponse({ query, suggestions: cached.data })
+		return jsonResponse({ query: normalizedQuery, mode, suggestions: cached.data })
 	}
 
-	const suggestions: string[] = [query]
-	const seen = new Set<string>([key])
+	const suggestions: string[] = [normalizedQuery]
+	const seen = new Set<string>([normalizedQuery])
+	const pushSuggestion = (value: string) => {
+		const clean = normalizeSuggestionName(value)
+		if (mode === 'related' && clean?.includes('x402')) return
+		if (!clean || seen.has(clean)) return
+		seen.add(clean)
+		suggestions.push(clean)
+	}
+
+	if (mode === 'related') {
+		for (const suffix of SUGGESTION_FALLBACK_SUFFIXES) {
+			pushSuggestion(`${normalizedQuery}${suffix}`)
+		}
+	} else {
+		for (const seed of SUGGESTION_X402_SEEDS) pushSuggestion(seed)
+		for (const seed of buildX402PriorityCandidates(normalizedQuery)) pushSuggestion(seed)
+	}
+	for (const seed of SUGGESTION_AI_SEEDS) pushSuggestion(seed)
 
 	const braveKey = env.BRAVE_SEARCH_API_KEY
 	const aiKey = env.OPENROUTER_API_KEY
 
 	if (aiKey) {
 		try {
-			const braveContext = braveKey ? await fetchBraveContext(query, braveKey) : []
-			const aiNames = await fetchAISuggestions(query, braveContext, aiKey)
+			const braveContext = braveKey ? await fetchBraveContext(normalizedQuery, braveKey) : []
+			const aiNames = await fetchAISuggestions(normalizedQuery, braveContext, aiKey, mode)
 			for (const name of aiNames) {
-				if (!seen.has(name) && suggestions.length < MAX_SUGGESTIONS) {
-					seen.add(name)
-					suggestions.push(name)
+				pushSuggestion(name)
+				if (mode === 'x402') {
+					for (const derived of buildX402PriorityCandidates(name)) pushSuggestion(derived)
 				}
 			}
 		} catch (e) {
 			console.error('AI suggestion error:', e)
 		}
 	} else if (braveKey) {
-		const braveContext = await fetchBraveContext(query, braveKey)
+		const braveContext = await fetchBraveContext(normalizedQuery, braveKey)
 		for (const phrase of braveContext) {
 			const words = phrase
 				.toLowerCase()
-				.replace(/[^a-z\s]/g, ' ')
+				.replace(/[^a-z0-9\s-]/g, ' ')
 				.split(/\s+/)
 			for (const w of words) {
-				if (
-					w.length >= 3 &&
-					w.length <= 15 &&
-					/^[a-z]+$/.test(w) &&
-					!seen.has(w) &&
-					suggestions.length < MAX_SUGGESTIONS
-				) {
-					seen.add(w)
-					suggestions.push(w)
+				pushSuggestion(w)
+				if (mode === 'x402') {
+					for (const derived of buildX402PriorityCandidates(w)) pushSuggestion(derived)
 				}
 			}
 		}
 	}
 
+	const finalized = finalizeSuggestions(normalizedQuery, suggestions, mode)
+
 	if (suggestionMemCache.size > MAX_SUGGESTION_CACHE_SIZE) {
 		const first = suggestionMemCache.keys().next().value
 		if (first) suggestionMemCache.delete(first)
 	}
-	suggestionMemCache.set(key, { data: suggestions, exp: Date.now() + SUGGESTION_CACHE_TTL_MS })
-	return jsonResponse({ query, suggestions })
+	suggestionMemCache.set(key, { data: finalized, exp: Date.now() + SUGGESTION_CACHE_TTL_MS })
+	return jsonResponse({ query: normalizedQuery, mode, suggestions: finalized })
 }
 
 interface FeaturedName {
@@ -1883,6 +2243,15 @@ interface FeaturedName {
 }
 
 const FEATURED_NAME_CANDIDATES = [
+	'x402',
+	'x402ai',
+	'x402pay',
+	'x402agent',
+	'x402wallet',
+	'x402app',
+	'x402hub',
+	'x402sdk',
+	'x402kit',
 	'agents',
 	'agent',
 	'ai',
@@ -1904,6 +2273,10 @@ const FEATURED_NAME_CANDIDATES = [
 	'scout',
 	'prime',
 	'oracle',
+	'aikit',
+	'aiwallet',
+	'agentai',
+	'payai',
 ]
 const FEATURED_NAMES_TTL_MS = 5 * 60 * 1000
 let featuredNamesCache: { data: FeaturedName[]; exp: number } | null = null
@@ -1958,18 +2331,15 @@ async function handleFeaturedNames(env: Env): Promise<Response> {
 		})
 		.slice(0, 10)
 
-	const pinnedAgents = ranked.find((item) => item.name === 'agents') || {
-		name: 'agents',
+	const pinnedX402 = ranked.find((item) => item.name === 'x402') || {
+		name: 'x402',
 		marketSui: 0,
 		registrySui: 0,
 		premiumX: 9999,
 		source: 'offer' as const,
 	}
 
-	const featuredPinned = [pinnedAgents, ...ranked.filter((item) => item.name !== 'agents')].slice(
-		0,
-		10,
-	)
+	const featuredPinned = [pinnedX402, ...ranked.filter((item) => item.name !== 'x402')].slice(0, 10)
 
 	featuredNamesCache = { data: featuredPinned, exp: Date.now() + FEATURED_NAMES_TTL_MS }
 	return jsonResponse({ names: featuredPinned, cached: false })
@@ -2586,7 +2956,6 @@ ${socialMeta}
 					if (!SuinsClient) console.warn('SuinsClient export unavailable from @mysten/suins module');
 				}
 			${generateWalletSessionJs()}
-			var __skiServerSession = ${options.session?.address ? JSON.stringify({ address: options.session.address, walletName: options.session.walletName, verified: options.session.verified }) : 'null'};
 			const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
 			const NETWORK = ${JSON.stringify(options.network || 'mainnet')};
 			const RPC_URL = RPC_URLS[NETWORK] || RPC_URLS.mainnet;
@@ -2608,29 +2977,9 @@ ${socialMeta}
 			let suiClient = null;
 			let suinsClient = null;
 
-			const walletProfileBtn = document.getElementById('wallet-profile-btn');
-
 			function getConnectedAddress() {
 				var conn = SuiWalletKit.$connection.value;
 				return conn && conn.status === 'connected' ? conn.address : null;
-			}
-
-			function getWalletProfileHref() {
-				var conn = SuiWalletKit.$connection.value;
-				if (conn && conn.primaryName) {
-					return 'https://' + encodeURIComponent(conn.primaryName) + '.sui.ski';
-				}
-				return 'https://sui.ski';
-			}
-
-			function updateWalletProfileButton() {
-				if (!walletProfileBtn) return;
-				var conn = SuiWalletKit.$connection.value;
-				var href = getWalletProfileHref();
-				walletProfileBtn.dataset.href = href;
-				walletProfileBtn.title = conn && conn.primaryName
-					? 'View my primary profile'
-					: 'Go to sui.ski';
 			}
 
 			async function initClients() {
@@ -2638,44 +2987,26 @@ ${socialMeta}
 				suinsClient = new SuinsClient({ client: suiClient, network: NETWORK });
 			}
 
-			async function resolveWalletName(address) {
-				if (!address || !suiClient) return;
-				try {
-					var result = await suiClient.resolveNameServiceNames({ address });
-					var name = result && result.data && result.data[0];
-					if (name) {
-						SuiWalletKit.setPrimaryName(name.replace(/.sui$/i, ''));
-						updateWalletProfileButton();
-					}
-				} catch (e) {
-					console.log('Reverse resolution failed:', e.message);
-				}
-			}
-
 			${generateWalletKitJs({ network: options.network || 'mainnet', autoConnect: true })}
 			${generateWalletTxJs()}
 			${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onLandingWalletConnected', onDisconnect: 'onLandingWalletDisconnected' })}
-			if (__skiServerSession && __skiServerSession.address) { initSessionFromServer(__skiServerSession); }
-
-			SuiWalletKit.renderModal('wk-modal');
-			SuiWalletKit.renderWidget('wk-widget');
 
 			window.onLandingWalletConnected = function() {
-				updateWalletProfileButton();
-				resolveWalletName(SuiWalletKit.$connection.value.address);
+				return undefined;
 			};
 
 			window.onLandingWalletDisconnected = function() {
-				updateWalletProfileButton();
+				return undefined;
 			};
 
-			updateWalletProfileButton();
-			if (walletProfileBtn) {
-				walletProfileBtn.onclick = function(e) {
-					e.stopPropagation();
-					window.location.href = walletProfileBtn.dataset.href || 'https://sui.ski';
-				};
-			}
+			${generateSharedWalletMountJs({
+				network: options.network || 'mainnet',
+				session: options.session,
+				onConnect: 'onLandingWalletConnected',
+				onDisconnect: 'onLandingWalletDisconnected',
+				profileButtonId: 'wallet-profile-btn',
+				profileFallbackHref: 'https://sui.ski',
+			})}
 
 			async function executeTransaction(tx) {
 				var txBytes = await tx.build({ client: suiClient });
@@ -2683,9 +3014,6 @@ ${socialMeta}
 			}
 
 			initClients();
-			SuiWalletKit.detectWallets().then(function() {
-				SuiWalletKit.autoReconnect();
-			});
 
 		// ========== SEARCH FUNCTIONALITY ==========
 		const searchInput = document.getElementById('search-input');
@@ -2699,7 +3027,26 @@ ${socialMeta}
 			const suggestCache = new Map();
 			const ownerNameCache = new Map();
 			const ownerNameInFlight = new Map();
-			const FEATURED_FALLBACK = ['agents', 'agent', 'vault', 'alpha', 'pro', 'wallet', 'builder', 'domain', 'defi'];
+			const FEATURED_FALLBACK = [
+				'x402',
+				'x402ai',
+				'x402pay',
+				'x402agent',
+				'x402wallet',
+				'x402app',
+				'x402hub',
+				'x402sdk',
+				'x402kit',
+				'aikit',
+				'aiwallet',
+				'agentai',
+				'payai',
+				'agents',
+				'agent',
+				'ai',
+				'vault',
+				'wallet',
+			];
 			let featuredRequestNonce = 0;
 
 			function showDropdownLoading(message) {
@@ -2788,7 +3135,7 @@ ${socialMeta}
 							.filter((name) => !!name && /^[a-z0-9-]{3,}$/.test(name));
 						if (extracted.length) {
 							const unique = Array.from(new Set(extracted));
-							names = ['agents', ...unique.filter((name) => name !== 'agents')].slice(0, 10);
+							names = ['x402', ...unique.filter((name) => name !== 'x402')].slice(0, 18);
 						}
 					}
 					if (nonce !== featuredRequestNonce) return;
@@ -3002,7 +3349,7 @@ ${socialMeta}
 					if (cachedSuiPriceUsd) {
 							var smartDefaultMist = 0;
 							if (hasBid) {
-								smartDefaultMist = data.bestBid.price + 1000000000;
+								smartDefaultMist = data.bestBid.price;
 							} else if (hasListing) {
 								smartDefaultMist = data.bestListing.price;
 							}
@@ -3086,12 +3433,13 @@ ${socialMeta}
 				if (lastQuery !== raw) return;
 				const suggestions = await fetchSuggestions(raw);
 				if (lastQuery !== raw) return;
-				const unique = [raw];
-				const seen = new Set([raw]);
+				const unique = [];
+				const seen = new Set();
 				for (const s of suggestions) {
 					if (!seen.has(s)) { seen.add(s); unique.push(s); }
 				}
-				showDropdown(unique);
+				if (!seen.has(raw)) unique.push(raw);
+				showDropdown(unique.slice(0, 18));
 			}, 200);
 		});
 

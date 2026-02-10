@@ -228,18 +228,44 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle fill="#818cf8" cx="16" cy="16" r="16"/></svg>');
     }
 
+    function __wkHasPasskeySupport() {
+      try {
+        return typeof window.PublicKeyCredential !== 'undefined'
+          && !!navigator.credentials
+          && typeof navigator.credentials.create === 'function';
+      } catch (e) {
+        return false;
+      }
+    }
+
     function __wkInstallLinksHtml() {
-      return '<div class="wk-no-wallets">'
-        + 'No Sui wallets detected.'
-        + '<br><br>'
+      var html = '<div class="wk-no-wallets">'
+        + 'No Sui wallets detected in this browser.'
+        + '<br><br>';
+      if (__wkHasPasskeySupport()) {
+        html += '<span style="display:inline-block;margin-top:6px;font-size:0.78rem;color:#52525b;">Passkey wallet is available from the wallet list above.</span><br>';
+      } else {
+        html += '<span style="display:inline-block;margin-top:6px;font-size:0.78rem;color:#52525b;">This browser does not support passkey wallet creation.</span><br>';
+      }
+      html += '<br>'
         + '<a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer">Install Phantom \\u2192</a>'
         + '<br>'
         + '<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank" rel="noopener noreferrer">Install Sui Wallet \\u2192</a>'
         + '</div>';
+      return html;
     }
 
-    function __wkFormatConnectError(err) {
-      var message = (err && err.message) ? String(err.message) : String(err || 'Connection failed');
+    function __wkFormatConnectError(err, walletName) {
+      var message = '';
+      if (err && typeof err.message === 'string' && err.message) {
+        message = String(err.message);
+      } else if (typeof err === 'string') {
+        message = err;
+      } else if (err && typeof err.name === 'string' && err.name) {
+        message = err.name;
+      } else {
+        message = 'Connection failed';
+      }
       var lower = message.toLowerCase();
       if (
         lower.indexOf('not been authorized') !== -1
@@ -247,7 +273,19 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
         || lower.indexOf('unauthorized') !== -1
         || lower.indexOf('something went wrong') !== -1
       ) {
-        return 'Phantom has not authorized Sui accounts for this site yet. Open Phantom app permissions for this site, allow Sui account access, then retry.';
+        if (walletName === 'Phantom') {
+          return 'Phantom has not authorized Sui accounts for this site yet. Open Phantom app permissions for this site, allow Sui account access, then retry.';
+        }
+      }
+      if (
+        walletName === 'Passkey Wallet'
+        && (
+        lower.indexOf('unexpected') !== -1
+        || lower.indexOf('notallowederror') !== -1
+        || lower.indexOf('invalidstateerror') !== -1
+        )
+      ) {
+        return 'Passkey setup failed. Use a supported browser profile with passkeys enabled and try again.';
       }
       return message;
     }
@@ -266,19 +304,25 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
           var name = wallet.name || 'Unknown';
           item.innerHTML = '<img src="' + iconSrc + '" alt="" onerror="this.style.display=\\'none\\'">'
             + '<span>' + name + '</span>';
-          item.addEventListener('click', function() {
-            listEl.innerHTML = '<div class="wk-detecting"><div class="wk-spinner"></div> Connecting...</div>';
-            SuiWalletKit.connect(wallet).catch(function(err) {
-              var formattedError = __wkFormatConnectError(err);
-              listEl.innerHTML = '<div class="wk-detecting" style="color:#f87171;">'
-                + 'Connection failed: ' + formattedError
-                + '<br><br><button class="wk-wallet-item" style="justify-content:center;" onclick="__wkPopulateModal()">Try Again</button>'
-                + '</div>';
-            });
-          });
-          listEl.appendChild(item);
-        })(wallets[i]);
-      }
+	          item.addEventListener('click', function() {
+	            listEl.innerHTML = '<div class="wk-detecting"><div class="wk-spinner"></div> Connecting...</div>';
+	            SuiWalletKit.connect(wallet).catch(function(err) {
+	              var formattedError = __wkFormatConnectError(err, wallet.name || '');
+	              listEl.innerHTML = '<div class="wk-detecting" style="color:#f87171;">'
+	                + 'Connection failed: ' + formattedError
+	                + '<br><br><button type="button" class="wk-wallet-item wk-retry-connect" style="justify-content:center;">Try Again</button>'
+	                + '</div>';
+	              var retryBtn = listEl.querySelector('.wk-retry-connect');
+	              if (retryBtn) {
+	                retryBtn.addEventListener('click', function() {
+	                  __wkPopulateModal();
+	                });
+	              }
+	            });
+	          });
+	          listEl.appendChild(item);
+	        })(wallets[i]);
+	      }
     }
 
     function __wkPopulateModal() {
@@ -341,26 +385,44 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       });
     };
 
-    function __wkIsSubdomain() {
-      var host = window.location.hostname;
-      return host !== 'sui.ski' && host.endsWith('.sui.ski');
-    }
+	    function __wkIsSubdomain() {
+	      var host = window.location.hostname;
+	      return host !== 'sui.ski' && host.endsWith('.sui.ski');
+	    }
 
-    SuiWalletKit.openModal = function openModal() {
-      var conn = SuiWalletKit.$connection.value;
-      var isSessionOnly = conn && conn.status === 'session';
-      if (__wkIsSubdomain()) {
-        if (isSessionOnly) return;
-        window.location.href = 'https://sui.ski/in?return=' + encodeURIComponent(window.location.href);
-        return;
-      }
-      if (!__wkModalContainer) return;
-      var overlay = __wkModalContainer.querySelector('.wk-modal-overlay');
-      if (overlay) {
-        overlay.classList.add('open');
-        __wkPopulateModal();
-      }
-    };
+	    function __wkRedirectToSharedConnect() {
+	      window.location.href = 'https://sui.ski/in?return=' + encodeURIComponent(window.location.href);
+	    }
+
+	    SuiWalletKit.openModal = function openModal() {
+	      var conn = SuiWalletKit.$connection.value;
+	      var isSessionOnly = conn && conn.status === 'session';
+	      if (__wkIsSubdomain()) {
+	        if (isSessionOnly) return;
+	      }
+	      if (!__wkModalContainer) {
+	        if (__wkIsSubdomain()) __wkRedirectToSharedConnect();
+	        return;
+	      }
+	      var overlay = __wkModalContainer.querySelector('.wk-modal-overlay');
+	      if (overlay) {
+	        overlay.classList.add('open');
+	        __wkPopulateModal();
+	        if (__wkIsSubdomain()) {
+	          var hasPasskey = __wkHasPasskeySupport();
+	          SuiWalletKit.detectWallets().then(function(wallets) {
+	            var hasWalletOptions = Array.isArray(wallets) && wallets.length > 0;
+	            if (!hasWalletOptions && !hasPasskey) {
+	              __wkRedirectToSharedConnect();
+	            }
+	          }).catch(function() {
+	            if (!hasPasskey) {
+	              __wkRedirectToSharedConnect();
+	            }
+	          });
+	        }
+	      }
+	    };
 
     SuiWalletKit.closeModal = function closeModal() {
       if (!__wkModalContainer) return;
@@ -378,12 +440,13 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
         + 'Copy Address</button>';
 
-      if (primaryName) {
-        var profileHref = 'https://' + encodeURIComponent(primaryName) + '.sui.ski';
-        html += '<a class="wk-dropdown-item" href="' + profileHref + '">'
-          + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>'
-          + 'My Profile</a>';
-      }
+      // Always show My Profile link to me.sui.ski
+      var profileHref = primaryName 
+        ? 'https://' + encodeURIComponent(primaryName) + '.sui.ski'
+        : 'https://me.sui.ski';
+      html += '<a class="wk-dropdown-item" href="' + profileHref + '">'
+        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>'
+        + 'My Profile</a>';
 
       html += '<button class="wk-dropdown-item" id="__wk-dd-switch">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>'
@@ -441,7 +504,14 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       var isActive = conn && (conn.status === 'connected' || conn.status === 'session') && conn.address;
       if (isActive) {
         var label = ${showPrimaryName} && conn.primaryName ? conn.primaryName : __wkTruncAddr(conn.address);
-        btn.textContent = label;
+        var walletIcon = conn.wallet && conn.wallet.icon ? conn.wallet.icon : '';
+        if (walletIcon) {
+          btn.innerHTML = '<img src="' + walletIcon + '" alt="" style="width:18px;height:18px;border-radius:5px;flex-shrink:0" onerror="this.style.display=\\\'none\\\'"> ' + label;
+        } else if (conn.status === 'session') {
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ' + label;
+        } else {
+          btn.textContent = label;
+        }
         btn.classList.remove('connected', 'session-only');
         btn.classList.add(conn.status === 'session' ? 'session-only' : 'connected');
         dropdown.innerHTML = __wkBuildDropdownHtml(conn);

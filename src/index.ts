@@ -5,6 +5,7 @@ import { generateDashboardPage } from './handlers/dashboard'
 import { agentGraceVaultRoutes } from './handlers/grace-vault-agent'
 import { apiRoutes, landingPageHTML } from './handlers/landing'
 import { generateProfilePage } from './handlers/profile'
+import { handleRegistrationSubmission } from './handlers/register2'
 import { generateSkiPage } from './handlers/ski'
 import { generateSkiSignPage } from './handlers/ski-sign'
 import { solSwapRoutes } from './handlers/sol-swap'
@@ -127,6 +128,10 @@ app.post('/api/wallet/disconnect', async (c) => {
 	return handleWalletDisconnect(c.req.raw, c.env)
 })
 
+app.post('/api/register/submit', async (c) => {
+	return handleRegistrationSubmission(c.req.raw, c.get('env'))
+})
+
 app.use('*', async (c, next) => {
 	const parsed = c.get('parsed')
 	const env = c.get('env')
@@ -214,7 +219,10 @@ app.get('/in', async (c) => {
 })
 
 app.get('/sign', async (c) => {
-	return htmlResponse(generateSkiSignPage(c.get('env')))
+	return htmlResponse(generateSkiSignPage(c.get('env')), 200, {
+		'Cache-Control': 'no-store, no-cache, must-revalidate',
+		Pragma: 'no-cache',
+	})
 })
 
 app.get('/subnamecap', async (c) => {
@@ -273,7 +281,8 @@ app.all('*', async (c) => {
 		const skipCache = url.searchParams.has('nocache') || url.searchParams.has('refresh')
 		const result = await resolveSuiNS(parsed.subdomain, env, skipCache)
 
-		if (!result.found) return notFoundPage(parsed.subdomain, env, result.available)
+		if (!result.found)
+			return notFoundPage(parsed.subdomain, env, result.available, c.get('session'))
 
 		const record = result.data as SuiNSRecord
 		const normalizedPath = url.pathname || '/'
@@ -296,18 +305,31 @@ app.all('*', async (c) => {
 
 		if (url.pathname === '/json' || url.searchParams.has('json')) return jsonResponse(record)
 		if (url.pathname === '/home' || url.searchParams.has('profile'))
-			return htmlResponse(renderProfile())
-		if (shouldServeProfileForTwitter) return htmlResponse(renderProfile())
+			return htmlResponse(renderProfile(), 200, {
+				'Cache-Control': 'no-store, no-cache, must-revalidate',
+				Pragma: 'no-cache',
+			})
+		if (shouldServeProfileForTwitter)
+			return htmlResponse(renderProfile(), 200, {
+				'Cache-Control': 'no-store, no-cache, must-revalidate',
+				Pragma: 'no-cache',
+			})
 
 		if (record.content) {
 			const contentResponse = await resolveContent(record.content, env)
 			if (!contentResponse.ok && (url.pathname === '/' || url.pathname === '')) {
-				return htmlResponse(renderProfile())
+				return htmlResponse(renderProfile(), 200, {
+					'Cache-Control': 'no-store, no-cache, must-revalidate',
+					Pragma: 'no-cache',
+				})
 			}
 			return contentResponse
 		}
 
-		return htmlResponse(renderProfile())
+		return htmlResponse(renderProfile(), 200, {
+			'Cache-Control': 'no-store, no-cache, must-revalidate',
+			Pragma: 'no-cache',
+		})
 	}
 
 	return errorResponse('Unknown route type', 'UNKNOWN_ROUTE', 400)

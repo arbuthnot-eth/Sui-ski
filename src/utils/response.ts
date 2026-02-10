@@ -1,4 +1,4 @@
-import { generateRegistrationPage } from '../handlers/register'
+import { generateRegistrationPage } from '../handlers/register2'
 import type { Env, GatewayError } from '../types'
 
 const CORS_HEADERS = {
@@ -23,12 +23,13 @@ export function errorResponse(error: string, code: string, status = 400, details
 	return jsonResponse(body, status)
 }
 
-export function htmlResponse(html: string, status = 200) {
+export function htmlResponse(html: string, status = 200, headers: Record<string, string> = {}) {
 	return new Response(html, {
 		status,
 		headers: {
 			'Content-Type': 'text/html; charset=utf-8',
 			...CORS_HEADERS,
+			...headers,
 		},
 	})
 }
@@ -50,11 +51,16 @@ export function proxyResponse(response: Response) {
 	})
 }
 
-export function notFoundPage(name: string, env?: Env, available?: boolean) {
+export function notFoundPage(
+	name: string,
+	env?: Env,
+	available?: boolean,
+	session?: { address: string | null; walletName: string | null; verified: boolean },
+) {
 	// Only show registration page if env is provided AND we confirmed the name is available
 	// If available is false/undefined, there was a resolution error - don't show registration
 	if (env && available === true) {
-		return htmlResponse(generateRegistrationPage(name, env), 200)
+		return htmlResponse(generateRegistrationPage(name, env, session), 200)
 	}
 
 	const escapeHtml = (value: string) =>

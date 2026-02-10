@@ -1,5 +1,6 @@
 import type { Env, SuiNSRecord } from '../types'
 import { generateLogoSvg, getDefaultOgImageUrl, getProfileOgImageUrl } from '../utils/og-image'
+import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import { normalizeMediaUrl, renderSocialMeta } from '../utils/social'
 import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
@@ -150,6 +151,8 @@ export function generateProfilePage(
 
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 	<link rel="preconnect" href="https://esm.sh" crossorigin>
+	<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+	<link rel="preconnect" href="https://unpkg.com" crossorigin>
 	<script type="module">
 		import('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle').catch(()=>{});
 		import('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle').catch(()=>{});
@@ -596,7 +599,7 @@ ${generateZkSendCss()}</style>
 								<div class="marketplace-list-estimate" id="marketplace-list-estimate"></div>
 								<div class="marketplace-list-price-control">
 										<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-down" aria-label="Decrease list price by 0.5 SUI">-</button>
-									<input type="text" id="marketplace-list-amount" placeholder="12" inputmode="numeric" pattern="[0-9]*">
+									<input type="text" id="marketplace-list-amount" placeholder="12" inputmode="decimal" pattern="[0-9]*\\.?[0-9]*" step="any">
 									<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-up" aria-label="Increase list price by 0.5 SUI">+</button>
 								</div>
 							</div>
@@ -836,47 +839,107 @@ ${generateZkSendCss()}</style>
 					}
 					return undefined;
 				};
-				const SDK_TIMEOUT = 15000;
-				const timedImport = (url) => Promise.race([
+				const pickSuiClientExport = (mod) => pickExport(mod, 'SuiJsonRpcClient') || pickExport(mod, 'SuiClient');
+				const pickTransactionExport = (mod) => pickExport(mod, 'Transaction') || pickExport(mod, 'TransactionBlock');
+				const pickSuinsClientExport = (mod) => {
+					const direct = pickExport(mod, 'SuinsClient');
+					if (typeof direct === 'function') return direct;
+					if (direct && typeof direct === 'object' && typeof direct.SuinsClient === 'function') {
+						return direct.SuinsClient;
+					}
+					if (mod && typeof mod.default === 'function') return mod.default;
+					return direct;
+				};
+				const SDK_TIMEOUT = 25000;
+				const SDK_RETRY_TIMEOUT = 35000;
+				const timedImport = (url, timeoutMs = SDK_TIMEOUT) => Promise.race([
 					import(url),
-					new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
+					new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), timeoutMs)),
 				]);
+				const importFirst = async (urls, timeoutMs = SDK_TIMEOUT) => {
+					let lastError = null;
+					for (const url of urls) {
+						try {
+							return await timedImport(url, timeoutMs);
+						} catch (error) {
+							lastError = error;
+						}
+					}
+					throw lastError || new Error('Import failed');
+				};
+
+				const walletStandardUrls = [
+					'https://esm.sh/@wallet-standard/app@1.1.0',
+					'https://cdn.jsdelivr.net/npm/@wallet-standard/app@1.1.0/+esm',
+					'https://unpkg.com/@wallet-standard/app@1.1.0?module',
+				];
+				const suiJsonRpcUrls = [
+					'https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle',
+					'https://esm.sh/@mysten/sui@2.2.0/jsonRpc',
+					'https://cdn.jsdelivr.net/npm/@mysten/sui@2.2.0/+esm',
+					'https://unpkg.com/@mysten/sui@2.2.0?module',
+				];
+				const suiTransactionsUrls = [
+					'https://esm.sh/@mysten/sui@2.2.0/transactions?bundle',
+					'https://esm.sh/@mysten/sui@2.2.0/transactions',
+					'https://cdn.jsdelivr.net/npm/@mysten/sui@2.2.0/+esm',
+					'https://unpkg.com/@mysten/sui@2.2.0?module',
+				];
+				const suinsUrls = [
+					'https://esm.sh/@mysten/suins@1.0.0?bundle',
+					'https://esm.sh/@mysten/suins@1.0.0',
+					'https://cdn.jsdelivr.net/npm/@mysten/suins@1.0.0/+esm',
+					'https://unpkg.com/@mysten/suins@1.0.0?module',
+				];
+
 				const results = await Promise.allSettled([
-					timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
-					timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
-					timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
-					timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
+					importFirst(walletStandardUrls),
+					importFirst(suiJsonRpcUrls),
+					importFirst(suiTransactionsUrls),
+					importFirst(suinsUrls),
 				]);
-				if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
-				if (results[1].status === 'fulfilled') ({ SuiJsonRpcClient } = results[1].value);
-				if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value);
+				if (results[0].status === 'fulfilled') {
+					const walletsModule = results[0].value;
+					getWallets = pickExport(walletsModule, 'getWallets') || getWallets;
+				}
+				if (results[1].status === 'fulfilled') {
+					const suiModule = results[1].value;
+					SuiJsonRpcClient = pickSuiClientExport(suiModule) || SuiJsonRpcClient;
+					Transaction = pickTransactionExport(suiModule) || Transaction;
+				}
+				if (results[2].status === 'fulfilled') {
+					const txModule = results[2].value;
+					Transaction = pickTransactionExport(txModule) || Transaction;
+					SuiJsonRpcClient = pickSuiClientExport(txModule) || SuiJsonRpcClient;
+				}
 				if (results[3].status === 'fulfilled') {
 					const suinsModule = results[3].value;
-					SuinsClient = pickExport(suinsModule, 'SuinsClient');
+					SuinsClient = pickSuinsClientExport(suinsModule);
 					SuinsTransaction = pickExport(suinsModule, 'SuinsTransaction');
 				}
 				const failed = results.filter(r => r.status === 'rejected');
 				if (failed.length > 0) {
 					console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
-					console.warn('Retrying failed SDK modules without ?bundle...');
-					const retryImport = (url) => Promise.race([
-						import(url),
-						new Promise((_, r) => setTimeout(() => r(new Error('Retry timeout: ' + url)), 20000)),
-					]);
+					console.warn('Retrying failed SDK modules with fallback CDNs...');
 					const retries = [];
+					if (!getWallets) retries.push(
+						importFirst(walletStandardUrls, SDK_RETRY_TIMEOUT)
+							.then(m => { getWallets = pickExport(m, 'getWallets') || getWallets; })
+							.catch(e => console.warn('Retry getWallets failed:', e.message))
+					);
 					if (!SuiJsonRpcClient) retries.push(
-						retryImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc')
-							.then(m => { if (!SuiJsonRpcClient) SuiJsonRpcClient = pickExport(m, 'SuiJsonRpcClient'); })
+						importFirst(suiJsonRpcUrls, SDK_RETRY_TIMEOUT)
+							.then(m => { if (!SuiJsonRpcClient) SuiJsonRpcClient = pickSuiClientExport(m) || SuiJsonRpcClient; })
 							.catch(e => console.warn('Retry SuiJsonRpcClient failed:', e.message))
 					);
 					if (!Transaction) retries.push(
-						retryImport('https://esm.sh/@mysten/sui@2.2.0/transactions')
-							.then(m => { if (!Transaction) Transaction = pickExport(m, 'Transaction'); })
+						importFirst(suiTransactionsUrls, SDK_RETRY_TIMEOUT)
+							.then(m => { if (!Transaction) Transaction = pickTransactionExport(m) || Transaction; })
 							.catch(e => console.warn('Retry Transaction failed:', e.message))
 					);
 					if (!SuinsClient) retries.push(
-						retryImport('https://esm.sh/@mysten/suins@1.0.0')
-							.then(m => { SuinsClient = pickExport(m, 'SuinsClient') || SuinsClient; SuinsTransaction = pickExport(m, 'SuinsTransaction') || SuinsTransaction; })
+						importFirst(suinsUrls, SDK_RETRY_TIMEOUT)
+							.then(m => { SuinsClient = pickSuinsClientExport(m) || SuinsClient; SuinsTransaction = pickExport(m, 'SuinsTransaction') || SuinsTransaction; })
 							.catch(e => console.warn('Retry SuinsClient failed:', e.message))
 					);
 					if (retries.length > 0) await Promise.allSettled(retries);
@@ -937,8 +1000,6 @@ ${generateZkSendCss()}</style>
 		window.rawIdentityNftImage = null;
 
 		${generateWalletSessionJs()}
-		var __skiServerSession = ${options.session?.address ? JSON.stringify({ address: options.session.address, walletName: options.session.walletName, verified: options.session.verified }) : 'null'};
-		if (__skiServerSession && __skiServerSession.address) { initSessionFromServer(__skiServerSession); }
 		${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
 		${generateWalletTxJs()}
 		${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onProfileWalletConnected', onDisconnect: 'onProfileWalletDisconnected' })}
@@ -984,7 +1045,22 @@ ${generateZkSendCss()}</style>
 			if (!mod || typeof mod !== 'object') return undefined;
 			if (name in mod) return mod[name];
 			if (mod.default && typeof mod.default === 'object' && name in mod.default) return mod.default[name];
+			if (name === 'SuinsClient' && typeof mod.default === 'function') return mod.default;
 			return undefined;
+		}
+		function resolveSuinsClientCtor(candidate) {
+			if (typeof candidate === 'function') return candidate;
+			if (!candidate || typeof candidate !== 'object') return null;
+			if (typeof candidate.SuinsClient === 'function') return candidate.SuinsClient;
+			if (candidate.default && typeof candidate.default === 'function') return candidate.default;
+			if (
+				candidate.default &&
+				typeof candidate.default === 'object' &&
+				typeof candidate.default.SuinsClient === 'function'
+			) {
+				return candidate.default.SuinsClient;
+			}
+			return null;
 		}
 		function getSuinsNetwork() {
 			if (NETWORK === 'mainnet') return 'mainnet';
@@ -992,18 +1068,20 @@ ${generateZkSendCss()}</style>
 			return 'testnet';
 		}
 		async function ensureSuinsSdkLoaded(requireTransaction = false) {
-			const clientReady = typeof SuinsClient === 'function';
+			const clientReady = !!resolveSuinsClientCtor(SuinsClient);
 			const txReady = !requireTransaction || typeof SuinsTransaction === 'function';
 			if (clientReady && txReady) return true;
 
 			if (!suinsModuleLoadingPromise) {
-				suinsModuleLoadingPromise = (async () => {
-					const timeoutMs = 20000;
-					const urls = [
-						'https://esm.sh/@mysten/suins@1.0.0?bundle',
-						'https://esm.sh/@mysten/suins@1.0.0',
-						'https://esm.sh/@mysten/suins?bundle',
-					];
+					suinsModuleLoadingPromise = (async () => {
+						const timeoutMs = 30000;
+						const urls = [
+							'https://esm.sh/@mysten/suins@1.0.0?bundle',
+							'https://esm.sh/@mysten/suins@1.0.0',
+							'https://esm.sh/@mysten/suins?bundle',
+							'https://cdn.jsdelivr.net/npm/@mysten/suins@1.0.0/+esm',
+							'https://unpkg.com/@mysten/suins@1.0.0?module',
+						];
 					for (const url of urls) {
 						try {
 							const suinsModule = await Promise.race([
@@ -1012,7 +1090,7 @@ ${generateZkSendCss()}</style>
 							]);
 							SuinsClient = pickSuinsExport(suinsModule, 'SuinsClient') || SuinsClient;
 							SuinsTransaction = pickSuinsExport(suinsModule, 'SuinsTransaction') || SuinsTransaction;
-							if (typeof SuinsClient === 'function') {
+							if (resolveSuinsClientCtor(SuinsClient)) {
 								if (!requireTransaction || typeof SuinsTransaction === 'function') return;
 							}
 						} catch (error) {
@@ -1025,7 +1103,7 @@ ${generateZkSendCss()}</style>
 			}
 
 			await suinsModuleLoadingPromise;
-			const loadedClient = typeof SuinsClient === 'function';
+			const loadedClient = !!resolveSuinsClientCtor(SuinsClient);
 			const loadedTx = !requireTransaction || typeof SuinsTransaction === 'function';
 			return loadedClient && loadedTx;
 		}
@@ -1034,7 +1112,11 @@ ${generateZkSendCss()}</style>
 			if (!ready) {
 				throw new Error('SuiNS SDK failed to load from CDN. Check your connection and reload the page.');
 			}
-			return new SuinsClient({
+			const SuinsClientCtor = resolveSuinsClientCtor(SuinsClient);
+			if (!SuinsClientCtor) {
+				throw new Error('SuiNS SDK loaded without a usable SuinsClient constructor.');
+			}
+			return new SuinsClientCtor({
 				client: getSuiClient(),
 				network: getSuinsNetwork(),
 			});
@@ -1047,6 +1129,7 @@ ${generateZkSendCss()}</style>
 		let connectedPrimaryName = null;
 		let nftOwnerAddress = null;
 		let targetPrimaryName = null;
+		let ownerPrimaryName = null;
 		let canEdit = false;
 		let ownerDisplayAddress = CURRENT_ADDRESS;
 		let currentTargetAddress = TARGET_ADDRESS || '';
@@ -1069,6 +1152,8 @@ ${generateZkSendCss()}</style>
 			if (connectedAddress) {
 				if (connectedAddress !== __lastVaultAddress) {
 					__lastVaultAddress = connectedAddress;
+					window.userVaultNames = new Set();
+					if (typeof window.renderVaultList === 'function') window.renderVaultList();
 					if (typeof window.loadUserVault === 'function') window.loadUserVault();
 				}
 			} else {
@@ -1078,12 +1163,20 @@ ${generateZkSendCss()}</style>
 			}
 		});
 
-		function canSign() {
-			if (!connectedAddress) return false;
-			if (connectedWallet && connectedAccount) return true;
-			var conn = SuiWalletKit.$connection.value;
-			return conn && conn.status === 'session' && !!SuiWalletKit.__skiSignFrame;
-		}
+			function canSign() {
+				if (!connectedAddress) return false;
+				if (connectedWallet && connectedAccount) return true;
+				var conn = SuiWalletKit.$connection.value;
+				return conn && conn.status === 'session' && !!SuiWalletKit.__skiSignFrame;
+			}
+
+			function getConnectedSenderAddress() {
+				const senderAddress =
+					typeof connectedAccount?.address === 'string'
+						? connectedAccount.address
+						: connectedAccount?.address?.toString?.() || connectedAddress || '';
+				return senderAddress;
+			}
 
 		window.connectWallet = function connectWallet() {
 			if (canSign()) return Promise.resolve();
@@ -1154,6 +1247,57 @@ ${generateZkSendCss()}</style>
 			let stylizedMode = false;
 			let nftDisplayLoaded = false;
 			let restoringIdentityVisual = false;
+
+		// Marketplace elements (declared early to avoid temporal dead zone)
+		const overviewSecondaryGrid = document.getElementById('overview-secondary-grid');
+		const overviewMarketModule = document.getElementById('overview-market-module');
+		const marketplaceCard = document.getElementById('marketplace-card');
+		const marketplaceListingRow = document.getElementById('marketplace-listing-row');
+		const marketplaceBidRow = document.getElementById('marketplace-bid-row');
+		const marketplaceListingPrice = document.getElementById('marketplace-listing-price');
+		const marketplaceLister = document.getElementById('marketplace-lister');
+		const marketplaceBidPrice = document.getElementById('marketplace-bid-price');
+		const marketplaceBidder = document.getElementById('marketplace-bidder');
+		const marketplaceAcceptBidBtn = document.getElementById('marketplace-accept-bid-btn');
+		const marketplaceAcceptText = marketplaceAcceptBidBtn?.querySelector('.marketplace-accept-text');
+		const marketplaceAcceptLoading = marketplaceAcceptBidBtn?.querySelector('.marketplace-accept-loading');
+		const marketplaceBuyBtn = document.getElementById('marketplace-buy-btn');
+		const marketplaceBuyText = marketplaceBuyBtn?.querySelector('.marketplace-buy-text');
+		const marketplaceBuyLoading = marketplaceBuyBtn?.querySelector('.marketplace-buy-loading');
+		const marketplaceBidInputWrap = document.getElementById('marketplace-bid-input');
+		const marketplaceBidAmountInput = document.getElementById('marketplace-bid-amount');
+		const marketplaceBidPriceUpBtn = document.getElementById('marketplace-bid-price-up');
+		const marketplaceBidPriceDownBtn = document.getElementById('marketplace-bid-price-down');
+		const marketplaceBidMaxBtn = document.getElementById('marketplace-bid-max');
+		const marketplacePlaceBidBtn = document.getElementById('marketplace-place-bid-btn');
+		const marketplaceBidText = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-text');
+		const marketplaceBidLoading = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-loading');
+		const marketplaceBidEstimate = document.getElementById('marketplace-bid-estimate');
+		const marketplaceListInputWrap = document.getElementById('marketplace-list-input');
+		const marketplaceListAmountInput = document.getElementById('marketplace-list-amount');
+		const marketplaceListPriceUpBtn = document.getElementById('marketplace-list-price-up');
+		const marketplaceListPriceDownBtn = document.getElementById('marketplace-list-price-down');
+		const marketplaceListBtn = document.getElementById('marketplace-list-btn');
+		const marketplaceListText = marketplaceListBtn?.querySelector('.marketplace-list-text');
+		const marketplaceListLoading = marketplaceListBtn?.querySelector('.marketplace-list-loading');
+		const marketplaceListEstimate = document.getElementById('marketplace-list-estimate');
+		const marketplaceStatus = document.getElementById('marketplace-status');
+		const marketplaceActivity = document.getElementById('marketplace-activity');
+		const marketplaceActivityList = document.getElementById('marketplace-activity-list');
+		const marketplaceActivityLink = document.getElementById('marketplace-activity-link');
+		const marketplaceSoldRow = document.getElementById('marketplace-sold-row');
+		const marketplaceSoldPrice = document.getElementById('marketplace-sold-price');
+		const marketplaceSeller = document.getElementById('marketplace-seller');
+
+		// Decay auction elements (declared early to avoid temporal dead zone)
+		const auctionCard = document.getElementById('auction-card');
+		const auctionCurrentPrice = document.getElementById('auction-current-price');
+		const auctionTimeLeft = document.getElementById('auction-time-left');
+		const auctionBuyBtn = document.getElementById('auction-buy-btn');
+		const auctionBuyText = document.getElementById('auction-buy-text');
+		const auctionBuyLoading = auctionBuyBtn?.querySelector('.auction-buy-loading');
+		const auctionStatus = document.getElementById('auction-status');
+		const auctionSellerLabel = document.getElementById('auction-seller-label');
 
 		function truncAddr(addr) {
 			return addr.slice(0, 6) + '...' + addr.slice(-4);
@@ -1504,7 +1648,12 @@ ${generateZkSendCss()}</style>
 			if (!IS_IN_GRACE_PERIOD) return;
 			const giftBtn = document.getElementById('gift-renewal-btn');
 			const renewBtn = document.getElementById('renew-name-btn');
-			const isOwner = connectedAddress && nftOwnerAddress && connectedAddress === nftOwnerAddress;
+			const normalizedOwner = getResolvedOwnerAddress();
+			const isOwner = Boolean(
+				connectedAddress
+				&& normalizedOwner
+				&& connectedAddress.toLowerCase() === normalizedOwner,
+			);
 			if (giftBtn) giftBtn.style.display = connectedAddress ? 'inline-flex' : 'none';
 			if (renewBtn) renewBtn.style.display = isOwner ? 'inline-flex' : 'none';
 		}
@@ -1661,7 +1810,12 @@ ${generateZkSendCss()}</style>
 			}
 
 			if (burnBtn) {
-				const isOwner = connectedAddress && nftOwnerAddress && connectedAddress.toLowerCase() === nftOwnerAddress.toLowerCase();
+				const normalizedOwner = getResolvedOwnerAddress();
+				const isOwner = Boolean(
+					connectedAddress
+					&& normalizedOwner
+					&& connectedAddress.toLowerCase() === normalizedOwner,
+				);
 				burnBtn.classList.toggle('hidden', !isOwner);
 			}
 		}
@@ -1673,7 +1827,12 @@ ${generateZkSendCss()}</style>
 				return;
 			}
 
-			const isOwner = connectedAddress && nftOwnerAddress && connectedAddress.toLowerCase() === nftOwnerAddress.toLowerCase();
+			const normalizedOwner = getResolvedOwnerAddress();
+			const isOwner = Boolean(
+				connectedAddress
+				&& normalizedOwner
+				&& connectedAddress.toLowerCase() === normalizedOwner,
+			);
 			if (!isOwner) {
 				showBurnStatus('Only the NFT owner can burn', 'error');
 				return;
@@ -1793,10 +1952,11 @@ ${generateZkSendCss()}</style>
 			});
 		}
 
-		// Global function to update UI when wallet connects/disconnects
+			// Global function to update UI when wallet connects/disconnects
+			var renewalUiReady = false
 
-		// This can be extended by other features (messaging, etc.)
-			var updateUIForWallet = () => {
+			// This can be extended by other features (messaging, etc.)
+				var updateUIForWallet = () => {
 			// Expose wallet state to window for cross-script access
 			window.connectedAddress = connectedAddress;
 			window.connectedWallet = connectedWallet;
@@ -1809,9 +1969,9 @@ ${generateZkSendCss()}</style>
 			updateGlobalWalletWidget();
 			checkEditPermission();
 			updateEditButton();
-			if (typeof loadUserVault === 'function') loadUserVault();
-			if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
-				if (typeof updateRenewalButton === 'function') updateRenewalButton();
+				if (typeof loadUserVault === 'function') loadUserVault();
+				if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
+					if (renewalUiReady && typeof updateRenewalButton === 'function') updateRenewalButton();
 				if (typeof updateMarketplaceButton === 'function') updateMarketplaceButton();
 
 					const vaultBtn = document.getElementById('vault-diamond-btn');
@@ -1920,6 +2080,10 @@ ${generateZkSendCss()}</style>
 			return Boolean(address && typeof address === 'string' && address.startsWith('0x') && address.length >= 10);
 		}
 
+		function getResolvedOwnerAddress() {
+			return String(nftOwnerAddress || OWNER_ADDRESS || '').toLowerCase();
+		}
+
 		function getExplicitTargetAddress() {
 			return currentTargetAddress || TARGET_ADDRESS || '';
 		}
@@ -1931,7 +2095,7 @@ ${generateZkSendCss()}</style>
 		function canConnectedWalletEditTarget() {
 			const normalizedConnected = connectedAddress ? String(connectedAddress).toLowerCase() : '';
 			if (!normalizedConnected) return false;
-			const normalizedOwner = String(nftOwnerAddress || OWNER_ADDRESS || '').toLowerCase();
+			const normalizedOwner = getResolvedOwnerAddress();
 			const normalizedTarget = String(getExplicitTargetAddress() || '').toLowerCase();
 			return Boolean(
 				(normalizedOwner && normalizedConnected === normalizedOwner)
@@ -2004,6 +2168,11 @@ ${generateZkSendCss()}</style>
 				showStatus(sendStatus, 'Connect wallet first', 'error');
 				return;
 			}
+			const senderAddress = getConnectedSenderAddress();
+			if (!isLikelySuiAddress(senderAddress)) {
+				showStatus(sendStatus, 'Wallet sender address is unavailable', 'error');
+				return;
+			}
 
 			const amountSui = Number(sendAmountInput.value);
 			if (!Number.isFinite(amountSui) || amountSui <= 0) {
@@ -2021,11 +2190,29 @@ ${generateZkSendCss()}</style>
 			showStatus(sendStatus, '<span class="loading"></span> Building transaction...', 'info');
 
 			try {
+				showStatus(sendStatus, '<span class="loading"></span> Checking balance...', 'info');
+				const suiClient = getSuiClient();
+				const balanceRes = await suiClient.getBalance({
+					owner: senderAddress,
+					coinType: SUI_TYPE,
+				});
+				const totalBalanceMist = BigInt(balanceRes?.totalBalance || '0');
+				const gasReserveMist = 10000000n;
+				if (totalBalanceMist < amountMist + gasReserveMist) {
+					const neededSui = Number(amountMist + gasReserveMist) / 1e9;
+					const availableSui = Number(totalBalanceMist) / 1e9;
+					showStatus(
+						sendStatus,
+						'Insufficient SUI. Need ~' + neededSui.toFixed(4) + ' SUI, have ' + availableSui.toFixed(4) + ' SUI',
+						'error',
+					);
+					return;
+				}
+
 				const tx = new Transaction();
-				tx.setSender(connectedAddress);
+				tx.setSender(senderAddress);
 				const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountMist)]);
 				tx.transferObjects([coin], tx.pure.address(recipient));
-				tx.setGasBudget(50000000);
 
 				showStatus(sendStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
@@ -2151,7 +2338,13 @@ ${generateZkSendCss()}</style>
 			}
 
 			async function downloadIdentityImage(feedbackBtn, preferQr = showingQr) {
-				const taggedFilename = NAME.replace(/./g, '-') + '-sui.png';
+				const safeNameBase = String(NAME || 'sui')
+					.replace(/\.sui$/i, '')
+					.toLowerCase()
+					.replace(/[^a-z0-9-]/g, '-')
+					.replace(/-+/g, '-')
+					.replace(/^-|-$/g, '') || 'sui';
+				const taggedFilename = safeNameBase + '-sui.png';
 				const sealPayload = buildMetaSealPayload(preferQr);
 				try {
 					const taggedCanvas = await buildTaggedIdentityCanvas(preferQr, currentListing, currentBestBid, {
@@ -2169,7 +2362,7 @@ ${generateZkSendCss()}</style>
 				}
 
 				// Fallback to raw visual export if tagged generation fails
-				const fallbackFilename = NAME.replace(/./g, '-') + '-sui.png';
+				const fallbackFilename = safeNameBase + '-sui.png';
 				if (preferQr && identityCanvas) {
 					triggerCanvasDownload(identityCanvas, fallbackFilename, feedbackBtn, sealPayload);
 					return;
@@ -2284,8 +2477,9 @@ ${generateZkSendCss()}</style>
 					ctx.restore();
 				};
 
-				const minSide = Math.min(srcWidth, srcHeight);
-				const overlayPadding = Math.max(22, Math.round(minSide * 0.045));
+					const minSide = Math.min(srcWidth, srcHeight);
+					const overlayPadding = Math.max(22, Math.round(minSide * 0.045));
+					let lowerRightOverlayReserve = Math.max(72, Math.round(srcWidth * 0.24));
 
 				if (blackDiamondMode) {
 					drawWavyBackground(srcWidth, srcHeight);
@@ -2425,14 +2619,19 @@ ${generateZkSendCss()}</style>
 							const expiryX = overlayPadding + primaryTag.width + Math.max(8, Math.round(minSide * 0.012));
 							drawOverlayTag(expiryLabel, expiryX, tagY, expiryVariant);
 						}
-						if (Number.isFinite(EXPIRATION_MS) && EXPIRATION_MS > 0) {
-							const expiryDate = new Date(EXPIRATION_MS).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-							const dateSize = Math.max(14, Math.round(minSide * 0.04));
-							ctx.save();
-							ctx.font = '700 ' + dateSize + 'px Inter, system-ui, -apple-system, sans-serif';
-							ctx.textBaseline = 'bottom';
-							ctx.textAlign = 'right';
-							ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+							if (Number.isFinite(EXPIRATION_MS) && EXPIRATION_MS > 0) {
+								const expiryDate = new Date(EXPIRATION_MS).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+								const dateSize = Math.max(14, Math.round(minSide * 0.04));
+								ctx.save();
+								ctx.font = '700 ' + dateSize + 'px Inter, system-ui, -apple-system, sans-serif';
+								const dateWidth = ctx.measureText(expiryDate).width;
+								lowerRightOverlayReserve = Math.max(
+									lowerRightOverlayReserve,
+									Math.round(dateWidth + overlayPadding * 1.4),
+								);
+								ctx.textBaseline = 'bottom';
+								ctx.textAlign = 'right';
+								ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
 							ctx.lineWidth = Math.max(2, Math.round(dateSize * 0.25));
 							// Position at bottom right with standard margin
 							const dateX = srcWidth - overlayPadding;
@@ -2457,29 +2656,112 @@ ${generateZkSendCss()}</style>
 				const qrX = qrMargin;
 				const qrY = srcHeight - qrBadgeSize - qrMargin;
 				drawCornerBrandedQr(ctx, qrX, qrY, qrBadgeSize, PROFILE_URL, logoImage, qrSource);
-
-				// Upper-right brand lockup: shared sui.ski logo mark + ".sui.ski".
-				const brandIconSize = isStylized ? Math.floor(nameFontSize * 0.88) : Math.max(40, Math.min(96, Math.round(Math.min(srcWidth, srcHeight) * 0.18)));
-				const brandPadding = Math.max(12, Math.round(Math.min(srcWidth, srcHeight) * 0.035));
-				const brandX = srcWidth - brandPadding - brandIconSize;
-				const brandY = isStylized ? nameY : brandPadding + Math.max(6, Math.round(Math.min(srcWidth, srcHeight) * 0.018));
-				if (logoImage) {
-					drawVisualIntoBox(ctx, logoImage, brandX, brandY, brandIconSize, brandIconSize, Math.round(brandIconSize * 0.2));
-				} else {
-					drawSiteLogoGlyph(ctx, brandX, brandY, brandIconSize);
+				const ownerNameEl = document.getElementById('addr-name');
+				const ownerNameFromUi = String(ownerNameEl?.dataset?.copyName || '').trim();
+				const ownerNameResolved = String(ownerNameFromUi || ownerPrimaryName || targetPrimaryName || '').trim();
+				const ownerAddressFallback = String(ownerDisplayAddress || nftOwnerAddress || OWNER_ADDRESS || CURRENT_ADDRESS || '').trim();
+				const ownerNameText = ownerNameResolved
+					? ownerNameResolved.replace(/\.sui$/i, '') + '.sui'
+					: (ownerAddressFallback ? truncAddr(ownerAddressFallback) : '');
+				if (ownerNameText) {
+					const ownerLabelText = 'OWNER';
+					const ownerLabelSize = Math.max(11, Math.round(minSide * 0.03));
+					const ownerValueSize = Math.max(16, Math.round(minSide * 0.05));
+					const ownerPadX = Math.max(10, Math.round(minSide * 0.022));
+					const ownerPadTop = Math.max(8, Math.round(minSide * 0.016));
+					const ownerPadBottom = Math.max(9, Math.round(minSide * 0.018));
+					const ownerLineGap = Math.max(3, Math.round(minSide * 0.008));
+					const ownerGapFromQr = Math.max(10, Math.round(minSide * 0.018));
+					const ownerBlockMaxWidth = Math.min(
+						srcWidth - qrX - overlayPadding,
+						Math.max(qrBadgeSize, Math.round(minSide * 0.42)),
+					);
+					const ownerValueFont = '800 ' + ownerValueSize + 'px Inter, system-ui, -apple-system, sans-serif';
+					const ownerLabelFont = '700 ' + ownerLabelSize + 'px Inter, system-ui, -apple-system, sans-serif';
+					const fitOwnerText = (value, maxWidth) => {
+						if (!value) return '';
+						ctx.font = ownerValueFont;
+						if (ctx.measureText(value).width <= maxWidth) return value;
+						let base = value;
+						while (base.length > 6 && ctx.measureText(base + '...').width > maxWidth) {
+							base = base.slice(0, -1);
+						}
+						return base.length < value.length ? base + '...' : base;
+					};
+					ctx.save();
+					ctx.font = ownerLabelFont;
+					const ownerLabelWidth = ctx.measureText(ownerLabelText).width;
+					const ownerTextMaxWidth = Math.max(28, ownerBlockMaxWidth - ownerPadX * 2);
+					const fittedOwnerName = fitOwnerText(ownerNameText, ownerTextMaxWidth);
+					ctx.font = ownerValueFont;
+					const ownerValueWidth = ctx.measureText(fittedOwnerName).width;
+					const ownerBlockWidth = Math.max(
+						qrBadgeSize,
+						Math.min(ownerBlockMaxWidth, Math.round(Math.max(ownerLabelWidth, ownerValueWidth) + ownerPadX * 2)),
+					);
+					const ownerBlockHeight = ownerPadTop + ownerLabelSize + ownerLineGap + ownerValueSize + ownerPadBottom;
+					const ownerX = qrX;
+					const ownerY = Math.max(overlayPadding, qrY - ownerBlockHeight - ownerGapFromQr);
+					const ownerGradient = ctx.createLinearGradient(ownerX, ownerY, ownerX, ownerY + ownerBlockHeight);
+					ownerGradient.addColorStop(0, 'rgba(76, 29, 149, 0.8)');
+					ownerGradient.addColorStop(1, 'rgba(49, 46, 129, 0.84)');
+					drawRoundedRect(ctx, ownerX, ownerY, ownerBlockWidth, ownerBlockHeight, Math.round(ownerBlockHeight * 0.24));
+					ctx.fillStyle = ownerGradient;
+					ctx.fill();
+					ctx.strokeStyle = 'rgba(196, 181, 253, 0.72)';
+					ctx.lineWidth = Math.max(1.2, Math.round(minSide * 0.003));
+					ctx.stroke();
+					ctx.fillStyle = 'rgba(221, 214, 254, 0.94)';
+					ctx.font = ownerLabelFont;
+					ctx.textAlign = 'left';
+					ctx.textBaseline = 'top';
+					ctx.fillText(ownerLabelText, ownerX + ownerPadX, ownerY + ownerPadTop);
+					ctx.font = ownerValueFont;
+					ctx.fillStyle = 'rgba(245, 243, 255, 0.98)';
+					ctx.fillText(
+						fittedOwnerName,
+						ownerX + ownerPadX,
+						ownerY + ownerPadTop + ownerLabelSize + ownerLineGap,
+					);
+					ctx.restore();
 				}
 
-				const nftTagSize = Math.max(13, Math.round(brandIconSize * 0.28));
-				const nftTagY = isStylized ? (nameY + nameFontSize) : (brandY + brandIconSize + Math.max(6, Math.round(nftTagSize * 0.42)));
-				const brandTextGradient = ctx.createLinearGradient(brandX, brandY, brandX + brandIconSize, brandY + brandIconSize);
-				brandTextGradient.addColorStop(0, '#60a5fa');
-				brandTextGradient.addColorStop(1, '#a78bfa');
-				ctx.fillStyle = brandTextGradient;
-				ctx.font = '700 ' + nftTagSize + 'px Inter, system-ui, -apple-system, sans-serif';
-				ctx.textAlign = 'center';
-				ctx.textBaseline = 'alphabetic';
-				ctx.fillText('.sui.ski', brandX + brandIconSize / 2, nftTagY);
-				ctx.textAlign = 'left';
+				// Upper-right brand lockup: shared sui.ski logo mark + ".sui.ski".
+					const brandIconSize = isStylized ? Math.floor(nameFontSize * 1.1) : Math.max(48, Math.min(120, Math.round(Math.min(srcWidth, srcHeight) * 0.22)));
+					const brandPadding = Math.max(12, Math.round(Math.min(srcWidth, srcHeight) * 0.035));
+					const brandX = srcWidth - brandPadding - brandIconSize;
+					// Keep bottom aligned by adjusting Y position when logo is larger
+					const baseBrandY = brandPadding + Math.max(6, Math.round(Math.min(srcWidth, srcHeight) * 0.018));
+					const standardIconSize = Math.max(40, Math.min(96, Math.round(Math.min(srcWidth, srcHeight) * 0.18)));
+					const brandY = isStylized ? nameY : baseBrandY + (standardIconSize - brandIconSize);
+					ctx.save();
+					ctx.shadowColor = 'rgba(0, 0, 0, 0.72)';
+					ctx.shadowBlur = Math.max(8, Math.round(brandIconSize * 0.28));
+					ctx.shadowOffsetX = 0;
+					ctx.shadowOffsetY = 2;
+					if (logoImage) {
+						drawVisualIntoBox(ctx, logoImage, brandX, brandY, brandIconSize, brandIconSize, Math.round(brandIconSize * 0.2));
+					} else {
+						drawSiteLogoGlyph(ctx, brandX, brandY, brandIconSize);
+					}
+					ctx.restore();
+
+					const nftTagSize = Math.max(13, Math.round(brandIconSize * 0.28));
+					const nftTagY = isStylized ? (nameY + nameFontSize) : (brandY + brandIconSize + Math.max(6, Math.round(nftTagSize * 0.42)));
+					const brandTextGradient = ctx.createLinearGradient(brandX, brandY, brandX + brandIconSize, brandY + brandIconSize);
+					brandTextGradient.addColorStop(0, '#60a5fa');
+					brandTextGradient.addColorStop(1, '#a78bfa');
+					ctx.fillStyle = brandTextGradient;
+					ctx.font = '700 ' + nftTagSize + 'px Inter, system-ui, -apple-system, sans-serif';
+					ctx.textAlign = 'center';
+					ctx.textBaseline = 'alphabetic';
+					ctx.shadowColor = 'rgba(0, 0, 0, 0.75)';
+					ctx.shadowBlur = Math.max(6, Math.round(nftTagSize * 0.75));
+					ctx.shadowOffsetX = 0;
+					ctx.shadowOffsetY = 1;
+					ctx.fillText('.sui.ski', brandX + brandIconSize / 2, nftTagY);
+					ctx.shadowColor = 'transparent';
+					ctx.textAlign = 'left';
 
 				// Draw TradePort market data badge if available
 				const listingPriceMist = Number(listing?.price || 0);
@@ -2492,34 +2774,35 @@ ${generateZkSendCss()}</style>
 				if (hasListing || hasBestBid || hasSold) {
 					let tradeportLogo = null;
 					try { tradeportLogo = await loadImageForCanvas(TRADEPORT_LOGO_URL); } catch {}
-					const priceTextSize = Math.max(26, Math.round(Math.min(srcWidth, srcHeight) * 0.067));
-					const labelTextSize = Math.max(22, Math.round(priceTextSize * 0.88));
-					const logoSize = Math.max(28, Math.round(priceTextSize * 2.0));
-					const trimTrailingZeros = (value) => value.replace(/\\.?0+$/, '');
-					const formatSuiPrice = (mist) => {
-						const sui = Number(mist) / 1e9;
-						if (!Number.isFinite(sui) || sui <= 0) return '0';
-						if (sui >= 1000000) return trimTrailingZeros((sui / 1000000).toFixed(2)) + 'M';
-						if (sui >= 10000) return trimTrailingZeros((sui / 1000).toFixed(1)) + 'k';
-						if (sui >= 1) return trimTrailingZeros(sui.toFixed(2));
-						if (sui >= 0.1) return trimTrailingZeros(sui.toFixed(3));
-						if (sui >= 0.01) return trimTrailingZeros(sui.toFixed(4));
-						return trimTrailingZeros(sui.toFixed(6));
-					};
-					const entries = [];
-					if (shouldShowSoldOnly) {
-						const soldPrice = formatSuiPrice(soldPriceValueMist);
-						entries.push({ label: 'Sold:', priceNum: soldPrice, labelColor: '#4ade80', priceColor: '#ffffff', suiColor: '#60a5fa' });
-					} else {
-						if (hasListing) {
-							const listPrice = formatSuiPrice(listingPriceMist);
-							entries.push({ label: 'List:', priceNum: listPrice, labelColor: '#c084fc', priceColor: '#ffffff', suiColor: '#60a5fa' });
+						const basePriceTextSize = Math.max(26, Math.round(Math.min(srcWidth, srcHeight) * 0.067));
+						const priceTextSize = basePriceTextSize + 13;
+						const baseLabelTextSize = Math.max(22, Math.round(basePriceTextSize * 0.88));
+						const labelTextSize = baseLabelTextSize + 9;
+					const logoSize = Math.max(20, Math.round(priceTextSize * 1.4));
+						const formatListingSuiPrice = (mist) => {
+							const listingDisplaySui = getMarketplaceListingDisplaySui(mist);
+							if (!Number.isFinite(listingDisplaySui) || listingDisplaySui <= 0) return '0';
+							return formatMarketplaceListingSuiDisplay(listingDisplaySui);
+						};
+						const formatBidSuiPrice = (mist) => {
+							const sui = Number(mist) / 1e9;
+							if (!Number.isFinite(sui) || sui <= 0) return '0';
+							return formatMarketplaceBidSuiDisplay(sui);
+						};
+						const entries = [];
+						if (shouldShowSoldOnly) {
+							const soldPrice = formatBidSuiPrice(soldPriceValueMist);
+							entries.push({ label: 'Sold:', priceNum: soldPrice, labelColor: '#4ade80', priceColor: '#ffffff', suiColor: '#60a5fa' });
+						} else {
+							if (hasListing) {
+								const listPrice = formatListingSuiPrice(listingPriceMist);
+								entries.push({ label: 'List:', priceNum: listPrice, labelColor: '#c084fc', priceColor: '#ffffff', suiColor: '#60a5fa' });
+							}
+							if (hasBestBid) {
+								const offerPrice = formatBidSuiPrice(bestBidPriceMist);
+								entries.push({ label: 'Offer:', priceNum: offerPrice, labelColor: '#8b5cf6', priceColor: '#ffffff', suiColor: '#60a5fa' });
+							}
 						}
-						if (hasBestBid) {
-							const offerPrice = formatSuiPrice(bestBidPriceMist);
-							entries.push({ label: 'Offer:', priceNum: offerPrice, labelColor: '#8b5cf6', priceColor: '#ffffff', suiColor: '#60a5fa' });
-						}
-					}
 					ctx.font = '700 ' + priceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
 					let maxWidth = 0;
 					for (const entry of entries) {
@@ -2527,12 +2810,23 @@ ${generateZkSendCss()}</style>
 						const valueWidth = ctx.measureText(entry.priceNum + ' SUI').width;
 						maxWidth = Math.max(maxWidth, labelWidth, valueWidth);
 					}
-					const qrBottom = qrY + qrBadgeSize;
-					const textGap = Math.max(6, Math.round(qrMargin * 0.4));
-					const textX = qrX + qrBadgeSize + textGap;
-					const availableWidth = (srcWidth - overlayPadding) - textX;
-					let priceFontScale = 1.0;
-					if (maxWidth > availableWidth) priceFontScale = availableWidth / maxWidth;
+						const qrBottom = qrY + qrBadgeSize;
+						const textGap = Math.max(6, Math.round(qrMargin * 0.4));
+						const textX = qrX + qrBadgeSize + textGap;
+						const rightBoundaryX = Math.min(
+							srcWidth - overlayPadding - Math.round(lowerRightOverlayReserve * 1.2),
+							brandX - Math.max(10, Math.round(brandIconSize * 0.2)),
+						);
+						const textSafetyPad = Math.max(16, Math.round(priceTextSize * 0.55));
+						const availableWidth = Math.max(
+							Math.round(minSide * 0.14),
+							rightBoundaryX - textX - textSafetyPad,
+						);
+						let priceFontScale = 1.0;
+						const measuredWidthWithEffects = maxWidth + textSafetyPad;
+						if (measuredWidthWithEffects > availableWidth) {
+							priceFontScale = availableWidth / measuredWidthWithEffects;
+						}
 					const scaledPriceTextSize = Math.floor(priceTextSize * priceFontScale);
 					const scaledLabelTextSize = Math.floor(labelTextSize * priceFontScale);
 					const scaledLabelLineHeight = scaledLabelTextSize + 3;
@@ -3576,9 +3870,7 @@ ${generateZkSendCss()}</style>
 				const suinsClient = await createSuinsClient(true);
 				const suiClient = getSuiClient();
 
-				const senderAddress = typeof connectedAccount.address === 'string'
-					? connectedAccount.address
-					: connectedAccount.address?.toString() || connectedAddress;
+					const senderAddress = getConnectedSenderAddress();
 
 				let nftId = NFT_ID;
 				if (!nftId) {
@@ -3606,6 +3898,7 @@ ${generateZkSendCss()}</style>
 					// Update UI
 					document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
 						document.querySelector('.owner-name').innerHTML = formatSuiName(connectedPrimaryName);
+						ownerPrimaryName = connectedPrimaryName || null;
 						ownerDisplayAddress = connectedAddress;
 						renderTargetPreview(connectedAddress);
 						updatePortfolioLink(connectedAddress);
@@ -3632,7 +3925,12 @@ ${generateZkSendCss()}</style>
 				if (!connectedAddress) return;
 			}
 
-			const isOwner = connectedAddress && nftOwnerAddress && connectedAddress === nftOwnerAddress;
+			const normalizedOwner = getResolvedOwnerAddress();
+			const isOwner = Boolean(
+				connectedAddress
+				&& normalizedOwner
+				&& connectedAddress.toLowerCase() === normalizedOwner,
+			);
 			if (!isOwner) {
 				showOwnerInlineStatus('Only the NFT owner can set this as primary.', 'error');
 				return;
@@ -3659,9 +3957,7 @@ ${generateZkSendCss()}</style>
 				const suinsClient = await createSuinsClient(true);
 				const suiClient = getSuiClient();
 
-				const senderAddress = typeof connectedAccount.address === 'string'
-					? connectedAccount.address
-					: connectedAccount.address?.toString() || connectedAddress;
+					const senderAddress = getConnectedSenderAddress();
 
 				let nftId = NFT_ID;
 				if (!nftId) {
@@ -3705,6 +4001,7 @@ ${generateZkSendCss()}</style>
 				if (ownerNameEl) {
 					ownerNameEl.innerHTML = formatSuiName(connectedPrimaryName);
 				}
+				ownerPrimaryName = connectedPrimaryName || null;
 				showOwnerInlineStatus(
 					'<strong>Primary set!</strong> ' + renderTxExplorerLinks(result.digest, true),
 					'success',
@@ -3802,9 +4099,7 @@ ${generateZkSendCss()}</style>
 				const suinsClient = await createSuinsClient(true);
 				const suiClient = getSuiClient();
 
-				const senderAddress = typeof connectedAccount.address === 'string'
-					? connectedAccount.address
-					: connectedAccount.address?.toString() || connectedAddress;
+					const senderAddress = getConnectedSenderAddress();
 
 				let nftId = NFT_ID;
 				if (!nftId) {
@@ -3840,6 +4135,7 @@ ${generateZkSendCss()}</style>
 					document.querySelector('.owner-addr').textContent = newAddress.slice(0, 8) + '...' + newAddress.slice(-6);
 						const newName = await fetchPrimaryName(newAddress);
 						document.querySelector('.owner-name').innerHTML = formatSuiName(newName);
+						ownerPrimaryName = newName || null;
 						ownerDisplayAddress = newAddress;
 						updatePortfolioLink(newAddress);
 						renderTargetPreview(newAddress);
@@ -3862,7 +4158,7 @@ ${generateZkSendCss()}</style>
 		function openJacketModal() {
 			if (!connectedAddress) {
 				connectWallet().then(() => {
-					if (connectedAddress && nftOwnerAddress && connectedAddress === nftOwnerAddress) {
+					if (isConnectedProfileOwner()) {
 						jacketModal.classList.add('open');
 					}
 				});
@@ -3883,7 +4179,7 @@ ${generateZkSendCss()}</style>
 				if (!connectedAddress) return;
 			}
 
-			if (!nftOwnerAddress || connectedAddress !== nftOwnerAddress) {
+			if (!isConnectedProfileOwner()) {
 				if (jacketStatus) {
 					jacketStatus.textContent = 'You must be the NFT owner to list';
 					jacketStatus.className = 'jacket-status error';
@@ -3920,9 +4216,7 @@ ${generateZkSendCss()}</style>
 					jacketStatus.className = 'jacket-status';
 				}
 
-				const senderAddress = typeof connectedAccount.address === 'string'
-					? connectedAccount.address
-					: connectedAccount.address?.toString() || connectedAddress;
+					const senderAddress = getConnectedSenderAddress();
 
 				const res = await fetch('/api/auction/list', {
 					method: 'POST',
@@ -4255,6 +4549,7 @@ ${generateZkSendCss()}</style>
 					targetPrimaryName = displayName;
 				}
 			}
+			ownerPrimaryName = displayName || null;
 
 				ownerDisplayAddress = displayAddress || '';
 				updatePortfolioLink(ownerDisplayAddress);
@@ -4326,16 +4621,13 @@ ${generateZkSendCss()}</style>
 					ownerAddrEl.style.color = 'var(--text)';
 				}
 			}
+			if (rawIdentityNftImage) {
+				applyTaggedIdentityToProfile();
+			}
 		}
 
-			// Initialize
-			try {
-				SuiWalletKit.renderModal('wk-modal')
-			} catch (e) {
-				console.error('Failed to initialize wallet modal:', e)
-			}
-			updatePortfolioLink(ownerDisplayAddress);
-			renderWalletBar();
+		updatePortfolioLink(ownerDisplayAddress);
+		renderWalletBar();
 		updateGlobalWalletWidget();
 		updateEditButton();
 
@@ -4355,9 +4647,14 @@ ${generateZkSendCss()}</style>
 			updateGlobalWalletWidget();
 		};
 
-		SuiWalletKit.detectWallets().then(function() {
-			SuiWalletKit.autoReconnect().catch(function() {});
-		}).catch(function() {});
+		${generateSharedWalletMountJs({
+			network: env.SUI_NETWORK,
+			session: options.session,
+			onConnect: 'onProfileWalletConnected',
+			onDisconnect: 'onProfileWalletDisconnected',
+			profileButtonId: 'wallet-profile-btn',
+			profileFallbackHref: 'https://sui.ski',
+		})}
 
 		fetchAndDisplayOwnerInfo();
 		updateGracePeriodOwnerInfo();
@@ -5034,12 +5331,39 @@ ${generateZkSendCss()}</style>
 				btnText.textContent = 'Preparing...';
 				showMessageStatus('Initializing encrypted channel...', 'info', true);
 
-				// Import Sui SDK
-				const { Transaction } = await import('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle');
-				const { SuiJsonRpcClient } = await import('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle');
+					// Ensure Sui SDK
+					if (typeof Transaction !== 'function' || typeof SuiJsonRpcClient !== 'function') {
+						const timedImport = (url, timeoutMs = 30000) => Promise.race([
+							import(url),
+							new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout: ' + url)), timeoutMs)),
+						]);
+						const importFirst = async (urls) => {
+							let lastError = null;
+							for (const url of urls) {
+								try {
+									return await timedImport(url);
+								} catch (error) {
+									lastError = error;
+								}
+							}
+							throw lastError || new Error('Import failed');
+						};
+						const suiUrls = [
+							'https://esm.sh/@mysten/sui@2.2.0?bundle',
+							'https://esm.sh/@mysten/sui@2.2.0',
+							'https://cdn.jsdelivr.net/npm/@mysten/sui@2.2.0/+esm',
+							'https://unpkg.com/@mysten/sui@2.2.0?module',
+						];
+						const sdkModule = await importFirst(suiUrls);
+						SuiJsonRpcClient = sdkModule?.SuiJsonRpcClient || sdkModule?.SuiClient || sdkModule?.default?.SuiJsonRpcClient || SuiJsonRpcClient;
+						Transaction = sdkModule?.Transaction || sdkModule?.TransactionBlock || sdkModule?.default?.Transaction || Transaction;
+					}
+					if (typeof Transaction !== 'function' || typeof SuiJsonRpcClient !== 'function') {
+						throw new Error('Sui SDK unavailable. Check network and retry.');
+					}
 
-				const suiClient = getSuiClient();
-				const tx = new Transaction();
+					const suiClient = getSuiClient();
+					const tx = new Transaction();
 
 				btnText.textContent = 'Encrypting...';
 				showMessageStatus('Encrypting message with Seal protocol...', 'info', true);
@@ -5980,10 +6304,10 @@ ${generateZkSendCss()}</style>
 		// Initialize stepper state (must be after pricing functions are defined)
 		updateYearsStepper();
 
-		function updateRenewalButton() {
-			const nameToExtend = selectedRenewalName || NAME;
-			if (ovRenewalCard) {
-				ovRenewalCard.classList.toggle('renewal-disconnected', !connectedAddress);
+			function updateRenewalButton() {
+				const nameToExtend = selectedRenewalName || NAME;
+				if (ovRenewalCard) {
+					ovRenewalCard.classList.toggle('renewal-disconnected', !connectedAddress);
 			}
 			if (ovRenewalYearsMinus) ovRenewalYearsMinus.disabled = currentRenewalYears <= MIN_YEARS;
 			if (ovRenewalYearsPlus) ovRenewalYearsPlus.disabled = currentRenewalYears >= MAX_YEARS;
@@ -6006,11 +6330,13 @@ ${generateZkSendCss()}</style>
 					renewalBtn.disabled = true;
 					renewalBtnText.textContent = 'Connect Wallet to Renew';
 				}
+				}
 			}
-		}
 
-		// DeepBook constants for client-side PTB building (must match register.ts)
-		const DEEPBOOK_PACKAGE = NETWORK === 'mainnet'
+			renewalUiReady = true
+
+			// DeepBook constants for client-side PTB building (must match register.ts)
+			const DEEPBOOK_PACKAGE = NETWORK === 'mainnet'
 			? '0x337f4f4f6567fcd778d5454f27c16c70e2f274cc6377ea6249ddf491482ef497'
 			: null;
 		const DEEPBOOK_NS_SUI_POOL = NETWORK === 'mainnet'
@@ -6224,6 +6550,8 @@ ${generateZkSendCss()}</style>
 			return Math.max(0, Math.round(maxBid * 1e4) / 1e4);
 		}
 
+		let renewalInFlight = false;
+
 		async function handleRenewal(yearsEl, btnEl, btnTextEl, btnLoadingEl, statusEl, options = {}) {
 			const useProfileName = Boolean(options.useProfileName);
 			const nftIdToUse = useProfileName ? NFT_ID : (selectedRenewalNftId || NFT_ID);
@@ -6254,6 +6582,15 @@ ${generateZkSendCss()}</style>
 				: (Number.isFinite(yearsFromUi) && yearsFromUi > 0 ? yearsFromUi : 1);
 			console.log('[Renewal] Years:', years, 'Sender:', connectedAddress);
 
+			if (renewalInFlight) {
+				if (statusEl) {
+					statusEl.textContent = 'Renewal already in progress. Please complete the wallet prompt.';
+					statusEl.className = 'renewal-status';
+				}
+				return;
+			}
+
+			renewalInFlight = true;
 			if (btnTextEl) btnTextEl.classList.add('hidden');
 			if (btnLoadingEl) btnLoadingEl.classList.remove('hidden');
 			if (btnEl) btnEl.disabled = true;
@@ -6303,13 +6640,25 @@ ${generateZkSendCss()}</style>
 
 				console.log('[Renewal] NS needed:', nsNeeded.toString(), 'SUI for swap:', suiForNsSwap.toString());
 
-				const priceInfoObjectId = pricingData.priceInfoObjectId || undefined;
-				console.log('[Renewal] priceInfoObjectId:', priceInfoObjectId);
+					let priceInfoObjectId = pricingData.priceInfoObjectId || undefined;
+					console.log('[Renewal] priceInfoObjectId (from pricing API):', priceInfoObjectId);
 
-				// Validate price info object (required for Pyth price feed)
-				if (nsCoinConfig.feed && !priceInfoObjectId) {
-					throw new Error('Price info object ID required for NS renewal');
-				}
+					if (nsCoinConfig.feed && !priceInfoObjectId && typeof suinsClient.getPriceInfoObject === 'function') {
+						try {
+							const resolvedPriceInfo = await suinsClient.getPriceInfoObject(tx, nsCoinConfig.feed);
+							if (Array.isArray(resolvedPriceInfo) && typeof resolvedPriceInfo[0] === 'string') {
+								priceInfoObjectId = resolvedPriceInfo[0];
+							}
+							console.log('[Renewal] priceInfoObjectId (resolved from SuiNS client):', priceInfoObjectId || 'none');
+						} catch (priceInfoError) {
+							console.warn('[Renewal] Failed to resolve price info object from SuiNS client:', priceInfoError);
+						}
+					}
+
+					// Validate price info object (required for Pyth price feed)
+					if (nsCoinConfig.feed && !priceInfoObjectId) {
+						throw new Error('Price info object ID is required for non-base asset purchases');
+					}
 
 				// Check if user has enough SUI for the renewal swap + fees + optional discount transfer
 				const totalSuiNeededForRenewal = suiForNsSwap + SUI_FOR_DEEP_SWAP + 50_000_000n + discountSuiMist;
@@ -6389,9 +6738,8 @@ ${generateZkSendCss()}</style>
 					priceInfoObjectId,
 				});
 
-				// We don't transfer nsCoin here because it might be consumed by suinsTx.renew
-				// The SDK should handle change or leftover coins correctly within the PTB
-				// if integrated properly. If not, we can add a split/transfer logic later.
+				// Return any remaining NS coin object after payment split to avoid unused value errors.
+				tx.transferObjects([nsCoin], connectedAddress);
 
 				tx.setGasBudget(100000000);
 
@@ -6475,6 +6823,7 @@ ${generateZkSendCss()}</style>
 					statusEl.className = 'renewal-status error';
 				}
 			} finally {
+				renewalInFlight = false;
 				if (btnTextEl) btnTextEl.classList.remove('hidden');
 				if (btnLoadingEl) btnLoadingEl.classList.add('hidden');
 				updateRenewalButton();
@@ -6696,10 +7045,7 @@ ${generateZkSendCss()}</style>
 			try {
 				const suiClient = getSuiClient();
 				const tx = new Transaction();
-				const senderAddress =
-					typeof connectedAccount?.address === 'string'
-						? connectedAccount.address
-						: connectedAddress;
+					const senderAddress = getConnectedSenderAddress();
 				tx.setSender(senderAddress);
 
 				const [depositCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalAmountMist)]);
@@ -7078,7 +7424,18 @@ function shortAddr(addr) {
 			return getLinkedNameMatchScore(cleanName, linkedFilterQuery);
 		}
 
+		function isCurrentProfile(name) {
+			return name.replace(/\\.sui$/, '').toLowerCase() === NAME.toLowerCase();
+		}
+
 		function compareLinkedItemsByMode(a, b) {
+			const aIsCurrent = isCurrentProfile(a.name);
+			const bIsCurrent = isCurrentProfile(b.name);
+
+			// Current profile always comes first
+			if (aIsCurrent && !bIsCurrent) return -1;
+			if (!aIsCurrent && bIsCurrent) return 1;
+
 			if (linkedSortMode === 'expiry') {
 				if (a.isPrimary && !b.isPrimary) return -1;
 				if (!a.isPrimary && b.isPrimary) return 1;
@@ -7087,19 +7444,34 @@ function shortAddr(addr) {
 				return a.expirationMs - b.expirationMs;
 			}
 
-			if (linkedSortMode === 'price') {
-				const nameA = a.name.replace(/\\.sui$/, '');
-				const nameB = b.name.replace(/\\.sui$/, '');
-				const priceA = linkedNamesPrices[nameA] ? parseFloat(linkedNamesPrices[nameA]) : null;
-				const priceB = linkedNamesPrices[nameB] ? parseFloat(linkedNamesPrices[nameB]) : null;
+		if (linkedSortMode === 'price') {
+			const nameA = a.name.replace(/\\.sui$/, '');
+			const nameB = b.name.replace(/\\.sui$/, '');
+			const priceA = linkedNamesPrices[nameA] ? parseFloat(linkedNamesPrices[nameA]) : null;
+			const priceB = linkedNamesPrices[nameB] ? parseFloat(linkedNamesPrices[nameB]) : null;
 
+			// Listed names (with or without price loaded) come before unlisted
+			const hasPriceA = priceA !== null || a.isListed;
+			const hasPriceB = priceB !== null || b.isListed;
+
+			if (hasPriceA && hasPriceB) {
+				// Both have price data - sort by actual price
 				if (priceA !== null && priceB !== null) return priceA - priceB;
+				// If only one has price loaded, it comes first
 				if (priceA !== null) return -1;
 				if (priceB !== null) return 1;
+				// Both listed but no price loaded - sort by expiration
 				if (a.expirationMs === null) return 1;
 				if (b.expirationMs === null) return -1;
 				return a.expirationMs - b.expirationMs;
 			}
+			if (hasPriceA) return -1;
+			if (hasPriceB) return 1;
+			// Neither has price - sort by expiration
+			if (a.expirationMs === null) return 1;
+			if (b.expirationMs === null) return -1;
+			return a.expirationMs - b.expirationMs;
+		}
 
 			const aName = a.name.replace(/\\.sui$/, '');
 			const bName = b.name.replace(/\\.sui$/, '');
@@ -7109,7 +7481,26 @@ function shortAddr(addr) {
 		function renderNameChip(item) {
 			const cleanName = item.name.replace(/\\.sui$/, '');
 			const isCurrent = cleanName.toLowerCase() === NAME.toLowerCase();
-			const tag = getExpirationTag(item.expirationMs);
+			let tag;
+			if (item.isListed) {
+				const marketData = linkedNamesMarketData[cleanName];
+				if (marketData?.listingPriceSui) {
+					const priceSui = parseFloat(marketData.listingPriceSui);
+					let priceText;
+					if (priceSui >= 1000000) {
+						priceText = (priceSui / 1000000).toFixed(1) + 'M';
+					} else if (priceSui >= 1000) {
+						priceText = (priceSui / 1000).toFixed(1) + 'k';
+					} else {
+						priceText = priceSui.toFixed(2);
+					}
+					tag = { color: 'purple', text: priceText + ' SUI' };
+				} else {
+					tag = getExpirationTag(item.expirationMs);
+				}
+			} else {
+				tag = getExpirationTag(item.expirationMs);
+			}
 			const matchScore = getLinkedItemMatchScore(item);
 			const isFilterMatch = matchScore > 0;
 			const classes = ['linked-name-chip'];
@@ -7136,11 +7527,7 @@ function shortAddr(addr) {
 			if (item.isPrimary) {
 				h += '<svg class="primary-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>';
 			}
-			h += '<span class="linked-name-text">' + cleanName + '<span class="linked-name-suffix">.sui</span></span>';
-			const price = linkedNamesPrices[cleanName];
-			if (price) {
-				h += '<span class="linked-name-price">' + price + ' SUI</span>';
-			}
+			h += '<span class="linked-name-text">' + cleanName + '</span>';
 			h += '<span class="linked-name-tag ' + tag.color + '">' + tag.text + '</span>';
 			h += '</a>';
 			return h;
@@ -7450,22 +7837,33 @@ function shortAddr(addr) {
 				html += '<div class="linked-group-names">';
 				for (const item of sorted) html += renderNameChip(item);
 				html += '</div>';
-			} else if (linkedSortMode === 'price') {
-				const withPrice = [];
-				const withoutPrice = [];
-				for (const item of linkedNamesData) {
-					const cleanName = item.name.replace(/\\.sui$/, '');
-					if (linkedNamesPrices[cleanName]) {
-						withPrice.push(item);
-					} else {
-						withoutPrice.push(item);
-					}
+		} else if (linkedSortMode === 'price') {
+			const withPrice = [];
+			const withoutPrice = [];
+			for (const item of linkedNamesData) {
+				const cleanName = item.name.replace(/\\.sui$/, '');
+				// Listed names (with or without price loaded) go in withPrice
+				if (linkedNamesPrices[cleanName] || item.isListed) {
+					withPrice.push(item);
+				} else {
+					withoutPrice.push(item);
 				}
-				withPrice.sort(function(a, b) {
-					const nameA = a.name.replace(/\\.sui$/, '');
-					const nameB = b.name.replace(/\\.sui$/, '');
-					return parseFloat(linkedNamesPrices[nameA]) - parseFloat(linkedNamesPrices[nameB]);
-				});
+			}
+			withPrice.sort(function(a, b) {
+				const nameA = a.name.replace(/\\.sui$/, '');
+				const nameB = b.name.replace(/\\.sui$/, '');
+				const priceA = linkedNamesPrices[nameA] ? parseFloat(linkedNamesPrices[nameA]) : null;
+				const priceB = linkedNamesPrices[nameB] ? parseFloat(linkedNamesPrices[nameB]) : null;
+				// Both have price - sort by price
+				if (priceA !== null && priceB !== null) return priceA - priceB;
+				// Only one has price - it comes first
+				if (priceA !== null) return -1;
+				if (priceB !== null) return 1;
+				// Neither has price loaded - sort by expiration
+				if (a.expirationMs === null) return 1;
+				if (b.expirationMs === null) return -1;
+				return a.expirationMs - b.expirationMs;
+			});
 				withoutPrice.sort(function(a, b) {
 					if (a.expirationMs === null) return 1;
 					if (b.expirationMs === null) return -1;
@@ -7704,114 +8102,21 @@ function shortAddr(addr) {
 			fetchLinkedNames();
 		}
 
-		// Marketplace functionality
-		const overviewSecondaryGrid = document.getElementById('overview-secondary-grid');
-		const overviewMarketModule = document.getElementById('overview-market-module');
-		const marketplaceCard = document.getElementById('marketplace-card');
-		const marketplaceListingRow = document.getElementById('marketplace-listing-row');
-		const marketplaceBidRow = document.getElementById('marketplace-bid-row');
-		const marketplaceListingPrice = document.getElementById('marketplace-listing-price');
-		const marketplaceLister = document.getElementById('marketplace-lister');
-		const marketplaceBidPrice = document.getElementById('marketplace-bid-price');
-		const marketplaceBidder = document.getElementById('marketplace-bidder');
-		const marketplaceAcceptBidBtn = document.getElementById('marketplace-accept-bid-btn');
-		const marketplaceAcceptText = marketplaceAcceptBidBtn?.querySelector('.marketplace-accept-text');
-		const marketplaceAcceptLoading = marketplaceAcceptBidBtn?.querySelector('.marketplace-accept-loading');
-		const marketplaceBuyBtn = document.getElementById('marketplace-buy-btn');
-		const marketplaceBuyText = marketplaceBuyBtn?.querySelector('.marketplace-buy-text');
-		const marketplaceBuyLoading = marketplaceBuyBtn?.querySelector('.marketplace-buy-loading');
-			const marketplaceBidInputWrap = document.getElementById('marketplace-bid-input');
-			const marketplaceBidAmountInput = document.getElementById('marketplace-bid-amount');
-			const marketplaceBidPriceUpBtn = document.getElementById('marketplace-bid-price-up');
-			const marketplaceBidPriceDownBtn = document.getElementById('marketplace-bid-price-down');
-			const marketplaceBidMaxBtn = document.getElementById('marketplace-bid-max');
-			const marketplacePlaceBidBtn = document.getElementById('marketplace-place-bid-btn');
-			const marketplaceBidText = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-text');
-			const marketplaceBidLoading = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-loading');
-			const marketplaceBidEstimate = document.getElementById('marketplace-bid-estimate');
-			const marketplaceListInputWrap = document.getElementById('marketplace-list-input');
-			const marketplaceListAmountInput = document.getElementById('marketplace-list-amount');
-			const marketplaceListPriceUpBtn = document.getElementById('marketplace-list-price-up');
-			const marketplaceListPriceDownBtn = document.getElementById('marketplace-list-price-down');
-			const marketplaceListBtn = document.getElementById('marketplace-list-btn');
-			const marketplaceListText = marketplaceListBtn?.querySelector('.marketplace-list-text');
-			const marketplaceListLoading = marketplaceListBtn?.querySelector('.marketplace-list-loading');
-			const marketplaceListEstimate = document.getElementById('marketplace-list-estimate');
-			const marketplaceStatus = document.getElementById('marketplace-status');
-			const marketplaceActivity = document.getElementById('marketplace-activity');
-			const marketplaceActivityList = document.getElementById('marketplace-activity-list');
-			const marketplaceActivityLink = document.getElementById('marketplace-activity-link');
-			const marketplaceSoldRow = document.getElementById('marketplace-sold-row');
-			const marketplaceSoldPrice = document.getElementById('marketplace-sold-price');
-			const marketplaceSeller = document.getElementById('marketplace-seller');
-
-				let resolvingNftOwnerForMarketplace = false;
-				let bidInputTouched = false;
-				let listInputTouched = false;
-				let profileRegistrationCostSui = null;
-				let profileRegistrationCostPending = null;
-				const bidPrimaryNameCache = new Map();
-				const linkedPrimaryNameCache = new Map();
-				let marketplaceActivityRenderNonce = 0;
-
-		function tryParseMarketplaceTx(candidate) {
-			if (!candidate) return null;
-
-			if (typeof candidate === 'string') {
-				const trimmed = candidate.trim();
-				if (!trimmed) return null;
-				if (
-					(trimmed.startsWith('{') && trimmed.endsWith('}'))
-					|| (trimmed.startsWith('[') && trimmed.endsWith(']'))
-				) {
-					try {
-						const parsed = JSON.parse(trimmed);
-						const nestedTx = tryParseMarketplaceTx(parsed);
-						if (nestedTx) return nestedTx;
-					} catch {
-						// Fall through and try as raw/base64 tx bytes
+			// Marketplace functionality
+			let resolvingNftOwnerForMarketplace = false;
+			let bidInputTouched = false;
+			let listInputTouched = false;
+			let profileRegistrationCostSui = null;
+			let profileRegistrationCostPending = null;
+			let profileRenewalBaseCostSui = null;
+			let profileRenewalBaseCostPending = null;
+			const bidPrimaryNameCache = new Map();
+			const linkedPrimaryNameCache = new Map();
+			let marketplaceActivityRenderNonce = 0;
+					async function ensureProfileRegistrationCostSui() {
+					if (Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0) {
+						return profileRegistrationCostSui;
 					}
-				}
-				try {
-					return Transaction.from(trimmed);
-				} catch {
-					return null;
-				}
-			}
-
-			if (typeof candidate === 'object') {
-				const nestedPayload =
-					candidate.transaction
-					|| candidate.txBytes
-					|| candidate.tx_bytes
-					|| candidate.serializedTransaction
-					|| candidate.serialized_transaction;
-				if (nestedPayload) {
-					const nestedTx = tryParseMarketplaceTx(nestedPayload);
-					if (nestedTx) return nestedTx;
-				}
-				try {
-					return Transaction.from(candidate);
-				} catch {
-					return null;
-				}
-			}
-
-			return null;
-		}
-
-			function parseMarketplaceAcceptTx(payload) {
-				const tx = tryParseMarketplaceTx(payload);
-				if (!tx) {
-					throw new Error('Missing or invalid transaction payload');
-				}
-				return tx;
-			}
-
-			async function ensureProfileRegistrationCostSui() {
-				if (Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0) {
-					return profileRegistrationCostSui;
-				}
 				if (profileRegistrationCostPending) return profileRegistrationCostPending;
 
 				profileRegistrationCostPending = (async () => {
@@ -7840,8 +8145,65 @@ function shortAddr(addr) {
 					profileRegistrationCostPending = null;
 				});
 
-				return profileRegistrationCostPending;
-			}
+					return profileRegistrationCostPending;
+				}
+
+				function resolveRenewalBaseCostSuiFromPricing(pricing) {
+					const discountedMist = Number(pricing?.discountedSuiMist || 0);
+					if (!Number.isFinite(discountedMist) || discountedMist <= 0) return null;
+					const savingsMist = Number(pricing?.savingsMist || 0);
+					const normalizedSavingsMist = Number.isFinite(savingsMist) && savingsMist > 0 ? savingsMist : 0;
+					return (discountedMist + normalizedSavingsMist) / 1e9;
+				}
+
+				function getProfileRenewalBaseCostSuiOrNull() {
+					if (Number.isFinite(profileRenewalBaseCostSui) && profileRenewalBaseCostSui > 0) {
+						return profileRenewalBaseCostSui;
+					}
+					const cacheKey = NAME + '-1';
+					const cachedPricing = renewalPricingCache?.[cacheKey] || null;
+					const cachedBaseCostSui = resolveRenewalBaseCostSuiFromPricing(cachedPricing);
+					if (Number.isFinite(cachedBaseCostSui) && cachedBaseCostSui > 0) {
+						profileRenewalBaseCostSui = cachedBaseCostSui;
+						return cachedBaseCostSui;
+					}
+					return null;
+				}
+
+				async function ensureProfileRenewalBaseCostSui() {
+					const cachedBaseCostSui = getProfileRenewalBaseCostSuiOrNull();
+					if (Number.isFinite(cachedBaseCostSui) && cachedBaseCostSui > 0) {
+						return cachedBaseCostSui;
+					}
+					if (profileRenewalBaseCostPending) return profileRenewalBaseCostPending;
+
+					profileRenewalBaseCostPending = (async () => {
+						try {
+							const cacheKey = NAME + '-1';
+							let pricing = renewalPricingCache?.[cacheKey] || null;
+							if (!pricing) {
+								const res = await fetch('/api/renewal-pricing?domain=' + encodeURIComponent(NAME) + '&years=1');
+								if (!res.ok) return null;
+								pricing = await res.json();
+								if (renewalPricingCache) renewalPricingCache[cacheKey] = pricing;
+							}
+
+							const renewalBaseCostSui = resolveRenewalBaseCostSuiFromPricing(pricing);
+							if (Number.isFinite(renewalBaseCostSui) && renewalBaseCostSui > 0) {
+								profileRenewalBaseCostSui = renewalBaseCostSui;
+								return renewalBaseCostSui;
+							}
+							return null;
+						} catch (error) {
+							console.log('Failed to fetch 1-year renewal baseline:', error);
+							return null;
+						}
+					})().finally(() => {
+						profileRenewalBaseCostPending = null;
+					});
+
+					return profileRenewalBaseCostPending;
+				}
 
 			async function ensureMarketplaceFunding(tx, requiredMist) {
 				if (!connectedAddress) return;
@@ -8386,12 +8748,25 @@ function shortAddr(addr) {
 										: '') +
 									'>' + escapeHtmlJs(fallbackActor) + '</span>';
 
-								const customAmount = typeof action.expirySummary === 'string' ? action.expirySummary : '';
-								const amountContent = customAmount
-									? '<span class="marketplace-activity-amount-text">' + escapeHtmlJs(customAmount) + '</span>'
-									: action.price > 0
-										? '<span class="marketplace-activity-amount-num">' + escapeHtmlJs(formatMarketplaceBidSuiDisplay(Number(action.price) / 1e9)) + '</span><span class="marketplace-activity-amount-sui"> SUI</span>'
-										: '';
+									const customAmount = typeof action.expirySummary === 'string' ? action.expirySummary : '';
+									const amountContent = customAmount
+										? '<span class="marketplace-activity-amount-text">' + escapeHtmlJs(customAmount) + '</span>'
+										: action.price > 0
+											? '<span class="marketplace-activity-amount-num">' + escapeHtmlJs((() => {
+												const actionType = normalizeActionType(action.type);
+												if (
+													actionType === 'list'
+													|| actionType === 'listed'
+													|| actionType === 'relist'
+													|| actionType === 'create_listing'
+												) {
+													const listingDisplaySui = getMarketplaceListingDisplaySui(action.price);
+													return formatMarketplaceListingSuiDisplay(listingDisplaySui);
+												}
+												const actionSui = Number(action.price) / 1e9;
+												return formatMarketplaceBidSuiDisplay(actionSui);
+											})()) + '</span><span class="marketplace-activity-amount-sui"> SUI</span>'
+											: '';
 								const priceDisplay = '<span class="marketplace-activity-amount">' + amountContent + '</span>';
 
 								const dateStr = customAmount ? '' : formatActivityDate(action.blockTime);
@@ -8471,11 +8846,20 @@ function shortAddr(addr) {
 			}
 
 			function isConnectedProfileOwner() {
-				return Boolean(
+				const normalizedOwner = getResolvedOwnerAddress();
+				const isOnChainOwner = Boolean(
 					connectedAddress
-					&& nftOwnerAddress
-					&& connectedAddress.toLowerCase() === nftOwnerAddress.toLowerCase(),
+					&& normalizedOwner
+					&& connectedAddress.toLowerCase() === normalizedOwner,
 				);
+				// Also check if connected wallet is the seller in marketplace listing
+				// This handles cases where NFT is listed (ObjectOwner) and on-chain owner is the marketplace contract
+				const isMarketplaceSeller = Boolean(
+					connectedAddress
+					&& currentListing?.seller
+					&& connectedAddress.toLowerCase() === currentListing.seller.toLowerCase()
+				);
+				return isOnChainOwner || isMarketplaceSeller;
 			}
 
 			function hasOwnerListingForCurrentNft() {
@@ -8495,23 +8879,26 @@ function shortAddr(addr) {
 				return Math.max(LIST_FLOOR_SUI, bestBidBaselineSui);
 			}
 
-			function getMarketplaceListLabel() {
+				function getMarketplaceListLabel() {
 				const normalizedName = String(NAME || '').replace(/.sui$/i, '');
 				return 'List ' + normalizedName + '.sui';
 			}
 
-			function getMarketplaceListingTokenId() {
-				if (currentListing?.tokenId) return String(currentListing.tokenId);
-				if (currentBestBid?.tokenId) return String(currentBestBid.tokenId);
-				if (NFT_ID) return NFT_ID;
-				return '';
-			}
+				function getMarketplaceListingTokenId() {
+					if (currentListing?.tokenId) return String(currentListing.tokenId);
+					if (currentBestBid?.tokenId) return String(currentBestBid.tokenId);
+					if (NFT_ID) return NFT_ID;
+					return '';
+				}
 
-				function formatMarketplaceBidSuiDisplay(amountSui) {
-					if (!Number.isFinite(amountSui) || amountSui <= 0) return '--';
-					const nearestInt = Math.round(amountSui);
+				const TRADEPORT_DISPLAY_COMMISSION_BPS = 300;
+
+					function formatMarketplaceBidSuiDisplay(amountSui) {
+						if (!Number.isFinite(amountSui) || amountSui <= 0) return '--';
+						const absSui = Math.abs(amountSui);
+						if (absSui >= 1000) return formatMarketplaceListingSuiDisplay(amountSui);
+						const nearestInt = Math.round(amountSui);
 					const diffFromWhole = Math.abs(amountSui - nearestInt);
-					const absSui = Math.abs(amountSui);
 
 				if (absSui >= 0.05) {
 					const fivePercentOfValue = absSui * 0.05;
@@ -8529,16 +8916,57 @@ function shortAddr(addr) {
 					return amountSui.toFixed(2);
 				}
 
-				function formatMarketplaceListingSuiDisplay(amountSui) {
-					if (!Number.isFinite(amountSui) || amountSui <= 0) return '--';
-					if (amountSui >= 1000000) return trimTrailingZeros((amountSui / 1000000).toFixed(2)) + 'M';
-					if (amountSui >= 10000) return trimTrailingZeros((amountSui / 1000).toFixed(1)) + 'k';
-					if (amountSui >= 1000) return trimTrailingZeros(amountSui.toFixed(0));
-					if (amountSui >= 100) return trimTrailingZeros(amountSui.toFixed(1));
-					return formatMarketplaceBidSuiDisplay(amountSui);
+				function roundToSignificantFigures(value, significantFigures = 3) {
+					if (!Number.isFinite(value) || value === 0) return 0;
+					const digits = Math.floor(Math.log10(Math.abs(value))) + 1;
+					const decimals = Math.max(0, significantFigures - digits);
+					return Number(value.toFixed(decimals));
 				}
 
-				const trimTrailingZeros = (value) => value.replace(/[.]?0+$/, '');
+					function formatMarketplaceListingSuiDisplay(amountSui) {
+						if (!Number.isFinite(amountSui) || amountSui <= 0) return '--';
+
+					const COMPACT_UNITS = [
+						{ divisor: 1e12, suffix: 'T' },
+						{ divisor: 1e9, suffix: 'B' },
+						{ divisor: 1e6, suffix: 'M' },
+						{ divisor: 1e3, suffix: 'K' },
+					];
+					const SIG_FIGS = 3;
+					const absAmount = Math.abs(amountSui);
+
+					for (let i = 0; i < COMPACT_UNITS.length; i++) {
+						const unit = COMPACT_UNITS[i];
+						if (absAmount < unit.divisor) continue;
+
+						let scaled = absAmount / unit.divisor;
+						let rounded = roundToSignificantFigures(scaled, SIG_FIGS);
+						let suffix = unit.suffix;
+
+						if (rounded >= 1000 && i > 0) {
+							const largerUnit = COMPACT_UNITS[i - 1];
+							scaled = absAmount / largerUnit.divisor;
+							rounded = roundToSignificantFigures(scaled, SIG_FIGS);
+							suffix = largerUnit.suffix;
+						}
+
+						return trimTrailingZeros(String(rounded)) + suffix;
+					}
+
+						const baseRounded = roundToSignificantFigures(absAmount, SIG_FIGS);
+						return trimTrailingZeros(String(baseRounded));
+					}
+
+					function getMarketplaceListingDisplaySui(listingPriceMist) {
+						const listingMist = Number(listingPriceMist || 0);
+						if (!Number.isFinite(listingMist) || listingMist <= 0) return 0;
+						const marketFeeMist = TRADEPORT_DISPLAY_COMMISSION_BPS > 0
+							? Math.ceil(listingMist * TRADEPORT_DISPLAY_COMMISSION_BPS / 10000)
+							: 0;
+						return (listingMist + marketFeeMist) / 1e9;
+					}
+
+					const trimTrailingZeros = (value) => value.replace(/[.]?0+$/, '');
 
 			function getRoundedListAmountSuiOrNull() {
 				if (!marketplaceListAmountInput) return null;
@@ -8571,7 +8999,23 @@ function shortAddr(addr) {
 				if (hasOwnerListingForCurrentNft() && currentListing?.price) {
 					defaultValue = Number(currentListing.price) / 1e9;
 				} else {
-					defaultValue = minimumSui;
+					const renewalBaseSui = getProfileRenewalBaseCostSuiOrNull();
+					defaultValue = Number.isFinite(renewalBaseSui) && renewalBaseSui > 0
+						? renewalBaseSui
+						: minimumSui;
+					if (!(Number.isFinite(renewalBaseSui) && renewalBaseSui > 0)) {
+						ensureProfileRenewalBaseCostSui()
+							.then((resolvedRenewalBaseSui) => {
+								if (!marketplaceListAmountInput || listInputTouched || hasOwnerListingForCurrentNft()) return;
+								if (!Number.isFinite(resolvedRenewalBaseSui) || resolvedRenewalBaseSui <= 0) return;
+								const latestMinimumSui = getListMinimumSui();
+								const hydratedDefaultSui = Math.max(latestMinimumSui, resolvedRenewalBaseSui);
+								marketplaceListAmountInput.value = String(Math.round(hydratedDefaultSui * 1e4) / 1e4);
+								marketplaceListAmountInput.min = String(latestMinimumSui);
+								updateListButtonState();
+							})
+							.catch(() => null);
+					}
 				}
 
 				if (defaultValue < minimumSui) {
@@ -8609,12 +9053,22 @@ function shortAddr(addr) {
 
 				const listingAmountSui = Math.round(rawListAmountSui * 1e4) / 1e4;
 				const usdEstimate = cachedSuiUsdPrice > 0 ? (listingAmountSui * cachedSuiUsdPrice).toFixed(2) : null;
+					const renewalBaseSui = getProfileRenewalBaseCostSuiOrNull();
+					if (!(Number.isFinite(renewalBaseSui) && renewalBaseSui > 0) && !profileRenewalBaseCostPending) {
+						ensureProfileRenewalBaseCostSui()
+							.then(() => {
+								updateListEstimateDisplay();
+							})
+							.catch(() => null);
+					}
+
+				const estimateLines = [];
 				if (usdEstimate) {
-					marketplaceListEstimate.innerHTML = '<span class="marketplace-list-usd">≈ $' + usdEstimate + '</span>';
-				} else {
-					marketplaceListEstimate.innerHTML = '';
+					estimateLines.push('<span class="marketplace-list-usd">≈ $' + usdEstimate + '</span>');
 				}
-			}
+
+					marketplaceListEstimate.innerHTML = estimateLines.join('');
+				}
 
 			function updateListButtonState() {
 				if (!marketplaceListBtn) return;
@@ -8628,7 +9082,7 @@ function shortAddr(addr) {
 					: 0;
 				const roundedListAmountSui =
 					Number.isFinite(rawListAmountSui) && rawListAmountSui > 0
-						? Math.max(minimumSui, Math.ceil(rawListAmountSui))
+						? Math.max(minimumSui, Math.round(rawListAmountSui * 1e4) / 1e4)
 						: 0;
 				const meetsMinimum = roundedListAmountSui >= minimumSui;
 				const canList = Boolean(
@@ -8674,8 +9128,10 @@ function shortAddr(addr) {
 						marketplaceCard.classList.toggle('marketplace-owner-listing', isOwner);
 					}
 
-				if (marketplaceBuyBtn && marketplaceBuyText && currentListing) {
-					const priceInSui = formatMarketplaceListingSuiDisplay(currentListing.price / 1e9);
+					if (marketplaceBuyBtn && marketplaceBuyText && currentListing) {
+						const priceInSui = formatMarketplaceListingSuiDisplay(
+							getMarketplaceListingDisplaySui(currentListing.price),
+						);
 					if (isOwner) {
 						marketplaceBuyBtn.style.display = 'none';
 					} else if (connectedAddress) {
@@ -8802,9 +9258,11 @@ function shortAddr(addr) {
 				lastSoldPriceMist = null;
 				lastSaleEventMs = 0;
 				lastListingEventMs = 0;
-				if (data.bestListing && data.bestListing.price) {
-					currentListing = data.bestListing;
-					const priceInSui = formatMarketplaceListingSuiDisplay(data.bestListing.price / 1e9);
+					if (data.bestListing && data.bestListing.price) {
+						currentListing = data.bestListing;
+						const priceInSui = formatMarketplaceListingSuiDisplay(
+							getMarketplaceListingDisplaySui(data.bestListing.price),
+						);
 					const listingAmountEl = marketplaceListingPrice.querySelector('.price-amount');
 					const listingSuiEl = marketplaceListingPrice.querySelector('.price-sui');
 					if (listingAmountEl) listingAmountEl.textContent = priceInSui;
@@ -8921,13 +9379,13 @@ function shortAddr(addr) {
 		const TRADEPORT_LISTINGS_STORE = '0xf96f9363ac5a64c058bf7140723226804d74c0dab2dd27516fb441a180cd763b';
 		const TRADEPORT_LISTINGS_STORE_VERSION = '670935706';
 		const TRADEPORT_LISTINGS_PACKAGE = '0x6cfe7388ccf732432906d7faebcc33fd91e11d4c2f8cb3ae0082b8d3269e3d5b';
-		const TRADEPORT_COMMISSION_BPS = 300;
+			const TRADEPORT_COMMISSION_BPS = TRADEPORT_DISPLAY_COMMISSION_BPS;
 		const SUINS_REGISTRATION_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration';
-			const TRADEPORT_MULTI_BID_PACKAGE = '0x63ce6caee2ba264e92bca2d160036eb297d99b2d91d4db89d48a9bffca66e55b';
-			const TRADEPORT_MULTI_BID_STORE = '0x8aaed7e884343fb8b222c721d02eaac2c6ae2abbb4ddcdf16cb55cf8754ee860';
-			const TRADEPORT_MULTI_BID_STORE_VERSION = '572206387';
-			const TRADEPORT_BID_FEE_BPS = 300;
-			const ACCEPT_BID_EXTRA_FEE_BPS = 500;
+				const TRADEPORT_MULTI_BID_PACKAGE = '0x63ce6caee2ba264e92bca2d160036eb297d99b2d91d4db89d48a9bffca66e55b';
+				const TRADEPORT_MULTI_BID_STORE = '0x8aaed7e884343fb8b222c721d02eaac2c6ae2abbb4ddcdf16cb55cf8754ee860';
+				const TRADEPORT_MULTI_BID_STORE_VERSION = '572206387';
+				const TRADEPORT_BID_FEE_BPS = 300;
+				const TRADEPORT_CLOCK_OBJECT = '0x6';
 
 		if (marketplaceBuyBtn) {
 			marketplaceBuyBtn.addEventListener('click', async () => {
@@ -9433,9 +9891,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					return;
 				}
 
-				const isOwner =
-					nftOwnerAddress &&
-					connectedAddress.toLowerCase() === String(nftOwnerAddress).toLowerCase();
+				const isOwner = isConnectedProfileOwner();
 				if (!isOwner) {
 					marketplaceStatus.textContent = 'Only the NFT owner can accept bids';
 					marketplaceStatus.className = 'marketplace-status error';
@@ -9452,43 +9908,48 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					return;
 				}
 
-				marketplaceAcceptBidBtn.disabled = true;
-				marketplaceAcceptText?.classList.add('hidden');
-				marketplaceAcceptLoading?.classList.remove('hidden');
-				marketplaceStatus.textContent = 'Preparing accept transaction...';
-				marketplaceStatus.className = 'marketplace-status';
+					marketplaceAcceptBidBtn.disabled = true;
+					marketplaceAcceptText?.classList.add('hidden');
+					marketplaceAcceptLoading?.classList.remove('hidden');
+					marketplaceStatus.textContent = 'Building accept transaction...';
+					marketplaceStatus.className = 'marketplace-status';
 
-				try {
-					const txResponse = await fetch('/api/marketplace/accept-bid', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({
-							bidId: currentBestBid.id,
-							sellerAddress: connectedAddress,
-						}),
-					});
-
-					const txData = await txResponse.json().catch(() => ({}));
-					if (!txResponse.ok) {
-						throw new Error(txData?.error || 'Failed to prepare accept transaction');
-					}
-
-						const tx = parseMarketplaceAcceptTx(txData);
-						const acceptedBidMist = BigInt(Math.ceil(Number(currentBestBid?.price || 0)));
-						if (acceptedBidMist > 0n) {
-							const suinsClient = await createSuinsClient();
-							const extraBidFeeRecipient = await resolveFacilitatorAddress(suinsClient);
-							const extraFeeRecipientAddress = isLikelySuiAddress(extraBidFeeRecipient)
-								? extraBidFeeRecipient
-								: connectedAddress;
-							const extraFeeMist = (acceptedBidMist * BigInt(ACCEPT_BID_EXTRA_FEE_BPS) + 9999n) / 10000n;
-							if (extraFeeMist > 0n) {
-								await ensureMarketplaceFunding(tx, extraFeeMist);
-								const [extraFeeCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(extraFeeMist)]);
-								tx.transferObjects([extraFeeCoin], tx.pure.address(extraFeeRecipientAddress));
-							}
+					try {
+						const senderAddress = getConnectedSenderAddress();
+						if (!isLikelySuiAddress(senderAddress)) {
+							throw new Error('Wallet sender unavailable');
+						}
+						const bidId = String(currentBestBid?.id || '').trim();
+						if (!bidId || !bidId.startsWith('0x')) {
+							throw new Error('Invalid bid id');
+						}
+						const listingTokenId = getMarketplaceListingTokenId();
+						if (!listingTokenId || !listingTokenId.startsWith('0x')) {
+							throw new Error('Missing listing token id');
 						}
 
+						const tx = new Transaction();
+						tx.setSender(senderAddress);
+
+						const multiBidStoreRef = tx.sharedObjectRef({
+							objectId: TRADEPORT_MULTI_BID_STORE,
+							initialSharedVersion: TRADEPORT_MULTI_BID_STORE_VERSION,
+							mutable: true,
+						});
+
+						tx.moveCall({
+							target: TRADEPORT_MULTI_BID_PACKAGE + '::tradeport_biddings::accept_bid_without_transfer_policy',
+							typeArguments: [SUINS_REGISTRATION_TYPE],
+							arguments: [
+								tx.object(TRADEPORT_CLOCK_OBJECT),
+								multiBidStoreRef,
+								tx.pure.id(bidId),
+								tx.pure.option('address', null),
+								tx.object(listingTokenId),
+							],
+						});
+
+						tx.setGasBudget(100000000);
 						marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
@@ -9528,15 +9989,6 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		}
 
 		// Decay auction functionality
-		const auctionCard = document.getElementById('auction-card');
-		const auctionCurrentPrice = document.getElementById('auction-current-price');
-		const auctionTimeLeft = document.getElementById('auction-time-left');
-		const auctionBuyBtn = document.getElementById('auction-buy-btn');
-		const auctionBuyText = document.getElementById('auction-buy-text');
-		const auctionBuyLoading = auctionBuyBtn?.querySelector('.auction-buy-loading');
-		const auctionStatus = document.getElementById('auction-status');
-		const auctionSellerLabel = document.getElementById('auction-seller-label');
-
 		let auctionData = null;
 		let auctionInterval = null;
 
@@ -9755,50 +10207,233 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		// Subscriptions are encrypted with Seal and stored on Walrus for privacy
 		// Only the subscriber's wallet can decrypt the subscription list
 
-		const SUBSCRIPTIONS_KEY = 'sui_ski_subscriptions';
-		const SUBSCRIPTIONS_BLOB_KEY = 'sui_ski_subscriptions_blob';
+		const SUBSCRIPTIONS_KEY_PREFIX = 'sui_ski_subscriptions';
+		const SUBSCRIPTIONS_BLOB_KEY_PREFIX = 'sui_ski_subscriptions_blob';
+		const SUBSCRIPTIONS_CIPHER_VERSION = 2;
+		const SUBSCRIPTIONS_KEY_CONTEXT = 'sui.ski:black-diamond:v2';
+		let subscriptionsCryptoKeyAddress = null;
+		let subscriptionsCryptoKey = null;
+		let subscriptionsCryptoKeyPromise = null;
+
+		function normalizeWalletAddress(value) {
+			return String(value || '').trim().toLowerCase();
+		}
+
+		function getActiveWalletAddress() {
+			return normalizeWalletAddress(window.connectedAddress);
+		}
+
+		function getScopedStorageKey(prefix, walletAddress = getActiveWalletAddress()) {
+			return walletAddress ? prefix + ':' + walletAddress : prefix;
+		}
+
+		function filterSubscriptionsForWallet(subs, walletAddress = getActiveWalletAddress()) {
+			if (!Array.isArray(subs)) return [];
+			if (!walletAddress) return subs;
+			return subs.filter((entry) => normalizeWalletAddress(entry?.subscriberAddress) === walletAddress);
+		}
 
 		// Local cache (also encrypted on Walrus for cross-device sync)
 		function getLocalSubscriptions() {
 			try {
-				return JSON.parse(localStorage.getItem(SUBSCRIPTIONS_KEY) || '[]');
+				const scopedRaw = localStorage.getItem(getScopedStorageKey(SUBSCRIPTIONS_KEY_PREFIX));
+				if (scopedRaw) {
+					return filterSubscriptionsForWallet(JSON.parse(scopedRaw));
+				}
+
+				const legacyRaw = localStorage.getItem(SUBSCRIPTIONS_KEY_PREFIX);
+				const legacySubs = filterSubscriptionsForWallet(JSON.parse(legacyRaw || '[]'));
+				if (legacySubs.length > 0) {
+					saveLocalSubscriptions(legacySubs);
+				}
+				return legacySubs;
 			} catch {
 				return [];
 			}
 		}
 
 		function saveLocalSubscriptions(subs) {
-			localStorage.setItem(SUBSCRIPTIONS_KEY, JSON.stringify(subs));
+			localStorage.setItem(
+				getScopedStorageKey(SUBSCRIPTIONS_KEY_PREFIX),
+				JSON.stringify(filterSubscriptionsForWallet(subs)),
+			);
 		}
 
 		function getBlobInfo() {
 			try {
-				return JSON.parse(localStorage.getItem(SUBSCRIPTIONS_BLOB_KEY) || 'null');
+				const scopedRaw = localStorage.getItem(getScopedStorageKey(SUBSCRIPTIONS_BLOB_KEY_PREFIX));
+				if (scopedRaw) {
+					const scopedInfo = JSON.parse(scopedRaw);
+					if (scopedInfo?.blobId) return scopedInfo;
+				}
+
+				const legacyInfo = JSON.parse(localStorage.getItem(SUBSCRIPTIONS_BLOB_KEY_PREFIX) || 'null');
+				if (!legacyInfo?.blobId) return null;
+
+				const walletAddress = getActiveWalletAddress();
+				const blobWalletAddress = normalizeWalletAddress(legacyInfo.subscriberAddress);
+				if (walletAddress && blobWalletAddress && walletAddress !== blobWalletAddress) {
+					return null;
+				}
+				saveBlobInfo(legacyInfo);
+				return legacyInfo;
 			} catch {
 				return null;
 			}
 		}
 
 		function saveBlobInfo(info) {
-			localStorage.setItem(SUBSCRIPTIONS_BLOB_KEY, JSON.stringify(info));
+			if (!info || !info.blobId) return;
+			const walletAddress = getActiveWalletAddress();
+			const nextInfo = walletAddress
+				? { ...info, subscriberAddress: info.subscriberAddress || window.connectedAddress || '' }
+				: info;
+			localStorage.setItem(getScopedStorageKey(SUBSCRIPTIONS_BLOB_KEY_PREFIX), JSON.stringify(nextInfo));
+		}
+
+		function bytesToBase64(bytes) {
+			let binary = '';
+			for (let i = 0; i < bytes.length; i++) {
+				binary += String.fromCharCode(bytes[i]);
+			}
+			return btoa(binary);
+		}
+
+		function base64ToBytes(value) {
+			const binary = atob(value);
+			const bytes = new Uint8Array(binary.length);
+			for (let i = 0; i < binary.length; i++) {
+				bytes[i] = binary.charCodeAt(i);
+			}
+			return bytes;
+		}
+
+		function getSignatureFromSignResult(signResult) {
+			if (!signResult) return '';
+			if (typeof signResult === 'string') return signResult;
+			if (typeof signResult.signature === 'string') return signResult.signature;
+			if (signResult.signature && signResult.signature.length) {
+				try {
+					return bytesToBase64(new Uint8Array(signResult.signature));
+				} catch {}
+			}
+			return '';
+		}
+
+		async function signSubscriptionsMessage(messageBytes) {
+			const wallet = getConnectedWallet();
+			const account = getConnectedAccount();
+			if (!wallet || !account) throw new Error('Wallet must be connected');
+
+			const signFeature = wallet.features && wallet.features['sui:signPersonalMessage'];
+			if (signFeature && typeof signFeature.signPersonalMessage === 'function') {
+				const signResult = await signFeature.signPersonalMessage({
+					account,
+					message: messageBytes,
+				});
+				const firstResult = Array.isArray(signResult) ? signResult[0] : signResult;
+				const signature = getSignatureFromSignResult(firstResult);
+				if (signature) return signature;
+			}
+
+			const rawWallet = wallet._raw;
+			if (rawWallet && typeof rawWallet.signPersonalMessage === 'function') {
+				const signResult = await rawWallet.signPersonalMessage({ message: messageBytes });
+				const signature = getSignatureFromSignResult(signResult);
+				if (signature) return signature;
+			}
+			if (rawWallet && typeof rawWallet.signMessage === 'function') {
+				const signResult = await rawWallet.signMessage({ message: messageBytes });
+				const signature = getSignatureFromSignResult(signResult);
+				if (signature) return signature;
+			}
+
+			throw new Error('Wallet does not support personal message signing for private bookmarks');
+		}
+
+		async function getSubscriptionsCryptoKey(subscriberAddress) {
+			const normalizedAddress = normalizeWalletAddress(subscriberAddress || window.connectedAddress);
+			if (!normalizedAddress) throw new Error('Subscriber wallet address is required');
+			if (subscriptionsCryptoKey && subscriptionsCryptoKeyAddress === normalizedAddress) {
+				return subscriptionsCryptoKey;
+			}
+			if (subscriptionsCryptoKeyPromise && subscriptionsCryptoKeyAddress === normalizedAddress) {
+				return subscriptionsCryptoKeyPromise;
+			}
+
+			subscriptionsCryptoKeyAddress = normalizedAddress;
+			subscriptionsCryptoKeyPromise = (async () => {
+				const signaturePayload = new TextEncoder().encode(
+					SUBSCRIPTIONS_KEY_CONTEXT + ':' + normalizedAddress,
+				);
+				const signature = await signSubscriptionsMessage(signaturePayload);
+				const seed = new TextEncoder().encode(
+					signature + ':' + normalizedAddress + ':' + SUBSCRIPTIONS_KEY_CONTEXT,
+				);
+				const keyMaterial = await crypto.subtle.digest('SHA-256', seed);
+				subscriptionsCryptoKey = await crypto.subtle.importKey(
+					'raw',
+					keyMaterial,
+					{ name: 'AES-GCM' },
+					false,
+					['encrypt', 'decrypt'],
+				);
+				return subscriptionsCryptoKey;
+			})()
+				.catch((error) => {
+					subscriptionsCryptoKey = null;
+					subscriptionsCryptoKeyAddress = null;
+					throw error;
+				})
+				.finally(() => {
+					subscriptionsCryptoKeyPromise = null;
+				});
+
+			return subscriptionsCryptoKeyPromise;
 		}
 
 		async function encryptSubscriptions(subs, subscriberAddress) {
+			const key = await getSubscriptionsCryptoKey(subscriberAddress);
 			const data = JSON.stringify({
 				subscriptions: subs,
 				subscriberAddress: subscriberAddress,
 				encryptedAt: Date.now(),
-				version: 1,
+				version: SUBSCRIPTIONS_CIPHER_VERSION,
 			});
-			return btoa(unescape(encodeURIComponent(data)));
+			const iv = crypto.getRandomValues(new Uint8Array(12));
+			const plaintext = new TextEncoder().encode(data);
+			const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
+			return JSON.stringify({
+				v: SUBSCRIPTIONS_CIPHER_VERSION,
+				iv: bytesToBase64(iv),
+				cipher: bytesToBase64(new Uint8Array(ciphertext)),
+			});
 		}
 
-		// Decrypt subscriptions (simplified)
-		async function decryptSubscriptions(encryptedData, _subscriberAddress) {
+		async function decryptSubscriptions(encryptedData, subscriberAddress) {
+			if (!encryptedData) return [];
 			try {
-				// In production, use @mysten/seal SDK for decryption
+				const envelope = JSON.parse(encryptedData);
+				if (
+					envelope &&
+					Number(envelope.v) === SUBSCRIPTIONS_CIPHER_VERSION &&
+					typeof envelope.iv === 'string' &&
+					typeof envelope.cipher === 'string'
+				) {
+					const key = await getSubscriptionsCryptoKey(subscriberAddress);
+					const plaintext = await crypto.subtle.decrypt(
+						{ name: 'AES-GCM', iv: base64ToBytes(envelope.iv) },
+						key,
+						base64ToBytes(envelope.cipher),
+					);
+					const data = JSON.parse(new TextDecoder().decode(new Uint8Array(plaintext)));
+					return Array.isArray(data.subscriptions) ? data.subscriptions : [];
+				}
+			} catch {}
+
+			try {
 				const data = JSON.parse(decodeURIComponent(escape(atob(encryptedData))));
-				return data.subscriptions || [];
+				return Array.isArray(data.subscriptions) ? data.subscriptions : [];
 			} catch {
 				return [];
 			}
@@ -9839,7 +10474,10 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		// Load subscriptions from Walrus (for cross-device sync)
 		async function loadSubscriptionsFromWalrus() {
 			const blobInfo = getBlobInfo();
-			if (!blobInfo?.blobId || !window.connectedAddress) return null;
+			const walletAddress = getActiveWalletAddress();
+			if (!blobInfo?.blobId || !walletAddress) return null;
+			const blobWalletAddress = normalizeWalletAddress(blobInfo.subscriberAddress);
+			if (blobWalletAddress && blobWalletAddress !== walletAddress) return null;
 
 			try {
 				const res = await fetch(\`/api/app/subscriptions/blob/\${blobInfo.blobId}\`);
@@ -9847,7 +10485,8 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 				const data = await res.json();
 				if (data.encryptedData) {
-					return await decryptSubscriptions(data.encryptedData, window.connectedAddress);
+					const decrypted = await decryptSubscriptions(data.encryptedData, window.connectedAddress);
+					return filterSubscriptionsForWallet(decrypted, walletAddress);
 				}
 			} catch (err) {
 				console.error('Failed to load from Walrus:', err);
@@ -9856,17 +10495,19 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		}
 
 		function isSubscribed(targetName) {
-			return getLocalSubscriptions().some(s => s.targetName === targetName);
+			const cleanTargetName = String(targetName || '').replace(/\.sui$/i, '').toLowerCase() + '.sui';
+			return getLocalSubscriptions().some(s => String(s?.targetName || '').toLowerCase() === cleanTargetName);
 		}
 
 		async function subscribeToName(targetName, targetAddress) {
+			const cleanTargetName = String(targetName || '').replace(/\.sui$/i, '').toLowerCase() + '.sui';
 			const subs = getLocalSubscriptions();
-			if (subs.some(s => s.targetName === targetName)) {
+			if (subs.some(s => String(s?.targetName || '').toLowerCase() === cleanTargetName)) {
 				return false;
 			}
 			subs.push({
 				subscriberAddress: window.connectedAddress || 'anonymous',
-				targetName: targetName,
+				targetName: cleanTargetName,
 				targetAddress: targetAddress,
 				subscribedAt: Date.now(),
 				notifications: true,
@@ -9877,7 +10518,10 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		}
 
 		function unsubscribeFromName(targetName) {
-			const subs = getLocalSubscriptions().filter(s => s.targetName !== targetName);
+			const cleanTargetName = String(targetName || '').replace(/\.sui$/i, '').toLowerCase() + '.sui';
+			const subs = getLocalSubscriptions().filter(
+				s => String(s?.targetName || '').toLowerCase() !== cleanTargetName,
+			);
 			saveLocalSubscriptions(subs);
 		}
 
@@ -10004,11 +10648,16 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		// ===== BLACK DIAMOND VAULT (Seal + Walrus) =====
 		// Persistent list of "Black Diamonds" (watched names) for the connected wallet.
 		window.userVaultNames = new Set();
-		let vaultLoading = false;
+		let vaultLoadingForAddress = null;
+		let vaultLoadNonce = 0;
 
 		async function loadUserVault() {
-			if (!window.connectedAddress || vaultLoading) return;
-			vaultLoading = true;
+			const walletAddress = getActiveWalletAddress();
+			if (!walletAddress) return;
+			if (vaultLoadingForAddress === walletAddress) return;
+
+			const loadNonce = ++vaultLoadNonce;
+			vaultLoadingForAddress = walletAddress;
 			try {
 				// Try loading from Walrus/Seal via existing subscription logic
 				let persistentList = null;
@@ -10018,12 +10667,17 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					console.warn('Walrus vault load failed, falling back to local');
 				}
 
-				if (persistentList && Array.isArray(persistentList)) {
-					window.userVaultNames = new Set(persistentList.map(s => s.targetName.replace(/.sui$/i, '').toLowerCase()));
-				} else {
-					const local = getLocalSubscriptions();
-					window.userVaultNames = new Set(local.map(s => s.targetName.replace(/.sui$/i, '').toLowerCase()));
-				}
+				if (loadNonce !== vaultLoadNonce || getActiveWalletAddress() !== walletAddress) return;
+
+				const sourceList = persistentList && Array.isArray(persistentList)
+					? persistentList
+					: getLocalSubscriptions();
+				const walletList = filterSubscriptionsForWallet(sourceList, walletAddress);
+				window.userVaultNames = new Set(
+					walletList
+						.map(s => String(s?.targetName || '').replace(/\.sui$/i, '').toLowerCase())
+						.filter(Boolean),
+				);
 
 				// Synchronize the current page's diamond state
 				const currentClean = NAME.toLowerCase();
@@ -10037,7 +10691,9 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			} catch (err) {
 				console.error('Failed to load user vault:', err);
 			} finally {
-				vaultLoading = false;
+				if (loadNonce === vaultLoadNonce && vaultLoadingForAddress === walletAddress) {
+					vaultLoadingForAddress = null;
+				}
 			}
 		}
 		window.loadUserVault = loadUserVault;
@@ -10072,7 +10728,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		window.renderVaultList = renderVaultList;
 
 		async function syncVaultAction(name, action) {
-			const cleanName = name.replace(/.sui$/i, '').toLowerCase();
+			const cleanName = String(name || '').replace(/\.sui$/i, '').toLowerCase();
 			if (action === 'watch') {
 				window.userVaultNames.add(cleanName);
 				await subscribeToName(cleanName + '.sui', '');
@@ -10117,20 +10773,10 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 		async function checkWatchingState() {
 			if (!connectedAddress) return;
-			// Use the cached vault list if we have it
-			if (window.userVaultNames.size > 0) {
-				const isWatching = window.userVaultNames.has(NAME.toLowerCase());
-				updateDiamondState(isWatching);
-				return;
+			if (window.userVaultNames.size === 0) {
+				await loadUserVault();
 			}
-			
-			try {
-				const res = await fetch('/api/vault/watching?address=' + encodeURIComponent(connectedAddress) + '&name=' + encodeURIComponent(NAME));
-				const data = await res.json();
-				updateDiamondState(!!data.watching);
-			} catch (err) {
-				console.error('Failed to check watching state:', err);
-			}
+			updateDiamondState(window.userVaultNames.has(NAME.toLowerCase()));
 		}
 
 		async function toggleVaultDiamond() {
@@ -10148,24 +10794,8 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 			try {
 				const action = diamondWatching ? 'unwatch' : 'watch';
-				const toggleBody = {
-					ownerAddress: connectedAddress,
-					name: NAME,
-					action,
-				};
-
-				const toggleRes = await fetch('/api/vault/toggle-watch', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(toggleBody),
-				});
-				const toggleData = await toggleRes.json();
-				if (toggleData.error) throw new Error(toggleData.error);
-
-				// Update local and remote state
 				await syncVaultAction(NAME, action === 'watch' ? 'watch' : 'unwatch');
 				updateDiamondState(action === 'watch');
-
 			} catch (err) {
 				console.error('Vault toggle failed:', err);
 			} finally {

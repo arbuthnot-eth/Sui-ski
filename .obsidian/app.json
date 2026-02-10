@@ -1,0 +1,7 @@
+{
+	"alwaysUpdateLinks": true,
+	"newFileLocation": "folder",
+	"newFileFolderPath": ".vault",
+	"attachmentFolderPath": ".vault/assets",
+	"promptDelete": false
+}

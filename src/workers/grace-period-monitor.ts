@@ -179,11 +179,11 @@ export class GracePeriodMonitor {
 	}
 
 	private async signWithWorkerIdentity(tx: Transaction) {
-		const txBytes = tx.serialize()
+		const txJson = await tx.toJSON()
 
 		return {
 			digest: 'tx-digest-placeholder',
-			txBytes: txBytes.toString(),
+			txBytes: JSON.stringify(txJson),
 		}
 	}
 }

@@ -1,0 +1,5 @@
+{
+	"folder": ".vault/daily-notes",
+	"format": "YYYY-MM-DD",
+	"template": ".vault/templates/Daily Note Template.md"
+}
