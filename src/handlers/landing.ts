@@ -1125,9 +1125,13 @@ async function handleNamesByAddress(
 		}
 
 		// Step 3: Get unique target addresses and fetch their default names (reverse resolution)
+		// Include the queried address itself so the owner's primary name is always detected
 		const uniqueAddresses = [
-			...new Set(allNames.map((n) => n.targetAddress).filter(Boolean)),
-		] as string[]
+			...new Set([
+				normalizedAddress,
+				...allNames.map((n) => n.targetAddress).filter(Boolean) as string[],
+			]),
+		]
 		const addressDefaultName = new Map<string, string>()
 
 		for (let i = 0; i < uniqueAddresses.length; i += BATCH_SIZE) {
@@ -1149,11 +1153,17 @@ async function handleNamesByAddress(
 		}
 
 		// Step 4: Mark primary names based on reverse resolution
+		const ownerDefaultName = addressDefaultName.get(normalizedAddress)
+		const cleanOwnerDefault = ownerDefaultName ? ownerDefaultName.replace(/\.sui$/, '') : null
 		for (const nameInfo of allNames) {
+			const cleanName = nameInfo.name.replace(/\.sui$/, '')
+			if (cleanOwnerDefault && cleanName === cleanOwnerDefault) {
+				nameInfo.isPrimary = true
+				continue
+			}
 			if (nameInfo.targetAddress) {
 				const defaultName = addressDefaultName.get(nameInfo.targetAddress)
 				if (defaultName) {
-					const cleanName = nameInfo.name.replace(/\.sui$/, '')
 					const cleanDefault = defaultName.replace(/\.sui$/, '')
 					nameInfo.isPrimary = cleanName === cleanDefault
 				}

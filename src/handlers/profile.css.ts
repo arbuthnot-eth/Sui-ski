@@ -8696,11 +8696,24 @@ export const profileStyles = `
 		}
 		.linked-names-count {
 			font-size: 0.7rem;
-			color: var(--text-muted);
-			background: rgba(139, 92, 246, 0.15);
-			padding: 2px 8px;
+			color: #fff;
+			font-weight: 600;
+			background: rgba(139, 92, 246, 0.25);
+			padding: 3px 10px;
 			border-radius: 10px;
+			border: 1px solid rgba(139, 92, 246, 0.4);
 			margin-left: auto;
+		}
+		.linked-renewal-cost {
+			display: none;
+			font-size: 0.65rem;
+			color: #a5f3fc;
+			font-weight: 600;
+			background: rgba(34, 211, 238, 0.12);
+			padding: 3px 10px;
+			border-radius: 10px;
+			border: 1px solid rgba(34, 211, 238, 0.25);
+			white-space: nowrap;
 		}
 		.linked-names-list {
 			display: flex;

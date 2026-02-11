@@ -397,6 +397,7 @@ ${generateZkSendCss()}</style>
 						</button>
 					</div>
 						<span class="linked-names-count" id="linked-names-count">Loading...</span>
+						<span class="linked-renewal-cost" id="linked-renewal-cost"></span>
 					</div>
 					<div class="linked-names-filter" id="linked-names-filter" style="display:none;">
 						<label for="linked-names-filter-input" class="visually-hidden">Filter linked names</label>
@@ -7482,6 +7483,7 @@ ${generateZkSendCss()}</style>
 		// ========== LINKED NAMES (Reverse Resolution) ==========
 		const linkedNamesList = document.getElementById('linked-names-list');
 		const linkedNamesCount = document.getElementById('linked-names-count');
+		const linkedRenewalCost = document.getElementById('linked-renewal-cost');
 		const linkedNamesSort = document.getElementById('linked-names-sort');
 		const linkedNamesFilter = document.getElementById('linked-names-filter');
 		const linkedNamesFilterInput = document.getElementById('linked-names-filter-input');
@@ -7562,6 +7564,25 @@ ${generateZkSendCss()}</style>
 				} else {
 					linkedNamesCount.textContent =
 						linkedMatchedCount + ' match' + (linkedMatchedCount !== 1 ? 'es' : '') + ' / ' + totalLabel;
+				}
+			}
+
+			if (linkedRenewalCost) {
+				if (linkedNamesData.length > 0) {
+					var totalUsd = 0;
+					for (var ri = 0; ri < linkedNamesData.length; ri++) {
+						var rName = String(linkedNamesData[ri].name || '').replace(/\.sui$/i, '');
+						var rLen = rName.length;
+						if (rLen === 3) totalUsd += 500;
+						else if (rLen === 4) totalUsd += 100;
+						else if (rLen >= 5) totalUsd += 10;
+					}
+					var discountedUsd = totalUsd * 0.75;
+					linkedRenewalCost.textContent = '$' + discountedUsd.toFixed(0) + '/yr';
+					linkedRenewalCost.title = '$' + totalUsd + '/yr before 25% discount';
+					linkedRenewalCost.style.display = 'inline';
+				} else {
+					linkedRenewalCost.style.display = 'none';
 				}
 			}
 
@@ -8374,6 +8395,7 @@ function shortAddr(addr) {
 					linkedNamesList.innerHTML = '<div class="linked-names-empty">No address found</div>';
 				}
 				if (linkedNamesCount) linkedNamesCount.textContent = '0';
+				if (linkedRenewalCost) linkedRenewalCost.style.display = 'none';
 				if (linkedNamesSort) linkedNamesSort.style.display = 'none';
 				if (linkedNamesFilter) linkedNamesFilter.style.display = 'none';
 				return;
@@ -8479,6 +8501,45 @@ function shortAddr(addr) {
 					console.log('Primary fallback resolution failed:', e);
 				}
 
+				var hasPrimary = names.some(function(n) { return n.isPrimary; });
+				if (!hasPrimary) {
+					var ownerNameEl = document.querySelector('.owner-name');
+					var ownerPrimary = ownerNameEl ? normalizeLinkedNameKey(ownerNameEl.textContent) : '';
+					if (!ownerPrimary && connectedPrimaryName) {
+						ownerPrimary = normalizeLinkedNameKey(connectedPrimaryName);
+					}
+					if (ownerPrimary) {
+						var found = false;
+						for (var fi = 0; fi < names.length; fi++) {
+							if (normalizeLinkedNameKey(names[fi].name) === ownerPrimary) {
+								names[fi].isPrimary = true;
+								found = true;
+								break;
+							}
+						}
+						if (!found) {
+							var injected = {
+								name: ownerPrimary,
+								nftId: 'primary-injected-' + ownerPrimary,
+								expirationMs: null,
+								targetAddress: TARGET_ADDRESS || OWNER_ADDRESS || null,
+								isPrimary: true,
+								isListed: false,
+								__sourceOwner: normalizeLinkedGroupAddress(OWNER_ADDRESS || TARGET_ADDRESS || ''),
+							};
+							names.unshift(injected);
+							var injectKey = normalizeLinkedGroupAddress(injected.targetAddress || injected.__sourceOwner);
+							if (injectKey && grouped[injectKey]) {
+								grouped[injectKey].unshift(injected);
+							} else if (grouped.__misc) {
+								grouped.__misc.unshift(injected);
+							} else {
+								grouped.__misc = [injected];
+							}
+						}
+					}
+				}
+
 				for (const groupKey of Object.keys(grouped)) {
 					grouped[groupKey].sort(function(a, b) {
 						if (a.isPrimary && !b.isPrimary) return -1;
@@ -8527,6 +8588,7 @@ function shortAddr(addr) {
 				console.error('Failed to fetch linked names:', error);
 				linkedNamesList.innerHTML = '<div class="linked-names-empty">Could not load linked names</div>';
 				if (linkedNamesCount) linkedNamesCount.textContent = '--';
+				if (linkedRenewalCost) linkedRenewalCost.style.display = 'none';
 				if (linkedNamesSort) linkedNamesSort.style.display = 'none';
 				if (linkedNamesFilter) linkedNamesFilter.style.display = 'none';
 			}
