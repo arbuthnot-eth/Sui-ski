@@ -19,21 +19,59 @@ import { calculateRegistrationPrice, calculateRenewalPrice } from './pricing'
 import { getDefaultRpcUrl } from './rpc'
 
 const CLOCK_OBJECT = '0x6'
+const DUST_SINK_ADDRESS = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const DEEP_FEE_PERCENT = 15n
 const MIN_DEEP_OUT = 50_000n
 
 async function resolveFeeRecipient(
+	client: SuiClient,
 	suinsClient: SuinsClient,
 	feeName: string | undefined,
 	fallback: string,
 ): Promise<string> {
 	if (!feeName) return fallback
+	const normalizedName = feeName.replace(/\.sui$/i, '') + '.sui'
 	try {
-		const record = await suinsClient.getNameRecord(`${feeName.replace(/\.sui$/i, '')}.sui`)
-		return record?.targetAddress || fallback
+		const record = await suinsClient.getNameRecord(normalizedName)
+		if (record?.targetAddress && /^0x[a-fA-F0-9]{64}$/.test(record.targetAddress)) {
+			return record.targetAddress
+		}
 	} catch {
+		// try fallback resolver below
+	}
+	try {
+		const resolved = await client.resolveNameServiceAddress({ name: normalizedName })
+		if (resolved && /^0x[a-fA-F0-9]{64}$/.test(resolved)) {
+			return resolved
+		}
+	} catch {
+		// use fallback
+	}
+	try {
+		if (/^0x[a-fA-F0-9]{64}$/.test(fallback)) {
+			return fallback
+		}
+		const resolvedFallback = await client.resolveNameServiceAddress({
+			name: fallback.replace(/\.sui$/i, '') + '.sui',
+		})
+		if (resolvedFallback && /^0x[a-fA-F0-9]{64}$/.test(resolvedFallback)) {
+			return resolvedFallback
+		}
+	} catch {
+		// use raw fallback
+	}
+	try {
+		const recordFallback = await suinsClient.getNameRecord(fallback.replace(/\.sui$/i, '') + '.sui')
+		if (recordFallback?.targetAddress && /^0x[a-fA-F0-9]{64}$/.test(recordFallback.targetAddress)) {
+			return recordFallback.targetAddress
+		}
+	} catch {
+		// use raw fallback
+	}
+	if (/^0x[a-fA-F0-9]{64}$/.test(fallback)) {
 		return fallback
 	}
+	return fallback
 }
 
 export interface SwapRegisterParams {
@@ -145,8 +183,6 @@ export async function buildSwapAndRegisterTx(
 		],
 	})
 
-	tx.transferObjects([deepLeftoverSui, deepLeftoverDeep], senderAddress)
-
 	const [nsCoin, nsLeftoverSui, nsLeftoverDeep] = tx.moveCall({
 		target: `${deepbookPackage}::pool::swap_exact_quote_for_base`,
 		typeArguments: [NS_TYPE_MAINNET, SUI_TYPE],
@@ -159,6 +195,7 @@ export async function buildSwapAndRegisterTx(
 		],
 	})
 
+	tx.transferObjects([deepLeftoverSui, deepLeftoverDeep], senderAddress)
 	tx.transferObjects([nsLeftoverSui, nsLeftoverDeep], senderAddress)
 
 	const suinsTx = new SuinsTransaction(suinsClient, tx)
@@ -187,7 +224,12 @@ export async function buildSwapAndRegisterTx(
 
 	tx.transferObjects([nft], senderAddress)
 
-	const feeRecipient = await resolveFeeRecipient(suinsClient, env.SERVICE_FEE_NAME, senderAddress)
+	const feeRecipient = await resolveFeeRecipient(
+		client,
+		suinsClient,
+		env.SERVICE_FEE_NAME,
+		senderAddress,
+	)
 	tx.transferObjects([nsCoin], feeRecipient)
 
 	tx.setGasBudget(100_000_000)
@@ -348,10 +390,9 @@ export async function buildSwapAndRenewTx(
 	const renewalCostNsMist = pricing.nsNeededMist
 
 	const nsPoolAddress = DEEPBOOK_NS_SUI_POOL[network]
-	const deepPoolAddress = DEEPBOOK_DEEP_SUI_POOL[network]
 	const deepbookPackage = DEEPBOOK_PACKAGE[network]
 
-	if (!nsPoolAddress || !deepPoolAddress || !deepbookPackage) {
+	if (!nsPoolAddress || !deepbookPackage) {
 		throw new Error(`DeepBook pools not available on ${network}`)
 	}
 
@@ -382,8 +423,7 @@ export async function buildSwapAndRenewTx(
 		minNsOutput = renewalCostNsMist - (renewalCostNsMist * BigInt(slippageBps)) / 10000n
 	}
 
-	const suiForDeepSwap = (suiForNsSwap * DEEP_FEE_PERCENT) / 100n
-	const suiInputMist = suiForNsSwap + suiForDeepSwap
+	const suiInputMist = suiForNsSwap
 
 	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
 	const suinsClient = new SuinsClient({ client: client as never, network })
@@ -391,29 +431,12 @@ export async function buildSwapAndRenewTx(
 	const tx = new Transaction()
 	tx.setSender(senderAddress)
 
-	const [suiCoinForNs, suiCoinForDeep] = tx.splitCoins(tx.gas, [
-		tx.pure.u64(suiForNsSwap),
-		tx.pure.u64(suiForDeepSwap),
-	])
+	const [suiCoinForNs] = tx.splitCoins(tx.gas, [tx.pure.u64(suiForNsSwap)])
 
 	const [zeroDeepCoin] = tx.moveCall({
 		target: '0x2::coin::zero',
 		typeArguments: [DEEP_TYPE],
 	})
-
-	const [deepCoin, deepLeftoverSui, deepLeftoverDeep] = tx.moveCall({
-		target: `${deepbookPackage}::pool::swap_exact_quote_for_base`,
-		typeArguments: [DEEP_TYPE, SUI_TYPE],
-		arguments: [
-			tx.object(deepPoolAddress),
-			suiCoinForDeep,
-			zeroDeepCoin,
-			tx.pure.u64(MIN_DEEP_OUT),
-			tx.object(CLOCK_OBJECT),
-		],
-	})
-
-	tx.transferObjects([deepLeftoverSui, deepLeftoverDeep], senderAddress)
 
 	const [nsCoin, nsLeftoverSui, nsLeftoverDeep] = tx.moveCall({
 		target: `${deepbookPackage}::pool::swap_exact_quote_for_base`,
@@ -421,13 +444,11 @@ export async function buildSwapAndRenewTx(
 		arguments: [
 			tx.object(nsPoolAddress),
 			suiCoinForNs,
-			deepCoin,
+			zeroDeepCoin,
 			tx.pure.u64(minNsOutput),
 			tx.object(CLOCK_OBJECT),
 		],
 	})
-
-	tx.transferObjects([nsLeftoverSui, nsLeftoverDeep], senderAddress)
 
 	const suinsTx = new SuinsTransaction(suinsClient, tx)
 	const coinConfig = suinsClient.config.coins.NS
@@ -447,8 +468,46 @@ export async function buildSwapAndRenewTx(
 		priceInfoObjectId,
 	})
 
-	const feeRecipient = await resolveFeeRecipient(suinsClient, env.SERVICE_FEE_NAME, senderAddress)
-	tx.transferObjects([nsCoin], feeRecipient)
+	const feeRecipient = await resolveFeeRecipient(
+		client,
+		suinsClient,
+		env.DISCOUNT_RECIPIENT_NAME || 'extra.sui',
+		senderAddress,
+	)
+	const senderLower = senderAddress.toLowerCase()
+	const feeRecipientLower = feeRecipient.toLowerCase()
+	const residualRecipient =
+		feeRecipientLower === senderLower
+			? DUST_SINK_ADDRESS
+			: feeRecipient
+
+	const [postRenewNsLeftover, nsSweepSui, nsSweepDeep] = tx.moveCall({
+		target: `${deepbookPackage}::pool::swap_exact_base_for_quote`,
+		typeArguments: [NS_TYPE_MAINNET, SUI_TYPE],
+		arguments: [
+			tx.object(nsPoolAddress),
+			nsCoin,
+			nsLeftoverDeep,
+			tx.pure.u64(0),
+			tx.object(CLOCK_OBJECT),
+		],
+	})
+
+	const [postRenewNsLeftoverDust, nsSweepSuiDust, nsSweepDeepDust] = tx.moveCall({
+		target: `${deepbookPackage}::pool::swap_exact_base_for_quote`,
+		typeArguments: [NS_TYPE_MAINNET, SUI_TYPE],
+		arguments: [
+			tx.object(nsPoolAddress),
+			postRenewNsLeftover,
+			nsSweepDeep,
+			tx.pure.u64(0),
+			tx.object(CLOCK_OBJECT),
+		],
+	})
+
+	tx.mergeCoins(nsLeftoverSui, [nsSweepSui, nsSweepSuiDust])
+	tx.transferObjects([nsLeftoverSui], feeRecipient)
+	tx.transferObjects([postRenewNsLeftoverDust, nsSweepDeepDust], residualRecipient)
 	tx.setGasBudget(100_000_000)
 
 	return {
@@ -507,6 +566,7 @@ export async function buildSuiRenewTx(
 		coin: paymentCoin,
 		priceInfoObjectId,
 	})
+	tx.mergeCoins(tx.gas, [paymentCoin])
 
 	tx.setGasBudget(100_000_000)
 

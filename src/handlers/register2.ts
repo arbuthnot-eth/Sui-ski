@@ -54,7 +54,7 @@ export function generateRegistrationPage(
 
 				<div class="top-row">
 					<div>
-						<div class="price" id="price-value">-- <span class="price-unit">SUI</span></div>
+						<div class="price" id="price-value">-- <span class="price-unit">SUI</span> <span class="price-usd">/ $-- est.</span></div>
 						<div class="price-note" id="price-note">Loading pricing...</div>
 					</div>
 				</div>
@@ -373,6 +373,14 @@ export function generateRegistrationPage(
 				font-weight: 700;
 				letter-spacing: 0.03em;
 				margin-left: 8px;
+			}
+			.price-usd {
+				color: var(--muted);
+				font-size: 0.5em;
+				font-weight: 600;
+				letter-spacing: 0.01em;
+				margin-left: 10px;
+				white-space: nowrap;
 			}
 			.price-decimals {
 				font-size: 0.56em;
@@ -745,8 +753,16 @@ export function generateRegistrationPage(
 		let pricingData = null
 		const suggestionStatusCache = new Map()
 		let wantsPrimaryName = false
+		let primaryStarManualOverride = null
+		let primaryStarAddress = ''
+		let primaryStarSyncNonce = 0
 		const MIN_YEARS = 1
 		const MAX_YEARS = 5
+		const RPC_URLS = {
+			mainnet: 'https://fullnode.mainnet.sui.io:443',
+			testnet: 'https://fullnode.testnet.sui.io:443',
+			devnet: 'https://fullnode.devnet.sui.io:443',
+		}
 
 		function formatPrimaryPriceHtml(sui) {
 			if (!Number.isFinite(sui) || sui <= 0) return '-- <span class="price-unit">SUI</span>'
@@ -762,6 +778,14 @@ export function generateRegistrationPage(
 			const decimalsText = String(decimals).padStart(2, '0')
 			const normalizedDecimals = decimalsText.endsWith('0') ? decimalsText.slice(0, 1) : decimalsText
 			return String(whole) + '<span class="price-decimals">.' + normalizedDecimals + '</span><span class="price-unit">SUI</span>'
+		}
+
+		function formatUsdAmount(usdValue) {
+			if (!Number.isFinite(usdValue) || usdValue <= 0) return null
+			return new Intl.NumberFormat('en-US', {
+				minimumFractionDigits: 2,
+				maximumFractionDigits: 2,
+			}).format(usdValue)
 		}
 
 		function updatePrimaryStarUi() {
@@ -803,6 +827,70 @@ export function generateRegistrationPage(
 			if (!conn) return null
 			if (conn.status !== 'connected' && conn.status !== 'session') return null
 			return conn.address || null
+		}
+
+		function getConnectedPrimaryName() {
+			const conn = SuiWalletKit.$connection.value
+			if (!conn) return null
+			if (conn.status !== 'connected' && conn.status !== 'session') return null
+			if (!conn.primaryName || typeof conn.primaryName !== 'string') return null
+			const normalized = conn.primaryName.trim().replace(/\\.sui$/i, '')
+			return normalized || null
+		}
+
+		function getRpcUrlForNetwork() {
+			return RPC_URLS[NETWORK] || RPC_URLS.mainnet
+		}
+
+		async function fetchPrimaryNameForAddress(address) {
+			if (!address || typeof SuiJsonRpcClient !== 'function') return { resolved: false, name: null }
+			try {
+				const client = new SuiJsonRpcClient({ url: getRpcUrlForNetwork() })
+				const result = await client.resolveNameServiceNames({ address })
+				const name = result?.data?.[0]
+				if (!name || typeof name !== 'string') return { resolved: true, name: null }
+				const normalized = name.replace(/\\.sui$/i, '')
+				return { resolved: true, name: normalized || null }
+			} catch {
+				return { resolved: false, name: null }
+			}
+		}
+
+		async function syncPrimaryStarState() {
+			const address = getConnectedAddress()
+			if (!address) {
+				primaryStarAddress = ''
+				primaryStarManualOverride = null
+				wantsPrimaryName = false
+				updatePrimaryStarUi()
+				return
+			}
+
+			if (primaryStarAddress !== address) {
+				primaryStarAddress = address
+				primaryStarManualOverride = null
+			}
+
+			if (typeof primaryStarManualOverride === 'boolean') {
+				wantsPrimaryName = primaryStarManualOverride
+				updatePrimaryStarUi()
+				return
+			}
+
+			const connectedPrimaryName = getConnectedPrimaryName()
+			if (connectedPrimaryName) {
+				wantsPrimaryName = false
+				updatePrimaryStarUi()
+				return
+			}
+
+			const syncNonce = ++primaryStarSyncNonce
+			const primaryResolution = await fetchPrimaryNameForAddress(address)
+			if (syncNonce !== primaryStarSyncNonce) return
+			if (getConnectedAddress() !== address) return
+			if (!primaryResolution.resolved) return
+			wantsPrimaryName = primaryResolution.name === null
+			updatePrimaryStarUi()
 		}
 
 		function isLikelyAddress(value) {
@@ -873,7 +961,13 @@ export function generateRegistrationPage(
 				pricingData = await response.json()
 				const mist = Number(pricingData?.discountedSuiMist || pricingData?.directSuiMist || 0)
 				const sui = mist / 1e9
-				if (priceValue) priceValue.innerHTML = formatPrimaryPriceHtml(sui)
+				const discountedUsdRaw = Number(pricingData?.breakdown?.discountedPriceUsd || 0)
+				const discountedUsdText = formatUsdAmount(discountedUsdRaw)
+				if (priceValue) {
+					const primaryPriceHtml = formatPrimaryPriceHtml(sui)
+					const usdHtml = discountedUsdText ? '<span class="price-usd">/ $' + discountedUsdText + ' est.</span>' : '<span class="price-usd">/ $-- est.</span>'
+					priceValue.innerHTML = primaryPriceHtml + ' ' + usdHtml
+				}
 				if (priceNote) {
 					const rawSavingsMist = Number(pricingData?.savingsMist || 0)
 					const directMist = Number(pricingData?.directSuiMist || 0)
@@ -884,17 +978,21 @@ export function generateRegistrationPage(
 							? directMist - discountedMist
 							: 0)
 					const savingsSui = savingsMist / 1e9
+					const baseUsdRaw = Number(pricingData?.breakdown?.basePriceUsd || 0)
+					const premiumUsdRaw = Number(pricingData?.breakdown?.premiumUsd || 0)
+					const originalUsdText = formatUsdAmount(baseUsdRaw + premiumUsdRaw)
+					const originalUsdLabel = originalUsdText ? ' | Original $' + originalUsdText : ''
 					if (Number.isFinite(savingsSui) && savingsSui > 0) {
 						priceNote.classList.add('discount')
-						priceNote.textContent = 'SKI saved ' + savingsSui.toFixed(2) + ' SUI'
+						priceNote.textContent = 'SKI saved ' + savingsSui.toFixed(2) + ' SUI' + originalUsdLabel
 					} else {
 						priceNote.classList.remove('discount')
-						priceNote.textContent = years === 1 ? '1 year registration' : years + ' year registration'
+						priceNote.textContent = (years === 1 ? '1 year registration' : years + ' year registration') + originalUsdLabel
 					}
 				}
 				updateRegisterButton()
 			} catch (error) {
-				if (priceValue) priceValue.innerHTML = '-- <span class="price-unit">SUI</span>'
+				if (priceValue) priceValue.innerHTML = '-- <span class="price-unit">SUI</span> <span class="price-usd">/ $-- est.</span>'
 				if (priceNote) {
 					priceNote.classList.remove('discount')
 					priceNote.textContent = 'Pricing unavailable'
@@ -1092,12 +1190,7 @@ export function generateRegistrationPage(
 			showStatus('Building transaction...', 'info')
 
 			try {
-				const rpcUrls = {
-					mainnet: 'https://fullnode.mainnet.sui.io:443',
-					testnet: 'https://fullnode.testnet.sui.io:443',
-					devnet: 'https://fullnode.devnet.sui.io:443',
-				}
-				const rpcUrl = rpcUrls[NETWORK] || rpcUrls.mainnet
+				const rpcUrl = getRpcUrlForNetwork()
 				const years = getSelectedYears()
 				const domain = NAME + '.sui'
 
@@ -1172,6 +1265,9 @@ export function generateRegistrationPage(
 					'ok',
 					true,
 				)
+				if (wantsPrimaryName && typeof SuiWalletKit.setPrimaryName === 'function') {
+					SuiWalletKit.setPrimaryName(NAME)
+				}
 				registerBtn.textContent = 'Registered'
 				registerBtn.disabled = true
 			} catch (error) {
@@ -1191,10 +1287,12 @@ export function generateRegistrationPage(
 
 		window.onRegisterWalletConnected = function() {
 			updateRegisterButton()
+			syncPrimaryStarState()
 		}
 
 		window.onRegisterWalletDisconnected = function() {
 			updateRegisterButton()
+			syncPrimaryStarState()
 		}
 
 		${generateSharedWalletMountJs({
@@ -1208,6 +1306,7 @@ export function generateRegistrationPage(
 
 		markRegisterFlowImpression()
 		updatePrimaryStarUi()
+		syncPrimaryStarState()
 		setSelectedYears(getSelectedYears())
 		updateRegisterButton()
 		fetchPricing()
@@ -1232,6 +1331,7 @@ export function generateRegistrationPage(
 		if (primaryStarEl) {
 			primaryStarEl.addEventListener('click', () => {
 				wantsPrimaryName = !wantsPrimaryName
+				primaryStarManualOverride = wantsPrimaryName
 				updatePrimaryStarUi()
 			})
 		}

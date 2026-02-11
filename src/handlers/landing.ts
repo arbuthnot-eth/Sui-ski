@@ -50,6 +50,54 @@ apiRoutes.get('/resolve', async (c) => {
 	return jsonResponse(result)
 })
 
+apiRoutes.get('/primary-name', async (c) => {
+	try {
+		const env = c.get('env')
+		const address = String(c.req.query('address') || '').trim()
+		if (!address) return jsonResponse({ error: 'Address parameter required' }, 400)
+
+		const cacheKeyValue = cacheKey('primary-name', env.SUI_NETWORK, address.toLowerCase())
+		const cached = await getCached<{ name: string | null }>(cacheKeyValue)
+		if (cached) {
+			return jsonResponse(
+				{
+					address,
+					name: cached.name,
+				},
+				200,
+				{ 'X-Cache': 'HIT' },
+			)
+		}
+
+		const client = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
+
+		let name: string | null = null
+		try {
+			const result = await client.resolveNameServiceNames({ address })
+			const first = Array.isArray(result?.data) ? result.data[0] : null
+			name = typeof first === 'string' ? first : null
+		} catch (_error) {
+			name = null
+		}
+
+		await setCache(cacheKeyValue, { name }, 60)
+		return jsonResponse(
+			{
+				address,
+				name,
+			},
+			200,
+			{ 'X-Cache': 'MISS' },
+		)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to resolve primary name'
+		return jsonResponse({ error: message }, 500)
+	}
+})
+
 apiRoutes.get('/pricing', async (c) => {
 	try {
 		const env = c.get('env')
@@ -153,6 +201,7 @@ apiRoutes.post('/renew-tx', async (c) => {
 			const txBytes = await tx.build({ client })
 			return jsonResponse({
 				txBytes: Buffer.from(txBytes).toString('base64'),
+				txEncoding: 'bcs',
 				method: 'sui',
 			})
 		}
@@ -161,6 +210,7 @@ apiRoutes.post('/renew-tx', async (c) => {
 		const txBytes = await result.tx.build({ client })
 		return jsonResponse({
 			txBytes: Buffer.from(txBytes).toString('base64'),
+			txEncoding: 'bcs',
 			breakdown: {
 				suiInputMist: String(result.breakdown.suiInputMist),
 				nsOutputEstimate: String(result.breakdown.nsOutputEstimate),
@@ -189,6 +239,43 @@ const SUINS_REG_TYPE_BY_NETWORK: Record<string, string> = {
 const MIN_AUCTION_PRICE_MIST = 1_000_000_000n
 const MIN_AUCTION_DURATION_MS = 3_600_000n
 const MAX_AUCTION_DURATION_MS = 30n * 86_400_000n
+const GRACE_WRAP_WINDOW_MS = 30n * 86_400_000n
+const GRACE_WRAP_DURATION_MS = 30n * 86_400_000n
+const GRACE_WRAP_CURVE_EXPONENT = 69n
+const GRACE_WRAP_START_PRICE_MIST = 100_000_000n * 1_000_000_000n
+const AUCTION_DECAY_PPM_SCALE = 1_000_000n
+
+function computeDecayPriceMist(
+	startPriceMist: bigint,
+	remainingMs: bigint,
+	totalMs: bigint,
+): bigint {
+	if (totalMs <= 0n || remainingMs <= 0n) return 0n
+	const remainingPpm = (remainingMs * AUCTION_DECAY_PPM_SCALE) / totalMs
+	let ratioPpm = AUCTION_DECAY_PPM_SCALE
+	for (let i = 0n; i < GRACE_WRAP_CURVE_EXPONENT; i++) {
+		ratioPpm = (ratioPpm * remainingPpm) / AUCTION_DECAY_PPM_SCALE
+	}
+	const price = (startPriceMist * ratioPpm) / AUCTION_DECAY_PPM_SCALE
+	return price > 0n ? price : 1n
+}
+
+function computeGraceWrapAuctionParams(expirationMs: bigint, nowMs: bigint) {
+	const graceEndMs = expirationMs + GRACE_WRAP_WINDOW_MS
+	if (nowMs >= graceEndMs) return null
+	const remainingGraceMs = nowMs < expirationMs ? GRACE_WRAP_WINDOW_MS : graceEndMs - nowMs
+	const currentPremiumMist =
+		nowMs < expirationMs
+			? GRACE_WRAP_START_PRICE_MIST
+			: computeDecayPriceMist(GRACE_WRAP_START_PRICE_MIST, remainingGraceMs, GRACE_WRAP_WINDOW_MS)
+	return {
+		startPriceMist: GRACE_WRAP_START_PRICE_MIST,
+		startTimeMs: expirationMs,
+		durationMs: GRACE_WRAP_DURATION_MS,
+		graceEndMs,
+		currentPremiumMist,
+	}
+}
 
 apiRoutes.post('/auction/list', async (c) => {
 	const env = c.get('env')
@@ -200,23 +287,51 @@ apiRoutes.post('/auction/list', async (c) => {
 	try {
 		const body = await c.req.json<{
 			nftId: string
-			startPriceMist: string
-			durationMs: string
+			startPriceMist?: string
+			durationMs?: string
 			senderAddress: string
+			curveMode?: string
+			expirationMs?: string | number
 		}>()
 
-		if (!body.nftId || !body.startPriceMist || !body.durationMs || !body.senderAddress) {
-			return jsonResponse(
-				{ error: 'Missing required fields: nftId, startPriceMist, durationMs, senderAddress' },
-				400,
-			)
+		if (!body.nftId || !body.senderAddress) {
+			return jsonResponse({ error: 'Missing required fields: nftId, senderAddress' }, 400)
 		}
 
-		const startPriceMist = BigInt(body.startPriceMist)
-		const durationMs = BigInt(body.durationMs)
+		const isGraceWindowMode = body.curveMode === 'grace-window'
+		let startPriceMist: bigint
+		let durationMs: bigint
+		let startTimeMs: bigint | null = null
+		let graceEndMs: bigint | null = null
+		let currentPremiumMist: bigint | null = null
 
-		if (startPriceMist < MIN_AUCTION_PRICE_MIST) {
-			return jsonResponse({ error: 'Start price must be at least 1 SUI' }, 400)
+		if (isGraceWindowMode) {
+			if (body.expirationMs === undefined || body.expirationMs === null) {
+				return jsonResponse({ error: 'expirationMs is required for grace-window mode' }, 400)
+			}
+			const expirationMs = BigInt(String(body.expirationMs))
+			if (expirationMs <= 0n) {
+				return jsonResponse({ error: 'Invalid expiration timestamp' }, 400)
+			}
+			const nowMs = BigInt(Date.now())
+			const computed = computeGraceWrapAuctionParams(expirationMs, nowMs)
+			if (!computed) {
+				return jsonResponse({ error: 'Grace period has ended for this name' }, 400)
+			}
+			startPriceMist = computed.startPriceMist
+			startTimeMs = computed.startTimeMs
+			durationMs = computed.durationMs
+			graceEndMs = computed.graceEndMs
+			currentPremiumMist = computed.currentPremiumMist
+		} else {
+			if (!body.startPriceMist || !body.durationMs) {
+				return jsonResponse({ error: 'Missing required fields: startPriceMist, durationMs' }, 400)
+			}
+			startPriceMist = BigInt(body.startPriceMist)
+			durationMs = BigInt(body.durationMs)
+			if (startPriceMist < MIN_AUCTION_PRICE_MIST) {
+				return jsonResponse({ error: 'Start price must be at least 1 SUI' }, 400)
+			}
 		}
 
 		if (durationMs < MIN_AUCTION_DURATION_MS || durationMs > MAX_AUCTION_DURATION_MS) {
@@ -230,19 +345,41 @@ apiRoutes.post('/auction/list', async (c) => {
 		tx.setSender(body.senderAddress)
 		tx.setGasBudget(50_000_000)
 
-		tx.moveCall({
-			target: `${env.DECAY_AUCTION_PACKAGE_ID}::auction::create_and_share`,
-			typeArguments: [suinsRegType],
-			arguments: [
-				tx.object(body.nftId),
-				tx.pure.u64(startPriceMist),
-				tx.pure.u64(durationMs),
-				tx.object('0x6'),
-			],
-		})
+		if (isGraceWindowMode) {
+			tx.moveCall({
+				target: `${env.DECAY_AUCTION_PACKAGE_ID}::auction::create_and_share_with_start_time`,
+				typeArguments: [suinsRegType],
+				arguments: [
+					tx.object(body.nftId),
+					tx.pure.u64(startPriceMist),
+					tx.pure.u64(startTimeMs || 0n),
+					tx.pure.u64(durationMs),
+					tx.object('0x6'),
+				],
+			})
+		} else {
+			tx.moveCall({
+				target: `${env.DECAY_AUCTION_PACKAGE_ID}::auction::create_and_share`,
+				typeArguments: [suinsRegType],
+				arguments: [
+					tx.object(body.nftId),
+					tx.pure.u64(startPriceMist),
+					tx.pure.u64(durationMs),
+					tx.object('0x6'),
+				],
+			})
+		}
 
 		const txBytes = await tx.toJSON()
-		return jsonResponse({ txBytes })
+		return jsonResponse({
+			txBytes,
+			curveMode: isGraceWindowMode ? 'grace-window' : 'custom',
+			startPriceMist: String(startPriceMist),
+			...(startTimeMs ? { startTimeMs: String(startTimeMs) } : {}),
+			durationMs: String(durationMs),
+			...(graceEndMs ? { graceEndMs: String(graceEndMs) } : {}),
+			...(currentPremiumMist ? { currentPremiumMist: String(currentPremiumMist) } : {}),
+		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to build auction transaction'
 		console.error('Auction list tx error:', error)
@@ -323,11 +460,12 @@ apiRoutes.get('/auction/status/:nftId', async (c) => {
 
 		const fields = (obj.data.content as { dataType: 'moveObject'; fields: Record<string, unknown> })
 			.fields
+		const startPrice = fields.start_price_mist || fields.start_price
 		return jsonResponse({
 			active: true,
 			listingId: cached.listingId,
 			seller: fields.seller as string,
-			startPriceMist: String(fields.start_price),
+			startPriceMist: String(startPrice || 0),
 			startTimeMs: String(fields.start_time_ms),
 			endTimeMs: String(fields.end_time_ms),
 		})
@@ -367,29 +505,22 @@ apiRoutes.post('/auction/buy', async (c) => {
 
 		const fields = (obj.data.content as { dataType: 'moveObject'; fields: Record<string, unknown> })
 			.fields
-		const startPrice = BigInt(String(fields.start_price))
+		const startPriceRaw = fields.start_price_mist || fields.start_price
+		const startPrice = BigInt(String(startPriceRaw || 0))
 		const startTimeMs = BigInt(String(fields.start_time_ms))
 		const endTimeMs = BigInt(String(fields.end_time_ms))
 		const now = BigInt(Date.now())
 
+		if (now < startTimeMs) {
+			return jsonResponse({ error: 'Auction has not started yet' }, 400)
+		}
 		if (now >= endTimeMs) {
 			return jsonResponse({ error: 'Auction has ended' }, 400)
 		}
 
-		const elapsed = now - startTimeMs
 		const duration = endTimeMs - startTimeMs
-		const remaining = duration - elapsed
-		let currentPrice: bigint
-		if (remaining <= 0n) {
-			currentPrice = 0n
-		} else {
-			const fraction = (remaining * 1_000_000_000n) / duration
-			let pow8 = fraction
-			for (let i = 0; i < 7; i++) {
-				pow8 = (pow8 * fraction) / 1_000_000_000n
-			}
-			currentPrice = (startPrice * pow8) / 1_000_000_000n
-		}
+		const remaining = endTimeMs - now
+		const currentPrice = computeDecayPriceMist(startPrice, remaining, duration)
 
 		const priceWithBuffer = currentPrice + currentPrice / 50n
 
@@ -417,6 +548,41 @@ apiRoutes.post('/auction/buy', async (c) => {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to build buy transaction'
 		console.error('Auction buy tx error:', error)
+		return jsonResponse({ error: message }, 500)
+	}
+})
+
+apiRoutes.post('/auction/cancel', async (c) => {
+	const env = c.get('env')
+
+	if (!env.DECAY_AUCTION_PACKAGE_ID) {
+		return jsonResponse({ error: 'Decay auction not configured' }, 400)
+	}
+
+	try {
+		const body = await c.req.json<{ listingId: string; sellerAddress: string }>()
+		if (!body.listingId || !body.sellerAddress) {
+			return jsonResponse({ error: 'Missing required fields: listingId, sellerAddress' }, 400)
+		}
+
+		const suinsRegType =
+			SUINS_REG_TYPE_BY_NETWORK[env.SUI_NETWORK] || SUINS_REG_TYPE_BY_NETWORK.mainnet
+
+		const tx = new Transaction()
+		tx.setSender(body.sellerAddress)
+		tx.setGasBudget(50_000_000)
+
+		tx.moveCall({
+			target: `${env.DECAY_AUCTION_PACKAGE_ID}::auction::cancel`,
+			typeArguments: [suinsRegType],
+			arguments: [tx.object(body.listingId), tx.object('0x6')],
+		})
+
+		const txBytes = await tx.toJSON()
+		return jsonResponse({ txBytes })
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to build cancel transaction'
+		console.error('Auction cancel tx error:', error)
 		return jsonResponse({ error: message }, 500)
 	}
 })
@@ -455,7 +621,8 @@ apiRoutes.get('/names/:address', async (c) => {
 	if (!address.startsWith('0x')) {
 		return jsonResponse({ error: 'Valid Sui address required' }, 400)
 	}
-	return handleNamesByAddress(address, c.get('env'))
+	const refresh = c.req.query('refresh') === '1'
+	return handleNamesByAddress(address, c.get('env'), { bypassCache: refresh })
 })
 
 apiRoutes.get('/nft-details', async (c) => {
@@ -607,6 +774,7 @@ interface NameInfo {
 	targetAddress: string | null
 	isPrimary: boolean
 	isListed: boolean
+	listingPriceMist: number | null
 }
 
 interface LinkedNamesCache {
@@ -620,21 +788,27 @@ const LINKED_NAMES_CACHE_TTL = 300 // 5 minutes
  * Fetch all SuiNS names owned by an address with expiration and target address data
  * Uses native Sui RPC methods for reliable name resolution
  */
-async function handleNamesByAddress(address: string, env: Env): Promise<Response> {
+async function handleNamesByAddress(
+	address: string,
+	env: Env,
+	options: { bypassCache?: boolean } = {},
+): Promise<Response> {
 	const corsHeaders = {
 		'Access-Control-Allow-Origin': '*',
 		'Content-Type': 'application/json',
 	}
 
 	try {
-		// Check cache first
+		const bypassCache = options.bypassCache === true
 		const key = cacheKey('linked-names', env.SUI_NETWORK, address)
-		const cached = await getCached<LinkedNamesCache>(key)
-		if (cached) {
-			return new Response(JSON.stringify(cached), {
-				status: 200,
-				headers: { ...corsHeaders, 'X-Cache': 'HIT' },
-			})
+		if (!bypassCache) {
+			const cached = await getCached<LinkedNamesCache>(key)
+			if (cached) {
+				return new Response(JSON.stringify(cached), {
+					status: 200,
+					headers: { ...corsHeaders, 'X-Cache': 'HIT' },
+				})
+			}
 		}
 
 		const client = new SuiClient({
@@ -644,240 +818,201 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 
 		const allNames: NameInfo[] = []
 		const seenNftIds = new Set<string>()
+		const normalizedAddress = address.toLowerCase()
 
-		// Network-aware SuiNS type definitions
-		const SUINS_REGISTRATION_TYPES: Record<string, string[]> = {
-			mainnet: [
-				'0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration',
-				'0xb7004c7914308557f7afbaf0dca8dd258e18e306cb7a45b28019f3d0a693f162::subdomain_registration::SubDomainRegistration',
-			],
-			testnet: [
-				'0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93::suins_registration::SuinsRegistration',
-				'0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93::subdomain_registration::SubDomainRegistration',
-			],
+		const normalizeSuinsName = (value: unknown): string | null => {
+			const raw = String(value || '')
+				.trim()
+				.toLowerCase()
+			if (!raw) return null
+			// Remove .sui suffix if present
+			const namePart = raw.endsWith('.sui') ? raw.slice(0, -4) : raw
+			// Reject names with invalid characters (only allow a-z, 0-9, -, and . for subdomains)
+			if (!/^[a-z0-9.-]+$/.test(namePart)) return null
+			return namePart
 		}
 
-		const typesToQuery =
-			SUINS_REGISTRATION_TYPES[env.SUI_NETWORK] || SUINS_REGISTRATION_TYPES.mainnet
-
-		// Step 1: Query all SuiNS NFT types owned by this address
-		for (const structType of typesToQuery) {
-			let cursor: string | null | undefined
-			const isSubdomain = structType.includes('subdomain_registration')
-
-			do {
-				const response = await client
-					.getOwnedObjects({
-						owner: address,
-						filter: { StructType: structType },
-						options: { showContent: true, showType: true },
-						cursor: cursor || undefined,
-						limit: 50,
-					})
-					.catch(() => null)
-				if (!response) break
-
-				for (const item of response.data) {
-					if (item.data?.content?.dataType !== 'moveObject') continue
-					const objectId = item.data.objectId
-					if (seenNftIds.has(objectId)) continue
-					seenNftIds.add(objectId)
-
-					const fields = (item.data.content as any).fields
-					let name: string | undefined
-					let expirationMs: number | null = null
-
-					if (isSubdomain) {
-						const inner = fields?.nft?.fields
-						name = inner?.domain_name || inner?.name
-						expirationMs = inner?.expiration_timestamp_ms
-							? Number(inner.expiration_timestamp_ms)
-							: null
-					} else {
-						name = fields?.domain_name || fields?.name
-						expirationMs = fields?.expiration_timestamp_ms
-							? Number(fields.expiration_timestamp_ms)
-							: null
+		// Tradeport indexer query - include delegated_owner for listed NFTs
+		const indexerNftQuery = `query fetchWalletInventoryWithListings(
+			$where: nfts_bool_exp
+			$listingsWhere: listings_bool_exp
+			$order_by: [nfts_order_by!]
+			$offset: Int
+			$limit: Int!
+		) {
+			sui {
+				nfts(where: $where, order_by: $order_by, offset: $offset, limit: $limit) {
+					id
+					token_id
+					name
+					owner
+					delegated_owner
+					delegated_owner_reason
+					claimable
+					claimable_by
+					collection {
+						slug
+						semantic_slug
 					}
-
-					if (name) {
-						allNames.push({
-							name: String(name),
-							nftId: objectId,
-							expirationMs,
-							targetAddress: null,
-							isPrimary: false,
-							isListed: false,
-						})
+					listings(where: $listingsWhere, order_by: {price: asc}) {
+						price
+						seller
+						listed
 					}
 				}
+			}
+		}`
 
-				cursor = response.hasNextPage ? response.nextCursor : null
-			} while (cursor)
-		}
+		const PAGE_SIZE = 50
+		const MAX_PAGES = 200
+		const defaultOrderBy = [{ ranking: 'asc_nulls_last' }]
+		const listingsWhere = { listed: { _eq: true } }
 
-		// Step 1b: Query marketplace listing objects (catches listed NFTs with ObjectOwner)
-		// When NFTs are listed on marketplaces like Tradeport, they become ObjectOwner
-		// and won't appear in getOwnedObjects results
-		const MARKETPLACE_LISTING_TYPES: Record<string, string[]> = {
-			mainnet: [
-				'0xff2251ea99230ed1cbe3a347a209352711c6723fcdcd9286e16636e65bb55cab::tradeport_listings::SimpleListing',
-			],
-			testnet: [],
-		}
+		const upsertNft = (nft: {
+			name: string
+			token_id: string
+			owner?: string
+			delegated_owner?: string
+			delegated_owner_reason?: string
+			collection?: { slug?: string | null; semantic_slug?: string | null }
+			listings?: Array<{ seller?: string; listed?: boolean; price?: number }>
+		}) => {
+			if (!nft.token_id) return
+			const slug = String(nft?.collection?.slug || '').toLowerCase()
+			const semanticSlug = String(nft?.collection?.semantic_slug || '').toLowerCase()
+			if (slug !== 'suins' && semanticSlug !== 'suins') return
 
-		const listingTypes = MARKETPLACE_LISTING_TYPES[env.SUI_NETWORK] || []
-		for (const listingType of listingTypes) {
-			let cursor: string | null | undefined
-			do {
-				const response = await client
-					.getOwnedObjects({
-						owner: address,
-						filter: { StructType: listingType },
-						options: { showContent: true, showType: true },
-						cursor: cursor || undefined,
-						limit: 50,
-					})
-					.catch(() => null)
-				if (!response) break
+			const tokenId = String(nft.token_id)
+			const normalizedName = normalizeSuinsName(nft.name)
+			if (!normalizedName) return
 
-				for (const item of response.data) {
-					if (item.data?.content?.dataType !== 'moveObject') continue
+			const sellerListing = (nft.listings || []).find(
+				(l) => l.listed !== false && String(l.seller || '').toLowerCase() === normalizedAddress,
+			)
+			const listingPriceMist = sellerListing?.price ?? null
 
-					const fields = (item.data.content as any).fields
-					const innerFields = fields?.inner?.fields || fields
-					const nftId = innerFields?.nft_id || innerFields?.token_id
-
-					if (!nftId || seenNftIds.has(nftId)) continue
-
-					// Fetch the actual NFT object to get domain info
-					try {
-						const nftResponse = await client.getObject({
-							id: nftId,
-							options: { showContent: true, showType: true },
-						})
-						if (nftResponse.data?.content?.dataType !== 'moveObject') continue
-
-						const nftFields = (nftResponse.data.content as any).fields
-						const isSubdomain = nftResponse.data.type?.includes('subdomain_registration')
-
-						let name: string | undefined
-						let expirationMs: number | null = null
-
-						if (isSubdomain) {
-							const inner = nftFields?.nft?.fields
-							name = inner?.domain_name || inner?.name
-							expirationMs = inner?.expiration_timestamp_ms
-								? Number(inner.expiration_timestamp_ms)
-								: null
-						} else {
-							name = nftFields?.domain_name || nftFields?.name
-							expirationMs = nftFields?.expiration_timestamp_ms
-								? Number(nftFields.expiration_timestamp_ms)
-								: null
-						}
-
-						if (name) {
-							seenNftIds.add(nftId)
-							allNames.push({
-								name: String(name),
-								nftId: nftId,
-								expirationMs,
-								targetAddress: null,
-								isPrimary: false,
-								isListed: true,
-							})
-						}
-					} catch {
-						// Failed to fetch NFT details, skip
+			if (seenNftIds.has(tokenId)) {
+				const existing = allNames.find(
+					(entry) => String(entry.nftId || '').toLowerCase() === tokenId.toLowerCase(),
+				)
+				if (existing) {
+					if (sellerListing) {
+						existing.isListed = true
+						if (listingPriceMist !== null) existing.listingPriceMist = listingPriceMist
 					}
 				}
+				return
+			}
 
-				cursor = response.hasNextPage ? response.nextCursor : null
-			} while (cursor)
+			seenNftIds.add(tokenId)
+			allNames.push({
+				name: normalizedName,
+				nftId: tokenId,
+				expirationMs: null,
+				targetAddress: null,
+				isPrimary: false,
+				isListed: !!sellerListing,
+				listingPriceMist,
+			})
 		}
 
-		// Step 1c: Query events for SuiNS registrations by this address
-		// This catches names registered by this address that may have been transferred
-		const SUINS_REGISTRATION_EVENTS: Record<string, string> = {
-			mainnet:
-				'0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::RegistrationCreated',
-			testnet:
-				'0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93::suins_registration::RegistrationCreated',
-		}
-
-		const eventType = SUINS_REGISTRATION_EVENTS[env.SUI_NETWORK]
-		if (eventType) {
-			try {
-				const eventsResponse = await client.queryEvents({
-					query: {
-						MoveEventType: eventType,
+		const fetchIndexerByWhere = async (where: Record<string, unknown>, queryName: string) => {
+			for (let page = 0; page < MAX_PAGES; page++) {
+				const offset = page * PAGE_SIZE
+				const response = await fetch(INDEXER_API_URL, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'x-api-user': INDEXER_API_USER,
+						'x-api-key': env.INDEXER_API_KEY || '',
 					},
-					limit: 100,
+					body: JSON.stringify({
+						query: indexerNftQuery,
+						variables: { where, listingsWhere, order_by: defaultOrderBy, offset, limit: PAGE_SIZE },
+					}),
 				})
-
-				for (const event of eventsResponse.data) {
-					const sender = event.sender
-					if (sender !== address) continue
-
-					const parsedJson = (event.parsedJson as any) || {}
-					const nftId = parsedJson.nft_id || parsedJson.id
-					if (!nftId || seenNftIds.has(nftId)) continue
-
-					// Fetch the NFT object to get current state
-					try {
-						const nftResponse = await client.getObject({
-							id: nftId,
-							options: { showContent: true, showType: true },
-						})
-						if (nftResponse.data?.content?.dataType !== 'moveObject') continue
-
-						const fields = (nftResponse.data.content as any).fields
-						const name = fields?.domain_name || fields?.name
-						const expirationMs = fields?.expiration_timestamp_ms
-							? Number(fields.expiration_timestamp_ms)
-							: null
-
-						if (name) {
-							seenNftIds.add(nftId)
-							allNames.push({
-								name: String(name),
-								nftId: nftId,
-								expirationMs,
-								targetAddress: null,
-								isPrimary: false,
-								isListed: false,
-							})
-						}
-					} catch {
-						// Failed to fetch NFT, may have been burned or is invalid
-					}
+				const responseText = await response.text()
+				if (!response.ok) {
+					console.error(`Tradeport ${queryName} HTTP error:`, response.status, responseText)
+					break
 				}
-			} catch {
-				// Event query failed, continue without event-based results
+				let payload: {
+					data?: {
+						sui?: {
+							nfts?: Array<{
+								name: string
+								token_id: string
+								collection?: { slug?: string | null; semantic_slug?: string | null }
+								listings?: Array<{ seller?: string; listed?: boolean; price?: number }>
+							}>
+						}
+					}
+					errors?: Array<{ message?: string }>
+				}
+				try {
+					payload = JSON.parse(responseText)
+				} catch {
+					console.error(`Tradeport ${queryName} JSON parse error:`, responseText.slice(0, 500))
+					break
+				}
+				if (payload?.errors?.length) {
+					console.error(`Tradeport ${queryName} query errors:`, JSON.stringify(payload.errors))
+					break
+				}
+				const pageNfts = payload?.data?.sui?.nfts || []
+				console.log(`Tradeport ${queryName} page ${page}: ${pageNfts.length} NFTs`)
+				if (pageNfts.length === 0) break
+				for (const nft of pageNfts) upsertNft(nft)
 			}
 		}
 
-		// Step 1d: Indexer query for listed names (existing implementation)
-		try {
-			const listedQuery = `query GetListedNames($address: String!, $collectionId: uuid!) {
-				sui {
-					nfts(where: {
-						collection_id: {_eq: $collectionId}
-						listings: {listed: {_eq: true}, seller: {_eq: $address}}
-					}, limit: 50) {
-						name
+		console.log('Starting Tradeport queries for address:', normalizedAddress)
+
+		// Query 1: Owned or claimable SuiNS NFTs
+		console.log('Query 1: Fetching owned/claimable SuiNS NFTs...')
+		await fetchIndexerByWhere(
+			{
+				_or: [{ owner: { _eq: normalizedAddress } }, { claimable_by: { _eq: normalizedAddress } }],
+				collection: { semantic_slug: { _eq: 'suins' } },
+			},
+			'owned',
+		)
+		console.log(`After owned query: ${allNames.length} names collected`)
+
+		// Query 2: Query listings table directly for seller's active listings
+		// When NFT is listed, owner becomes marketplace but seller remains original owner
+		console.log('Query 2: Fetching listings table for seller...')
+		const listingsQuery = `query fetchSellerListings($where: listings_bool_exp, $order_by: [listings_order_by!], $offset: Int, $limit: Int!) {
+			sui {
+				listings(where: $where, order_by: $order_by, offset: $offset, limit: $limit) {
+					id
+					price
+					seller
+					listed
+					nft {
+						id
 						token_id
+						name
 						owner
-						listings(where: {listed: {_eq: true}}) {
+						collection {
+							slug
+							semantic_slug
+						}
+						listings(order_by: {price: asc}) {
 							price
 							seller
+							listed
 						}
 					}
 				}
-			}`
+			}
+		}`
 
-			const listedResponse = await fetch(INDEXER_API_URL, {
+		let listedCount = 0
+		let newFromListings = 0
+		for (let page = 0; page < 50; page++) {
+			const offset = page * PAGE_SIZE
+			const response = await fetch(INDEXER_API_URL, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -885,45 +1020,75 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 					'x-api-key': env.INDEXER_API_KEY || '',
 				},
 				body: JSON.stringify({
-					query: listedQuery,
-					variables: { address, collectionId: SUINS_COLLECTION_ID },
+					query: listingsQuery,
+					variables: {
+						where: {
+							seller: { _eq: normalizedAddress },
+							listed: { _eq: true },
+							nft: { collection: { semantic_slug: { _eq: 'suins' } } },
+						},
+						order_by: [{ block_time: 'desc' }],
+						offset,
+						limit: PAGE_SIZE,
+					},
 				}),
 			})
-
-			if (listedResponse.ok) {
-				const listedData = (await listedResponse.json()) as {
-					data?: {
-						sui?: {
-							nfts?: Array<{
+			if (!response.ok) {
+				console.error(`Listings query page ${page} failed:`, response.status)
+				break
+			}
+			const payload = (await response.json()) as {
+				data?: {
+					sui?: {
+						listings?: Array<{
+							price?: number
+							seller?: string
+							listed?: boolean
+							nft?: {
 								name: string
 								token_id: string
-								owner: string
-								listings: Array<{ price: string; seller: string }>
-							}>
-						}
+								collection?: { slug?: string | null; semantic_slug?: string | null }
+								listings?: Array<{ seller?: string; listed?: boolean; price?: number }>
+							}
+						}>
 					}
 				}
-				const listedNfts = listedData?.data?.sui?.nfts || []
-				for (const nft of listedNfts) {
-					if (!nft.token_id || seenNftIds.has(nft.token_id)) continue
-					seenNftIds.add(nft.token_id)
-
-					const name = nft.name?.replace(/\.sui$/, '')
-					if (!name) continue
-
-					allNames.push({
-						name,
-						nftId: nft.token_id,
-						expirationMs: null,
-						targetAddress: null,
-						isPrimary: false,
-						isListed: true,
-					})
+				errors?: Array<{ message?: string }>
+			}
+			if (payload?.errors?.length) {
+				console.error(`Listings query page ${page} errors:`, JSON.stringify(payload.errors))
+				break
+			}
+			const pageListings = payload?.data?.sui?.listings || []
+			console.log(`Listings query page ${page}: ${pageListings.length} listings`)
+			let pageNew = 0
+			for (const listing of pageListings) {
+				if (listing.nft) {
+					const tokenId = String(listing.nft.token_id)
+					const isNew = !seenNftIds.has(tokenId)
+					const nftWithPrice = {
+						...listing.nft,
+						listings: [
+							{ price: listing.price, seller: listing.seller, listed: listing.listed },
+							...(listing.nft.listings || []),
+						],
+					}
+					upsertNft(nftWithPrice)
+					listedCount++
+					if (isNew) {
+						newFromListings++
+						pageNew++
+					}
 				}
 			}
-		} catch {
-			// Indexer failure should not break the primary flow
+			console.log(`  -> ${pageNew} new from this page`)
+			if (pageListings.length === 0) break
 		}
+		console.log(`Listings table: ${listedCount} total, ${newFromListings} new (not in owned)`)
+
+		const listedNames = allNames.filter((n) => n.isListed).length
+		const ownedNames = allNames.filter((n) => !n.isListed).length
+		console.log(`SUMMARY: ${allNames.length} total (${ownedNames} owned, ${listedNames} listed)`)
 
 		// Step 2: Use SuinsClient.getNameRecord to resolve each name to its target address
 		// This is more reliable than the raw RPC method
@@ -941,6 +1106,9 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 					try {
 						const nameRecord = await suinsClient.getNameRecord(suinsName)
 						nameInfo.targetAddress = nameRecord?.targetAddress || null
+						if (nameRecord?.expirationTimestampMs) {
+							nameInfo.expirationMs = Number(nameRecord.expirationTimestampMs)
+						}
 					} catch {
 						// getNameRecord can fail for some valid names
 					}
@@ -1021,7 +1189,7 @@ async function handleNamesByAddress(address: string, env: Env): Promise<Response
 
 		return new Response(JSON.stringify(result), {
 			status: 200,
-			headers: { ...corsHeaders, 'X-Cache': 'MISS' },
+			headers: { ...corsHeaders, 'X-Cache': bypassCache ? 'BYPASS' : 'MISS' },
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch names'
@@ -2032,7 +2200,8 @@ function finalizeSuggestions(query: string, values: string[], mode: SuggestionMo
 	const sorted = normalized
 		.filter((name) => !!name)
 		.sort((a, b) => {
-			const scoreDiff = rankSuggestion(b, normalizedQuery, mode) - rankSuggestion(a, normalizedQuery, mode)
+			const scoreDiff =
+				rankSuggestion(b, normalizedQuery, mode) - rankSuggestion(a, normalizedQuery, mode)
 			if (scoreDiff !== 0) return scoreDiff
 			if (a.length !== b.length) return a.length - b.length
 			return a.localeCompare(b)
@@ -2165,7 +2334,8 @@ async function handleNameSuggestions(
 			.toLowerCase()
 			.replace(/[^a-z0-9-]/g, '')
 			.slice(0, 18)
-	const normalizedQuery = normalizedQueryRaw.length >= 3 ? normalizedQueryRaw : mode === 'related' ? 'name' : 'x402'
+	const normalizedQuery =
+		normalizedQueryRaw.length >= 3 ? normalizedQueryRaw : mode === 'related' ? 'name' : 'x402'
 	const key = `${mode}:${normalizedQuery}`
 	const cached = suggestionMemCache.get(key)
 	if (cached && cached.exp > Date.now()) {
@@ -2448,45 +2618,6 @@ ${socialMeta}
 			transform: translateY(-10px);
 			pointer-events: none;
 		}
-		.search-backdrop-logo {
-			position: fixed;
-			inset: 0;
-			z-index: 20;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			opacity: 0;
-			transform: scale(1.04);
-			transition: opacity 0.25s ease, transform 0.25s ease;
-			pointer-events: none;
-		}
-		.search-backdrop-lockup {
-			display: flex;
-			align-items: center;
-			gap: clamp(14px, 2.2vw, 26px);
-			opacity: 0.3;
-			transform: translateY(-2vh);
-		}
-		.search-backdrop-lockup svg {
-			width: min(20vw, 220px);
-			height: auto;
-			filter: drop-shadow(0 0 28px rgba(96, 165, 250, 0.32));
-			flex-shrink: 0;
-		}
-		.search-backdrop-lockup-text {
-			font-size: clamp(3rem, 11vw, 9rem);
-			font-weight: 800;
-			letter-spacing: 0.02em;
-			background: linear-gradient(135deg, #60a5fa, #a78bfa);
-			-webkit-background-clip: text;
-			-webkit-text-fill-color: transparent;
-			background-clip: text;
-		}
-		body.search-focused .search-backdrop-logo {
-			opacity: 1;
-			transform: scale(1);
-		}
-
 		.logo {
 			font-size: 3rem;
 			font-weight: 800;
@@ -2611,7 +2742,7 @@ ${socialMeta}
 			letter-spacing: 0.05em;
 			color: #52525b;
 			}
-			.dropdown-header span:nth-child(2) { text-align: center; }
+			.dropdown-header span:nth-child(2) { text-align: right; }
 			.dropdown-header span:nth-child(3) { text-align: right; }
 			.dropdown-header span:nth-child(4) { text-align: right; }
 			.dropdown-item {
@@ -2638,10 +2769,21 @@ ${socialMeta}
 			height: 8px;
 			border-radius: 50%;
 			flex-shrink: 0;
+			margin-top: 4px;
 		}
 		.dropdown-item .col-name .dot.available { background: #4ade80; box-shadow: 0 0 6px rgba(74, 222, 128, 0.5); }
-		.dropdown-item .col-name .dot.taken { background: #f87171; box-shadow: 0 0 6px rgba(248, 113, 113, 0.4); }
-		.dropdown-item .col-name .dot.listed { background: #3b82f6; box-shadow: 0 0 6px rgba(59, 130, 246, 0.4); }
+		.dropdown-item .col-name .dot.taken {
+			background: #60a5fa;
+			box-shadow: 0 0 8px rgba(96, 165, 250, 0.42);
+			border-radius: 2px;
+		}
+		.dropdown-item .col-name .dot.listed {
+			background: #f7a000;
+			box-shadow: 0 0 8px rgba(247, 160, 0, 0.45);
+			border-radius: 0;
+			clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+		}
+		.dropdown-item .col-name .dot.frozen { background: #f4f4f5; box-shadow: 0 0 8px rgba(244, 244, 245, 0.45); }
 		.dropdown-item .col-name .dot.checking { background: #71717a; animation: pulse 1s infinite; }
 		@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 		.dropdown-item .col-name .name-meta {
@@ -2653,6 +2795,7 @@ ${socialMeta}
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
+			line-height: 1.2;
 		}
 		.dropdown-item .col-name .suffix { color: #52525b; }
 		.dropdown-item .col-name .name-expiry {
@@ -2666,11 +2809,16 @@ ${socialMeta}
 		.dropdown-item .col-name .name-expiry.expiry-yellow { color: #facc15; }
 		.dropdown-item .col-name .name-expiry.expiry-blue { color: #60a5fa; }
 		.dropdown-item .col-price {
-			text-align: center;
+			display: flex;
+			flex-direction: column;
+			align-items: flex-end;
+			justify-content: center;
+			text-align: right;
 			font-size: 0.8rem;
 			color: #71717a;
 			font-family: 'SF Mono', 'Fira Code', monospace;
 			line-height: 1.2;
+			font-variant-numeric: tabular-nums;
 		}
 			.dropdown-item .col-price .original {
 				text-decoration: line-through;
@@ -2679,7 +2827,9 @@ ${socialMeta}
 				display: block;
 			}
 			.dropdown-item .col-price .discounted { color: #4ade80; font-weight: 600; display: block; }
-			.dropdown-item .col-price .listing-price { color: #3b82f6; font-weight: 600; display: block; }
+			.dropdown-item .col-price .listing-price { font-weight: 600; display: inline-flex; gap: 6px; align-items: baseline; }
+			.dropdown-item .col-price .listing-price .value { color: #f5f5f5; }
+			.dropdown-item .col-price .listing-price .unit { color: #60a5fa; }
 			.dropdown-item .col-price .offer-price { color: #f59e0b; font-size: 0.65rem; display: block; }
 			.dropdown-item .col-status {
 				display: flex;
@@ -2698,14 +2848,24 @@ ${socialMeta}
 			.dropdown-item .col-owner.loading {
 				color: #71717a;
 			}
+			.dropdown-item .col-owner.self {
+				color: #c4b5fd;
+				font-weight: 600;
+			}
 			.dropdown-item .col-owner a {
 				color: #60a5fa;
 				text-decoration: none;
 				transition: color 0.15s;
 			}
+			.dropdown-item .col-owner a.owner-self {
+				color: #c4b5fd;
+			}
 			.dropdown-item .col-owner a:hover {
 				color: #93bbfd;
 				text-decoration: underline;
+			}
+			.dropdown-item .col-owner a.owner-self:hover {
+				color: #ddd6fe;
 			}
 			.dropdown-item .status-text {
 				font-size: 0.75rem;
@@ -2713,7 +2873,8 @@ ${socialMeta}
 			}
 		.dropdown-item .status-text.available { color: #4ade80; font-weight: 500; }
 		.dropdown-item .status-text.taken { color: #a1a1aa; }
-		.dropdown-item .status-text.listed { color: #3b82f6; font-weight: 500; }
+		.dropdown-item .status-text.listed { color: #c084fc; font-weight: 600; }
+		.dropdown-item .status-text.frozen { color: #f5f5f5; font-weight: 700; }
 		.dropdown-item .status-text.expiry-red { color: #f87171; font-weight: 500; }
 		.dropdown-item .status-text.expiry-orange { color: #fb923c; }
 		.dropdown-item .status-text.expiry-yellow { color: #facc15; }
@@ -2736,12 +2897,51 @@ ${socialMeta}
 			color: #020204;
 		}
 		.dropdown-item .action-btn.register:hover { background: linear-gradient(135deg, #22c55e, #16a34a); }
+		.dropdown-item .action-btn.register2 {
+			border-radius: 999px;
+			border: 1px solid rgba(0, 166, 81, 0.58);
+			background: linear-gradient(135deg, rgba(14, 56, 36, 0.95), rgba(8, 42, 27, 0.96));
+			box-shadow: inset 0 1px 0 rgba(0, 166, 81, 0.24), 0 0 0 1px rgba(0, 166, 81, 0.18);
+			color: #82e2b3;
+			font-weight: 800;
+			padding: 6px 12px;
+		}
+		.dropdown-item .action-btn.register2:hover {
+			background: linear-gradient(135deg, rgba(16, 67, 42, 0.96), rgba(9, 50, 31, 0.98));
+		}
 		.dropdown-item .action-btn.buy {
 			background: linear-gradient(135deg, #3b82f6, #8b5cf6);
 			color: #fff;
 			display: inline-block;
 		}
 		.dropdown-item .action-btn.buy:hover { background: linear-gradient(135deg, #2563eb, #7c3aed); }
+		.dropdown-item .action-btn.tradeport {
+			background: rgba(247, 160, 0, 0.18);
+			border: 1px solid rgba(247, 160, 0, 0.4);
+			color: #f7a000;
+			display: inline-block;
+		}
+		.dropdown-item .action-btn.tradeport:hover {
+			background: rgba(247, 160, 0, 0.28);
+			border-color: rgba(247, 160, 0, 0.6);
+			box-shadow: 0 4px 12px rgba(247, 160, 0, 0.3);
+		}
+		.dropdown-item .action-btn.relist {
+			background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(124, 58, 237, 0.1));
+			border: 1px solid rgba(139, 92, 246, 0.3);
+			color: #c4b5fd;
+			display: inline-block;
+		}
+		.dropdown-item .action-btn.relist:hover {
+			background: linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(124, 58, 237, 0.18));
+			border-color: rgba(139, 92, 246, 0.5);
+			box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+		}
+		.dropdown-item .action-btn.frozen {
+			background: linear-gradient(135deg, #f5f5f5, #d4d4d8);
+			color: #09090b;
+		}
+		.dropdown-item .action-btn.frozen:hover { background: linear-gradient(135deg, #ffffff, #e4e4e7); }
 		.dropdown-item .action-btn.offer {
 			background: linear-gradient(135deg, #f59e0b, #d97706);
 			color: #020204;
@@ -2779,6 +2979,25 @@ ${socialMeta}
 		.offer-status.success { color: #4ade80; }
 		.offer-status.error { color: #f87171; }
 		.offer-status.info { color: #60a5fa; }
+		.dropdown-item.frozen {
+			background: rgba(255, 255, 255, 0.1);
+			border-top: 1px solid rgba(255, 255, 255, 0.2);
+			border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+		}
+		.dropdown-item.frozen:hover {
+			background: rgba(255, 255, 255, 0.14);
+		}
+		.dropdown-item.frozen .col-name .label {
+			color: #f5f5f5;
+		}
+		.dropdown-item.frozen .col-name .suffix {
+			color: #d4d4d8;
+		}
+		.dropdown-item.frozen .col-name .name-expiry,
+		.dropdown-item.frozen .col-price,
+		.dropdown-item.frozen .col-owner {
+			color: #e4e4e7;
+		}
 		.dropdown-loading {
 			padding: 16px;
 			text-align: center;
@@ -2877,13 +3096,6 @@ ${socialMeta}
 	</div>
 	<div id="wk-modal"></div>
 
-	<div class="search-backdrop-logo" aria-hidden="true">
-		<div class="search-backdrop-lockup">
-			${generateLogoSvg(220)}
-			<div class="search-backdrop-lockup-text">sui.ski</div>
-		</div>
-	</div>
-
 	<div class="header">
 		<h1 class="logo">${generateLogoSvg(42)} sui.ski</h1>
 		<p class="tagline">SuiNS name gateway</p>
@@ -2924,7 +3136,7 @@ ${socialMeta}
 	</div>
 
 		<script type="module">
-				let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, SuinsClient, Transaction;
+				let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, Transaction;
 				{
 					const pickExport = (mod, name) => {
 						if (!mod || typeof mod !== 'object') return undefined;
@@ -2939,23 +3151,20 @@ ${socialMeta}
 						import(url),
 						new Promise((_, r) => setTimeout(() => r(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
 					]);
-				const results = await Promise.allSettled([
-					timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
-					timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
-					timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
-					timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
-				]);
-					if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
-					if (results[1].status === 'fulfilled') ({ getJsonRpcFullnodeUrl, SuiJsonRpcClient } = results[1].value);
-					if (results[2].status === 'fulfilled') {
-						SuinsClient = pickExport(results[2].value, 'SuinsClient');
+					const results = await Promise.allSettled([
+						timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
+						timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
+						timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
+					]);
+						if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
+						if (results[1].status === 'fulfilled') ({ getJsonRpcFullnodeUrl, SuiJsonRpcClient } = results[1].value);
+						if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value);
+						const failed = results.filter(r => r.status === 'rejected');
+						if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
 					}
-					if (results[3].status === 'fulfilled') ({ Transaction } = results[3].value);
-					const failed = results.filter(r => r.status === 'rejected');
-					if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
-					if (!SuinsClient) console.warn('SuinsClient export unavailable from @mysten/suins module');
-				}
-			${generateWalletSessionJs()}
+				if (SuiJsonRpcClient) window.SuiJsonRpcClient = SuiJsonRpcClient;
+				if (Transaction) window.Transaction = Transaction;
+				${generateWalletSessionJs()}
 			const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
 			const NETWORK = ${JSON.stringify(options.network || 'mainnet')};
 			const RPC_URL = RPC_URLS[NETWORK] || RPC_URLS.mainnet;
@@ -2973,47 +3182,90 @@ ${socialMeta}
 			const TRADEPORT_BID_FEE_BPS = 300;
 			const SUINS_REGISTRATION_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration';
 
-			let cachedSuiPriceUsd = null;
-			let suiClient = null;
-			let suinsClient = null;
+				let cachedSuiPriceUsd = null;
+				let suiClient = null;
+					let suinsClient = null;
+				let walletDropdownRefreshTimer = null;
 
-			function getConnectedAddress() {
-				var conn = SuiWalletKit.$connection.value;
-				return conn && conn.status === 'connected' ? conn.address : null;
-			}
+				function getConnectedAddress() {
+					var conn = SuiWalletKit.$connection.value;
+					return conn && conn.status === 'connected' ? conn.address : null;
+				}
 
-			async function initClients() {
-				suiClient = new SuiJsonRpcClient({ url: RPC_URL });
-				suinsClient = new SuinsClient({ client: suiClient, network: NETWORK });
-			}
+				function getViewerAddress() {
+					var conn = SuiWalletKit.$connection.value;
+					return conn && (conn.status === 'connected' || conn.status === 'session') ? conn.address : null;
+				}
+
+				function getConnectedPrimaryName() {
+					var conn = SuiWalletKit.$connection.value;
+					if (!conn || !conn.primaryName) return null;
+					return String(conn.primaryName).replace(/\\.sui$/i, '');
+				}
+
+				function normalizeAddress(value) {
+					var raw = String(value || '').trim().toLowerCase();
+					if (!raw) return '';
+					var noPrefix = raw.replace(/^0x/, '').replace(/^0+/, '');
+					return '0x' + (noPrefix || '0');
+				}
+
+				function isSameAddress(left, right) {
+					var a = normalizeAddress(left);
+					var b = normalizeAddress(right);
+					return !!a && !!b && a === b;
+				}
+
+				async function initClients() {
+					if (typeof SuiJsonRpcClient !== 'function') {
+						console.warn('SuiJsonRpcClient unavailable; RPC-dependent UI features disabled');
+						suiClient = null;
+						suinsClient = null;
+						return;
+					}
+					suiClient = new SuiJsonRpcClient({ url: RPC_URL });
+					suinsClient = null;
+				}
 
 			${generateWalletKitJs({ network: options.network || 'mainnet', autoConnect: true })}
 			${generateWalletTxJs()}
 			${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onLandingWalletConnected', onDisconnect: 'onLandingWalletDisconnected' })}
 
-			window.onLandingWalletConnected = function() {
-				return undefined;
-			};
+				window.onLandingWalletConnected = function() {
+					scheduleWalletDrivenDropdownRefresh();
+					return undefined;
+				};
 
-			window.onLandingWalletDisconnected = function() {
-				return undefined;
-			};
+				window.onLandingWalletDisconnected = function() {
+					scheduleWalletDrivenDropdownRefresh();
+					return undefined;
+				};
 
-			${generateSharedWalletMountJs({
-				network: options.network || 'mainnet',
-				session: options.session,
-				onConnect: 'onLandingWalletConnected',
-				onDisconnect: 'onLandingWalletDisconnected',
-				profileButtonId: 'wallet-profile-btn',
-				profileFallbackHref: 'https://sui.ski',
-			})}
+					${generateSharedWalletMountJs({
+						network: options.network || 'mainnet',
+						session: options.session,
+						onConnect: 'onLandingWalletConnected',
+						onDisconnect: 'onLandingWalletDisconnected',
+						profileButtonId: 'wallet-profile-btn',
+						profileFallbackHref: 'https://sui.ski',
+					})}
+
+				if (typeof SuiWalletKit.subscribe === 'function' && SuiWalletKit.$connection) {
+					SuiWalletKit.subscribe(SuiWalletKit.$connection, function() {
+						scheduleWalletDrivenDropdownRefresh();
+					});
+				}
 
 			async function executeTransaction(tx) {
 				var txBytes = await tx.build({ client: suiClient });
 				return SuiWalletKit.signAndExecuteFromBytes(txBytes);
 			}
 
-			initClients();
+				initClients().catch(function(error) {
+					console.warn('initClients failed:', error && error.message ? error.message : error);
+					suiClient = null;
+					suinsClient = null;
+				});
 
 		// ========== SEARCH FUNCTIONALITY ==========
 		const searchInput = document.getElementById('search-input');
@@ -3027,6 +3279,9 @@ ${socialMeta}
 			const suggestCache = new Map();
 			const ownerNameCache = new Map();
 			const ownerNameInFlight = new Map();
+			let featuredNamePool = null;
+			let featuredNamePoolExp = 0;
+			const FEATURED_POOL_TTL_MS = 2 * 60 * 1000;
 			const FEATURED_FALLBACK = [
 				'x402',
 				'x402ai',
@@ -3047,7 +3302,7 @@ ${socialMeta}
 				'vault',
 				'wallet',
 			];
-			let featuredRequestNonce = 0;
+				let featuredRequestNonce = 0;
 
 			function showDropdownLoading(message) {
 				dropdown.innerHTML = '<div class="dropdown-loading">' + message + '</div>';
@@ -3055,22 +3310,119 @@ ${socialMeta}
 				searchBox.classList.add('has-results');
 			}
 
-		async function fetchSuggestions(query) {
-			if (suggestCache.has(query)) return suggestCache.get(query);
-			try {
-				const res = await fetch('/api/suggest-names?q=' + encodeURIComponent(query));
-				if (res.ok) {
-					const data = await res.json();
-					const names = data.suggestions || [query];
-					suggestCache.set(query, names);
-					return names;
-				}
-			} catch (e) {}
-			return [query];
-		}
+			function normalizeSuggestedName(value) {
+				const clean = String(value || '')
+					.toLowerCase()
+					.replace(/\\.sui$/i, '')
+					.replace(/[^a-z0-9-]/g, '');
+				if (!clean || clean.length < 3) return null;
+				return clean;
+			}
 
-			async function resolveOwnerName(address) {
+			function dedupeSuggestedNames(names, limit = 18) {
+				const seen = new Set();
+				const list = [];
+				for (const candidate of names || []) {
+					const clean = normalizeSuggestedName(candidate);
+					if (!clean || seen.has(clean)) continue;
+					seen.add(clean);
+					list.push(clean);
+					if (list.length >= limit) break;
+				}
+				return list;
+			}
+
+			function buildLocalSuggestionFallback(query) {
+				const base = normalizeSuggestedName(query) || 'name';
+				const pool = [
+					base,
+					base + 'ai',
+					base + 'app',
+					base + 'hub',
+					base + 'pay',
+					base + 'agent',
+					base + 'sdk',
+					base + 'kit',
+					base + 'labs',
+				];
+				if (!base.includes('x402')) {
+					pool.push(
+						'x402' + base,
+						base + 'x402',
+						'x402-' + base,
+						base + '-x402',
+						'x402' + base + 'ai',
+					);
+				}
+				return dedupeSuggestedNames(pool, 24);
+			}
+
+			async function fetchFeaturedNamePool(force = false) {
+				const now = Date.now();
+				if (!force && Array.isArray(featuredNamePool) && featuredNamePool.length && featuredNamePoolExp > now) {
+					return featuredNamePool;
+				}
+				let names = FEATURED_FALLBACK;
+				try {
+					const res = await fetch('/api/featured-names');
+					if (res.ok) {
+						const data = await res.json();
+						const featured = Array.isArray(data?.names) ? data.names : [];
+						const extracted = featured
+							.map((item) => (item && typeof item.name === 'string' ? item.name.toLowerCase() : null))
+							.filter((name) => !!name && /^[a-z0-9-]{3,}$/.test(name));
+						if (extracted.length) {
+							const unique = Array.from(new Set(extracted));
+							names = ['x402', ...unique.filter((name) => name !== 'x402')].slice(0, 18);
+						}
+					}
+				} catch {}
+				const seeded = dedupeSuggestedNames([...names, ...FEATURED_FALLBACK], 18);
+				featuredNamePool = seeded.length ? seeded : dedupeSuggestedNames(FEATURED_FALLBACK, 18);
+				featuredNamePoolExp = now + FEATURED_POOL_TTL_MS;
+				return featuredNamePool;
+			}
+
+			async function fetchAiSuggestions(query) {
+				try {
+					const res = await fetch('/api/suggest-names?q=' + encodeURIComponent(query));
+					if (!res.ok) return [query];
+					const data = await res.json();
+					const names = Array.isArray(data?.suggestions) ? data.suggestions : [query];
+					return names;
+				} catch {
+					return [query];
+				}
+			}
+
+			async function fetchSuggestions(query) {
+				const cleanQuery = normalizeSuggestedName(query) || String(query || '').toLowerCase();
+				if (suggestCache.has(cleanQuery)) return suggestCache.get(cleanQuery);
+				const [featuredNames, aiNames] = await Promise.all([
+					fetchFeaturedNamePool(),
+					fetchAiSuggestions(cleanQuery),
+				]);
+				const matchedFeatured = [];
+				const overflowFeatured = [];
+				for (const name of featuredNames || []) {
+					if (name.includes(cleanQuery) || cleanQuery.includes(name)) matchedFeatured.push(name);
+					else overflowFeatured.push(name);
+				}
+				let merged = dedupeSuggestedNames(
+					[...matchedFeatured, ...aiNames, cleanQuery, ...overflowFeatured],
+					18,
+				);
+				if (merged.length < 10) {
+					const localFallback = buildLocalSuggestionFallback(cleanQuery);
+					merged = dedupeSuggestedNames([...merged, ...localFallback, ...FEATURED_FALLBACK], 18);
+				}
+				suggestCache.set(cleanQuery, merged);
+				return merged;
+			}
+
+				async function resolveOwnerName(address) {
 				if (!address) return null;
+				if (!suiClient || typeof suiClient.resolveNameServiceNames !== 'function') return null;
 				if (ownerNameCache.has(address)) return ownerNameCache.get(address);
 				const inflight = ownerNameInFlight.get(address);
 				if (inflight) return inflight;
@@ -3089,55 +3441,81 @@ ${socialMeta}
 					}
 				})();
 
-				ownerNameInFlight.set(address, request);
-				return request;
-			}
+					ownerNameInFlight.set(address, request);
+					return request;
+				}
 
-			async function updateOwnerColumn(item, ownerAddress) {
-				const ownerCol = item.querySelector('.col-owner');
-				if (!ownerCol) return;
-				if (!ownerAddress) {
-					ownerCol.textContent = '--';
+				function scheduleWalletDrivenDropdownRefresh() {
+					if (walletDropdownRefreshTimer) {
+						clearTimeout(walletDropdownRefreshTimer);
+					}
+					walletDropdownRefreshTimer = setTimeout(function() {
+						walletDropdownRefreshTimer = null;
+						refreshDropdownForWalletState();
+					}, 80);
+				}
+
+				function refreshDropdownForWalletState() {
+					if (!dropdown) return;
+					var items = dropdown.querySelectorAll('.dropdown-item');
+					if (!items || !items.length) return;
+					items.forEach(function(item) {
+						var name = item.dataset.name || '';
+						if (!name) return;
+						if (item.dataset.ownerAddress) {
+							updateOwnerColumn(item, item.dataset.ownerAddress);
+						}
+						var cached = cache.get(name);
+						if (cached) {
+							updateItem(item, name, cached);
+						}
+						if (item.dataset.marketHasListing === '1' || item.dataset.marketHasBid === '1') {
+							fetchListingPrice(item, name);
+						}
+					});
+				}
+
+				async function updateOwnerColumn(item, ownerAddress) {
+					const ownerCol = item.querySelector('.col-owner');
+					if (!ownerCol) return;
+					if (!ownerAddress) {
+						ownerCol.textContent = '--';
+						ownerCol.classList.remove('loading');
+						ownerCol.classList.remove('self');
+						return;
+					}
+					const selfOwner = isSameAddress(ownerAddress, getViewerAddress());
+					ownerCol.classList.toggle('self', selfOwner);
+					ownerCol.textContent = '...';
+					ownerCol.classList.add('loading');
+					let shortName = selfOwner ? getConnectedPrimaryName() : null;
+					if (!shortName) {
+						const ownerName = await resolveOwnerName(ownerAddress);
+						if (ownerName) shortName = String(ownerName).replace(/\\.sui$/i, '');
+					}
+					if (item.dataset.ownerAddress !== ownerAddress) return;
+					if (shortName) {
+						const link = document.createElement('a');
+						link.href = 'https://' + encodeURIComponent(shortName) + '.sui.ski';
+						link.textContent = shortName;
+						link.title = ownerAddress;
+						if (selfOwner) link.classList.add('owner-self');
+						link.addEventListener('click', (e) => e.stopPropagation());
+						ownerCol.textContent = '';
+						ownerCol.appendChild(link);
+					} else {
+						ownerCol.textContent = ownerAddress.slice(0, 6) + '...' + ownerAddress.slice(-4);
+						ownerCol.title = ownerAddress;
+					}
 					ownerCol.classList.remove('loading');
-					return;
+					ownerCol.classList.toggle('self', selfOwner);
 				}
-				ownerCol.textContent = '...';
-				ownerCol.classList.add('loading');
-				const ownerName = await resolveOwnerName(ownerAddress);
-				if (item.dataset.ownerAddress !== ownerAddress) return;
-				if (ownerName) {
-					const shortName = ownerName.replace(/\\.sui$/, '');
-					const link = document.createElement('a');
-					link.href = 'https://' + encodeURIComponent(shortName) + '.sui.ski';
-					link.textContent = ownerName;
-					link.title = ownerAddress;
-					link.addEventListener('click', (e) => e.stopPropagation());
-					ownerCol.textContent = '';
-					ownerCol.appendChild(link);
-				} else {
-					ownerCol.textContent = ownerAddress.slice(0, 6) + '...' + ownerAddress.slice(-4);
-					ownerCol.title = ownerAddress;
-				}
-				ownerCol.classList.remove('loading');
-			}
 
 			async function showFeaturedSuggestions() {
 				const nonce = ++featuredRequestNonce;
 				showDropdownLoading('Loading premium names...');
 				try {
-					const res = await fetch('/api/featured-names');
-					let names = FEATURED_FALLBACK;
-					if (res.ok) {
-						const data = await res.json();
-						const featured = Array.isArray(data?.names) ? data.names : [];
-						const extracted = featured
-							.map((item) => (item && typeof item.name === 'string' ? item.name.toLowerCase() : null))
-							.filter((name) => !!name && /^[a-z0-9-]{3,}$/.test(name));
-						if (extracted.length) {
-							const unique = Array.from(new Set(extracted));
-							names = ['x402', ...unique.filter((name) => name !== 'x402')].slice(0, 18);
-						}
-					}
+					const names = await fetchFeaturedNamePool(true);
 					if (nonce !== featuredRequestNonce) return;
 					showDropdown(names);
 				} catch {
@@ -3155,7 +3533,7 @@ ${socialMeta}
 				let html = '<div class="dropdown-header"><span>Name</span><span>Price</span><span>Status</span><span>Owner</span></div>';
 				for (const n of names) {
 					html += '<div class="dropdown-item" data-name="' + n + '">'
-						+ '<div class="col-name"><span class="dot checking"></span><span class="name-meta"><span class="label">' + n + '<span class="suffix">.sui</span></span><span class="name-expiry"></span></span></div>'
+						+ '<div class="col-name"><span class="dot checking"></span><span class="name-meta"><span class="label">' + n + '</span><span class="name-expiry"></span></span></div>'
 						+ '<div class="col-price">--</div>'
 						+ '<div class="col-status"><span class="status-text">...</span></div>'
 						+ '<div class="col-owner">--</div>'
@@ -3185,7 +3563,12 @@ ${socialMeta}
 						var data = body.results[n];
 						if (!data) continue;
 						var item = dropdown.querySelector('[data-name="' + n + '"]');
-						if (item) applyMarketplaceData(item, n, data);
+						if (item) {
+							applyMarketplaceData(item, n, data);
+							if (item.dataset && item.dataset.nftId) {
+								fetchListingPrice(item, n);
+							}
+						}
 					}
 				})
 				.catch(function() {});
@@ -3246,65 +3629,130 @@ ${socialMeta}
 			}
 		}
 
+		function toPositiveNumber(value) {
+			const num = typeof value === 'string' ? Number(value) : value;
+			return Number.isFinite(num) && num > 0 ? num : 0;
+		}
+
+		const TRADEPORT_DISPLAY_COMMISSION_BPS = 300;
+
+		function getTradeportListingDisplayMist(listingMistValue) {
+			const listingMist = toPositiveNumber(listingMistValue);
+			if (!listingMist) return 0;
+			const marketFeeMist = TRADEPORT_DISPLAY_COMMISSION_BPS > 0
+				? Math.ceil((listingMist * TRADEPORT_DISPLAY_COMMISSION_BPS) / 10000)
+				: 0;
+			return listingMist + marketFeeMist;
+		}
+
+		function formatSuiCompactFromMist(mistValue) {
+			const mist = toPositiveNumber(mistValue);
+			if (!mist) return '--';
+			const sui = mist / 1e9;
+			if (sui >= 1_000_000_000) {
+				return (sui / 1_000_000_000).toFixed(1).replace(/\\.0$/, '') + 'B';
+			}
+			if (sui >= 1_000_000) {
+				return (sui / 1_000_000).toFixed(1).replace(/\\.0$/, '') + 'M';
+			}
+			if (sui > 100) {
+				return Math.round(sui).toLocaleString();
+			}
+			return sui.toFixed(1).replace(/\\.0$/, '');
+		}
+
+		function getTakenActionMarkup(name, item) {
+			const ownerAddress = String(item?.dataset?.ownerAddress || '');
+			const isConnectedOwner =
+				!!getViewerAddress() &&
+				!!ownerAddress &&
+				isSameAddress(getViewerAddress(), ownerAddress);
+			if (isConnectedOwner) {
+				return '<a class="action-btn relist" href="https://' + encodeURIComponent(name) + '.sui.ski#marketplace-card">List</a>';
+			}
+			return '<a class="action-btn tradeport" href="https://' + encodeURIComponent(name) + '.sui.ski">Offer</a>';
+		}
+
 			function updateItem(item, name, result) {
-				const dot = item.querySelector('.dot');
-				const priceCol = item.querySelector('.col-price');
-				const statusCol = item.querySelector('.col-status');
+					const dot = item.querySelector('.dot');
+					const priceCol = item.querySelector('.col-price');
+					const statusCol = item.querySelector('.col-status');
 				const ownerCol = item.querySelector('.col-owner');
 
+				item.classList.remove('frozen');
+				delete item.dataset.marketHasListing;
+				delete item.dataset.marketHasBid;
+				delete item.dataset.referenceUsd;
+
 				if (result.available) {
+					item.dataset.available = '1';
+					delete item.dataset.expirationMs;
+					delete item.dataset.nftId;
 					dot.className = 'dot available';
 					setNameExpiry(item, null, null);
 					priceCol.innerHTML = '--';
-					statusCol.innerHTML = '<button class="action-btn register" data-action="register">Register</button>';
-					if (ownerCol) ownerCol.textContent = '--';
-					statusCol.querySelector('.action-btn').onclick = (e) => {
-						e.stopPropagation();
-						window.location.href = 'https://' + name + '.sui.ski?register=1';
-				};
-				fetchPricing(item, name);
-				} else {
-					dot.className = 'dot taken';
-					if (result.ownerAddress) {
-						item.dataset.ownerAddress = result.ownerAddress;
-						updateOwnerColumn(item, result.ownerAddress);
-					} else {
-						delete item.dataset.ownerAddress;
-						if (ownerCol) ownerCol.textContent = '--';
+					statusCol.innerHTML = '<span class="status-text available">Available</span>';
+					if (ownerCol) {
+						ownerCol.innerHTML =
+							'<button class="action-btn register2" data-action="register">Register</button>';
 					}
-					const expiry = getExpiryInfo(result.expirationMs);
-					if (expiry && expiry.daysLeft > 0) {
-						const years = Math.floor(expiry.daysLeft / 365);
-						const days = expiry.daysLeft % 365;
-						const label = years > 0 ? years + 'y ' + days + 'd' : expiry.daysLeft + 'd';
-						item.dataset.expiryLabel = label;
-						item.dataset.expiryColor = expiry.color;
-						setNameExpiry(item, label, expiry.color);
-					} else {
-						delete item.dataset.expiryLabel;
-						delete item.dataset.expiryColor;
-						setNameExpiry(item, null, null);
+					const registerBtn = ownerCol?.querySelector('.action-btn.register2');
+					if (registerBtn) {
+						registerBtn.onclick = (e) => {
+							e.stopPropagation();
+							window.location.href = 'https://' + name + '.sui.ski?register=1';
+						};
 					}
-					const canOffer = getConnectedAddress() && result.nftId;
-					if (canOffer) {
-						item.dataset.nftId = result.nftId;
-						priceCol.innerHTML =
-							'<div class="offer-input-wrap"><span class="offer-currency">$</span><input type="number" class="offer-amount" min="1" step="any" placeholder="--"></div>';
-						statusCol.innerHTML = '<button class="action-btn offer">Offer</button>';
-					} else {
-						priceCol.innerHTML = '--';
-						statusCol.innerHTML = '<a class="action-btn buy" href="https://' + encodeURIComponent(name) + '.sui.ski">View</a>';
-					}
-					if (canOffer) {
-						const offerBtn = statusCol.querySelector('.action-btn.offer');
-						const offerInput = priceCol.querySelector('.offer-amount');
-					offerBtn.addEventListener('click', (e) => { e.stopPropagation(); placeOffer(name, item); });
-					offerInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); placeOffer(name, item); } });
-					offerInput.addEventListener('click', (e) => e.stopPropagation());
+					fetchPricing(item, name);
+					return;
 				}
-				statusCol.querySelectorAll('a.action-btn').forEach(b => b.addEventListener('click', (e) => e.stopPropagation()));
+
+				item.dataset.available = '0';
+				if (result.expirationMs) item.dataset.expirationMs = String(result.expirationMs);
+				else delete item.dataset.expirationMs;
+				if (result.nftId) item.dataset.nftId = result.nftId;
+				else delete item.dataset.nftId;
+				dot.className = 'dot taken';
+				if (result.ownerAddress) {
+					item.dataset.ownerAddress = result.ownerAddress;
+					updateOwnerColumn(item, result.ownerAddress);
+				} else {
+					delete item.dataset.ownerAddress;
+					if (ownerCol) ownerCol.textContent = '--';
+				}
+
+				delete item.dataset.expiryLabel;
+				delete item.dataset.expiryColor;
+				setNameExpiry(item, null, null);
+
+					priceCol.innerHTML = '--';
+					statusCol.innerHTML = getTakenActionMarkup(name, item);
+					statusCol.querySelectorAll('a.action-btn').forEach((b) => b.addEventListener('click', (e) => e.stopPropagation()));
+				}
+
+			function isFrozenCandidate(item, hasListing, hasBid) {
+				if (hasListing || hasBid) return false;
+				const expirationMs = Number(item.dataset.expirationMs || 0);
+				if (!Number.isFinite(expirationMs) || expirationMs <= 0) return false;
+				const expiry = getExpiryInfo(expirationMs);
+				if (!expiry) return false;
+				return expiry.daysLeft > 730;
 			}
-		}
+
+			function applyFrozenTheme(item, name) {
+				const dot = item.querySelector('.dot');
+				const priceCol = item.querySelector('.col-price');
+				const statusCol = item.querySelector('.col-status');
+				item.classList.add('frozen');
+				if (dot) dot.className = 'dot frozen';
+				if (priceCol) priceCol.innerHTML = '<span class="listing-price">--</span>';
+				if (statusCol) {
+					statusCol.innerHTML =
+						'<span class="status-text frozen">Frozen</span>' +
+						'<a class="action-btn frozen" href="https://' + encodeURIComponent(name) + '.sui.ski">View</a>';
+					statusCol.querySelectorAll('a.action-btn').forEach((b) => b.addEventListener('click', (e) => e.stopPropagation()));
+				}
+			}
 
 		async function fetchPricing(item, name) {
 			try {
@@ -3321,11 +3769,15 @@ ${socialMeta}
 		}
 
 		function applyMarketplaceData(item, name, data) {
-				const dot = item.querySelector('.dot');
-				const priceCol = item.querySelector('.col-price');
-				const statusCol = item.querySelector('.col-status');
-				const hasListing = data.bestListing && data.bestListing.price > 0;
-				const hasBid = data.bestBid && data.bestBid.price > 0;
+			const dot = item.querySelector('.dot');
+			const priceCol = item.querySelector('.col-price');
+			const statusCol = item.querySelector('.col-status');
+			const bestListingMist = toPositiveNumber(data.bestListing && data.bestListing.price);
+			const bestBidMist = toPositiveNumber(data.bestBid && data.bestBid.price);
+			const hasListing = bestListingMist > 0;
+			const hasBid = bestBidMist > 0;
+			item.dataset.marketHasListing = hasListing ? '1' : '0';
+			item.dataset.marketHasBid = hasBid ? '1' : '0';
 
 				if (data.nfts && data.nfts.length > 0) {
 					const firstNft = data.nfts[0];
@@ -3337,73 +3789,72 @@ ${socialMeta}
 						updateOwnerColumn(item, firstNft.owner);
 					}
 				}
+				if (hasListing && data.bestListing && data.bestListing.seller) {
+					const listingSeller = String(data.bestListing.seller);
+					item.dataset.ownerAddress = listingSeller;
+					updateOwnerColumn(item, listingSeller);
+				}
 
-				if (!hasListing && !hasBid) return;
+			if (!hasListing && !hasBid) {
+				if (isFrozenCandidate(item, hasListing, hasBid)) {
+					applyFrozenTheme(item, name);
+				}
+				return;
+			}
 
-					const offerInput = priceCol.querySelector('.offer-amount');
-					const tradeportUrl = hasListing
-						? (data.bestListing.tradeportUrl || 'https://www.tradeport.xyz/sui/collection/suins?search=' + encodeURIComponent(name))
-						: null;
-
-					if (offerInput) {
-					if (cachedSuiPriceUsd) {
-							var smartDefaultMist = 0;
-							if (hasBid) {
-								smartDefaultMist = data.bestBid.price;
-							} else if (hasListing) {
-								smartDefaultMist = data.bestListing.price;
-							}
-							if (smartDefaultMist > 0) {
-								var usdValue = Math.round((smartDefaultMist / 1e9) * cachedSuiPriceUsd);
-								item.dataset.referenceUsd = usdValue > 0 ? String(usdValue) : '';
-								offerInput.placeholder = usdValue > 0 ? String(usdValue) : '--';
-							}
-						}
-						if (hasListing) {
-							const listingSui = (data.bestListing.price / 1e9).toFixed(1) + ' SUI';
-							priceCol.innerHTML = '<span class="listing-price">' + listingSui + '</span>';
-							if (dot) dot.className = 'dot listed';
-							if (getConnectedAddress() && item.dataset.nftId) {
-								statusCol.innerHTML =
-									'<button class="action-btn offer">Offer</button>' +
-									'<a class="action-btn register" href="' + tradeportUrl + '" target="_blank" rel="noopener noreferrer">Buy</a>';
-								const offerBtn = statusCol.querySelector('.action-btn.offer');
-								offerBtn?.addEventListener('click', (e) => { e.stopPropagation(); placeOffer(name, item); });
-							} else {
-								const viewBtn = '<a class="action-btn buy" href="https://' + encodeURIComponent(name) + '.sui.ski">View</a>';
-								const buyBtn = '<a class="action-btn register" href="' + tradeportUrl + '" target="_blank" rel="noopener noreferrer">Buy</a>';
-								statusCol.innerHTML = viewBtn + buyBtn;
-							}
-							statusCol.querySelectorAll('a.action-btn').forEach(b => b.addEventListener('click', (e) => e.stopPropagation()));
-						}
-					} else {
-						let priceHtml = '';
-						if (hasListing) {
-							priceHtml += '<span class="listing-price">' + (data.bestListing.price / 1e9).toFixed(1) + ' SUI</span>';
-						}
-						if (hasBid) {
-							const hasRecentSale = data.sales && data.sales.length > 0;
-							const priceLabel = hasRecentSale ? 'sale' : 'offer';
-							priceHtml += '<span class="offer-price">' + (data.bestBid.price / 1e9).toFixed(1) + ' ' + priceLabel + '</span>';
-						}
-						if (priceCol) priceCol.innerHTML = priceHtml;
+			item.classList.remove('frozen');
+			const tradeportUrl = hasListing
+				? (data.bestListing.tradeportUrl || 'https://www.tradeport.xyz/sui/collection/suins?search=' + encodeURIComponent(name))
+				: null;
 
 					if (hasListing) {
+						const listingDisplayMist = getTradeportListingDisplayMist(bestListingMist);
+						const listingSuiValue = formatSuiCompactFromMist(listingDisplayMist);
+						const listingSellerAddress = data.bestListing && data.bestListing.seller
+							? String(data.bestListing.seller)
+							: (item.dataset.ownerAddress || '');
+						const isConnectedOwner = !!getViewerAddress() && isSameAddress(getViewerAddress(), listingSellerAddress);
+						priceCol.innerHTML =
+							'<span class="listing-price"><span class="value">' +
+							listingSuiValue +
+							'</span><span class="unit">SUI</span></span>';
 						if (dot) dot.className = 'dot listed';
-						const viewBtn = '<a class="action-btn buy" href="https://' + encodeURIComponent(name) + '.sui.ski">View</a>';
-						const buyBtn = '<a class="action-btn register" href="' + tradeportUrl + '" target="_blank" rel="noopener noreferrer">Buy</a>';
-						statusCol.innerHTML = viewBtn + buyBtn;
-						statusCol.querySelectorAll('.action-btn').forEach(b => b.addEventListener('click', (e) => e.stopPropagation()));
+						if (isConnectedOwner) {
+							statusCol.innerHTML =
+								'<a class="action-btn relist" href="https://' + encodeURIComponent(name) + '.sui.ski#marketplace-card">Re-list</a>';
+						} else if (getConnectedAddress() && item.dataset.nftId) {
+								statusCol.innerHTML =
+									'<button class="action-btn offer">Offer</button>' +
+									'<a class="action-btn tradeport" href="https://' + encodeURIComponent(name) + '.sui.ski">Buy</a>';
+						const offerBtn = statusCol.querySelector('.action-btn.offer');
+						offerBtn?.addEventListener('click', (e) => { e.stopPropagation(); placeOffer(name, item); });
+					} else {
+							const buyBtn = '<a class="action-btn tradeport" href="https://' + encodeURIComponent(name) + '.sui.ski">Buy</a>';
+						statusCol.innerHTML = buyBtn;
 					}
+					statusCol.querySelectorAll('a.action-btn').forEach((b) => b.addEventListener('click', (e) => e.stopPropagation()));
+					return;
 				}
-				if (hasListing && !dot.classList.contains('listed')) {
-					if (dot) dot.className = 'dot listed';
+
+				let priceHtml = '';
+				if (hasBid) {
+					priceHtml +=
+						'<span class="listing-price"><span class="value">' +
+						formatSuiCompactFromMist(bestBidMist) +
+						'</span><span class="unit">SUI</span></span>';
+					statusCol.innerHTML = getTakenActionMarkup(name, item);
+					statusCol.querySelectorAll('a.action-btn').forEach((b) => b.addEventListener('click', (e) => e.stopPropagation()));
 				}
-		}
+				if (priceCol && priceHtml) priceCol.innerHTML = priceHtml;
+			}
 
 		async function fetchListingPrice(item, name) {
 			try {
-				const res = await fetch('/api/marketplace/' + encodeURIComponent(name));
+				const nftId = item?.dataset?.nftId ? String(item.dataset.nftId) : '';
+				const marketplaceUrl = nftId
+					? ('/api/marketplace/' + encodeURIComponent(name) + '?tokenId=' + encodeURIComponent(nftId))
+					: ('/api/marketplace/' + encodeURIComponent(name));
+				const res = await fetch(marketplaceUrl);
 				if (!res.ok) return;
 				const data = await res.json();
 				applyMarketplaceData(item, name, data);

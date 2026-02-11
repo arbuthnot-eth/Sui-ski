@@ -138,58 +138,103 @@ export function generateWalletUiCss(): string {
 	font-weight: 600;
 	font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 	cursor: pointer;
-	transition: background 0.15s, border-color 0.15s;
+	min-height: 38px;
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	box-shadow: 0 4px 18px rgba(2, 6, 23, 0.36);
+	transition: background 0.16s, border-color 0.16s, transform 0.16s, box-shadow 0.16s;
 }
-.wk-widget-btn:hover { background: rgba(96,165,250,0.12); border-color: rgba(96,165,250,0.3); }
+.wk-widget-btn:hover {
+	background: rgba(96,165,250,0.12);
+	border-color: rgba(96,165,250,0.3);
+	transform: translateY(-1px);
+	box-shadow: 0 8px 22px rgba(30, 64, 175, 0.22);
+}
 .wk-widget-btn:not(.connected) {
 	background: linear-gradient(135deg, rgba(96,165,250,0.08), rgba(56,189,248,0.08));
 	border-color: rgba(96,165,250,0.2);
 	letter-spacing: 0.05em;
 }
 .wk-widget-btn.connected {
-	background: linear-gradient(135deg, rgba(96,165,250,0.15), rgba(139,92,246,0.15));
-	border-color: rgba(96,165,250,0.3);
+	background: linear-gradient(135deg, rgba(59,130,246,0.19), rgba(99,102,241,0.18));
+	border-color: rgba(96,165,250,0.36);
 }
 .wk-widget-btn.session-only {
 	background: linear-gradient(135deg, rgba(96,165,250,0.1), rgba(139,92,246,0.1));
 	border: 1px dashed rgba(96,165,250,0.35);
 }
 .wk-dropdown {
-	display: none;
+	display: block;
+	visibility: hidden;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateY(-4px) scale(0.985);
+	transform-origin: top right;
+	transition: opacity 0.16s ease, transform 0.16s ease, visibility 0s linear 0.16s;
 	position: absolute;
 	right: 0;
 	top: calc(100% + 6px);
-	min-width: 200px;
-	background: #1a1a1a;
-	border: 1px solid rgba(255,255,255,0.08);
-	border-radius: 12px;
-	overflow: hidden;
-	box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+	min-width: 224px;
+	padding: 8px;
+	background:
+		linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.98)),
+		radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 55%);
+	border: 1px solid rgba(96, 165, 250, 0.26);
+	border-radius: 14px;
+	box-shadow: 0 18px 44px rgba(2, 6, 23, 0.62), inset 0 1px 0 rgba(148, 163, 184, 0.12);
 	z-index: 9999;
 }
-.wk-dropdown.open { display: block; }
+.wk-dropdown.open {
+	visibility: visible;
+	opacity: 1;
+	pointer-events: auto;
+	transform: translateY(0) scale(1);
+	transition-delay: 0s;
+}
 .wk-dropdown-item {
 	display: flex;
 	align-items: center;
 	gap: 10px;
 	width: 100%;
-	padding: 10px 14px;
+	padding: 11px 12px;
 	background: none;
-	border: none;
-	border-bottom: 1px solid rgba(255,255,255,0.05);
-	color: #e4e4e7;
+	border: 1px solid transparent;
+	border-radius: 10px;
+	color: #e2e8f0;
 	font-size: 0.85rem;
 	font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 	cursor: pointer;
-	transition: background 0.15s;
+	transition: background 0.16s, border-color 0.16s, color 0.16s, transform 0.16s;
 	text-decoration: none;
 	text-align: left;
 }
-.wk-dropdown-item:last-child { border-bottom: none; }
-.wk-dropdown-item:hover { background: rgba(96,165,250,0.1); }
-.wk-dropdown-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.6; }
-.wk-dropdown-item.disconnect { color: #f87171; }
-.wk-dropdown-item.disconnect:hover { background: rgba(248,113,113,0.1); }
+.wk-dropdown-item + .wk-dropdown-item {
+	margin-top: 4px;
+}
+.wk-dropdown-item:hover {
+	background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(30, 64, 175, 0.14));
+	border-color: rgba(96, 165, 250, 0.32);
+	color: #f8fafc;
+	transform: translateY(-1px);
+}
+.wk-dropdown-item svg {
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+	opacity: 0.82;
+	color: #93c5fd;
+}
+.wk-dropdown-item.disconnect {
+	color: #fca5a5;
+}
+.wk-dropdown-item.disconnect svg {
+	color: #f87171;
+}
+.wk-dropdown-item.disconnect:hover {
+	background: linear-gradient(135deg, rgba(127, 29, 29, 0.36), rgba(69, 10, 10, 0.28));
+	border-color: rgba(248, 113, 113, 0.34);
+	color: #fee2e2;
+}
 .wk-copied-flash {
 	position: absolute;
 	right: 14px;
@@ -219,10 +264,14 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       return addr ? addr.slice(0, 6) + '...' + addr.slice(-4) : '';
     }
 
-    var __wkModalContainer = null;
-    var __wkWidgetContainer = null;
-    var __wkModalUnsub = null;
-    var __wkWidgetUnsub = null;
+	    var __wkModalContainer = null;
+	    var __wkWidgetContainer = null;
+	    var __wkModalUnsub = null;
+	    var __wkWidgetUnsub = null;
+	    var __wkWidgetDocClickBound = false;
+	    var __wkWidgetBtnMarkup = '';
+	    var __wkWidgetBtnStateClass = '';
+	    var __wkWidgetDropdownMarkup = '';
 
     function __wkDefaultIcon() {
       return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle fill="#818cf8" cx="16" cy="16" r="16"/></svg>');
@@ -249,6 +298,16 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       }
       html += '<br>'
         + '<a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer">Install Phantom \\u2192</a>'
+        + '<br>'
+        + '<a href="https://slush.app" target="_blank" rel="noopener noreferrer">Install Slush \\u2192</a>'
+        + '<br>'
+        + '<a href="https://suiet.app" target="_blank" rel="noopener noreferrer">Install Suiet \\u2192</a>'
+        + '<br>'
+        + '<a href="https://martianwallet.xyz" target="_blank" rel="noopener noreferrer">Install Martian \\u2192</a>'
+        + '<br>'
+        + '<a href="https://ethoswallet.xyz" target="_blank" rel="noopener noreferrer">Install Ethos \\u2192</a>'
+        + '<br>'
+        + '<a href="https://www.okx.com/web3" target="_blank" rel="noopener noreferrer">Install OKX Wallet \\u2192</a>'
         + '<br>'
         + '<a href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil" target="_blank" rel="noopener noreferrer">Install Sui Wallet \\u2192</a>'
         + '</div>';
@@ -430,9 +489,8 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       if (overlay) overlay.classList.remove('open');
     };
 
-    function __wkBuildDropdownHtml(conn) {
+	    function __wkBuildDropdownHtml(conn) {
       var addr = conn && conn.address ? conn.address : '';
-      var isSession = conn && conn.status === 'session';
       var primaryName = ${showPrimaryName} ? (conn && conn.primaryName ? conn.primaryName : null) : null;
       var html = '';
 
@@ -450,14 +508,24 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 
       html += '<button class="wk-dropdown-item" id="__wk-dd-switch">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>'
-        + (isSession ? 'Connect Wallet' : 'Switch Wallet') + '</button>';
+        + 'Switch Wallet</button>';
 
       html += '<button class="wk-dropdown-item disconnect" id="__wk-dd-disconnect">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>'
         + 'Disconnect</button>';
 
-      return html;
-    }
+	      return html;
+	    }
+
+	    function __wkEscapeHtml(value) {
+	      var text = String(value || '');
+	      return text
+	        .replace(/&/g, '&amp;')
+	        .replace(/</g, '&lt;')
+	        .replace(/>/g, '&gt;')
+	        .replace(/"/g, '&quot;')
+	        .replace(/'/g, '&#39;');
+	    }
 
     function __wkBindDropdownEvents(conn) {
       var copyBtn = document.getElementById('__wk-dd-copy');
@@ -493,75 +561,125 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       }
     }
 
-    function __wkUpdateWidget(conn) {
-      if (!__wkWidgetContainer) return;
-      var widget = __wkWidgetContainer.querySelector('.wk-widget');
-      if (!widget) return;
-      var btn = widget.querySelector('.wk-widget-btn');
-      var dropdown = widget.querySelector('.wk-dropdown');
-      if (!btn || !dropdown) return;
+	    function __wkUpdateWidget(conn) {
+	      if (!__wkWidgetContainer) return;
+	      var widget = __wkWidgetContainer.querySelector('.wk-widget');
+	      if (!widget) return;
+	      var btn = widget.querySelector('.wk-widget-btn');
+	      var dropdown = widget.querySelector('.wk-dropdown');
+	      if (!btn || !dropdown) return;
 
-      var isActive = conn && (conn.status === 'connected' || conn.status === 'session') && conn.address;
-      if (isActive) {
-        var label = ${showPrimaryName} && conn.primaryName ? conn.primaryName : __wkTruncAddr(conn.address);
-        var walletIcon = conn.wallet && conn.wallet.icon ? conn.wallet.icon : '';
-        if (walletIcon) {
-          btn.innerHTML = '<img src="' + walletIcon + '" alt="" style="width:18px;height:18px;border-radius:5px;flex-shrink:0" onerror="this.style.display=\\\'none\\\'"> ' + label;
-        } else if (conn.status === 'session') {
-          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ' + label;
-        } else {
-          btn.textContent = label;
-        }
-        btn.classList.remove('connected', 'session-only');
-        btn.classList.add(conn.status === 'session' ? 'session-only' : 'connected');
-        dropdown.innerHTML = __wkBuildDropdownHtml(conn);
-        __wkBindDropdownEvents(conn);
-      } else {
-        btn.textContent = 'SKI';
-        btn.classList.remove('connected', 'session-only');
-        dropdown.innerHTML = '';
-        dropdown.classList.remove('open');
-      }
-    }
+	      var isActive = conn && (conn.status === 'connected' || conn.status === 'session') && conn.address;
+	      if (isActive) {
+	        var label = ${showPrimaryName} && conn.primaryName ? conn.primaryName : __wkTruncAddr(conn.address);
+	        var safeLabel = __wkEscapeHtml(label);
+	        var walletIcon = conn.wallet && conn.wallet.icon ? conn.wallet.icon : '';
+	        var nextBtnMarkup = '';
+	        if (walletIcon) {
+	          nextBtnMarkup = '<img src="' + walletIcon + '" alt="" style="width:18px;height:18px;border-radius:5px;flex-shrink:0" onerror="this.style.display=\\\'none\\\'"> ' + safeLabel;
+	        } else if (conn.status === 'session') {
+	          nextBtnMarkup = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ' + safeLabel;
+	        } else {
+	          nextBtnMarkup = safeLabel;
+	        }
+	        if (__wkWidgetBtnMarkup !== nextBtnMarkup) {
+	          if (walletIcon || conn.status === 'session') {
+	            btn.innerHTML = nextBtnMarkup;
+	          } else {
+	            btn.textContent = label;
+	          }
+	          __wkWidgetBtnMarkup = nextBtnMarkup;
+	        }
+	        var nextBtnStateClass = 'connected';
+	        if (__wkWidgetBtnStateClass !== nextBtnStateClass) {
+	          btn.classList.remove('connected', 'session-only');
+	          btn.classList.add(nextBtnStateClass);
+	          __wkWidgetBtnStateClass = nextBtnStateClass;
+	        }
+	        var nextDropdownMarkup = __wkBuildDropdownHtml(conn);
+	        if (__wkWidgetDropdownMarkup !== nextDropdownMarkup) {
+	          dropdown.innerHTML = nextDropdownMarkup;
+	          __wkWidgetDropdownMarkup = nextDropdownMarkup;
+	          __wkBindDropdownEvents(conn);
+	        }
+	      } else {
+	        if (__wkWidgetBtnMarkup !== 'SKI') {
+	          btn.textContent = 'SKI';
+	          __wkWidgetBtnMarkup = 'SKI';
+	        }
+	        if (__wkWidgetBtnStateClass) {
+	          btn.classList.remove('connected', 'session-only');
+	          __wkWidgetBtnStateClass = '';
+	        }
+	        if (__wkWidgetDropdownMarkup) {
+	          dropdown.innerHTML = '';
+	          __wkWidgetDropdownMarkup = '';
+	        }
+	        dropdown.classList.remove('open');
+	      }
+	    }
 
-    SuiWalletKit.renderWidget = function renderWidget(containerId) {
-      var container = document.getElementById(containerId);
-      if (!container) throw new Error('Widget container not found: ' + containerId);
-      __wkWidgetContainer = container;
+	    SuiWalletKit.renderWidget = function renderWidget(containerId) {
+	      var container = document.getElementById(containerId);
+	      if (!container) throw new Error('Widget container not found: ' + containerId);
+	      __wkWidgetContainer = container;
 
-      container.innerHTML = '<div class="wk-widget">'
-        + '<button class="wk-widget-btn">SKI</button>'
-        + '<div class="wk-dropdown"></div>'
-        + '</div>';
+	      var widget = container.querySelector('.wk-widget');
+	      if (!widget) {
+	        container.innerHTML = '<div class="wk-widget">'
+	          + '<button class="wk-widget-btn" data-wk-role="toggle">SKI</button>'
+	          + '<div class="wk-dropdown"></div>'
+	          + '</div>';
+	        widget = container.querySelector('.wk-widget');
+	        __wkWidgetBtnMarkup = '';
+	        __wkWidgetBtnStateClass = '';
+	        __wkWidgetDropdownMarkup = '';
+	      }
 
-      var btn = container.querySelector('.wk-widget-btn');
-      var dropdown = container.querySelector('.wk-dropdown');
+	      var btn = container.querySelector('.wk-widget-btn');
+	      if (btn && container.dataset.wkWidgetBound !== '1') {
+	        container.dataset.wkWidgetBound = '1';
+	        btn.addEventListener('click', function() {
+	          var activeWidget = __wkWidgetContainer && __wkWidgetContainer.querySelector('.wk-widget');
+	          var dropdown = __wkWidgetContainer && __wkWidgetContainer.querySelector('.wk-dropdown');
+	          if (!activeWidget || !dropdown) return;
+	          var conn = SuiWalletKit.$connection.value;
+	          if (conn && (conn.status === 'connected' || conn.status === 'session')) {
+	            dropdown.classList.toggle('open');
+	          } else {
+	            SuiWalletKit.openModal();
+	          }
+	        });
+	      }
+	      if (btn) {
+	        try { window.__wkWidgetButton = btn; } catch (_) {}
+	        try {
+	          window.getWalletWidgetButton = window.getWalletWidgetButton || function() {
+	            return document.querySelector('#wk-widget > div > button') || document.querySelector('#wk-widget .wk-widget-btn');
+	          };
+	        } catch (_) {}
+	        try { window.dispatchEvent(new CustomEvent('wk-widget-ready')); } catch (_) {}
+	      }
 
-      btn.addEventListener('click', function() {
-        var conn = SuiWalletKit.$connection.value;
-        if (conn && (conn.status === 'connected' || conn.status === 'session')) {
-          dropdown.classList.toggle('open');
-        } else {
-          SuiWalletKit.openModal();
-        }
-      });
+	      if (!__wkWidgetDocClickBound) {
+	        __wkWidgetDocClickBound = true;
+	        document.addEventListener('click', function(e) {
+	          var activeContainer = __wkWidgetContainer;
+	          if (!activeContainer) return;
+	          var activeWidget = activeContainer.querySelector('.wk-widget');
+	          var dropdown = activeContainer.querySelector('.wk-dropdown');
+	          if (activeWidget && dropdown && !activeWidget.contains(e.target)) {
+	            dropdown.classList.remove('open');
+	          }
+	        });
+	      }
 
-      document.addEventListener('click', function(e) {
-        var widget = container.querySelector('.wk-widget');
-        if (widget && !widget.contains(e.target)) {
-          dropdown.classList.remove('open');
-        }
-      });
+	      if (__wkWidgetUnsub) __wkWidgetUnsub();
+	      __wkWidgetUnsub = SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
+	        __wkUpdateWidget(conn);
+	      });
 
-      if (__wkWidgetUnsub) __wkWidgetUnsub();
-      __wkWidgetUnsub = SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
-        __wkUpdateWidget(conn);
-      });
-
-      var initialConn = SuiWalletKit.$connection.value;
-      if (initialConn && (initialConn.status === 'connected' || initialConn.status === 'session')) {
-        __wkUpdateWidget(initialConn);
-      }
-    };
-  `
+	      __wkUpdateWidget(SuiWalletKit.$connection.value);
+	    };
+	  `
 }

@@ -322,10 +322,19 @@ ${generateZkSendCss()}</style>
 									<div class="header-meta-item target-meta-item">
 										<div class="target-preview" id="target-preview">
 											<button type="button" class="target-preview-copy-btn" id="copy-target-address-btn" title="Copy target address" aria-label="Copy target address">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M12 3v18M19 12a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"></path></svg>
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="2.5"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>
 											</button>
 											<span class="target-preview-value" id="target-preview-value"></span>
-											<button class="edit-btn target-self-btn hidden" id="set-self-btn" title="Set target to my address" aria-label="Set target to my address">Self</button>
+											<button class="edit-btn target-self-btn target-lift-btn hidden" id="set-self-btn" title="Lift target to my wallet" aria-label="Lift target to my wallet">
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+													<path d="M4 20h16"></path>
+													<path d="M6 20l4-8"></path>
+													<path d="M14 20l4-8"></path>
+													<path d="M10 9h4"></path>
+													<rect x="9.5" y="5.5" width="5" height="5" rx="1.2"></rect>
+													<path d="M12 4v-2"></path>
+												</svg>
+											</button>
 											<button class="target-preview-edit-btn hidden" id="edit-address-btn" title="Edit target address" aria-label="Edit target address">
 												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
 											</button>
@@ -584,10 +593,9 @@ ${generateZkSendCss()}</style>
 						<div class="marketplace-bid-input" id="marketplace-bid-input">
 							<div class="marketplace-bid-estimate" id="marketplace-bid-estimate"></div>
 							<div class="marketplace-bid-price-control">
-										<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-down" aria-label="Decrease bid by 0.5 SUI">-</button>
-								<input type="text" id="marketplace-bid-amount" placeholder="Bid amount" inputmode="decimal" pattern="[0-9]*\\.?[0-9]*" step="any">
-								<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-up" aria-label="Increase bid by 0.5 SUI">+</button>
-								<button type="button" class="marketplace-bid-max-btn" id="marketplace-bid-max" title="Use entire portfolio (95%)">MAX</button>
+										<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-down" aria-label="Decrease bid amount">-</button>
+									<input type="text" id="marketplace-bid-amount" placeholder="Bid amount" inputmode="numeric" pattern="[0-9]*" step="1">
+								<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-up" aria-label="Increase bid amount">+</button>
 							</div>
 							<button class="marketplace-bid-btn" id="marketplace-place-bid-btn" disabled>
 								<span class="marketplace-bid-text">Offer SUI for ${escapeHtml(cleanName)}.sui</span>
@@ -598,15 +606,20 @@ ${generateZkSendCss()}</style>
 							<div class="marketplace-list-top-row">
 								<div class="marketplace-list-estimate" id="marketplace-list-estimate"></div>
 								<div class="marketplace-list-price-control">
-										<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-down" aria-label="Decrease list price by 0.5 SUI">-</button>
+										<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-down" aria-label="Decrease list price amount">-</button>
 									<input type="text" id="marketplace-list-amount" placeholder="12" inputmode="decimal" pattern="[0-9]*\\.?[0-9]*" step="any">
-									<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-up" aria-label="Increase list price by 0.5 SUI">+</button>
+									<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-up" aria-label="Increase list price amount">+</button>
 								</div>
 							</div>
 							<button class="marketplace-list-btn" id="marketplace-list-btn" style="display:none;" disabled>
 								<span class="marketplace-list-text">List ${escapeHtml(cleanName)}.sui</span>
 								<span class="marketplace-list-loading hidden"><span class="loading"></span></span>
 							</button>
+							<button class="marketplace-wrap-btn" id="marketplace-wrap-btn" style="display:none;" disabled>
+								<span class="marketplace-wrap-text">Authorize Grace Wrap</span>
+								<span class="marketplace-wrap-loading hidden"><span class="loading"></span></span>
+							</button>
+							<div class="marketplace-wrap-hint" id="marketplace-wrap-hint" style="display:none;"></div>
 						</div>
 					<div class="marketplace-status" id="marketplace-status"></div>
 					<div class="marketplace-activity" id="marketplace-activity" style="display:none;">
@@ -633,6 +646,10 @@ ${generateZkSendCss()}</style>
 					</div>
 				</div>
 				<div class="auction-body">
+					<div class="auction-row auction-row-state" id="auction-state-row" style="display:none;">
+						<span class="auction-label">State</span>
+						<span class="auction-value state" id="auction-state-value">--</span>
+					</div>
 					<div class="auction-row">
 						<span class="auction-label">Current Price</span>
 						<span class="auction-value price" id="auction-current-price">--</span>
@@ -644,6 +661,10 @@ ${generateZkSendCss()}</style>
 					<button class="auction-buy-btn" id="auction-buy-btn" disabled>
 						<span class="auction-buy-text" id="auction-buy-text">Connect Wallet to Buy</span>
 						<span class="auction-buy-loading hidden"><span class="loading"></span></span>
+					</button>
+					<button class="auction-cancel-btn" id="auction-cancel-btn" style="display:none;" disabled>
+						<span class="auction-cancel-text" id="auction-cancel-text">Cancel Wrap</span>
+						<span class="auction-cancel-loading hidden"><span class="loading"></span></span>
 					</button>
 					<div class="auction-status" id="auction-status"></div>
 					</div>
@@ -901,6 +922,9 @@ ${generateZkSendCss()}</style>
 				if (results[0].status === 'fulfilled') {
 					const walletsModule = results[0].value;
 					getWallets = pickExport(walletsModule, 'getWallets') || getWallets;
+					if (typeof window !== 'undefined') {
+						window.__suiWalletStandard = walletsModule;
+					}
 				}
 				if (results[1].status === 'fulfilled') {
 					const suiModule = results[1].value;
@@ -924,7 +948,12 @@ ${generateZkSendCss()}</style>
 					const retries = [];
 					if (!getWallets) retries.push(
 						importFirst(walletStandardUrls, SDK_RETRY_TIMEOUT)
-							.then(m => { getWallets = pickExport(m, 'getWallets') || getWallets; })
+							.then(m => {
+								getWallets = pickExport(m, 'getWallets') || getWallets;
+								if (typeof window !== 'undefined') {
+									window.__suiWalletStandard = m;
+								}
+							})
 							.catch(e => console.warn('Retry getWallets failed:', e.message))
 					);
 					if (!SuiJsonRpcClient) retries.push(
@@ -967,6 +996,7 @@ ${generateZkSendCss()}</style>
 		const EXPIRATION_MS = ${safeNumber(expiresMs)};
 		const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 		const AVAILABLE_AT = EXPIRATION_MS + GRACE_PERIOD_MS;
+		const AUCTION_DECAY_EXPONENT = 69;
 		const IS_LONG_RENEWAL = EXPIRATION_MS > Date.now() + 2 * 365.25 * 86400000;
 		const HAS_WALRUS_SITE = ${record.walrusSiteId ? 'true' : 'false'};
 		const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
@@ -1029,16 +1059,61 @@ ${generateZkSendCss()}</style>
 			}
 			return cachedSuiClient;
 		};
-		async function resolveWalletName(address) {
-			if (!address) return;
-			try {
-				var client = getSuiClient();
-				var result = await client.resolveNameServiceNames({ address: address });
-				var name = result && result.data && result.data[0];
-				if (name) {
-					SuiWalletKit.setPrimaryName(name.replace(/.sui$/i, ''));
+		const primaryNameCache = new Map();
+		const primaryNameInflight = new Map();
+		const PRIMARY_NAME_CACHE_TTL_MS = 60000;
+		let lastWalletPrimaryResolvedAddress = '';
+
+		async function resolvePrimaryNameViaApi(address) {
+			const normalizedAddress = String(address || '').trim().toLowerCase();
+			if (!normalizedAddress) return null;
+
+			const cached = primaryNameCache.get(normalizedAddress);
+			if (cached && cached.expiresAt > Date.now()) {
+				return cached.name;
+			}
+
+			const inflight = primaryNameInflight.get(normalizedAddress);
+			if (inflight) return inflight;
+
+			const request = (async () => {
+				try {
+					const res = await fetch('/api/primary-name?address=' + encodeURIComponent(normalizedAddress));
+					if (!res.ok) return null;
+					const data = await res.json().catch(() => null);
+					const rawName = typeof data?.name === 'string' ? String(data.name) : null;
+					primaryNameCache.set(normalizedAddress, {
+						name: rawName,
+						expiresAt: Date.now() + PRIMARY_NAME_CACHE_TTL_MS,
+					});
+					return rawName;
+				} catch (_e) {
+					return null;
+				} finally {
+					primaryNameInflight.delete(normalizedAddress);
 				}
-			} catch (e) {}
+			})();
+
+			primaryNameInflight.set(normalizedAddress, request);
+			return request;
+		}
+
+		async function resolveWalletName(address) {
+			const normalizedAddress = String(address || '').trim().toLowerCase();
+			if (!normalizedAddress) return;
+			if (normalizedAddress === lastWalletPrimaryResolvedAddress && connectedPrimaryName) return;
+
+			const name = await resolvePrimaryNameViaApi(normalizedAddress);
+			lastWalletPrimaryResolvedAddress = normalizedAddress;
+			if (!name) return;
+			const normalizedPrimary = String(name).replace(/\\.sui$/i, '');
+			if (
+				connectedPrimaryName &&
+				String(connectedPrimaryName).toLowerCase() === String(normalizedPrimary).toLowerCase()
+			) {
+				return;
+			}
+			SuiWalletKit.setPrimaryName(normalizedPrimary);
 		}
 		let suinsModuleLoadingPromise = null;
 		function pickSuinsExport(mod, name) {
@@ -1178,10 +1253,34 @@ ${generateZkSendCss()}</style>
 				return senderAddress;
 			}
 
-		window.connectWallet = function connectWallet() {
-			if (canSign()) return Promise.resolve();
-			SuiWalletKit.openModal();
-			return new Promise(function(resolve) {
+			function normalizeSuiNameForCompare(value) {
+				return String(value || '').trim().toLowerCase().replace(/\\.sui$/i, '');
+			}
+
+			function isProfilePrimaryNameForOwner() {
+				const currentName = normalizeSuiNameForCompare(FULL_NAME || NAME);
+				if (!currentName) return false;
+				const ownerPrimary = normalizeSuiNameForCompare(ownerPrimaryName || targetPrimaryName);
+				if (ownerPrimary) return ownerPrimary === currentName;
+				const ownerNameEl = document.getElementById('addr-name');
+				const ownerNameFromUi = normalizeSuiNameForCompare(ownerNameEl?.dataset?.copyName || '');
+				return ownerNameFromUi ? ownerNameFromUi === currentName : false;
+			}
+
+			function syncIdentityPrimaryBadgeState() {
+				const isPrimaryName = isProfilePrimaryNameForOwner();
+				if (document.body) {
+					document.body.classList.toggle('profile-name-primary', isPrimaryName);
+				}
+				if (identityVisual) {
+					identityVisual.classList.toggle('primary-identity', isPrimaryName);
+				}
+			}
+
+			window.connectWallet = function connectWallet() {
+				if (canSign()) return Promise.resolve();
+				SuiWalletKit.openModal();
+				return new Promise(function(resolve) {
 				var unsub = SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
 					if (conn && (conn.status === 'connected' || conn.status === 'session') && conn.address) {
 						unsub();
@@ -1249,6 +1348,7 @@ ${generateZkSendCss()}</style>
 			let restoringIdentityVisual = false;
 
 		// Marketplace elements (declared early to avoid temporal dead zone)
+		const mainContentEl = document.querySelector('.main-content');
 		const overviewSecondaryGrid = document.getElementById('overview-secondary-grid');
 		const overviewMarketModule = document.getElementById('overview-market-module');
 		const marketplaceCard = document.getElementById('marketplace-card');
@@ -1266,20 +1366,26 @@ ${generateZkSendCss()}</style>
 		const marketplaceBuyLoading = marketplaceBuyBtn?.querySelector('.marketplace-buy-loading');
 		const marketplaceBidInputWrap = document.getElementById('marketplace-bid-input');
 		const marketplaceBidAmountInput = document.getElementById('marketplace-bid-amount');
+		const marketplaceBidPriceControl = marketplaceBidInputWrap?.querySelector('.marketplace-bid-price-control');
 		const marketplaceBidPriceUpBtn = document.getElementById('marketplace-bid-price-up');
 		const marketplaceBidPriceDownBtn = document.getElementById('marketplace-bid-price-down');
-		const marketplaceBidMaxBtn = document.getElementById('marketplace-bid-max');
 		const marketplacePlaceBidBtn = document.getElementById('marketplace-place-bid-btn');
 		const marketplaceBidText = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-text');
 		const marketplaceBidLoading = marketplacePlaceBidBtn?.querySelector('.marketplace-bid-loading');
 		const marketplaceBidEstimate = document.getElementById('marketplace-bid-estimate');
 		const marketplaceListInputWrap = document.getElementById('marketplace-list-input');
+		const marketplaceListTopRow = marketplaceListInputWrap?.querySelector('.marketplace-list-top-row');
 		const marketplaceListAmountInput = document.getElementById('marketplace-list-amount');
+		const marketplaceListPriceControl = marketplaceListInputWrap?.querySelector('.marketplace-list-price-control');
 		const marketplaceListPriceUpBtn = document.getElementById('marketplace-list-price-up');
 		const marketplaceListPriceDownBtn = document.getElementById('marketplace-list-price-down');
 		const marketplaceListBtn = document.getElementById('marketplace-list-btn');
 		const marketplaceListText = marketplaceListBtn?.querySelector('.marketplace-list-text');
 		const marketplaceListLoading = marketplaceListBtn?.querySelector('.marketplace-list-loading');
+		const marketplaceWrapBtn = document.getElementById('marketplace-wrap-btn');
+		const marketplaceWrapText = marketplaceWrapBtn?.querySelector('.marketplace-wrap-text');
+		const marketplaceWrapLoading = marketplaceWrapBtn?.querySelector('.marketplace-wrap-loading');
+		const marketplaceWrapHint = document.getElementById('marketplace-wrap-hint');
 		const marketplaceListEstimate = document.getElementById('marketplace-list-estimate');
 		const marketplaceStatus = document.getElementById('marketplace-status');
 		const marketplaceActivity = document.getElementById('marketplace-activity');
@@ -1293,9 +1399,14 @@ ${generateZkSendCss()}</style>
 		const auctionCard = document.getElementById('auction-card');
 		const auctionCurrentPrice = document.getElementById('auction-current-price');
 		const auctionTimeLeft = document.getElementById('auction-time-left');
+		const auctionStateRow = document.getElementById('auction-state-row');
+		const auctionStateValue = document.getElementById('auction-state-value');
 		const auctionBuyBtn = document.getElementById('auction-buy-btn');
 		const auctionBuyText = document.getElementById('auction-buy-text');
 		const auctionBuyLoading = auctionBuyBtn?.querySelector('.auction-buy-loading');
+		const auctionCancelBtn = document.getElementById('auction-cancel-btn');
+		const auctionCancelText = document.getElementById('auction-cancel-text');
+		const auctionCancelLoading = auctionCancelBtn?.querySelector('.auction-cancel-loading');
 		const auctionStatus = document.getElementById('auction-status');
 		const auctionSellerLabel = document.getElementById('auction-seller-label');
 
@@ -1356,7 +1467,7 @@ ${generateZkSendCss()}</style>
 					targetPreviewEl.removeAttribute('aria-label');
 					targetPreviewEl.removeAttribute('tabindex');
 					targetPreviewEl.title = 'No target address';
-					if (targetPreviewValueEl) targetPreviewValueEl.textContent = 'None';
+					if (targetPreviewValueEl) targetPreviewValueEl.textContent = '—';
 					if (targetCopyBtnEl) {
 						targetCopyBtnEl.classList.add('hidden');
 						targetCopyBtnEl.disabled = true;
@@ -1511,16 +1622,7 @@ ${generateZkSendCss()}</style>
 		// Fetch primary SuiNS name for an address using RPC
 		async function fetchPrimaryName(address) {
 			if (!address) return null;
-			try {
-				const suiClient = getSuiClient();
-				const result = await suiClient.resolveNameServiceNames({ address });
-				if (result?.data?.length > 0) {
-					return result.data[0];
-				}
-			} catch (e) {
-				console.log('Failed to fetch primary name:', e.message);
-			}
-			return null;
+			return await resolvePrimaryNameViaApi(address);
 		}
 
 		// Check if connected wallet can edit
@@ -1567,6 +1669,19 @@ ${generateZkSendCss()}</style>
 			const isAlreadySelf = Boolean(normalizedConnected && normalizedTarget && normalizedConnected === normalizedTarget);
 			const isOwner = Boolean(normalizedConnected && normalizedOwner && normalizedConnected === normalizedOwner);
 			const isLinkedTarget = Boolean(hasExplicitTarget && isAlreadySelf);
+			const isPrimaryForTarget = Boolean(hasExplicitTarget && isProfilePrimaryNameForOwner());
+			const hasTwoPlusYearsRemaining = Boolean(
+				Number.isFinite(EXPIRATION_MS)
+				&& Number(EXPIRATION_MS) - Date.now() >= 2 * 365.25 * 24 * 60 * 60 * 1000,
+			);
+			const isUnlisted = !currentListing;
+			const useOwnedWhiteTheme = Boolean(
+				!isPrimaryForTarget
+				&& isOwner
+				&& isUnlisted
+				&& hasTwoPlusYearsRemaining,
+			);
+			const useOwnedBlueTheme = Boolean(!isPrimaryForTarget && !useOwnedWhiteTheme && isOwner);
 			const isAlreadyPrimary = Boolean(
 				connectedAddress
 				&& connectedPrimaryName
@@ -1577,8 +1692,8 @@ ${generateZkSendCss()}</style>
 			if (isOwner && (!hasExplicitTarget || !isAlreadySelf)) {
 				setSelfBtn.disabled = false;
 				setSelfBtn.title = connectedPrimaryName
-					? 'Set to ' + connectedPrimaryName
-					: 'Set to ' + truncAddr(connectedAddress);
+					? 'Lift target to ' + connectedPrimaryName
+					: 'Lift target to ' + truncAddr(connectedAddress);
 				setSelfBtn.classList.remove('hidden');
 			} else {
 				setSelfBtn.classList.add('hidden');
@@ -1610,14 +1725,15 @@ ${generateZkSendCss()}</style>
 				ownerDisplayCard.classList.toggle('primary-view', isAlreadyPrimary);
 				ownerDisplayCard.classList.toggle('owner-view', isOwner && !isAlreadyPrimary);
 			}
-			if (document.body) {
-				document.body.classList.toggle('profile-primary-active', isAlreadyPrimary);
-			}
+				if (document.body) {
+					document.body.classList.toggle('profile-primary-active', isAlreadyPrimary);
+				}
+				syncIdentityPrimaryBadgeState();
 
-			// Jacket button - visible when owner and package configured
-			if (jacketBtn) {
-				jacketBtn.classList.toggle('hidden', !isOwner || !DECAY_AUCTION_PACKAGE_ID);
-			}
+				// Jacket button - visible when owner and package configured
+				if (jacketBtn) {
+					jacketBtn.classList.toggle('hidden', !isOwner || !DECAY_AUCTION_PACKAGE_ID);
+				}
 
 			// Edit button
 			if (editBtn) {
@@ -1626,17 +1742,32 @@ ${generateZkSendCss()}</style>
 				editBtn.disabled = !canShowEdit;
 				editBtn.title = canShowEdit ? 'Edit target address' : '';
 			}
-			if (copyTargetBtn) {
-				copyTargetBtn.classList.toggle('hidden', !hasExplicitTarget);
-				copyTargetBtn.disabled = !hasExplicitTarget;
-			}
-			if (targetPreviewBtn) {
-				targetPreviewBtn.classList.remove('hidden');
-				targetPreviewBtn.classList.toggle('self-target', Boolean(hasExplicitTarget && isAlreadySelf));
-			}
-			if (targetPreviewValue) {
-				targetPreviewValue.classList.remove('hidden');
-			}
+				if (copyTargetBtn) {
+					const showEmptyTarget = Boolean(connectedAddress && !isOwner && !hasExplicitTarget);
+					copyTargetBtn.classList.toggle('hidden', !hasExplicitTarget && !showEmptyTarget);
+					copyTargetBtn.disabled = !hasExplicitTarget;
+					if (showEmptyTarget) {
+						copyTargetBtn.title = 'No target address';
+						copyTargetBtn.setAttribute('aria-label', 'No target address');
+					}
+				}
+				if (targetPreviewBtn) {
+					const showEmptyTarget = Boolean(connectedAddress && !isOwner && !hasExplicitTarget);
+					targetPreviewBtn.classList.remove('hidden');
+					targetPreviewBtn.classList.toggle('self-target', Boolean(hasExplicitTarget && isAlreadySelf));
+					targetPreviewBtn.classList.toggle('lift-ready', Boolean(isOwner && !hasExplicitTarget));
+					targetPreviewBtn.classList.toggle('empty-target', showEmptyTarget);
+					targetPreviewBtn.classList.toggle('target-primary-gold', Boolean(hasExplicitTarget && isPrimaryForTarget));
+					targetPreviewBtn.classList.toggle('target-owned-blue', Boolean(hasExplicitTarget && useOwnedBlueTheme));
+					targetPreviewBtn.classList.toggle('target-owned-white', Boolean(hasExplicitTarget && useOwnedWhiteTheme));
+				}
+				if (targetPreviewValue) {
+					const showEmptyTarget = Boolean(connectedAddress && !isOwner && !hasExplicitTarget);
+					targetPreviewValue.classList.remove('hidden');
+					if (!hasExplicitTarget) {
+						targetPreviewValue.textContent = showEmptyTarget ? '' : '—';
+					}
+				}
 
 			// Update grace period banner visibility
 			updateGracePeriodActions();
@@ -2237,27 +2368,29 @@ ${generateZkSendCss()}</style>
 		}
 
 		// ===== IDENTITY CARD (NFT + QR CODE) =====
-		function showIdentityQr() {
-			if (!identityVisual || !identityCanvas) return;
-			// Show canvas (for QR overlay)
-			identityCanvas.style.display = 'block';
-			// Hide NFT image if it exists
-			const nftImg = identityVisual.querySelector('img');
-			if (nftImg) nftImg.style.display = 'none';
-			showingQr = true;
-			stylizedMode = false;
-		}
+			function showIdentityQr() {
+				if (!identityVisual || !identityCanvas) return;
+				// Show canvas (for QR overlay)
+				identityCanvas.style.display = 'block';
+				// Hide NFT image if it exists
+				const nftImg = identityVisual.querySelector('img');
+				if (nftImg) nftImg.style.display = 'none';
+				identityVisual.classList.remove('has-tagged-image');
+				showingQr = true;
+				stylizedMode = false;
+			}
 
-		function showIdentityNft() {
-			if (!identityVisual || !identityCanvas) return;
-			// Hide QR canvas
-			identityCanvas.style.display = 'none';
-			// Show NFT image if it exists
-			const nftImg = identityVisual.querySelector('img');
-			if (nftImg) nftImg.style.display = 'block';
-			showingQr = false;
-			stylizedMode = false;
-		}
+			function showIdentityNft() {
+				if (!identityVisual || !identityCanvas) return;
+				// Hide QR canvas
+				identityCanvas.style.display = 'none';
+				// Show NFT image if it exists
+				const nftImg = identityVisual.querySelector('img');
+				if (nftImg) nftImg.style.display = 'block';
+				identityVisual.classList.toggle('has-tagged-image', Boolean(identityVisual.querySelector('img.identity-tagged-image')));
+				showingQr = false;
+				stylizedMode = false;
+			}
 
 		function toggleIdentityView() {
 			if (showingQr) {
@@ -2339,7 +2472,7 @@ ${generateZkSendCss()}</style>
 
 			async function downloadIdentityImage(feedbackBtn, preferQr = showingQr) {
 				const safeNameBase = String(NAME || 'sui')
-					.replace(/\.sui$/i, '')
+					.replace(/.sui$/i, '')
 					.toLowerCase()
 					.replace(/[^a-z0-9-]/g, '-')
 					.replace(/-+/g, '-')
@@ -2571,7 +2704,7 @@ ${generateZkSendCss()}</style>
 				};
 
 				const nameFontSize = Math.max(46, Math.round(minSide * 0.175));
-				const nameY = overlayPadding;
+				const nameY = overlayPadding + Math.max(4, Math.round(minSide * 0.02));
 				// Stylized look (no @) is preferred for black diamonds too
 				const nameText = (blackDiamondMode || isStylized) 
 					? (String(NAME || '').replace(/.sui$/i, '').replace(/^@+/, '') || 'sui')
@@ -2660,71 +2793,96 @@ ${generateZkSendCss()}</style>
 				const ownerNameFromUi = String(ownerNameEl?.dataset?.copyName || '').trim();
 				const ownerNameResolved = String(ownerNameFromUi || ownerPrimaryName || targetPrimaryName || '').trim();
 				const ownerAddressFallback = String(ownerDisplayAddress || nftOwnerAddress || OWNER_ADDRESS || CURRENT_ADDRESS || '').trim();
-				const ownerNameText = ownerNameResolved
-					? ownerNameResolved.replace(/\.sui$/i, '') + '.sui'
-					: (ownerAddressFallback ? truncAddr(ownerAddressFallback) : '');
-				if (ownerNameText) {
-					const ownerLabelText = 'OWNER';
-					const ownerLabelSize = Math.max(11, Math.round(minSide * 0.03));
-					const ownerValueSize = Math.max(16, Math.round(minSide * 0.05));
-					const ownerPadX = Math.max(10, Math.round(minSide * 0.022));
-					const ownerPadTop = Math.max(8, Math.round(minSide * 0.016));
-					const ownerPadBottom = Math.max(9, Math.round(minSide * 0.018));
-					const ownerLineGap = Math.max(3, Math.round(minSide * 0.008));
-					const ownerGapFromQr = Math.max(10, Math.round(minSide * 0.018));
-					const ownerBlockMaxWidth = Math.min(
-						srcWidth - qrX - overlayPadding,
-						Math.max(qrBadgeSize, Math.round(minSide * 0.42)),
-					);
-					const ownerValueFont = '800 ' + ownerValueSize + 'px Inter, system-ui, -apple-system, sans-serif';
-					const ownerLabelFont = '700 ' + ownerLabelSize + 'px Inter, system-ui, -apple-system, sans-serif';
-					const fitOwnerText = (value, maxWidth) => {
-						if (!value) return '';
+					const ownerNameText = ownerNameResolved
+						? (ownerNameResolved.toLowerCase().endsWith('.sui') ? ownerNameResolved.slice(0, -4) : ownerNameResolved)
+						: (ownerAddressFallback ? truncAddr(ownerAddressFallback) : '');
+					if (ownerNameText) {
+						const ownerNameIsPrimary = isProfilePrimaryNameForOwner();
+						const ownerValueSize = Math.max(16, Math.round(minSide * 0.05));
+						const ownerPadX = Math.max(10, Math.round(minSide * 0.022));
+						const ownerPadY = Math.max(8, Math.round(minSide * 0.016));
+						const ownerGapFromQr = Math.max(10, Math.round(minSide * 0.018));
+						const ownerIconSize = Math.max(10, Math.round(minSide * 0.03));
+						const ownerIconGap = Math.max(6, Math.round(minSide * 0.01));
+						const ownerBlockMaxWidth = Math.min(
+							srcWidth - qrX - overlayPadding,
+							Math.max(qrBadgeSize, Math.round(minSide * 0.42)),
+						);
+						const ownerValueFont = '800 ' + ownerValueSize + 'px Inter, system-ui, -apple-system, sans-serif';
+						const fitOwnerText = (value, maxWidth) => {
+							if (!value) return '';
+							ctx.font = ownerValueFont;
+							if (ctx.measureText(value).width <= maxWidth) return value;
+							let base = value;
+							while (base.length > 6 && ctx.measureText(base + '...').width > maxWidth) {
+								base = base.slice(0, -1);
+							}
+							return base.length < value.length ? base + '...' : base;
+						};
+						ctx.save();
+						const ownerTextMaxWidth = Math.max(28, ownerBlockMaxWidth - ownerPadX * 2 - ownerIconSize - ownerIconGap);
+						const fittedOwnerName = fitOwnerText(ownerNameText, ownerTextMaxWidth);
 						ctx.font = ownerValueFont;
-						if (ctx.measureText(value).width <= maxWidth) return value;
-						let base = value;
-						while (base.length > 6 && ctx.measureText(base + '...').width > maxWidth) {
-							base = base.slice(0, -1);
+						const ownerValueWidth = ctx.measureText(fittedOwnerName).width;
+						const ownerBlockWidth = Math.max(
+							qrBadgeSize,
+							Math.min(ownerBlockMaxWidth, Math.round(ownerValueWidth + ownerPadX * 2 + ownerIconSize + ownerIconGap)),
+						);
+						const ownerBlockHeight = Math.round(ownerPadY * 2 + ownerValueSize + 2);
+						const ownerX = qrX;
+						const ownerY = Math.max(overlayPadding, qrY - ownerBlockHeight - ownerGapFromQr);
+						const ownerGradient = ctx.createLinearGradient(ownerX, ownerY, ownerX, ownerY + ownerBlockHeight);
+						if (ownerNameIsPrimary) {
+							ownerGradient.addColorStop(0, 'rgba(161, 98, 7, 0.86)');
+							ownerGradient.addColorStop(1, 'rgba(120, 53, 15, 0.9)');
+						} else {
+							ownerGradient.addColorStop(0, 'rgba(30, 58, 138, 0.8)');
+							ownerGradient.addColorStop(1, 'rgba(30, 64, 175, 0.86)');
 						}
-						return base.length < value.length ? base + '...' : base;
-					};
-					ctx.save();
-					ctx.font = ownerLabelFont;
-					const ownerLabelWidth = ctx.measureText(ownerLabelText).width;
-					const ownerTextMaxWidth = Math.max(28, ownerBlockMaxWidth - ownerPadX * 2);
-					const fittedOwnerName = fitOwnerText(ownerNameText, ownerTextMaxWidth);
-					ctx.font = ownerValueFont;
-					const ownerValueWidth = ctx.measureText(fittedOwnerName).width;
-					const ownerBlockWidth = Math.max(
-						qrBadgeSize,
-						Math.min(ownerBlockMaxWidth, Math.round(Math.max(ownerLabelWidth, ownerValueWidth) + ownerPadX * 2)),
-					);
-					const ownerBlockHeight = ownerPadTop + ownerLabelSize + ownerLineGap + ownerValueSize + ownerPadBottom;
-					const ownerX = qrX;
-					const ownerY = Math.max(overlayPadding, qrY - ownerBlockHeight - ownerGapFromQr);
-					const ownerGradient = ctx.createLinearGradient(ownerX, ownerY, ownerX, ownerY + ownerBlockHeight);
-					ownerGradient.addColorStop(0, 'rgba(76, 29, 149, 0.8)');
-					ownerGradient.addColorStop(1, 'rgba(49, 46, 129, 0.84)');
-					drawRoundedRect(ctx, ownerX, ownerY, ownerBlockWidth, ownerBlockHeight, Math.round(ownerBlockHeight * 0.24));
-					ctx.fillStyle = ownerGradient;
-					ctx.fill();
-					ctx.strokeStyle = 'rgba(196, 181, 253, 0.72)';
-					ctx.lineWidth = Math.max(1.2, Math.round(minSide * 0.003));
-					ctx.stroke();
-					ctx.fillStyle = 'rgba(221, 214, 254, 0.94)';
-					ctx.font = ownerLabelFont;
-					ctx.textAlign = 'left';
-					ctx.textBaseline = 'top';
-					ctx.fillText(ownerLabelText, ownerX + ownerPadX, ownerY + ownerPadTop);
-					ctx.font = ownerValueFont;
-					ctx.fillStyle = 'rgba(245, 243, 255, 0.98)';
-					ctx.fillText(
-						fittedOwnerName,
-						ownerX + ownerPadX,
-						ownerY + ownerPadTop + ownerLabelSize + ownerLineGap,
-					);
-					ctx.restore();
-				}
+						drawRoundedRect(ctx, ownerX, ownerY, ownerBlockWidth, ownerBlockHeight, Math.round(ownerBlockHeight * 0.32));
+						ctx.fillStyle = ownerGradient;
+						ctx.fill();
+						ctx.strokeStyle = ownerNameIsPrimary
+							? 'rgba(251, 191, 36, 0.9)'
+							: 'rgba(147, 197, 253, 0.82)';
+						ctx.lineWidth = Math.max(1.2, Math.round(minSide * 0.003));
+						ctx.stroke();
+						const iconX = ownerX + ownerPadX;
+						const iconY = ownerY + Math.round((ownerBlockHeight - ownerIconSize) / 2);
+						if (ownerNameIsPrimary) {
+							drawStarPath(
+								ctx,
+								iconX + ownerIconSize * 0.5,
+								iconY + ownerIconSize * 0.5,
+								ownerIconSize * 0.52,
+								ownerIconSize * 0.24,
+							);
+							ctx.fillStyle = '#facc15';
+							ctx.fill();
+							ctx.strokeStyle = 'rgba(251, 191, 36, 0.82)';
+							ctx.lineWidth = Math.max(1, Math.round(minSide * 0.0026));
+							ctx.stroke();
+						} else {
+							drawRoundedRect(ctx, iconX, iconY, ownerIconSize, ownerIconSize, Math.max(2, Math.round(ownerIconSize * 0.2)));
+							ctx.fillStyle = '#60a5fa';
+							ctx.fill();
+							ctx.strokeStyle = 'rgba(191, 219, 254, 0.85)';
+							ctx.lineWidth = Math.max(1, Math.round(minSide * 0.0022));
+							ctx.stroke();
+						}
+						ctx.font = ownerValueFont;
+						ctx.fillStyle = ownerNameIsPrimary
+							? 'rgba(255, 251, 235, 0.99)'
+							: 'rgba(239, 246, 255, 0.99)';
+						ctx.textAlign = 'left';
+						ctx.textBaseline = 'middle';
+						ctx.fillText(
+							fittedOwnerName,
+							iconX + ownerIconSize + ownerIconGap,
+							ownerY + ownerBlockHeight / 2 + Math.max(1, Math.round(ownerValueSize * 0.06)),
+						);
+						ctx.restore();
+					}
 
 				// Upper-right brand lockup: shared sui.ski logo mark + ".sui.ski".
 					const brandIconSize = isStylized ? Math.floor(nameFontSize * 1.1) : Math.max(48, Math.min(120, Math.round(Math.min(srcWidth, srcHeight) * 0.22)));
@@ -2903,6 +3061,7 @@ ${generateZkSendCss()}</style>
 						taggedImg.style.zIndex = '6';
 						taggedImg.style.borderRadius = '12px';
 						identityVisual.appendChild(taggedImg);
+						identityVisual.classList.add('has-tagged-image');
 						if (identityCanvas) identityCanvas.style.display = 'none';
 
 						// Hide HTML elements that are now redundant in the stylized image
@@ -2934,16 +3093,32 @@ ${generateZkSendCss()}</style>
 				}
 			}
 
-		function drawRoundedRect(ctx, x, y, width, height, radius) {
-			const r = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
-			ctx.beginPath();
+			function drawRoundedRect(ctx, x, y, width, height, radius) {
+				const r = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
+				ctx.beginPath();
 			ctx.moveTo(x + r, y);
 			ctx.arcTo(x + width, y, x + width, y + height, r);
 			ctx.arcTo(x + width, y + height, x, y + height, r);
 			ctx.arcTo(x, y + height, x, y, r);
-			ctx.arcTo(x, y, x + width, y, r);
-			ctx.closePath();
-		}
+				ctx.arcTo(x, y, x + width, y, r);
+				ctx.closePath();
+			}
+
+			function drawStarPath(ctx, centerX, centerY, outerRadius, innerRadius) {
+				const points = 5;
+				let angle = -Math.PI / 2;
+				const step = Math.PI / points;
+				ctx.beginPath();
+				for (let i = 0; i < points * 2; i++) {
+					const radius = i % 2 === 0 ? outerRadius : innerRadius;
+					const x = centerX + Math.cos(angle) * radius;
+					const y = centerY + Math.sin(angle) * radius;
+					if (i === 0) ctx.moveTo(x, y);
+					else ctx.lineTo(x, y);
+					angle += step;
+				}
+				ctx.closePath();
+			}
 
 		function drawSiteLogoGlyph(ctx, x, y, size) {
 			// Exact sui.ski mark geometry used site-wide: 512 viewbox.
@@ -3766,12 +3941,14 @@ ${generateZkSendCss()}</style>
 			img.style.objectFit = 'cover';
 			img.style.display = 'block';
 			img.style.position = 'absolute';
-			img.style.top = '0';
-			img.style.left = '0';
-			img.style.borderRadius = '12px';
-			identityVisual.appendChild(img);
+				img.style.top = '0';
+				img.style.left = '0';
+				img.style.borderRadius = '12px';
+				identityVisual.appendChild(img);
+				identityVisual.classList.remove('has-tagged-image');
+				syncIdentityPrimaryBadgeState();
 
-			if (identityCanvas) identityCanvas.style.display = 'none';
+				if (identityCanvas) identityCanvas.style.display = 'none';
 
 			// Clone image into viewer overlay
 			if (nftViewerImage) {
@@ -3859,10 +4036,6 @@ ${generateZkSendCss()}</style>
 					showOwnerInlineStatus('Already set to your address.', 'info');
 					return;
 				}
-
-			if (!confirm(\`Set target address to \${connectedPrimaryName || truncAddr(connectedAddress)}?\`)) {
-				return;
-			}
 
 				try {
 					setSelfBtn.disabled = true;
@@ -4173,6 +4346,51 @@ ${generateZkSendCss()}</style>
 			if (jacketStatus) jacketStatus.textContent = '';
 		}
 
+		async function extractDecayListingIdFromTxResult(result) {
+			let listingId = null;
+			const objectChanges = result?.objectChanges || [];
+			for (const change of objectChanges) {
+				if (change.type === 'created' && change.objectType && change.objectType.includes('DecayListing')) {
+					listingId = change.objectId;
+					break;
+				}
+			}
+
+			if (!listingId && result?.digest) {
+				try {
+					const suiClient = getSuiClient();
+					const txDetail = await suiClient.getTransactionBlock({
+						digest: result.digest,
+						options: { showObjectChanges: true },
+					});
+					const changes = txDetail.objectChanges || [];
+					for (const change of changes) {
+						if (change.type === 'created' && change.objectType && change.objectType.includes('DecayListing')) {
+							listingId = change.objectId;
+							break;
+						}
+					}
+				} catch (error) {
+					console.error('Failed to fetch tx details for listing ID:', error);
+				}
+			}
+
+			return listingId;
+		}
+
+		async function registerDecayListingForNft(nftId, listingId) {
+			if (!nftId || !listingId) return;
+			try {
+				await fetch('/api/auction/register', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ nftId, listingId }),
+				});
+			} catch (error) {
+				console.error('Failed to register auction listing:', error);
+			}
+		}
+
 		async function listForAuction() {
 			if (!connectedAddress) {
 				await connectWallet();
@@ -4241,43 +4459,8 @@ ${generateZkSendCss()}</style>
 
 				let result;
 				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true } });
-
-				let listingId = null;
-				const objectChanges = result.objectChanges || [];
-				for (const change of objectChanges) {
-					if (change.type === 'created' && change.objectType && change.objectType.includes('DecayListing')) {
-						listingId = change.objectId;
-						break;
-					}
-				}
-
-				if (!listingId && result.digest) {
-					try {
-						const suiClient = getSuiClient();
-						const txDetail = await suiClient.getTransactionBlock({ digest: result.digest, options: { showObjectChanges: true } });
-						const changes = txDetail.objectChanges || [];
-						for (const change of changes) {
-							if (change.type === 'created' && change.objectType && change.objectType.includes('DecayListing')) {
-								listingId = change.objectId;
-								break;
-							}
-						}
-					} catch (e) {
-						console.error('Failed to fetch tx details for listing ID:', e);
-					}
-				}
-
-				if (listingId && NFT_ID) {
-					try {
-						await fetch('/api/auction/register', {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({ nftId: NFT_ID, listingId }),
-						});
-					} catch (e) {
-						console.error('Failed to register auction listing:', e);
-					}
-				}
+				const listingId = await extractDecayListingIdFromTxResult(result);
+				await registerDecayListingForNft(NFT_ID, listingId);
 
 				if (jacketStatus) {
 					jacketStatus.innerHTML = 'Listed! ' + renderTxExplorerLinks(result.digest, true);
@@ -4510,7 +4693,7 @@ ${generateZkSendCss()}</style>
 
 		// Fetch and display owner info
 		// For grace period names, show the NFT owner; otherwise show the target address
-		async function fetchAndDisplayOwnerInfo() {
+			async function fetchAndDisplayOwnerInfo() {
 			const ownerNameEl = document.querySelector('.owner-name');
 			const ownerAddrEl = document.querySelector('.owner-addr');
 			const ownerLabelEl = document.querySelector('.owner-label');
@@ -4543,13 +4726,14 @@ ${generateZkSendCss()}</style>
 			}
 
 			// For active names, show the target address (targetPrimaryName is used elsewhere)
-			if (!IS_IN_GRACE_PERIOD) {
-				displayName = await fetchPrimaryName(CURRENT_ADDRESS);
-				if (displayName) {
-					targetPrimaryName = displayName;
+				if (!IS_IN_GRACE_PERIOD) {
+					displayName = await fetchPrimaryName(CURRENT_ADDRESS);
+					if (displayName) {
+						targetPrimaryName = displayName;
+					}
 				}
-			}
-			ownerPrimaryName = displayName || null;
+				ownerPrimaryName = displayName || null;
+				syncIdentityPrimaryBadgeState();
 
 				ownerDisplayAddress = displayAddress || '';
 				updatePortfolioLink(ownerDisplayAddress);
@@ -4612,19 +4796,20 @@ ${generateZkSendCss()}</style>
 					}
 				}
 			} else {
-				if (ownerNameEl) {
-					ownerNameEl.style.display = 'none';
-				}
+					if (ownerNameEl) {
+						ownerNameEl.style.display = 'none';
+					}
 				if (ownerAddrEl) {
 					ownerAddrEl.style.fontSize = '0.95rem';
 					ownerAddrEl.style.fontWeight = '600';
 					ownerAddrEl.style.color = 'var(--text)';
 				}
 			}
-			if (rawIdentityNftImage) {
-				applyTaggedIdentityToProfile();
+				if (rawIdentityNftImage) {
+					applyTaggedIdentityToProfile();
+				}
+				updateEditButton();
 			}
-		}
 
 		updatePortfolioLink(ownerDisplayAddress);
 		renderWalletBar();
@@ -6048,10 +6233,11 @@ ${generateZkSendCss()}</style>
 		}
 
 		function updateExpirationCountdown() {
-			if (!EXPIRATION_MS) return;
+			const baseExpirationMs = getSelectedRenewalBaseExpirationMs();
+			if (!baseExpirationMs) return;
 
 			const now = Date.now();
-			const diff = EXPIRATION_MS - now;
+			const diff = baseExpirationMs - now;
 
 			if (diff <= 0) {
 				if (expDays) expDays.textContent = '00';
@@ -6092,7 +6278,7 @@ ${generateZkSendCss()}</style>
 		}
 
 		// Initialize expiration timer
-		if (EXPIRATION_MS) {
+		if (getSelectedRenewalBaseExpirationMs()) {
 			updateExpirationCountdown();
 			setInterval(updateExpirationCountdown, 1000);
 		}
@@ -6116,8 +6302,9 @@ ${generateZkSendCss()}</style>
 		const expiryBadge = document.querySelector('.badge.expiry');
 
 		function updateExpiryBadgeWithRenewal() {
-			if (!expiryBadgeText || !EXPIRATION_MS) return;
-			const daysFromNow = Math.ceil((EXPIRATION_MS - Date.now()) / 86400000);
+			const baseExpirationMs = getSelectedRenewalBaseExpirationMs();
+			if (!expiryBadgeText || !baseExpirationMs) return;
+			const daysFromNow = Math.ceil((baseExpirationMs - Date.now()) / 86400000);
 
 			if (daysFromNow <= 0) {
 				expiryBadgeText.textContent = 'Expired';
@@ -6202,7 +6389,7 @@ ${generateZkSendCss()}</style>
 					return renewalPricingCache[cacheKey];
 				}
 
-				const res = await fetch('/api/renewal-pricing?domain=' + encodeURIComponent(nameToPrice) + '&years=' + years);
+					const res = await fetch(getRenewalApiUrl('/api/renewal-pricing?domain=' + encodeURIComponent(nameToPrice) + '&years=' + years));
 				if (!res.ok) throw new Error('Failed to fetch pricing');
 				const data = await res.json();
 				if (renewalPricingCache) renewalPricingCache[cacheKey] = data;
@@ -6215,7 +6402,7 @@ ${generateZkSendCss()}</style>
 
 		async function resolveQuickRenewalYears(nameToExtend) {
 			try {
-				const halfYearRes = await fetch('/api/renewal-pricing?domain=' + encodeURIComponent(nameToExtend) + '&years=0.5');
+					const halfYearRes = await fetch(getRenewalApiUrl('/api/renewal-pricing?domain=' + encodeURIComponent(nameToExtend) + '&years=0.5'));
 				if (!halfYearRes.ok) return 1;
 				const halfYearPricing = await halfYearRes.json();
 				const nsNeededMist = BigInt(halfYearPricing?.nsNeededMist || 0);
@@ -6552,6 +6739,206 @@ ${generateZkSendCss()}</style>
 
 		let renewalInFlight = false;
 
+		function getRenewalApiUrl(path) {
+			const normalizedPath = String(path || '').startsWith('/') ? path : '/' + String(path || '');
+			const conn = SuiWalletKit?.$connection?.value || {};
+			const accountChains = Array.isArray(conn?.account?.chains) ? conn.account.chains : [];
+			let chain = '';
+			for (const candidate of accountChains) {
+				if (typeof candidate === 'string' && candidate.indexOf('sui:') === 0) {
+					chain = candidate.toLowerCase();
+					break;
+				}
+			}
+			if (!chain) {
+				const normalizedNetwork = String(window.NETWORK || NETWORK || 'mainnet').toLowerCase();
+				chain = normalizedNetwork.indexOf('sui:') === 0 ? normalizedNetwork : ('sui:' + normalizedNetwork);
+			}
+			const rootOrigin = chain === 'sui:testnet'
+				? 'https://t.sui.ski'
+				: chain === 'sui:devnet'
+					? 'https://d.sui.ski'
+					: 'https://sui.ski';
+			return rootOrigin + normalizedPath;
+		}
+
+		function parseRenewalTransactionBytes(rawTxBytes) {
+			if (rawTxBytes instanceof Uint8Array) return rawTxBytes;
+			if (rawTxBytes instanceof ArrayBuffer) return new Uint8Array(rawTxBytes);
+			if (Array.isArray(rawTxBytes)) return Uint8Array.from(rawTxBytes);
+			if (typeof rawTxBytes !== 'string') {
+				throw new Error('Unsupported renewal transaction payload format');
+			}
+			const trimmed = rawTxBytes.trim();
+			if (!trimmed) throw new Error('Empty renewal transaction payload');
+			return base64ToBytes(trimmed);
+		}
+
+		function buildRenewalTransactionBlock(txBytes) {
+			if (!txBytes || !(txBytes instanceof Uint8Array)) return null;
+			if (typeof Transaction !== 'function' || typeof Transaction.from !== 'function') return null;
+			try {
+				return Transaction.from(txBytes);
+			} catch (_error) {}
+			try {
+				return Transaction.from(bytesToBase64(txBytes));
+			} catch (_error) {}
+			return null;
+		}
+
+		function getRenewalSignatureFromResult(signResult) {
+			if (!signResult) return '';
+			if (typeof signResult.signature === 'string') return signResult.signature;
+			if (Array.isArray(signResult.signatures) && typeof signResult.signatures[0] === 'string') {
+				return signResult.signatures[0];
+			}
+			if (Array.isArray(signResult.signatures) && signResult.signatures[0]?.length) {
+				try {
+					return bytesToBase64(new Uint8Array(signResult.signatures[0]));
+				} catch (_error) {}
+			}
+			if (signResult.signature && signResult.signature.length) {
+				try {
+					return bytesToBase64(new Uint8Array(signResult.signature));
+				} catch (_error) {}
+			}
+			return '';
+		}
+
+		function getRenewalTxBase64(txInput) {
+			if (typeof txInput === 'string') return txInput;
+			if (txInput instanceof Uint8Array) return bytesToBase64(txInput);
+			if (txInput instanceof ArrayBuffer) return bytesToBase64(new Uint8Array(txInput));
+			if (Array.isArray(txInput)) return bytesToBase64(Uint8Array.from(txInput));
+			if (txInput && typeof txInput.serialize === 'function') {
+				const serialized = txInput.serialize();
+				if (serialized instanceof Uint8Array) return bytesToBase64(serialized);
+				if (serialized instanceof ArrayBuffer) return bytesToBase64(new Uint8Array(serialized));
+				if (Array.isArray(serialized)) return bytesToBase64(Uint8Array.from(serialized));
+			}
+			return '';
+		}
+
+		async function reconnectWalletForRenewal() {
+			let conn = SuiWalletKit?.$connection?.value || {};
+			if (conn.wallet) return conn;
+
+			let preferredWalletName = '';
+			try {
+				const session = typeof getWalletSession === 'function' ? getWalletSession() : null;
+				preferredWalletName = String(session?.walletName || connectedWalletName || '').trim();
+			} catch (_error) {
+				preferredWalletName = String(connectedWalletName || '').trim();
+			}
+
+			let wallets = [];
+			try {
+				wallets = await SuiWalletKit.detectWallets();
+			} catch (_error) {
+				wallets = SuiWalletKit?.$wallets?.value || [];
+			}
+			if (!Array.isArray(wallets) || wallets.length === 0) return conn;
+
+			let walletMatch = null;
+			if (preferredWalletName) {
+				walletMatch = wallets.find(function(wallet) {
+					return String(wallet?.name || '') === preferredWalletName;
+				}) || null;
+			}
+			if (!walletMatch) {
+				walletMatch = wallets.find(function(wallet) {
+					return String(wallet?.name || '').toLowerCase() === 'phantom';
+				}) || null;
+			}
+			if (!walletMatch) {
+				walletMatch = wallets.find(function(wallet) {
+					return !wallet?.__isPasskey;
+				}) || null;
+			}
+			if (!walletMatch) walletMatch = wallets[0] || null;
+			if (!walletMatch) return conn;
+
+			try {
+				await SuiWalletKit.connect(walletMatch);
+			} catch (_error) {}
+
+			return SuiWalletKit?.$connection?.value || conn;
+		}
+
+			async function signAndExecuteRenewalOneClick(
+				txBytes,
+				txBlockInput,
+				signingChain,
+				txOptions,
+				suiClient,
+				expectedSenderAddress,
+			) {
+				let conn = SuiWalletKit?.$connection?.value || {};
+				let wallet = conn.wallet;
+				let account = conn.account || null;
+				const canUseBridge = !!(SuiWalletKit?.__skiSignFrame && SuiWalletKit?.__skiSignReady);
+
+				if (!wallet && !canUseBridge) {
+					conn = await reconnectWalletForRenewal();
+					wallet = conn.wallet;
+					account = conn.account || account;
+				}
+
+				if (!wallet && !(SuiWalletKit?.__skiSignFrame && SuiWalletKit?.__skiSignReady)) {
+					throw new Error('Wallet not connected. Reconnect wallet from sui.ski and retry.');
+				}
+
+				const senderAddress = String(
+					expectedSenderAddress || getConnectedSenderAddress() || conn.address || '',
+				).trim();
+				if (!senderAddress) throw new Error('Wallet address unavailable for renewal signing');
+
+				const accountAddress = String(
+					(typeof account?.address === 'string'
+						? account.address
+						: account?.address?.toString?.() || conn.address || '') || '',
+				).trim();
+				if (
+					accountAddress &&
+					accountAddress.toLowerCase() !== senderAddress.toLowerCase()
+				) {
+					throw new Error('Connected wallet account changed. Reconnect and retry renewal.');
+				}
+
+				const txB64 = getRenewalTxBase64(txBytes);
+				if (!txB64) {
+					throw new Error('Unable to serialize renewal transaction');
+				}
+				const accountChains = Array.isArray(account?.chains)
+					? account.chains.filter(function(chain) {
+						return typeof chain === 'string' && chain.indexOf('sui:') === 0;
+					})
+					: [];
+				const requestChain = accountChains[0] || signingChain;
+				const signOptions = {
+					account: account || undefined,
+					chain: requestChain,
+					txOptions: txOptions || {},
+					forceSignBridge: true,
+					preferTransactionBlock: true,
+					singleAttempt: true,
+				};
+
+				if (typeof SuiWalletKit?.signAndExecuteFromBytes === 'function') {
+					return await SuiWalletKit.signAndExecuteFromBytes(txBytes, signOptions);
+				}
+
+				if (txBlockInput && typeof SuiWalletKit?.signAndExecute === 'function') {
+					return await SuiWalletKit.signAndExecute(txBlockInput, signOptions);
+				}
+
+				if (typeof SuiWalletKit?.signAndExecute === 'function') {
+					return await SuiWalletKit.signAndExecute(txBytes, signOptions);
+				}
+
+				throw new Error('No compatible wallet signing method found for renewal');
+			}
+
 		async function handleRenewal(yearsEl, btnEl, btnTextEl, btnLoadingEl, statusEl, options = {}) {
 			const useProfileName = Boolean(options.useProfileName);
 			const nftIdToUse = useProfileName ? NFT_ID : (selectedRenewalNftId || NFT_ID);
@@ -6600,163 +6987,75 @@ ${generateZkSendCss()}</style>
 				}
 
 			try {
-				// Fetch pricing from API
-				console.log('[Renewal] Fetching pricing...');
-				const pricingRes = await fetch('/api/renewal-pricing?domain=' + encodeURIComponent(nameToExtend) + '&years=' + years);
-				if (!pricingRes.ok) throw new Error('Failed to fetch pricing');
-				const pricingData = await pricingRes.json();
-				console.log('[Renewal] Pricing:', pricingData);
+				const suiClient = getSuiClient();
+				const senderAddress = String(getConnectedSenderAddress() || connectedAddress || '').trim();
+				if (!senderAddress) {
+					throw new Error('Please reconnect your wallet and try renewal again');
+				}
+				const renewalDomain = String(nameToExtend || '').endsWith('.sui')
+					? String(nameToExtend)
+					: String(nameToExtend) + '.sui';
 
 				if (statusEl) {
 					statusEl.textContent = 'Building transaction...';
 				}
 
-				// Build PTB client-side (like registration does)
-				const suiClient = getSuiClient();
-				const suinsClient = await createSuinsClient(true);
-				const facilitator = await resolveFacilitatorAddress(suinsClient);
-				const facilitatorRecipient = isLikelySuiAddress(facilitator)
-					? facilitator
-					: connectedAddress;
-
-				const tx = new Transaction();
-				tx.setSender(connectedAddress);
-
-				const nsCoinConfig = suinsClient.config.coins['NS'];
-				if (!nsCoinConfig) throw new Error('SuiNS NS coin config not found');
-
-				if (!DEEPBOOK_PACKAGE || !DEEPBOOK_NS_SUI_POOL || !DEEPBOOK_DEEP_SUI_POOL) {
-					throw new Error('DeepBook pools not available on ' + NETWORK);
+				const renewTxRes = await fetch(getRenewalApiUrl('/api/renew-tx'), {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({
+						domain: renewalDomain,
+						nftId: nftIdToUse,
+						years: years,
+						senderAddress,
+						paymentMethod: 'ns',
+					}),
+				});
+				const renewTxData = await renewTxRes.json().catch(() => null);
+				if (!renewTxRes.ok || !renewTxData?.txBytes) {
+					throw new Error(
+						(renewTxData && renewTxData.error)
+							? String(renewTxData.error)
+							: 'Failed to build renewal transaction',
+					);
 				}
-
-				// Calculate amounts with slippage
-				const nsNeeded = BigInt(pricingData.nsNeededMist);
-				const nsWithSlippage = nsNeeded + (nsNeeded * SLIPPAGE_BPS) / 10000n;
-				const suiForNsSwap = BigInt(Math.ceil((Number(nsWithSlippage) / 1e6) * pricingData.suiPerNs * 1e9));
-
-				const discountSuiMist = options.includeDiscountTransfer
-					? BigInt(pricingData.savingsMist || '0')
-					: 0n;
-
-				console.log('[Renewal] NS needed:', nsNeeded.toString(), 'SUI for swap:', suiForNsSwap.toString());
-
-					let priceInfoObjectId = pricingData.priceInfoObjectId || undefined;
-					console.log('[Renewal] priceInfoObjectId (from pricing API):', priceInfoObjectId);
-
-					if (nsCoinConfig.feed && !priceInfoObjectId && typeof suinsClient.getPriceInfoObject === 'function') {
-						try {
-							const resolvedPriceInfo = await suinsClient.getPriceInfoObject(tx, nsCoinConfig.feed);
-							if (Array.isArray(resolvedPriceInfo) && typeof resolvedPriceInfo[0] === 'string') {
-								priceInfoObjectId = resolvedPriceInfo[0];
-							}
-							console.log('[Renewal] priceInfoObjectId (resolved from SuiNS client):', priceInfoObjectId || 'none');
-						} catch (priceInfoError) {
-							console.warn('[Renewal] Failed to resolve price info object from SuiNS client:', priceInfoError);
-						}
-					}
-
-					// Validate price info object (required for Pyth price feed)
-					if (nsCoinConfig.feed && !priceInfoObjectId) {
-						throw new Error('Price info object ID is required for non-base asset purchases');
-					}
-
-				// Check if user has enough SUI for the renewal swap + fees + optional discount transfer
-				const totalSuiNeededForRenewal = suiForNsSwap + SUI_FOR_DEEP_SWAP + 50_000_000n + discountSuiMist;
-				const suiBalRes = await suiClient.getBalance({ owner: connectedAddress, coinType: SUI_TYPE });
-				const suiAvailableForRenewal = BigInt(suiBalRes.totalBalance);
-
-				if (suiAvailableForRenewal < totalSuiNeededForRenewal) {
-					if (statusEl) statusEl.textContent = 'Low SUI balance, checking other tokens...';
-					const shortfallMist = totalSuiNeededForRenewal - suiAvailableForRenewal;
-					const swapInfo = await findBestSwapForSui(suiClient, shortfallMist, connectedAddress);
-					if (swapInfo) {
-						if (statusEl) statusEl.textContent = 'Swapping ' + swapInfo.name + ' for SUI...';
-						prependSwapToTx(tx, swapInfo, connectedAddress);
-					}
-				}
-
-				if (statusEl) statusEl.textContent = 'Building transaction...';
-
-				// Split SUI for swaps (+ optional discount transfer)
-				const splitAmounts = [
-					tx.pure.u64(suiForNsSwap),
-					tx.pure.u64(SUI_FOR_DEEP_SWAP),
-				];
-				if (discountSuiMist > 0n) splitAmounts.push(tx.pure.u64(discountSuiMist));
-				const splitResults = tx.splitCoins(tx.gas, splitAmounts);
-				const suiCoinForNs = splitResults[0];
-				const suiCoinForDeep = splitResults[1];
-
-				if (discountSuiMist > 0n) {
-					tx.transferObjects([splitResults[2]], tx.pure.address(facilitatorRecipient));
-				}
-
-				// Swap SUI -> DEEP (for DeepBook fees)
-				const [zeroDeepCoin] = tx.moveCall({
-					target: '0x2::coin::zero',
-					typeArguments: [DEEP_TYPE],
-				});
-
-				const [deepCoin, deepLeftoverSui, deepLeftoverDeep] = tx.moveCall({
-					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
-					typeArguments: [DEEP_TYPE, SUI_TYPE],
-					arguments: [
-						tx.object(DEEPBOOK_DEEP_SUI_POOL),
-						suiCoinForDeep,
-						zeroDeepCoin,
-						tx.pure.u64(MIN_DEEP_OUT),
-						tx.object(CLOCK_OBJECT),
-					],
-				});
-
-				tx.transferObjects([deepLeftoverSui], tx.pure.address(facilitatorRecipient));
-				tx.transferObjects([deepLeftoverDeep], connectedAddress);
-
-				// Swap SUI -> NS (for renewal payment)
-				const [nsCoin, nsLeftoverSui, nsLeftoverDeep] = tx.moveCall({
-					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
-					typeArguments: [NS_TYPE, SUI_TYPE],
-					arguments: [
-						tx.object(DEEPBOOK_NS_SUI_POOL),
-						suiCoinForNs,
-						deepCoin,
-						tx.pure.u64(nsNeeded),
-						tx.object(CLOCK_OBJECT),
-					],
-				});
-
-				tx.transferObjects([nsLeftoverSui], tx.pure.address(facilitatorRecipient));
-				tx.transferObjects([nsLeftoverDeep], connectedAddress);
-
-				// Renew using SuinsTransaction
-				const suinsTx = new SuinsTransaction(suinsClient, tx);
-				suinsTx.renew({
-					nft: tx.object(nftIdToUse),
-					years: years,
-					coinConfig: nsCoinConfig,
-					coin: nsCoin,
-					priceInfoObjectId,
-				});
-
-				// Return any remaining NS coin object after payment split to avoid unused value errors.
-				tx.transferObjects([nsCoin], connectedAddress);
-
-				tx.setGasBudget(100000000);
 
 				if (statusEl) {
 					statusEl.textContent = 'Please sign in your wallet...';
 				}
 
 				console.log('[Renewal] Signing transaction...');
-				let result = null;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+				const signingChain = NETWORK === 'testnet'
+					? 'sui:testnet'
+					: NETWORK === 'devnet'
+						? 'sui:devnet'
+						: 'sui:mainnet';
+				const renewalTxBytes = parseRenewalTransactionBytes(renewTxData.txBytes);
+				const renewalTxBlock = buildRenewalTransactionBlock(renewalTxBytes);
+				const executeOptions = {
+					chain: signingChain,
+					txOptions: { showEffects: true, showObjectChanges: true },
+				}
+					const result = await signAndExecuteRenewalOneClick(
+						renewalTxBytes,
+						renewalTxBlock,
+						executeOptions.chain,
+						executeOptions.txOptions,
+						suiClient,
+						senderAddress,
+					);
+					const renewalDigest =
+						result?.digest
+						|| result?.effects?.transactionDigest
+						|| result?.result?.digest
+						|| '';
 
-				console.log('[Renewal] Transaction result:', result);
+					console.log('[Renewal] Transaction result:', result);
 
-				if (result?.digest) {
-					if (statusEl) {
-						// Show immediate success, then fetch full tx details
-						const digest = result.digest;
+					if (renewalDigest) {
+						if (statusEl) {
+							// Show immediate success, then fetch full tx details
+							const digest = renewalDigest;
 						const txExplorerLinks = renderTxExplorerLinks(digest);
 						const txExplorerLinksWithPrefix = renderTxExplorerLinks(digest, true);
 
@@ -6780,6 +7079,14 @@ ${generateZkSendCss()}</style>
 
 							let balanceHtml = '';
 							for (const change of balanceChanges) {
+								const ownerAddress = String(
+									change?.owner?.AddressOwner
+									|| change?.owner?.ObjectOwner
+									|| '',
+								).toLowerCase();
+								if (!ownerAddress || ownerAddress !== String(senderAddress || '').toLowerCase()) {
+									continue;
+								}
 								const amount = Number(change.amount);
 								const coinType = change.coinType?.split('::').pop() || 'Unknown';
 								if (Math.abs(amount) > 0) {
@@ -6813,6 +7120,9 @@ ${generateZkSendCss()}</style>
 							'</div>';
 						}
 					}
+					fetchLinkedNames({ forceRefresh: true }).catch((refreshError) => {
+						console.warn('Failed to refresh linked names after renewal:', refreshError)
+					})
 				} else {
 					throw new Error('Transaction failed or was cancelled');
 				}
@@ -7270,7 +7580,7 @@ ${generateZkSendCss()}</style>
 			}
 
 		function getExpirationTag(expirationMs) {
-			if (!expirationMs) return { color: 'gray', text: '?' };
+			if (!expirationMs) return { color: 'blue', text: '' };
 			const now = Date.now();
 			const daysLeft = Math.floor((expirationMs - now) / (24 * 60 * 60 * 1000));
 
@@ -7285,6 +7595,31 @@ ${generateZkSendCss()}</style>
 			} else {
 				return { color: 'blue', text: daysLeft + 'd' };
 			}
+		}
+
+		function trimLinkedTagNumber(value) {
+			if (value.indexOf('.') === -1) return value;
+			return value.replace(/.0+$/, '').replace(/(.d*?[1-9])0+$/, '$1');
+		}
+
+		function formatLinkedTagListingPriceSui(priceSui) {
+			if (!Number.isFinite(priceSui) || priceSui <= 0) return '0';
+			const units = [
+				{ divisor: 1000000000000, suffix: 'T' },
+				{ divisor: 1000000000, suffix: 'B' },
+				{ divisor: 1000000, suffix: 'M' },
+				{ divisor: 1000, suffix: 'K' },
+			];
+			for (const unit of units) {
+				if (priceSui >= unit.divisor) {
+					const compact = priceSui / unit.divisor;
+					const decimals = compact >= 100 ? 0 : 1;
+					return trimLinkedTagNumber(compact.toFixed(decimals)) + unit.suffix;
+				}
+			}
+			if (priceSui >= 100) return Math.round(priceSui).toString();
+			if (priceSui >= 1) return trimLinkedTagNumber(priceSui.toFixed(2));
+			return trimLinkedTagNumber(priceSui.toFixed(3));
 		}
 
 function shortAddr(addr) {
@@ -7328,6 +7663,46 @@ function shortAddr(addr) {
 			return String(name || '')
 				.toLowerCase()
 				.replace(/.sui$/, '');
+		}
+
+		function isRootLinkedSuiName(name) {
+			const normalized = normalizeLinkedNameKey(name);
+			if (!normalized) return false;
+			return normalized.indexOf('.') === -1;
+		}
+
+		function isLinkedNameListed(item) {
+			if (!item || !item.name) return false;
+			const cleanName = String(item.name).replace(/\\.sui$/, '');
+			const isCurrent = cleanName.toLowerCase() === NAME.toLowerCase();
+			if (isCurrent && Number.isFinite(Number(currentListing?.price)) && Number(currentListing.price) > 0) {
+				return true;
+			}
+			const marketData = linkedNamesMarketData[cleanName];
+			if (marketData?.listingPriceSui) return true;
+			return Boolean(linkedNamesPrices[cleanName] || item.isListed);
+		}
+
+		function getLinkedNameListingPriceSui(item) {
+			if (!item || !item.name) return null;
+			if (typeof item.listingPriceMist === 'number' && Number.isFinite(item.listingPriceMist) && item.listingPriceMist > 0) {
+				return item.listingPriceMist / 1e9;
+			}
+			const cleanName = String(item.name).replace(/\\.sui$/, '');
+			const isCurrent = cleanName.toLowerCase() === NAME.toLowerCase();
+			if (isCurrent && Number.isFinite(Number(currentListing?.price)) && Number(currentListing.price) > 0) {
+				return Number(currentListing.price) / 1e9;
+			}
+			const marketData = linkedNamesMarketData[cleanName];
+			if (marketData?.listingPriceSui) {
+				const parsed = parseFloat(marketData.listingPriceSui);
+				return Number.isFinite(parsed) ? parsed : null;
+			}
+			if (linkedNamesPrices[cleanName]) {
+				const parsed = parseFloat(linkedNamesPrices[cleanName]);
+				return Number.isFinite(parsed) ? parsed : null;
+			}
+			return null;
 		}
 
 		function normalizeLinkedMatchText(value) {
@@ -7437,6 +7812,10 @@ function shortAddr(addr) {
 			if (!aIsCurrent && bIsCurrent) return 1;
 
 			if (linkedSortMode === 'expiry') {
+				const aListed = isLinkedNameListed(a);
+				const bListed = isLinkedNameListed(b);
+				if (aListed && !bListed) return -1;
+				if (!aListed && bListed) return 1;
 				if (a.isPrimary && !b.isPrimary) return -1;
 				if (!a.isPrimary && b.isPrimary) return 1;
 				if (a.expirationMs === null) return 1;
@@ -7481,33 +7860,19 @@ function shortAddr(addr) {
 		function renderNameChip(item) {
 			const cleanName = item.name.replace(/\\.sui$/, '');
 			const isCurrent = cleanName.toLowerCase() === NAME.toLowerCase();
-			let tag;
-			if (item.isListed) {
-				const marketData = linkedNamesMarketData[cleanName];
-				if (marketData?.listingPriceSui) {
-					const priceSui = parseFloat(marketData.listingPriceSui);
-					let priceText;
-					if (priceSui >= 1000000) {
-						priceText = (priceSui / 1000000).toFixed(1) + 'M';
-					} else if (priceSui >= 1000) {
-						priceText = (priceSui / 1000).toFixed(1) + 'k';
-					} else {
-						priceText = priceSui.toFixed(2);
-					}
-					tag = { color: 'purple', text: priceText + ' SUI' };
-				} else {
-					tag = getExpirationTag(item.expirationMs);
-				}
-			} else {
-				tag = getExpirationTag(item.expirationMs);
-			}
+			const showGoldStar = Boolean(item.isPrimary);
+			const listingPriceSui = getLinkedNameListingPriceSui(item);
+			const isListed = isLinkedNameListed(item) && Number.isFinite(listingPriceSui) && listingPriceSui > 0;
+			const tag = getExpirationTag(item.expirationMs);
 			const matchScore = getLinkedItemMatchScore(item);
 			const isFilterMatch = matchScore > 0;
-			const classes = ['linked-name-chip'];
-			if (isCurrent) classes.push('current');
-			if (item.isPrimary) classes.push('primary');
-			if (linkedFilterQuery && !isFilterMatch) classes.push('dimmed');
-			if (isFilterMatch) linkedMatchedCount++;
+				const classes = ['linked-name-chip'];
+				if (isCurrent) classes.push('current');
+				if (item.isPrimary) classes.push('primary');
+				else if (isListed) classes.push('listed');
+				else classes.push('blue');
+				if (linkedFilterQuery && !isFilterMatch) classes.push('dimmed');
+				if (isFilterMatch) linkedMatchedCount++;
 
 			const profileUrl = 'https://' + encodeURIComponent(cleanName) + '.sui.ski';
 			const imageUrl = getSuiNSImageUrl(cleanName, item.expirationMs);
@@ -7524,11 +7889,16 @@ function shortAddr(addr) {
 				' data-expiration-ms="' + escapeHtmlJs(expirationAttr) + '"' +
 				' data-target-address="' + escapeHtmlJs(targetAddress) + '"' +
 				'>';
-			if (item.isPrimary) {
-				h += '<svg class="primary-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>';
+				if (showGoldStar) {
+					h += '<svg class="primary-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>';
+				}
+				h += '<span class="linked-name-text">' + cleanName + '</span>';
+			if (isListed) {
+				const priceText = formatLinkedTagListingPriceSui(listingPriceSui);
+				h += '<span class="linked-name-sep">|</span><span class="linked-name-price"><img class="sui-price-icon" src="/media-pack/sui-sui-logo.png" alt="" />' + priceText + '</span>';
+			} else if (tag.text) {
+				h += '<span class="linked-name-tag ' + tag.color + '">' + tag.text + '</span>';
 			}
-			h += '<span class="linked-name-text">' + cleanName + '</span>';
-			h += '<span class="linked-name-tag ' + tag.color + '">' + tag.text + '</span>';
 			h += '</a>';
 			return h;
 		}
@@ -7746,6 +8116,8 @@ function shortAddr(addr) {
 
 			if (linkedFilterQuery) {
 				const ranked = linkedNamesData.slice().sort(function(a, b) {
+					if (a.isPrimary && !b.isPrimary) return -1;
+					if (!a.isPrimary && b.isPrimary) return 1;
 					const scoreA = getLinkedItemMatchScore(a);
 					const scoreB = getLinkedItemMatchScore(b);
 					const matchedA = scoreA > 0;
@@ -7830,6 +8202,10 @@ function shortAddr(addr) {
 				const sorted = linkedNamesData.slice().sort(function(a, b) {
 					if (a.isPrimary && !b.isPrimary) return -1;
 					if (!a.isPrimary && b.isPrimary) return 1;
+					const aListed = isLinkedNameListed(a);
+					const bListed = isLinkedNameListed(b);
+					if (aListed && !bListed) return -1;
+					if (!aListed && bListed) return 1;
 					if (a.expirationMs === null) return 1;
 					if (b.expirationMs === null) return -1;
 					return a.expirationMs - b.expirationMs;
@@ -7850,21 +8226,25 @@ function shortAddr(addr) {
 				}
 			}
 			withPrice.sort(function(a, b) {
-				const nameA = a.name.replace(/\\.sui$/, '');
-				const nameB = b.name.replace(/\\.sui$/, '');
-				const priceA = linkedNamesPrices[nameA] ? parseFloat(linkedNamesPrices[nameA]) : null;
-				const priceB = linkedNamesPrices[nameB] ? parseFloat(linkedNamesPrices[nameB]) : null;
-				// Both have price - sort by price
-				if (priceA !== null && priceB !== null) return priceA - priceB;
-				// Only one has price - it comes first
-				if (priceA !== null) return -1;
-				if (priceB !== null) return 1;
-				// Neither has price loaded - sort by expiration
-				if (a.expirationMs === null) return 1;
-				if (b.expirationMs === null) return -1;
-				return a.expirationMs - b.expirationMs;
-			});
+					if (a.isPrimary && !b.isPrimary) return -1;
+					if (!a.isPrimary && b.isPrimary) return 1;
+					const nameA = a.name.replace(/\\.sui$/, '');
+					const nameB = b.name.replace(/\\.sui$/, '');
+					const priceA = linkedNamesPrices[nameA] ? parseFloat(linkedNamesPrices[nameA]) : null;
+					const priceB = linkedNamesPrices[nameB] ? parseFloat(linkedNamesPrices[nameB]) : null;
+					// Both have price - sort by price
+					if (priceA !== null && priceB !== null) return priceA - priceB;
+					// Only one has price - it comes first
+					if (priceA !== null) return -1;
+					if (priceB !== null) return 1;
+					// Neither has price loaded - sort by expiration
+					if (a.expirationMs === null) return 1;
+					if (b.expirationMs === null) return -1;
+					return a.expirationMs - b.expirationMs;
+				});
 				withoutPrice.sort(function(a, b) {
+					if (a.isPrimary && !b.isPrimary) return -1;
+					if (!a.isPrimary && b.isPrimary) return 1;
 					if (a.expirationMs === null) return 1;
 					if (b.expirationMs === null) return -1;
 					return a.expirationMs - b.expirationMs;
@@ -7902,20 +8282,30 @@ function shortAddr(addr) {
 			updateLinkedNamesMeta();
 		}
 
-		async function fetchListingPrices(names) {
-			const batchSize = 6;
-			for (let i = 0; i < names.length; i += batchSize) {
-				const batch = names.slice(i, i + batchSize);
-				const fetches = batch.map(function(item) {
-					const cleanName = item.name.replace(/\\.sui$/, '');
-					return fetch('/api/marketplace/' + encodeURIComponent(cleanName))
-						.then(function(r) { return r.ok ? r.json() : null; })
-						.then(function(data) {
-							const listingPriceSui = data?.bestListing?.price
-								? (Number(data.bestListing.price) / 1e9).toFixed(2)
-								: null;
-							const bestBidSui = data?.bestBid?.price
-								? (Number(data.bestBid.price) / 1e9).toFixed(2)
+			async function fetchListingPrices(names) {
+				const batchSize = 6;
+				for (let i = 0; i < names.length; i += batchSize) {
+					const batch = names.slice(i, i + batchSize);
+					const fetches = batch.map(function(item) {
+						const cleanName = item.name.replace(/\\.sui$/, '');
+						const tokenId = typeof item?.nftId === 'string' ? item.nftId : '';
+						const tokenQuery = tokenId ? ('?tokenId=' + encodeURIComponent(tokenId)) : '';
+						const tokenUrl = '/api/marketplace/' + encodeURIComponent(cleanName) + tokenQuery;
+						const fallbackUrl = '/api/marketplace/' + encodeURIComponent(cleanName);
+						return fetch(tokenUrl)
+							.then(function(r) { return r.ok ? r.json() : null; })
+							.then(async function(data) {
+								if ((!data || !data.bestListing) && tokenId) {
+									const fallback = await fetch(fallbackUrl)
+										.then(function(r) { return r.ok ? r.json() : null; })
+										.catch(function() { return null; });
+									if (fallback) data = fallback;
+								}
+								const listingPriceSui = data?.bestListing?.price
+									? (Number(data.bestListing.price) / 1e9).toFixed(2)
+									: null;
+								const bestBidSui = data?.bestBid?.price
+									? (Number(data.bestBid.price) / 1e9).toFixed(2)
 								: null;
 							linkedNamesMarketData[cleanName] = {
 								listingPriceSui,
@@ -7971,8 +8361,9 @@ function shortAddr(addr) {
 			});
 		}
 
-			async function fetchLinkedNames() {
+			async function fetchLinkedNames(options = {}) {
 			const primaryAddr = TARGET_ADDRESS || OWNER_ADDRESS;
+			const forceRefresh = options?.forceRefresh === true;
 			if (!linkedNamesList || !primaryAddr) {
 				linkedNamesData = [];
 				linkedNamesGrouped = {};
@@ -7997,7 +8388,10 @@ function shortAddr(addr) {
 				if (secondaryAddr) addressesToQuery.push(secondaryAddr);
 
 				const fetches = addressesToQuery.map(function(addr) {
-					return fetch('/api/names/' + addr).then(function(r) {
+					const refreshQuery = forceRefresh
+						? ('?refresh=1&t=' + String(Date.now()))
+						: '';
+					return fetch('/api/names/' + addr + refreshQuery).then(function(r) {
 						return r.ok ? r.json() : { names: [], grouped: {} };
 					}).catch(function() { return { names: [], grouped: {} }; });
 				});
@@ -8017,8 +8411,24 @@ function shortAddr(addr) {
 						}
 					}
 
-					var grouped = {};
-					var singletonActive = [];
+					const fallbackSelectedNameKey = normalizeLinkedNameKey(selectedRenewalName || NAME);
+					const hasSelectedName = names.some(function(item) {
+						return normalizeLinkedNameKey(item?.name) === fallbackSelectedNameKey;
+					});
+					if (!hasSelectedName && fallbackSelectedNameKey) {
+						names.push({
+							name: fallbackSelectedNameKey,
+							nftId: selectedRenewalNftId || NFT_ID || ('profile-' + fallbackSelectedNameKey),
+							expirationMs: Number.isFinite(selectedRenewalExpiration) ? selectedRenewalExpiration : EXPIRATION_MS,
+							targetAddress: currentTargetAddress || TARGET_ADDRESS || OWNER_ADDRESS || null,
+							isPrimary: Boolean(isProfilePrimaryNameForOwner()),
+							isListed: Boolean(currentListing),
+							__sourceOwner: normalizeLinkedGroupAddress(OWNER_ADDRESS || TARGET_ADDRESS || ''),
+						});
+					}
+
+						var grouped = {};
+						var singletonActive = [];
 					var singletonExpired = [];
 					for (var gi = 0; gi < names.length; gi++) {
 						var normalizedTarget = normalizeLinkedGroupAddress(names[gi].targetAddress);
@@ -8049,14 +8459,18 @@ function shortAddr(addr) {
 					const primaryResolutions = await Promise.all(
 						addressesToQuery.map(async function(addr) {
 							const primary = await fetchPrimaryName(addr).catch(() => null);
+							console.log('fetchPrimaryName for', addr, 'returned:', primary);
 							return normalizeLinkedNameKey(primary);
 						}),
 					);
+					console.log('primaryResolutions:', primaryResolutions);
 					const primaryNameSet = new Set(primaryResolutions.filter(Boolean));
+					console.log('primaryNameSet:', Array.from(primaryNameSet));
 					if (primaryNameSet.size > 0) {
 						for (var pi = 0; pi < names.length; pi++) {
 							var normalizedName = normalizeLinkedNameKey(names[pi].name);
 							if (primaryNameSet.has(normalizedName)) {
+								console.log('Marking as primary:', names[pi].name);
 								names[pi].isPrimary = true;
 							}
 						}
@@ -8076,6 +8490,26 @@ function shortAddr(addr) {
 				linkedNamesData = names;
 				linkedNamesGrouped = grouped;
 				linkedMatchedCount = 0;
+				const selectedNameKey = normalizeLinkedNameKey(selectedRenewalName || NAME);
+				const selectedNameItem = names.find(function(item) {
+					return normalizeLinkedNameKey(item?.name) === selectedNameKey;
+				});
+				if (selectedNameItem) {
+					if (selectedNameItem.nftId) {
+						selectedRenewalNftId = selectedNameItem.nftId;
+					}
+					if (
+						typeof selectedNameItem.expirationMs === 'number'
+						&& Number.isFinite(selectedNameItem.expirationMs)
+						&& selectedNameItem.expirationMs > 0
+					) {
+						selectedRenewalExpiration = selectedNameItem.expirationMs;
+						if (ovRenewalCard) {
+							ovRenewalCard.setAttribute('data-expires-ms', String(selectedNameItem.expirationMs));
+						}
+						updateYearsStepper();
+					}
+				}
 
 				if (names.length === 0) {
 					linkedNamesList.innerHTML = '<div class="linked-names-empty">No other names owned by this wallet</div>';
@@ -8103,16 +8537,177 @@ function shortAddr(addr) {
 		}
 
 			// Marketplace functionality
-			let resolvingNftOwnerForMarketplace = false;
-			let bidInputTouched = false;
-			let listInputTouched = false;
-			let profileRegistrationCostSui = null;
-			let profileRegistrationCostPending = null;
-			let profileRenewalBaseCostSui = null;
-			let profileRenewalBaseCostPending = null;
+			var resolvingNftOwnerForMarketplace = false;
+			var bidInputTouched = false;
+			var listInputTouched = false;
+			var marketplaceWrapPending = false;
+			var profileRegistrationCostSui = null;
+			var profileRegistrationCostPending = null;
+			var profileRenewalBaseCostSui = null;
+			var profileRenewalBaseCostPending = null;
 			const bidPrimaryNameCache = new Map();
 			const linkedPrimaryNameCache = new Map();
 			let marketplaceActivityRenderNonce = 0;
+			var MARKETPLACE_MIN_SIDE_WIDTH = 233;
+			var MARKETPLACE_MAX_SIDE_WIDTH = 420;
+			var marketplaceLayoutRaf = null;
+			var MIST_PER_SUI = 1_000_000_000;
+
+			function toSuiInputPrecision(amountSui) {
+				if (!Number.isFinite(amountSui) || amountSui <= 0) return 0;
+				return Math.round(amountSui * MIST_PER_SUI) / MIST_PER_SUI;
+			}
+
+			function formatSuiInputValue(amountSui) {
+				const normalized = toSuiInputPrecision(amountSui);
+				if (!Number.isFinite(normalized) || normalized <= 0) return '';
+				return normalized
+					.toFixed(9)
+					.replace(/0+$/, '')
+					.replace(/.$/, '');
+			}
+
+			function getListingIncrementStepSui(amountSui) {
+				const base = Number.isFinite(amountSui) && amountSui > 0 ? amountSui : 0;
+				if (base < 10) return 0.01;
+				const whole = Math.floor(base);
+				if (!Number.isFinite(whole) || whole <= 0) return 0.01;
+				const digits = String(Math.abs(whole)).length;
+				const exponent = Math.max(-2, digits - 3);
+				return Math.max(0.01, Math.pow(10, exponent));
+			}
+
+				function applyListingPriceStep(currentSui, minimumSui, direction) {
+					const safeMinimum = Number.isFinite(minimumSui) && minimumSui > 0 ? minimumSui : 0;
+					const base = Number.isFinite(currentSui) && currentSui > 0 ? currentSui : Math.max(safeMinimum, 0.01);
+					const step = getListingIncrementStepSui(base);
+					const nextRaw = direction === 'down' ? base - step : base + step;
+					return Math.max(safeMinimum, toSuiInputPrecision(nextRaw));
+				}
+
+				function applyBidPriceStep(currentSui, minimumSui, direction) {
+					const safeMinimum = Number.isFinite(minimumSui) && minimumSui > 0 ? Math.ceil(minimumSui) : 1;
+					const baseRaw = Number.isFinite(currentSui) && currentSui > 0 ? currentSui : safeMinimum;
+					const base = Math.max(safeMinimum, Math.ceil(baseRaw));
+					const nextRaw = direction === 'down' ? base - 1 : base + 1;
+					return Math.max(safeMinimum, Math.ceil(nextRaw));
+				}
+
+			function setMarketplaceInputWidth(inputEl) {
+				if (!inputEl) return;
+				const raw = String(inputEl.value || inputEl.placeholder || '').replace(/[^0-9.]/g, '');
+				const visibleChars = Math.min(12, Math.max(4, raw.length + 1));
+				inputEl.style.width = visibleChars + 'ch';
+			}
+
+			function getVisibleWidth(element) {
+				if (!element) return 0;
+				if (!(element instanceof HTMLElement)) return 0;
+				const computed = window.getComputedStyle(element);
+				if (computed.display === 'none' || computed.visibility === 'hidden') return 0;
+				return Math.max(element.scrollWidth || 0, Math.ceil(element.getBoundingClientRect().width || 0));
+			}
+
+			function getInlineNodesWidth(nodes, gapPx = 0) {
+				const visibleNodes = (nodes || []).filter((node) => getVisibleWidth(node) > 0);
+				if (!visibleNodes.length) return 0;
+				let total = 0;
+				for (const node of visibleNodes) {
+					total += getVisibleWidth(node);
+				}
+				total += gapPx * Math.max(0, visibleNodes.length - 1);
+				return total;
+			}
+
+			function syncMarketplaceCardSizingNow() {
+				if (!mainContentEl || !marketplaceCard) return;
+				if (window.innerWidth <= 860 || marketplaceCard.style.display === 'none') {
+					mainContentEl.style.setProperty('--overview-side-rail-width', MARKETPLACE_MIN_SIDE_WIDTH + 'px');
+					marketplaceCard.classList.remove('marketplace-card-expanded');
+					return;
+				}
+
+				const listingRowWidth = getVisibleWidth(marketplaceListingRow);
+				const bidRowWidth = getVisibleWidth(marketplaceBidRow);
+				const soldRowWidth = getVisibleWidth(marketplaceSoldRow);
+				const bidControlWidth = getInlineNodesWidth(
+					[marketplaceBidEstimate, marketplaceBidPriceControl],
+					6,
+				);
+				const listControlWidth = getInlineNodesWidth(
+					[marketplaceListEstimate, marketplaceListPriceControl],
+					4,
+				);
+				const buyBtnWidth = getVisibleWidth(marketplaceBuyBtn);
+				const listBtnWidth = getVisibleWidth(marketplaceListBtn);
+				const wrapBtnWidth = getVisibleWidth(marketplaceWrapBtn);
+				const maxInnerWidth = Math.max(
+					listingRowWidth,
+					bidRowWidth,
+					soldRowWidth,
+					bidControlWidth,
+					listControlWidth,
+					buyBtnWidth,
+					listBtnWidth,
+					wrapBtnWidth,
+				);
+				const targetWidth = Math.min(
+					MARKETPLACE_MAX_SIDE_WIDTH,
+					Math.max(MARKETPLACE_MIN_SIDE_WIDTH, maxInnerWidth + 26),
+				);
+
+				mainContentEl.style.setProperty('--overview-side-rail-width', Math.ceil(targetWidth) + 'px');
+				marketplaceCard.classList.toggle(
+					'marketplace-card-expanded',
+					targetWidth > MARKETPLACE_MIN_SIDE_WIDTH + 4,
+				);
+			}
+
+			function queueMarketplaceLayoutSync() {
+				if (marketplaceLayoutRaf) cancelAnimationFrame(marketplaceLayoutRaf);
+				marketplaceLayoutRaf = requestAnimationFrame(() => {
+					marketplaceLayoutRaf = null;
+					setMarketplaceInputWidth(marketplaceBidAmountInput);
+					setMarketplaceInputWidth(marketplaceListAmountInput);
+					syncMarketplaceCardSizingNow();
+				});
+			}
+
+			function updateMarketplaceStepperLabels() {
+				const bidCurrentValue = parseFloat(String(marketplaceBidAmountInput?.value || '').replace(/[^0-9.]/g, ''));
+				const bidBase = Number.isFinite(bidCurrentValue) && bidCurrentValue > 0
+					? bidCurrentValue
+					: getBidMinimumSui();
+					const bidStep = 1;
+				const bidStepText = formatSuiInputValue(bidStep) || String(bidStep);
+				if (marketplaceBidPriceUpBtn) {
+					const upLabel = 'Increase bid by ' + bidStepText + ' SUI';
+					marketplaceBidPriceUpBtn.setAttribute('aria-label', upLabel);
+					marketplaceBidPriceUpBtn.title = upLabel;
+				}
+				if (marketplaceBidPriceDownBtn) {
+					const downLabel = 'Decrease bid by ' + bidStepText + ' SUI';
+					marketplaceBidPriceDownBtn.setAttribute('aria-label', downLabel);
+					marketplaceBidPriceDownBtn.title = downLabel;
+				}
+
+				const listCurrentValue = parseFloat(String(marketplaceListAmountInput?.value || '').replace(/[^0-9.]/g, ''));
+				const listBase = Number.isFinite(listCurrentValue) && listCurrentValue > 0
+					? listCurrentValue
+					: getListDefaultSui();
+				const listStep = getListingIncrementStepSui(listBase);
+				const listStepText = formatSuiInputValue(listStep) || String(listStep);
+				if (marketplaceListPriceUpBtn) {
+					const upLabel = 'Increase list by ' + listStepText + ' SUI';
+					marketplaceListPriceUpBtn.setAttribute('aria-label', upLabel);
+					marketplaceListPriceUpBtn.title = upLabel;
+				}
+				if (marketplaceListPriceDownBtn) {
+					const downLabel = 'Decrease list by ' + listStepText + ' SUI';
+					marketplaceListPriceDownBtn.setAttribute('aria-label', downLabel);
+					marketplaceListPriceDownBtn.title = downLabel;
+				}
+			}
 					async function ensureProfileRegistrationCostSui() {
 					if (Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0) {
 						return profileRegistrationCostSui;
@@ -8125,7 +8720,7 @@ function shortAddr(addr) {
 						let pricing = renewalPricingCache?.[cacheKey] || null;
 
 						if (!pricing) {
-							const res = await fetch('/api/renewal-pricing?domain=' + encodeURIComponent(NAME) + '&years=3');
+							const res = await fetch(getRenewalApiUrl('/api/renewal-pricing?domain=' + encodeURIComponent(NAME) + '&years=3'));
 							if (!res.ok) return null;
 							pricing = await res.json();
 							if (renewalPricingCache) renewalPricingCache[cacheKey] = pricing;
@@ -8182,7 +8777,7 @@ function shortAddr(addr) {
 							const cacheKey = NAME + '-1';
 							let pricing = renewalPricingCache?.[cacheKey] || null;
 							if (!pricing) {
-								const res = await fetch('/api/renewal-pricing?domain=' + encodeURIComponent(NAME) + '&years=1');
+								const res = await fetch(getRenewalApiUrl('/api/renewal-pricing?domain=' + encodeURIComponent(NAME) + '&years=1'));
 								if (!res.ok) return null;
 								pricing = await res.json();
 								if (renewalPricingCache) renewalPricingCache[cacheKey] = pricing;
@@ -8242,20 +8837,20 @@ function shortAddr(addr) {
 					prependSwapToTx(tx, swapInfo, connectedAddress);
 				}
 
-			function getBidMinimumSui() {
-				const BID_FLOOR_SUI = 0;
-				const bestOfferSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
-				const bestOfferBaselineSui = bestOfferSui > 0 ? (Math.round((bestOfferSui + 0.01) * 100) / 100) : BID_FLOOR_SUI;
-				const lastSaleSui = lastSoldPriceMist ? (Number(lastSoldPriceMist) / 1e9) : 0;
-				return Math.max(BID_FLOOR_SUI, bestOfferBaselineSui, lastSaleSui);
-			}
+				function getBidMinimumSui() {
+					const BID_FLOOR_SUI = 1;
+					const bestOfferSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
+					const bestOfferBaselineSui = bestOfferSui > 0 ? (bestOfferSui + 1) : BID_FLOOR_SUI;
+					const lastSaleSui = lastSoldPriceMist ? (Number(lastSoldPriceMist) / 1e9) : 0;
+					return Math.max(BID_FLOOR_SUI, Math.ceil(bestOfferBaselineSui), Math.ceil(lastSaleSui));
+				}
 
-			function getRoundedBidAmountSuiOrNull() {
-				if (!marketplaceBidAmountInput) return null;
-				const amountSui = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
-				if (!Number.isFinite(amountSui) || amountSui <= 0) return null;
-				return Math.max(getBidMinimumSui(), Math.round(amountSui * 1e4) / 1e4);
-			}
+				function getRoundedBidAmountSuiOrNull() {
+					if (!marketplaceBidAmountInput) return null;
+					const amountSui = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
+					if (!Number.isFinite(amountSui) || amountSui <= 0) return null;
+					return Math.max(getBidMinimumSui(), Math.ceil(amountSui));
+				}
 
 			function normalizeBidAmountInput() {
 				if (!marketplaceBidAmountInput) return null;
@@ -8267,47 +8862,55 @@ function shortAddr(addr) {
 				return roundedAmount;
 			}
 
-			function updateBidEstimateDisplay() {
+				function updateBidEstimateDisplay() {
 				if (!marketplaceBidEstimate) return;
 				const tradeportBidFeeBps = 300;
 				const minimumSui = getBidMinimumSui();
-				const currentInput = parseFloat(String(marketplaceBidAmountInput?.value || '').replace(/[^0-9.]/g, ''));
-				const bidSui = Number.isFinite(currentInput) && currentInput > 0
-					? Math.max(minimumSui, Math.round(currentInput * 1e4) / 1e4)
-					: minimumSui;
+					const currentInput = parseFloat(String(marketplaceBidAmountInput?.value || '').replace(/[^0-9.]/g, ''));
+					const bidSui = Number.isFinite(currentInput) && currentInput > 0
+						? Math.max(minimumSui, Math.ceil(currentInput))
+						: minimumSui;
 				const tradeportFeeSui = bidSui * (tradeportBidFeeBps / 10000);
 				const estimatedCostSui = bidSui + tradeportFeeSui;
-				const usdEstimate = cachedSuiUsdPrice > 0 ? (estimatedCostSui * cachedSuiUsdPrice).toFixed(2) : null;
-				marketplaceBidEstimate.innerHTML = '<span class="marketplace-bid-usd">≈ $' + (usdEstimate || '--') + '</span>';
+				const usdEstimate = cachedSuiUsdPrice > 0 ? (estimatedCostSui * cachedSuiUsdPrice) : null;
+				if (usdEstimate && Number.isFinite(usdEstimate) && usdEstimate > 0) {
+					const formattedEstimate = formatMarketplaceUsdEstimate(usdEstimate);
+					marketplaceBidEstimate.innerHTML =
+						'<span class="marketplace-bid-usd" title="$' + formattedEstimate.full + '">≈ $' + formattedEstimate.compact + '</span>';
+				} else {
+					marketplaceBidEstimate.innerHTML = '<span class="marketplace-bid-usd">≈ --</span>';
+				}
 				updateBidButtonLabel(bidSui);
+				updateMarketplaceStepperLabels();
+				queueMarketplaceLayoutSync();
 			}
 
-			function updateBidButtonLabel(bidSui) {
-				if (!marketplaceBidText) return;
-				if (!connectedAddress || marketplacePlaceBidBtn?.classList.contains('connect-wallet')) return;
-				const display = Number.isInteger(bidSui) ? String(bidSui) : bidSui.toFixed(Math.min(4, String(bidSui).split('.')[1]?.length || 2));
-				marketplaceBidText.textContent = 'Offer ' + display + ' SUI for ' + NAME + '.sui';
-			}
+				function updateBidButtonLabel(bidSui) {
+					if (!marketplaceBidText) return;
+					if (!connectedAddress || marketplacePlaceBidBtn?.classList.contains('connect-wallet')) return;
+					const display = String(Math.max(1, Math.ceil(bidSui)));
+					marketplaceBidText.textContent = 'Offer ' + display + ' SUI for ' + NAME + '.sui';
+				}
 
 			function setBidInputDefaultFromBestOffer(force = false) {
 				if (!marketplaceBidAmountInput) return;
 				const minBidSui = getBidMinimumSui();
 				const bestOfferSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
-				const regCostSui = Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0 ? profileRegistrationCostSui : 0.01;
-				const nextBidSui = Math.max(
-					minBidSui,
-					bestOfferSui > 0 ? (bestOfferSui + 0.01) : 0,
-					regCostSui,
-				);
+					const regCostSui = Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0 ? profileRegistrationCostSui : 1;
+					const nextBidSui = Math.max(
+						minBidSui,
+						bestOfferSui > 0 ? (bestOfferSui + 1) : 1,
+						regCostSui,
+					);
 				const currentInput = parseFloat(marketplaceBidAmountInput.value);
 				const hasInput = Number.isFinite(currentInput) && currentInput > 0;
 
 				marketplaceBidAmountInput.min = String(minBidSui);
 
-				if (force || !bidInputTouched || !hasInput || currentInput < nextBidSui) {
-					marketplaceBidAmountInput.value = String(nextBidSui);
-					bidInputTouched = false;
-				}
+					if (force || !bidInputTouched || !hasInput || currentInput < nextBidSui) {
+						marketplaceBidAmountInput.value = String(Math.ceil(nextBidSui));
+						bidInputTouched = false;
+					}
 				updateBidEstimateDisplay();
 			}
 
@@ -8688,20 +9291,36 @@ function shortAddr(addr) {
 
 						function getActionAddress(action) {
 							const actionType = normalizeActionType(action?.type).toLowerCase();
+							const sender = typeof action.sender === 'string' ? action.sender.trim() : '';
+							const receiver = typeof action.receiver === 'string' ? action.receiver.trim() : '';
+							const isSuiAddress = (value) => value && value.startsWith('0x');
 							if (actionType === 'bid') {
-								const receiver = typeof action.receiver === 'string' ? action.receiver.trim() : '';
-								if (receiver && receiver.startsWith('0x')) return receiver;
+								if (isSuiAddress(receiver)) return receiver;
+								if (isSuiAddress(sender)) return sender;
 								return '';
 							}
 							if (actionType === 'accept_bid') {
-								const sender = typeof action.sender === 'string' ? action.sender.trim() : '';
-								if (sender && sender.startsWith('0x')) return sender;
+								if (isSuiAddress(sender)) return sender;
+								if (isSuiAddress(receiver)) return receiver;
+								return '';
+							}
+							const listingActorTypes = new Set([
+								'list',
+								'listed',
+								'relist',
+								'create_listing',
+								'delist',
+								'cancel_listing',
+							]);
+							if (listingActorTypes.has(actionType)) {
+								if (isSuiAddress(sender)) return sender;
+								if (isSuiAddress(receiver)) return receiver;
 								return '';
 							}
 							const showRecipientTypes = new Set(['sale', 'buy', 'transfer', 'mint']);
 							if (!showRecipientTypes.has(actionType)) return '';
-							const receiver = typeof action.receiver === 'string' ? action.receiver.trim() : '';
-							if (receiver && receiver.startsWith('0x')) return receiver;
+							if (isSuiAddress(receiver)) return receiver;
+							if (isSuiAddress(sender)) return sender;
 							return '';
 						}
 
@@ -8873,10 +9492,27 @@ function shortAddr(addr) {
 			}
 
 			function getListMinimumSui() {
-				const LIST_FLOOR_SUI = 0.01;
-				const bestBidSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
-				const bestBidBaselineSui = bestBidSui > 0 ? (Math.round((bestBidSui + 0.01) * 100) / 100) : LIST_FLOOR_SUI;
-				return Math.max(LIST_FLOOR_SUI, bestBidBaselineSui);
+				return 0;
+			}
+
+			function roundUpToWholeSui(amountSui) {
+				if (!Number.isFinite(amountSui) || amountSui <= 0) return 0;
+				return Math.ceil(amountSui);
+			}
+
+			function getListDefaultSui() {
+				const minimumSui = getListMinimumSui();
+				if (hasOwnerListingForCurrentNft() && currentListing?.price) {
+					return Math.max(
+						minimumSui,
+						roundUpToWholeSui(Number(currentListing.price) / 1e9),
+					);
+				}
+				const renewalBaseSui = getProfileRenewalBaseCostSuiOrNull();
+				if (Number.isFinite(renewalBaseSui) && renewalBaseSui > 0) {
+					return Math.max(minimumSui, roundUpToWholeSui(renewalBaseSui * 2));
+				}
+				return Math.max(minimumSui, 1);
 			}
 
 				function getMarketplaceListLabel() {
@@ -8921,6 +9557,27 @@ function shortAddr(addr) {
 					const digits = Math.floor(Math.log10(Math.abs(value))) + 1;
 					const decimals = Math.max(0, significantFigures - digits);
 					return Number(value.toFixed(decimals));
+				}
+
+				function formatMarketplaceUsdEstimate(amountUsd) {
+					if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+						return { compact: '--', full: '--' };
+					}
+
+					const absAmount = Math.abs(amountUsd);
+					const compactFormatter = new Intl.NumberFormat('en-US', {
+						notation: 'compact',
+						maximumFractionDigits: absAmount >= 100 ? 1 : 2,
+					});
+					const fullFormatter = new Intl.NumberFormat('en-US', {
+						minimumFractionDigits: 2,
+						maximumFractionDigits: 2,
+					});
+
+					return {
+						compact: compactFormatter.format(amountUsd),
+						full: fullFormatter.format(amountUsd),
+					};
 				}
 
 					function formatMarketplaceListingSuiDisplay(amountSui) {
@@ -8972,7 +9629,7 @@ function shortAddr(addr) {
 				if (!marketplaceListAmountInput) return null;
 				const amountSui = parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''));
 				if (!Number.isFinite(amountSui) || amountSui <= 0) return null;
-				return Math.max(getListMinimumSui(), Math.round(amountSui * 1e4) / 1e4);
+				return Math.max(getListMinimumSui(), toSuiInputPrecision(amountSui));
 			}
 
 			function normalizeListAmountInput() {
@@ -8981,7 +9638,7 @@ function shortAddr(addr) {
 				marketplaceListAmountInput.min = String(minimumSui);
 				const roundedAmount = getRoundedListAmountSuiOrNull();
 				if (!roundedAmount) return null;
-				marketplaceListAmountInput.value = String(roundedAmount);
+				marketplaceListAmountInput.value = formatSuiInputValue(roundedAmount);
 				return roundedAmount;
 			}
 
@@ -8994,28 +9651,23 @@ function shortAddr(addr) {
 
 				const minimumSui = getListMinimumSui();
 
-				let defaultValue = 0;
-
-				if (hasOwnerListingForCurrentNft() && currentListing?.price) {
-					defaultValue = Number(currentListing.price) / 1e9;
-				} else {
-					const renewalBaseSui = getProfileRenewalBaseCostSuiOrNull();
-					defaultValue = Number.isFinite(renewalBaseSui) && renewalBaseSui > 0
-						? renewalBaseSui
-						: minimumSui;
-					if (!(Number.isFinite(renewalBaseSui) && renewalBaseSui > 0)) {
-						ensureProfileRenewalBaseCostSui()
-							.then((resolvedRenewalBaseSui) => {
-								if (!marketplaceListAmountInput || listInputTouched || hasOwnerListingForCurrentNft()) return;
-								if (!Number.isFinite(resolvedRenewalBaseSui) || resolvedRenewalBaseSui <= 0) return;
-								const latestMinimumSui = getListMinimumSui();
-								const hydratedDefaultSui = Math.max(latestMinimumSui, resolvedRenewalBaseSui);
-								marketplaceListAmountInput.value = String(Math.round(hydratedDefaultSui * 1e4) / 1e4);
-								marketplaceListAmountInput.min = String(latestMinimumSui);
-								updateListButtonState();
-							})
-							.catch(() => null);
-					}
+				let defaultValue = getListDefaultSui();
+				const renewalBaseSui = getProfileRenewalBaseCostSuiOrNull();
+				if (!(Number.isFinite(renewalBaseSui) && renewalBaseSui > 0) && !hasOwnerListingForCurrentNft()) {
+					ensureProfileRenewalBaseCostSui()
+						.then((resolvedRenewalBaseSui) => {
+							if (!marketplaceListAmountInput || listInputTouched || hasOwnerListingForCurrentNft()) return;
+							if (!Number.isFinite(resolvedRenewalBaseSui) || resolvedRenewalBaseSui <= 0) return;
+							const latestMinimumSui = getListMinimumSui();
+							const hydratedDefaultSui = Math.max(
+								latestMinimumSui,
+								roundUpToWholeSui(resolvedRenewalBaseSui * 2),
+							);
+							marketplaceListAmountInput.value = formatSuiInputValue(hydratedDefaultSui);
+							marketplaceListAmountInput.min = String(latestMinimumSui);
+							updateListButtonState();
+						})
+						.catch(() => null);
 				}
 
 				if (defaultValue < minimumSui) {
@@ -9023,7 +9675,9 @@ function shortAddr(addr) {
 				}
 
 				if (defaultValue > 0) {
-					marketplaceListAmountInput.value = String(Math.max(minimumSui, Math.round(defaultValue * 1e4) / 1e4));
+					marketplaceListAmountInput.value = formatSuiInputValue(
+						Math.max(minimumSui, toSuiInputPrecision(defaultValue)),
+					);
 					marketplaceListAmountInput.min = String(minimumSui);
 				} else {
 					marketplaceListAmountInput.value = '';
@@ -9051,8 +9705,8 @@ function shortAddr(addr) {
 					return;
 				}
 
-				const listingAmountSui = Math.round(rawListAmountSui * 1e4) / 1e4;
-				const usdEstimate = cachedSuiUsdPrice > 0 ? (listingAmountSui * cachedSuiUsdPrice).toFixed(2) : null;
+				const listingAmountSui = toSuiInputPrecision(rawListAmountSui);
+				const usdEstimate = cachedSuiUsdPrice > 0 ? (listingAmountSui * cachedSuiUsdPrice) : null;
 					const renewalBaseSui = getProfileRenewalBaseCostSuiOrNull();
 					if (!(Number.isFinite(renewalBaseSui) && renewalBaseSui > 0) && !profileRenewalBaseCostPending) {
 						ensureProfileRenewalBaseCostSui()
@@ -9063,8 +9717,11 @@ function shortAddr(addr) {
 					}
 
 				const estimateLines = [];
-				if (usdEstimate) {
-					estimateLines.push('<span class="marketplace-list-usd">≈ $' + usdEstimate + '</span>');
+				if (usdEstimate && Number.isFinite(usdEstimate) && usdEstimate > 0) {
+					const formattedEstimate = formatMarketplaceUsdEstimate(usdEstimate);
+					estimateLines.push(
+						'<span class="marketplace-list-usd" title="$' + formattedEstimate.full + '">≈ $' + formattedEstimate.compact + '</span>',
+					);
 				}
 
 					marketplaceListEstimate.innerHTML = estimateLines.join('');
@@ -9082,7 +9739,7 @@ function shortAddr(addr) {
 					: 0;
 				const roundedListAmountSui =
 					Number.isFinite(rawListAmountSui) && rawListAmountSui > 0
-						? Math.max(minimumSui, Math.round(rawListAmountSui * 1e4) / 1e4)
+						? Math.max(minimumSui, toSuiInputPrecision(rawListAmountSui))
 						: 0;
 				const meetsMinimum = roundedListAmountSui >= minimumSui;
 				const canList = Boolean(
@@ -9103,9 +9760,113 @@ function shortAddr(addr) {
 				}
 
 				updateListEstimateDisplay();
+				updateMarketplaceStepperLabels();
+				queueMarketplaceLayoutSync();
 			}
 
-				function updateMarketplaceButton() {
+			function getGraceWrapState() {
+				const expirationMs = Number(EXPIRATION_MS || 0);
+				const availableAtMs = Number(AVAILABLE_AT || 0);
+				if (!Number.isFinite(expirationMs) || expirationMs <= 0 || !Number.isFinite(availableAtMs)) {
+					return { eligible: false, reason: 'Expiration data unavailable' };
+				}
+				const now = Date.now();
+				if (now >= availableAtMs) {
+					return { eligible: false, reason: 'Grace period has ended' };
+				}
+				if (now < expirationMs) {
+					return {
+						eligible: true,
+						phase: 'pre-expiry',
+						startsInMs: Math.max(0, expirationMs - now),
+						remainingMs: GRACE_PERIOD_MS,
+						premiumSui: 100000000,
+					};
+				}
+				const remainingMs = Math.max(0, availableAtMs - now);
+				const ratio = Math.max(0, Math.min(1, remainingMs / GRACE_PERIOD_MS));
+				const premiumSui = 100000000 * Math.pow(ratio, AUCTION_DECAY_EXPONENT);
+				return {
+					eligible: true,
+					phase: 'grace',
+					remainingMs,
+					premiumSui,
+				};
+			}
+
+			function formatGraceWrapTimeLeft(ms) {
+				if (!Number.isFinite(ms) || ms <= 0) return '0m';
+				const days = Math.floor(ms / 86400000);
+				const hours = Math.floor((ms % 86400000) / 3600000);
+				const mins = Math.floor((ms % 3600000) / 60000);
+				if (days > 0) return days + 'd ' + hours + 'h';
+				if (hours > 0) return hours + 'h ' + mins + 'm';
+				return mins + 'm';
+			}
+
+			function updateGraceWrapControls(isOwner) {
+				if (!marketplaceWrapBtn || !marketplaceWrapHint) return;
+				const canShowWrap = Boolean(isOwner && DECAY_AUCTION_PACKAGE_ID && NFT_ID);
+				marketplaceWrapBtn.style.display = canShowWrap ? 'flex' : 'none';
+				marketplaceWrapHint.style.display = canShowWrap ? 'block' : 'none';
+				if (!canShowWrap) return;
+
+				const wrapState = getGraceWrapState();
+				const hasAuctionListing = Boolean(auctionData?.listingId);
+				const canAuthorize = Boolean(
+					canSign() &&
+					!marketplaceWrapPending &&
+					wrapState.eligible &&
+					!hasAuctionListing,
+				);
+				marketplaceWrapBtn.disabled = !canAuthorize;
+
+				if (hasAuctionListing) {
+					if (marketplaceWrapText) marketplaceWrapText.textContent = 'Grace Wrap Active';
+					const now = Date.now();
+					const listingStartMs = Number(auctionData?.startTimeMs || 0);
+					if (Number.isFinite(listingStartMs) && listingStartMs > now) {
+						const startsInLabel = formatGraceWrapTimeLeft(listingStartMs - now);
+						marketplaceWrapHint.textContent =
+							'Grace wrap is scheduled. Starts in ' + startsInLabel + '. You can cancel in the auction card.';
+					} else {
+						marketplaceWrapHint.textContent = 'This name already has an active decay listing.';
+					}
+					return;
+				}
+
+				if (marketplaceWrapText) {
+					marketplaceWrapText.textContent = 'Authorize Grace Wrap';
+				}
+
+				if (!wrapState.eligible) {
+					marketplaceWrapHint.textContent = wrapState.reason;
+					return;
+				}
+
+				const premiumLabel = formatMarketplaceListingSuiDisplay(wrapState.premiumSui);
+				const timeLeftLabel = formatGraceWrapTimeLeft(wrapState.remainingMs);
+				if (wrapState.phase === 'pre-expiry') {
+					const startsInLabel = formatGraceWrapTimeLeft(wrapState.startsInMs);
+					marketplaceWrapHint.textContent =
+						'One signature. Activates at expiration in ' +
+						startsInLabel +
+						', starts at ~' +
+						premiumLabel +
+						' SUI, then decays to ~0 over ' +
+						timeLeftLabel +
+						'. Renewal cost applies separately.';
+					return;
+				}
+				marketplaceWrapHint.textContent =
+					'One signature. Premium now ~' +
+					premiumLabel +
+					' SUI, decays to ~0 in ' +
+					timeLeftLabel +
+					'. Renewal cost applies separately.';
+			}
+
+			function updateMarketplaceButton() {
 				if (connectedAddress && !nftOwnerAddress && NFT_ID && !resolvingNftOwnerForMarketplace) {
 					resolvingNftOwnerForMarketplace = true;
 					fetchNftOwner()
@@ -9151,9 +9912,6 @@ function shortAddr(addr) {
 				if (marketplaceBidEstimate) {
 					marketplaceBidEstimate.style.display = isOwner ? 'none' : 'inline-flex';
 				}
-				if (marketplaceBidMaxBtn) {
-					marketplaceBidMaxBtn.style.display = connectedAddress && !isOwner ? 'block' : 'none';
-				}
 					if (marketplacePlaceBidBtn && marketplaceBidText) {
 						if (!connectedAddress && !isOwner) {
 							marketplacePlaceBidBtn.disabled = false;
@@ -9163,8 +9921,8 @@ function shortAddr(addr) {
 							marketplacePlaceBidBtn.disabled = !connectedAddress || isOwner;
 							marketplacePlaceBidBtn.classList.remove('connect-wallet');
 							const currentBid = parseFloat(String(marketplaceBidAmountInput?.value || '').replace(/[^0-9.]/g, ''));
-							const bidVal = Number.isFinite(currentBid) && currentBid > 0 ? Math.round(currentBid * 1e4) / 1e4 : getBidMinimumSui();
-							const bidDisplay = Number.isInteger(bidVal) ? String(bidVal) : bidVal.toFixed(Math.min(4, String(bidVal).split('.')[1]?.length || 2));
+								const bidVal = Number.isFinite(currentBid) && currentBid > 0 ? Math.ceil(currentBid) : getBidMinimumSui();
+								const bidDisplay = String(Math.max(1, Math.ceil(bidVal)));
 							marketplaceBidText.textContent = 'Offer ' + bidDisplay + ' SUI for ' + NAME + '.sui';
 						}
 				}
@@ -9191,6 +9949,7 @@ function shortAddr(addr) {
 					}
 				}
 				updateListButtonState();
+				updateGraceWrapControls(isOwner);
 
 				if (marketplaceAcceptBidBtn && marketplaceAcceptText) {
 					const bidMatchesCurrentNft =
@@ -9209,6 +9968,8 @@ function shortAddr(addr) {
 						marketplaceAcceptText.textContent = 'Accept';
 					}
 				}
+				updateEditButton();
+				queueMarketplaceLayoutSync();
 			}
 
 			async function fetchMarketplaceData() {
@@ -9227,6 +9988,7 @@ function shortAddr(addr) {
 					})
 					.catch(() => null);
 				try {
+					const currentNameKey = String(NAME || '').replace(/.sui$/i, '');
 					const marketplaceUrl = NFT_ID
 						? '/api/marketplace/' + NAME + '?tokenId=' + encodeURIComponent(NFT_ID)
 						: '/api/marketplace/' + NAME;
@@ -9260,6 +10022,16 @@ function shortAddr(addr) {
 				lastListingEventMs = 0;
 					if (data.bestListing && data.bestListing.price) {
 						currentListing = data.bestListing;
+						const currentListingSui = (Number(data.bestListing.price) / 1e9).toFixed(2);
+						if (currentNameKey) {
+							linkedNamesPrices[currentNameKey] = currentListingSui;
+							linkedNamesMarketData[currentNameKey] = {
+								listingPriceSui: currentListingSui,
+								bestBidSui: linkedNamesMarketData[currentNameKey]?.bestBidSui || null,
+								bidder: linkedNamesMarketData[currentNameKey]?.bidder || '',
+								seller: typeof data.bestListing.seller === 'string' ? data.bestListing.seller : '',
+							};
+						}
 						const priceInSui = formatMarketplaceListingSuiDisplay(
 							getMarketplaceListingDisplaySui(data.bestListing.price),
 						);
@@ -9283,6 +10055,17 @@ function shortAddr(addr) {
 					setListInputDefault();
 				} else {
 					currentListing = null;
+					if (currentNameKey) {
+						delete linkedNamesPrices[currentNameKey];
+						if (linkedNamesMarketData[currentNameKey]) {
+							linkedNamesMarketData[currentNameKey] = {
+								listingPriceSui: null,
+								bestBidSui: linkedNamesMarketData[currentNameKey]?.bestBidSui || null,
+								bidder: linkedNamesMarketData[currentNameKey]?.bidder || '',
+								seller: '',
+							};
+						}
+					}
 					marketplaceListingRow.style.display = 'none';
 					marketplaceBuyBtn.style.display = 'none';
 					if (marketplaceLister) setMarketplaceListerLink('', '');
@@ -9357,16 +10140,21 @@ function shortAddr(addr) {
 					marketplaceSoldRow.style.display = 'none';
 				}
 
-				setListInputDefault();
-				updateMarketplaceButton();
-				renderMarketplaceActivity(data).catch((error) => {
-					console.log('Marketplace activity render failed:', error);
-					setMarketplaceActivityMessage('Activity unavailable right now.');
-				});
+					setListInputDefault();
+					updateMarketplaceButton();
+					if (linkedNamesData && linkedNamesData.length > 0) {
+						renderLinkedNames().catch(function() {});
+					}
+					renderMarketplaceActivity(data).catch((error) => {
+						console.log('Marketplace activity render failed:', error);
+						setMarketplaceActivityMessage('Activity unavailable right now.');
+					});
+				queueMarketplaceLayoutSync();
 				applyTaggedIdentityToProfile();
 			} catch (e) {
 				console.log('Marketplace fetch failed:', e);
 				setMarketplaceActivityMessage('Activity unavailable right now.');
+				queueMarketplaceLayoutSync();
 			}
 		}
 
@@ -9617,6 +10405,108 @@ function shortAddr(addr) {
 			});
 		}
 
+			if (marketplaceWrapBtn) {
+				marketplaceWrapBtn.addEventListener('click', async () => {
+					if (!canSign()) {
+						marketplaceStatus.textContent = 'Connect wallet first';
+						marketplaceStatus.className = 'marketplace-status error';
+						return;
+					}
+					if (!isConnectedProfileOwner()) {
+						marketplaceStatus.textContent = 'Only the NFT owner can authorize grace wrap';
+						marketplaceStatus.className = 'marketplace-status error';
+						return;
+					}
+					if (!NFT_ID) {
+						marketplaceStatus.textContent = 'No NFT found for this name';
+						marketplaceStatus.className = 'marketplace-status error';
+						return;
+					}
+					const wrapState = getGraceWrapState();
+					if (!wrapState.eligible) {
+						marketplaceStatus.textContent = wrapState.reason;
+						marketplaceStatus.className = 'marketplace-status error';
+						return;
+					}
+					if (!Number.isFinite(EXPIRATION_MS) || Number(EXPIRATION_MS) <= 0) {
+						marketplaceStatus.textContent = 'Missing expiration timestamp';
+						marketplaceStatus.className = 'marketplace-status error';
+						return;
+					}
+
+					try {
+						marketplaceWrapPending = true;
+						marketplaceWrapBtn.disabled = true;
+						marketplaceWrapText?.classList.add('hidden');
+						marketplaceWrapLoading?.classList.remove('hidden');
+						marketplaceStatus.textContent = 'Building grace wrap authorization...';
+						marketplaceStatus.className = 'marketplace-status';
+
+						const senderAddress = getConnectedSenderAddress();
+						const res = await fetch('/api/auction/list', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({
+								nftId: NFT_ID,
+								senderAddress,
+								curveMode: 'grace-window',
+								expirationMs: String(EXPIRATION_MS),
+							}),
+						});
+						const data = await res.json();
+						if (!res.ok || data.error) throw new Error(data.error || 'Failed to build grace wrap transaction');
+
+						const tx = Transaction.from(data.txBytes);
+						marketplaceStatus.textContent = 'Confirm in wallet (one-time authorization)...';
+						marketplaceStatus.className = 'marketplace-status';
+
+						const result = await SuiWalletKit.signAndExecute(tx, {
+							txOptions: { showEffects: true, showObjectChanges: true },
+						});
+						const listingId = await extractDecayListingIdFromTxResult(result);
+						await registerDecayListingForNft(NFT_ID, listingId);
+
+						const digest = result.digest || result.result?.digest || '';
+						const startSui = Number(data.startPriceMist || 0) / 1e9;
+						const startLabel = Number.isFinite(startSui) ? formatMarketplaceListingSuiDisplay(startSui) : '--';
+						const startTimeMs = Number(data.startTimeMs || 0);
+						const nowMs = Date.now();
+						if (Number.isFinite(startTimeMs) && startTimeMs > nowMs) {
+							marketplaceStatus.innerHTML =
+								'Grace wrap authorized. Starts at ~' +
+								startLabel +
+								' SUI premium at expiration. ' +
+								renderTxExplorerLinks(digest, true);
+						} else {
+							const currentSui = Number(data.currentPremiumMist || data.startPriceMist || 0) / 1e9;
+							const currentLabel = Number.isFinite(currentSui)
+								? formatMarketplaceListingSuiDisplay(currentSui)
+								: startLabel;
+							marketplaceStatus.innerHTML =
+								'Grace wrap authorized at ~' +
+								currentLabel +
+								' SUI premium. ' +
+								renderTxExplorerLinks(digest, true);
+						}
+						marketplaceStatus.className = 'marketplace-status success';
+						await fetchAuctionStatus();
+						await fetchMarketplaceData();
+					} catch (error) {
+						const message = error?.message || 'Transaction failed';
+						marketplaceStatus.textContent =
+							message.includes('cancel') || message.includes('reject')
+								? 'Transaction cancelled'
+								: 'Failed: ' + message.slice(0, 120);
+						marketplaceStatus.className = 'marketplace-status error';
+					} finally {
+						marketplaceWrapPending = false;
+						marketplaceWrapText?.classList.remove('hidden');
+						marketplaceWrapLoading?.classList.add('hidden');
+						updateMarketplaceButton();
+					}
+				});
+			}
+
 			if (marketplacePlaceBidBtn) {
 				marketplacePlaceBidBtn.addEventListener('click', async () => {
 					if (!canSign()) {
@@ -9732,12 +10622,12 @@ function shortAddr(addr) {
 			});
 		}
 
-			if (marketplaceBidAmountInput) {
-				marketplaceBidAmountInput.addEventListener('input', () => {
-					const sanitized = String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, '');
-					if (sanitized !== marketplaceBidAmountInput.value) {
-						marketplaceBidAmountInput.value = sanitized;
-					}
+				if (marketplaceBidAmountInput) {
+					marketplaceBidAmountInput.addEventListener('input', () => {
+						const sanitized = String(marketplaceBidAmountInput.value).replace(/[^0-9]/g, '');
+						if (sanitized !== marketplaceBidAmountInput.value) {
+							marketplaceBidAmountInput.value = sanitized;
+						}
 					bidInputTouched = true;
 					updateBidEstimateDisplay();
 				});
@@ -9766,10 +10656,11 @@ function shortAddr(addr) {
 			marketplaceListPriceUpBtn.addEventListener('click', () => {
 				const currentValue = parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''));
 				const minimumSui = getListMinimumSui();
-				const base = Number.isFinite(currentValue) && currentValue > 0 ? currentValue : minimumSui;
-				const step = 0.5;
-				const nextValue = Math.round((base + step) * 1e4) / 1e4;
-				marketplaceListAmountInput.value = String(nextValue);
+				const baselineValue = Number.isFinite(currentValue) && currentValue > 0
+					? currentValue
+					: getListDefaultSui();
+				const nextValue = applyListingPriceStep(baselineValue, minimumSui, 'up');
+				marketplaceListAmountInput.value = formatSuiInputValue(nextValue);
 				listInputTouched = true;
 				updateListButtonState();
 			});
@@ -9779,59 +10670,35 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				marketplaceListPriceDownBtn.addEventListener('click', () => {
 				const currentValue = parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''));
 				const minimumSui = getListMinimumSui();
-				const base = Number.isFinite(currentValue) && currentValue > 0 ? currentValue : minimumSui;
-				const step = 0.5;
-				const nextValue = Math.max(minimumSui, Math.round((base - step) * 1e4) / 1e4);
-				marketplaceListAmountInput.value = String(nextValue);
+				const baselineValue = Number.isFinite(currentValue) && currentValue > 0
+					? currentValue
+					: getListDefaultSui();
+				const nextValue = applyListingPriceStep(baselineValue, minimumSui, 'down');
+				marketplaceListAmountInput.value = formatSuiInputValue(nextValue);
 				listInputTouched = true;
 				updateListButtonState();
 			});
 		}
 
-			if (marketplaceBidPriceUpBtn && marketplaceBidAmountInput) {
-				marketplaceBidPriceUpBtn.addEventListener('click', () => {
-					const currentValue = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
-					const minimumSui = getBidMinimumSui();
-					const base = Number.isFinite(currentValue) && currentValue > 0 ? currentValue : 0;
-					const step = 0.5;
-					const nextValue = Math.max(minimumSui, Math.round((base + step) * 1e4) / 1e4);
-					marketplaceBidAmountInput.value = String(nextValue);
-					bidInputTouched = true;
-					updateBidEstimateDisplay();
+				if (marketplaceBidPriceUpBtn && marketplaceBidAmountInput) {
+					marketplaceBidPriceUpBtn.addEventListener('click', () => {
+						const currentValue = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
+						const minimumSui = getBidMinimumSui();
+						const nextValue = applyBidPriceStep(currentValue, minimumSui, 'up');
+						marketplaceBidAmountInput.value = formatSuiInputValue(nextValue);
+						bidInputTouched = true;
+						updateBidEstimateDisplay();
 				});
 			}
 
-			if (marketplaceBidPriceDownBtn && marketplaceBidAmountInput) {
-				marketplaceBidPriceDownBtn.addEventListener('click', () => {
-					const currentValue = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
-					const minimumSui = getBidMinimumSui();
-					const base = Number.isFinite(currentValue) && currentValue > 0 ? currentValue : minimumSui;
-					const step = 0.5;
-					const nextValue = Math.max(minimumSui, Math.round((base - step) * 1e4) / 1e4);
-					marketplaceBidAmountInput.value = String(nextValue);
-					bidInputTouched = true;
-					updateBidEstimateDisplay();
-				});
-			}
-
-		if (marketplaceBidMaxBtn && marketplaceBidAmountInput) {
-				marketplaceBidMaxBtn.addEventListener('click', async () => {
-					if (!connectedAddress) return;
-					marketplaceBidMaxBtn.disabled = true;
-					marketplaceBidMaxBtn.textContent = '...';
-					try {
-						const maxSui = await getMaxBidSui();
-						if (maxSui > 0) {
-							marketplaceBidAmountInput.value = String(maxSui);
-							bidInputTouched = true;
-							updateBidEstimateDisplay();
-						}
-					} catch (err) {
-						console.warn('Max bid calc failed:', err.message);
-					} finally {
-						marketplaceBidMaxBtn.disabled = false;
-						marketplaceBidMaxBtn.textContent = 'MAX';
-					}
+				if (marketplaceBidPriceDownBtn && marketplaceBidAmountInput) {
+					marketplaceBidPriceDownBtn.addEventListener('click', () => {
+						const currentValue = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
+						const minimumSui = getBidMinimumSui();
+						const nextValue = applyBidPriceStep(currentValue, minimumSui, 'down');
+						marketplaceBidAmountInput.value = formatSuiInputValue(nextValue);
+						bidInputTouched = true;
+						updateBidEstimateDisplay();
 				});
 			}
 
@@ -10001,15 +10868,27 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 			overviewMarketModule.style.display = showMarketModule ? 'flex' : 'none';
 			overviewSecondaryGrid.classList.toggle('has-market-module', showMarketModule);
+			queueMarketplaceLayoutSync();
 		}
 
 		function computeAuctionPrice(startPriceMist, startTimeMs, endTimeMs) {
 			const now = Date.now();
+			if (now < startTimeMs) return Math.floor(Number(startPriceMist));
 			if (now >= endTimeMs) return 0;
 			const remaining = endTimeMs - now;
 			const duration = endTimeMs - startTimeMs;
 			const fraction = Math.max(0, remaining / duration);
-			return Math.floor(Number(startPriceMist) * Math.pow(fraction, 8));
+			const price = Math.floor(Number(startPriceMist) * Math.pow(fraction, AUCTION_DECAY_EXPONENT));
+			return price > 0 ? price : 1;
+		}
+
+		function formatAuctionSui(priceMist) {
+			const sui = Number(priceMist) / 1e9;
+			if (!Number.isFinite(sui) || sui <= 0) return '0 SUI';
+			if (sui >= 1_000_000) return formatMarketplaceListingSuiDisplay(sui) + ' SUI';
+			if (sui >= 100) return sui.toFixed(2) + ' SUI';
+			if (sui >= 1) return sui.toFixed(4).replace(/0+$/, '').replace(/.$/, '') + ' SUI';
+			return sui.toFixed(6).replace(/0+$/, '').replace(/.$/, '') + ' SUI';
 		}
 
 		function formatTimeLeft(endTimeMs) {
@@ -10025,18 +10904,34 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 		function updateAuctionDisplay() {
 			if (!auctionData) return;
+			const now = Date.now();
+			const startTimeMs = Number(auctionData.startTimeMs);
+			const endTimeMs = Number(auctionData.endTimeMs);
+			const isScheduled = Number.isFinite(startTimeMs) && now < startTimeMs;
 			const priceMist = computeAuctionPrice(
 				Number(auctionData.startPriceMist),
-				Number(auctionData.startTimeMs),
-				Number(auctionData.endTimeMs),
+				startTimeMs,
+				endTimeMs,
 			);
-			const priceSui = (priceMist / 1e9).toFixed(4);
-			auctionCurrentPrice.textContent = priceSui + ' SUI';
-			auctionTimeLeft.textContent = formatTimeLeft(Number(auctionData.endTimeMs));
+			auctionCurrentPrice.textContent = formatAuctionSui(priceMist);
+			auctionTimeLeft.textContent = formatTimeLeft(endTimeMs);
+			if (auctionStateRow && auctionStateValue) {
+				if (isScheduled) {
+					auctionStateRow.style.display = 'flex';
+					auctionStateValue.textContent = 'Scheduled · starts in ' + formatTimeLeft(startTimeMs);
+				} else {
+					auctionStateRow.style.display = 'none';
+					auctionStateValue.textContent = '--';
+				}
+			}
 
-			if (Date.now() >= Number(auctionData.endTimeMs)) {
+			if (now >= endTimeMs) {
 				auctionBuyBtn.disabled = true;
 				auctionBuyText.textContent = 'Auction Ended';
+				if (auctionCancelBtn) {
+					auctionCancelBtn.disabled = true;
+					auctionCancelBtn.style.display = 'none';
+				}
 				if (auctionInterval) clearInterval(auctionInterval);
 				return;
 			}
@@ -10045,10 +10940,31 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			if (isSeller) {
 				auctionSellerLabel.style.display = 'inline';
 				auctionBuyBtn.style.display = 'none';
+				if (auctionCancelBtn) {
+					auctionCancelBtn.style.display = isScheduled ? 'flex' : 'none';
+					auctionCancelBtn.disabled = !isScheduled || !canSign();
+				}
 			} else if (connectedAddress) {
-				auctionBuyBtn.disabled = false;
-				auctionBuyText.textContent = 'Buy for ' + priceSui + ' SUI';
+				auctionBuyBtn.style.display = 'flex';
+				auctionSellerLabel.style.display = 'none';
+				if (auctionCancelBtn) {
+					auctionCancelBtn.disabled = true;
+					auctionCancelBtn.style.display = 'none';
+				}
+				if (isScheduled) {
+					auctionBuyBtn.disabled = true;
+					auctionBuyText.textContent = 'Starts in ' + formatTimeLeft(startTimeMs);
+				} else {
+					auctionBuyBtn.disabled = false;
+					auctionBuyText.textContent = 'Buy for ' + formatAuctionSui(priceMist);
+				}
 			} else {
+				auctionBuyBtn.style.display = 'flex';
+				auctionSellerLabel.style.display = 'none';
+				if (auctionCancelBtn) {
+					auctionCancelBtn.disabled = true;
+					auctionCancelBtn.style.display = 'none';
+				}
 				auctionBuyBtn.disabled = true;
 				auctionBuyText.textContent = 'Connect Wallet to Buy';
 			}
@@ -10060,12 +10976,19 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				const res = await fetch('/api/auction/status/' + NFT_ID);
 				if (!res.ok) return;
 				const data = await res.json();
-				if (!data.active) return;
+				if (!data.active) {
+					auctionData = null;
+					if (auctionCard) auctionCard.style.display = 'none';
+					syncOverviewModulesLayout();
+					updateMarketplaceButton();
+					return;
+				}
 
 					auctionData = data;
 					auctionCard.style.display = 'block';
 					syncOverviewModulesLayout();
 					updateAuctionDisplay();
+					updateMarketplaceButton();
 				if (auctionInterval) clearInterval(auctionInterval);
 				auctionInterval = setInterval(updateAuctionDisplay, 1000);
 
@@ -10104,8 +11027,6 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 					const tx = Transaction.from(data.txBytes);
 					auctionStatus.textContent = 'Confirm in wallet...';
-
-					const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
 					let result;
 					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
@@ -10132,7 +11053,67 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			});
 		}
 
+		if (auctionCancelBtn) {
+			auctionCancelBtn.addEventListener('click', async () => {
+				if (!connectedAddress || !auctionData) return;
+				const now = Date.now();
+				const startTimeMs = Number(auctionData.startTimeMs || 0);
+				if (!(Number.isFinite(startTimeMs) && now < startTimeMs)) {
+					auctionStatus.textContent = 'Wrap can only be cancelled before start';
+					auctionStatus.className = 'auction-status error';
+					return;
+				}
+				if (!auctionData.seller || connectedAddress !== auctionData.seller) {
+					auctionStatus.textContent = 'Only the listing owner can cancel wrap';
+					auctionStatus.className = 'auction-status error';
+					return;
+				}
+
+				auctionCancelBtn.disabled = true;
+				auctionCancelText?.classList.add('hidden');
+				auctionCancelLoading?.classList.remove('hidden');
+				auctionStatus.textContent = '';
+
+				try {
+					const res = await fetch('/api/auction/cancel', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							listingId: auctionData.listingId,
+							sellerAddress: connectedAddress,
+						}),
+					});
+					const data = await res.json();
+					if (data.error) throw new Error(data.error);
+
+					const tx = Transaction.from(data.txBytes);
+					auctionStatus.textContent = 'Confirm cancel in wallet...';
+
+					const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					const digest = result.digest || result.result?.digest || '';
+					auctionStatus.innerHTML = 'Wrap cancelled. ' + renderTxExplorerLinks(digest, true);
+					auctionStatus.className = 'auction-status success';
+					await fetchAuctionStatus();
+					await fetchMarketplaceData();
+				} catch (e) {
+					const msg = e?.message || 'Transaction failed';
+					auctionStatus.textContent =
+						msg.includes('rejected') || msg.includes('cancelled')
+							? 'Transaction cancelled'
+							: 'Failed: ' + msg.slice(0, 100);
+					auctionStatus.className = 'auction-status error';
+					updateAuctionDisplay();
+				} finally {
+					auctionCancelText?.classList.remove('hidden');
+					auctionCancelLoading?.classList.add('hidden');
+				}
+			});
+		}
+
 		// Fetch marketplace data on load
+		window.addEventListener('resize', queueMarketplaceLayoutSync);
+		updateMarketplaceStepperLabels();
+		queueMarketplaceLayoutSync();
 		syncOverviewModulesLayout();
 		fetchMarketplaceData();
 		fetchAuctionStatus();
@@ -10472,12 +11453,17 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		}
 
 		// Load subscriptions from Walrus (for cross-device sync)
-		async function loadSubscriptionsFromWalrus() {
+		async function loadSubscriptionsFromWalrus(options = {}) {
 			const blobInfo = getBlobInfo();
 			const walletAddress = getActiveWalletAddress();
 			if (!blobInfo?.blobId || !walletAddress) return null;
 			const blobWalletAddress = normalizeWalletAddress(blobInfo.subscriberAddress);
 			if (blobWalletAddress && blobWalletAddress !== walletAddress) return null;
+			const allowSignaturePrompt = options.allowSignaturePrompt === true;
+			const hasCachedKey =
+				subscriptionsCryptoKey
+				&& subscriptionsCryptoKeyAddress === walletAddress;
+			if (!allowSignaturePrompt && !hasCachedKey) return null;
 
 			try {
 				const res = await fetch(\`/api/app/subscriptions/blob/\${blobInfo.blobId}\`);
@@ -10495,12 +11481,12 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		}
 
 		function isSubscribed(targetName) {
-			const cleanTargetName = String(targetName || '').replace(/\.sui$/i, '').toLowerCase() + '.sui';
+			const cleanTargetName = String(targetName || '').replace(/.sui$/i, '').toLowerCase() + '.sui';
 			return getLocalSubscriptions().some(s => String(s?.targetName || '').toLowerCase() === cleanTargetName);
 		}
 
 		async function subscribeToName(targetName, targetAddress) {
-			const cleanTargetName = String(targetName || '').replace(/\.sui$/i, '').toLowerCase() + '.sui';
+			const cleanTargetName = String(targetName || '').replace(/.sui$/i, '').toLowerCase() + '.sui';
 			const subs = getLocalSubscriptions();
 			if (subs.some(s => String(s?.targetName || '').toLowerCase() === cleanTargetName)) {
 				return false;
@@ -10518,7 +11504,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		}
 
 		function unsubscribeFromName(targetName) {
-			const cleanTargetName = String(targetName || '').replace(/\.sui$/i, '').toLowerCase() + '.sui';
+			const cleanTargetName = String(targetName || '').replace(/.sui$/i, '').toLowerCase() + '.sui';
 			const subs = getLocalSubscriptions().filter(
 				s => String(s?.targetName || '').toLowerCase() !== cleanTargetName,
 			);
@@ -10651,31 +11637,34 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		let vaultLoadingForAddress = null;
 		let vaultLoadNonce = 0;
 
-		async function loadUserVault() {
+		async function loadUserVault(options = {}) {
 			const walletAddress = getActiveWalletAddress();
 			if (!walletAddress) return;
 			if (vaultLoadingForAddress === walletAddress) return;
+			const allowSignaturePrompt = options.allowSignaturePrompt === true;
 
 			const loadNonce = ++vaultLoadNonce;
 			vaultLoadingForAddress = walletAddress;
 			try {
-				// Try loading from Walrus/Seal via existing subscription logic
-				let persistentList = null;
-				try {
-					persistentList = await loadSubscriptionsFromWalrus();
-				} catch (e) {
-					console.warn('Walrus vault load failed, falling back to local');
+				let sourceList = getLocalSubscriptions();
+				if (allowSignaturePrompt || sourceList.length === 0) {
+					try {
+						const persistentList = await loadSubscriptionsFromWalrus({ allowSignaturePrompt });
+						if (persistentList && Array.isArray(persistentList)) {
+							sourceList = persistentList;
+							saveLocalSubscriptions(persistentList);
+						}
+					} catch (e) {
+						console.warn('Walrus vault load failed, falling back to local');
+					}
 				}
 
 				if (loadNonce !== vaultLoadNonce || getActiveWalletAddress() !== walletAddress) return;
 
-				const sourceList = persistentList && Array.isArray(persistentList)
-					? persistentList
-					: getLocalSubscriptions();
 				const walletList = filterSubscriptionsForWallet(sourceList, walletAddress);
 				window.userVaultNames = new Set(
 					walletList
-						.map(s => String(s?.targetName || '').replace(/\.sui$/i, '').toLowerCase())
+						.map(s => String(s?.targetName || '').replace(/.sui$/i, '').toLowerCase())
 						.filter(Boolean),
 				);
 
@@ -10728,7 +11717,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		window.renderVaultList = renderVaultList;
 
 		async function syncVaultAction(name, action) {
-			const cleanName = String(name || '').replace(/\.sui$/i, '').toLowerCase();
+			const cleanName = String(name || '').replace(/.sui$/i, '').toLowerCase();
 			if (action === 'watch') {
 				window.userVaultNames.add(cleanName);
 				await subscribeToName(cleanName + '.sui', '');
@@ -10784,6 +11773,9 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			if (!connectedAddress) {
 				await connectWallet();
 				if (!connectedAddress) return;
+			}
+			if (window.userVaultNames.size === 0) {
+				await loadUserVault({ allowSignaturePrompt: true });
 			}
 
 			const btn = document.getElementById('vault-diamond-btn');

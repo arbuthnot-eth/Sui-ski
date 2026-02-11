@@ -366,39 +366,35 @@ window.addEventListener('message', function(e) {
 			if (expectedSender && typeof tx.setSenderIfNotSet === 'function') {
 				tx.setSenderIfNotSet(expectedSender);
 			}
-			var txJson = '';
-			if (typeof tx.toJSON === 'function') {
-				try {
-					txJson = await tx.toJSON();
-				} catch (_e) {}
-			}
 			var txForWallet = tx;
-			try {
-				txForWallet = await __buildTransactionBytes(tx, expectedSender);
-			} catch (buildErr) {
-				console.warn('[SignBridge] Build bytes failed, falling back to transaction object:', buildErr);
-			}
+			var requestedChain = (
+				signingAccount
+				&& Array.isArray(signingAccount.chains)
+				&& typeof signingAccount.chains[0] === 'string'
+			) ? signingAccount.chains[0] : ('sui:' + (SuiWalletKit.__config.network || 'mainnet'));
 
 			console.log('[SignBridge] Signing transaction...');
 			var result;
 			try {
-				if (__getPhantomProvider()) {
-					result = await __phantomSignAndExecute(txForWallet, execOptions, expectedSender, txJson);
-				} else {
-					var signExecOptions = { txOptions: execOptions };
-					if (signingAccount) signExecOptions.account = signingAccount;
-					result = await SuiWalletKit.signAndExecute(txForWallet, signExecOptions);
-				}
+				var signExecOptions = {
+					txOptions: execOptions,
+					chain: requestedChain,
+					singleAttempt: true,
+					preferTransactionBlock: true,
+				};
+				if (signingAccount) signExecOptions.account = signingAccount;
+				result = await SuiWalletKit.signAndExecute(txForWallet, signExecOptions);
 			} catch (signErr) {
 				console.warn('[SignBridge] signAndExecute failed, trying sign+execute fallback:', signErr);
-				if (__getPhantomProvider()) {
-					result = await __phantomSignThenExecute(txForWallet, execOptions, expectedSender, txJson);
-				} else {
-					var signOptions = {};
-					if (signingAccount) signOptions.account = signingAccount;
-					var signed = await SuiWalletKit.signTransaction(txForWallet, signOptions);
-					result = await __executeSignedTransaction(signed, txForWallet, execOptions);
-				}
+				if (signExecOptions.singleAttempt) throw signErr;
+				var signOptions = {
+					chain: requestedChain,
+					singleAttempt: true,
+					preferTransactionBlock: true,
+				};
+				if (signingAccount) signOptions.account = signingAccount;
+				var signed = await SuiWalletKit.signTransaction(txForWallet, signOptions);
+				result = await __executeSignedTransaction(signed, txForWallet, execOptions);
 			}
 
 			console.log('[SignBridge] result:', result);
@@ -426,7 +422,25 @@ window.addEventListener('message', function(e) {
 	})();
 });
 
-SuiWalletKit.detectWallets().then(function(wallets) {
+async function __loadWalletStandard() {
+	var urls = [
+		'https://esm.sh/@wallet-standard/app@1.1.0',
+	];
+	for (var i = 0; i < urls.length; i++) {
+		try {
+			var mod = await import(urls[i]);
+			if (mod && typeof mod.getWallets === 'function') {
+				window.getWallets = mod.getWallets;
+				return true;
+			}
+		} catch (_e) {}
+	}
+	return false;
+}
+
+__loadWalletStandard().then(function() {
+	return SuiWalletKit.detectWallets();
+}).then(function(wallets) {
 	if (!wallets || wallets.length === 0) return;
 
 	var session = null;
