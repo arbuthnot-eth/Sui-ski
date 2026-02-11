@@ -12,13 +12,14 @@ module decay_auction::auction {
     const ENotSeller: u64 = 5;
     const ENotExpired: u64 = 6;
     const ECancelWindowClosed: u64 = 7;
+    const EListingAlreadyEnded: u64 = 8;
 
     const MAX_DURATION_MS: u64 = 30 * 24 * 60 * 60 * 1000;
     const MIN_DURATION_MS: u64 = 60 * 60 * 1000;
     const CANCEL_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
-    const MIN_START_PRICE_MIST: u64 = 1_000_000_000;
+    const MIN_START_PRICE_MIST: u64 = 100_000_000_000_000_000;
     const PPM: u256 = 1_000_000;
-    const PPM_POW_EIGHT: u256 = 1_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000;
+    const DECAY_EXPONENT: u64 = 69;
 
     public struct DecayListing<T: key + store> has key {
         id: UID,
@@ -29,10 +30,14 @@ module decay_auction::auction {
         end_time_ms: u64,
     }
 
-    fun pow_eight(base: u256): u256 {
-        let sq = base * base;
-        let q = sq * sq;
-        q * q
+    fun ratio_pow_ppm(base_ppm: u256, exponent: u64): u256 {
+        let mut i = 0;
+        let mut ratio = PPM;
+        while (i < exponent) {
+            ratio = ratio * base_ppm / PPM;
+            i = i + 1;
+        };
+        ratio
     }
 
     public fun create<T: key + store>(
@@ -42,18 +47,32 @@ module decay_auction::auction {
         clock: &Clock,
         ctx: &mut TxContext,
     ): DecayListing<T> {
+        let now = clock.timestamp_ms();
+        create_with_start_time(nft, start_price_mist, now, duration_ms, clock, ctx)
+    }
+
+    public fun create_with_start_time<T: key + store>(
+        nft: T,
+        start_price_mist: u64,
+        start_time_ms: u64,
+        duration_ms: u64,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ): DecayListing<T> {
         assert!(duration_ms >= MIN_DURATION_MS && duration_ms <= MAX_DURATION_MS, EInvalidDuration);
         assert!(start_price_mist >= MIN_START_PRICE_MIST, EInvalidPrice);
 
         let now = clock.timestamp_ms();
+        let end_time_ms = start_time_ms + duration_ms;
+        assert!(end_time_ms > now, EListingAlreadyEnded);
 
         DecayListing {
             id: object::new(ctx),
             nft,
             seller: ctx.sender(),
             start_price_mist,
-            start_time_ms: now,
-            end_time_ms: now + duration_ms,
+            start_time_ms,
+            end_time_ms,
         }
     }
 
@@ -65,6 +84,18 @@ module decay_auction::auction {
         ctx: &mut TxContext,
     ) {
         let listing = create(nft, start_price_mist, duration_ms, clock, ctx);
+        transfer::share_object(listing);
+    }
+
+    public entry fun create_and_share_with_start_time<T: key + store>(
+        nft: T,
+        start_price_mist: u64,
+        start_time_ms: u64,
+        duration_ms: u64,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        let listing = create_with_start_time(nft, start_price_mist, start_time_ms, duration_ms, clock, ctx);
         transfer::share_object(listing);
     }
 
@@ -140,8 +171,8 @@ module decay_auction::auction {
         let total = listing.end_time_ms - listing.start_time_ms;
 
         let remaining_ppm = (remaining as u256) * PPM / (total as u256);
-        let ratio8 = pow_eight(remaining_ppm);
-        let price = (listing.start_price_mist as u256) * ratio8 / PPM_POW_EIGHT;
+        let ratio = ratio_pow_ppm(remaining_ppm, DECAY_EXPONENT);
+        let price = (listing.start_price_mist as u256) * ratio / PPM;
 
         (price as u64)
     }
