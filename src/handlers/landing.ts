@@ -972,8 +972,14 @@ async function handleNamesByAddress(
 		console.log('Query 1: Fetching owned/claimable SuiNS NFTs...')
 		await fetchIndexerByWhere(
 			{
-				_or: [{ owner: { _eq: normalizedAddress } }, { claimable_by: { _eq: normalizedAddress } }],
-				collection: { semantic_slug: { _eq: 'suins' } },
+				_or: [
+					{ owner: { _eq: normalizedAddress } },
+					{ claimable_by: { _eq: normalizedAddress } },
+					{ delegated_owner: { _eq: normalizedAddress } },
+				],
+				collection: {
+					_or: [{ semantic_slug: { _eq: 'suins' } }, { slug: { _eq: 'suins' } }],
+				},
 			},
 			'owned',
 		)
@@ -1025,7 +1031,11 @@ async function handleNamesByAddress(
 						where: {
 							seller: { _eq: normalizedAddress },
 							listed: { _eq: true },
-							nft: { collection: { semantic_slug: { _eq: 'suins' } } },
+							nft: {
+								collection: {
+									_or: [{ semantic_slug: { _eq: 'suins' } }, { slug: { _eq: 'suins' } }],
+								},
+							},
 						},
 						order_by: [{ block_time: 'desc' }],
 						offset,
@@ -1088,7 +1098,53 @@ async function handleNamesByAddress(
 
 		const listedNames = allNames.filter((n) => n.isListed).length
 		const ownedNames = allNames.filter((n) => !n.isListed).length
-		console.log(`SUMMARY: ${allNames.length} total (${ownedNames} owned, ${listedNames} listed)`)
+		console.log(`SUMMARY after indexer: ${allNames.length} total (${ownedNames} owned, ${listedNames} listed)`)
+
+		const SUINS_V1_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration'
+		let rpcFallbackCount = 0
+		try {
+			let cursor: string | null | undefined = null
+			let hasNext = true
+			while (hasNext) {
+				const page = await client.getOwnedObjects({
+					owner: normalizedAddress,
+					filter: { StructType: SUINS_V1_TYPE },
+					options: { showContent: true },
+					cursor: cursor ?? undefined,
+					limit: 50,
+				})
+				const objects = page.data || []
+				for (const obj of objects) {
+					if (!obj.data?.content || obj.data.content.dataType !== 'moveObject') continue
+					const fields = obj.data.content.fields as Record<string, unknown>
+					const domainName = String(fields?.domain_name || '')
+					const objectId = obj.data.objectId
+					if (!domainName || !objectId) continue
+					if (seenNftIds.has(objectId)) continue
+					const normalizedName = normalizeSuinsName(domainName)
+					if (!normalizedName) continue
+					seenNftIds.add(objectId)
+					const rawExp = fields?.expiration_timestamp_ms
+					allNames.push({
+						name: normalizedName,
+						nftId: objectId,
+						expirationMs: rawExp ? Number(rawExp) : null,
+						targetAddress: null,
+						isPrimary: false,
+						isListed: false,
+						listingPriceMist: null,
+					})
+					rpcFallbackCount++
+				}
+				hasNext = page.hasNextPage
+				cursor = page.nextCursor
+			}
+		} catch (rpcError) {
+			console.error('RPC fallback for owned SuiNS NFTs failed:', rpcError)
+		}
+		if (rpcFallbackCount > 0) {
+			console.log(`RPC fallback found ${rpcFallbackCount} additional names not in indexer`)
+		}
 
 		// Step 2: Use SuinsClient.getNameRecord to resolve each name to its target address
 		// This is more reliable than the raw RPC method
@@ -2005,7 +2061,7 @@ async function handleAcceptBidTransaction(
 		return jsonResponse({ transaction: transactionPayload })
 	} catch (error) {
 		const message =
-			error instanceof Error ? error.message : 'Failed to prepare bid acceptance transaction'
+			error instanceof Error ? error.message : 'Failed to prepare offer acceptance transaction'
 		return jsonResponse({ error: message }, 500)
 	}
 }
@@ -4096,7 +4152,7 @@ ${socialMeta}
 
 				const existing = statusCol.querySelector('.offer-status');
 				if (existing) existing.remove();
-				showOfferStatus(statusCol, 'Bid placed!', 'success');
+				showOfferStatus(statusCol, 'Offer placed!', 'success');
 				if (offerInput) offerInput.value = '';
 			} catch (e) {
 				const msg = e.message || 'Failed';

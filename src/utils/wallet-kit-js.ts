@@ -1054,7 +1054,14 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         }
         var existingSession = typeof getWalletSession === 'function' ? getWalletSession() : null;
         var hasSessionCookie = document.cookie.indexOf('session_id=') !== -1;
-	        if (existingSession && existingSession.address === address && hasSessionCookie) {
+        var existingWalletName = existingSession && existingSession.walletName ? String(existingSession.walletName) : '';
+        var currentWalletName = wallet && wallet.name ? String(wallet.name) : '';
+	        if (
+            existingSession
+            && existingSession.address === address
+            && existingWalletName === currentWalletName
+            && hasSessionCookie
+          ) {
 	          __sessionReady = Promise.resolve(true);
 	          return;
 	        }
@@ -1207,6 +1214,17 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	              if (match && __wkTrySilentReconnect(match, session.address)) {
 	                resolve(true);
 	                return;
+	              }
+
+	              if (match && !match.__isPasskey) {
+	                try {
+	                  await connect(match);
+	                  var connAfterReconnect = $connection.value;
+	                  if (connAfterReconnect && connAfterReconnect.wallet) {
+	                    resolve(true);
+	                    return;
+	                  }
+	                } catch (_reconnectErr) {}
 	              }
 
 	              if (__wkIsSubdomain() && session.address) {

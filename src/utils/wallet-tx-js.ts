@@ -172,7 +172,17 @@ export function generateWalletTxJs(): string {
     var __skiRequestCounter = 0;
     var __skiSignTimeout = 120000;
 
-    function __skiPostAndWait(frame, txB64, execOptions, expectedSender) {
+    function __skiResolvePreferredWalletName() {
+      var conn = SuiWalletKit.$connection.value || {};
+      if (conn.wallet && conn.wallet.name) return String(conn.wallet.name);
+      try {
+        var session = typeof getWalletSession === 'function' ? getWalletSession() : null;
+        if (session && session.walletName) return String(session.walletName);
+      } catch (_e) {}
+      return '';
+    }
+
+    function __skiPostAndWait(frame, txB64, execOptions, expectedSender, preferredWalletName) {
       var requestId = 'ski-' + (++__skiRequestCounter) + '-' + Date.now();
       return new Promise(function(resolve, reject) {
         var done = false;
@@ -205,6 +215,7 @@ export function generateWalletTxJs(): string {
           requestId: requestId,
           options: execOptions || {},
           sender: expectedSender || '',
+          walletName: preferredWalletName || '',
         }, 'https://sui.ski');
       });
     }
@@ -368,7 +379,7 @@ export function generateWalletTxJs(): string {
           )
         )
       );
-      if (singleAttempt && phantom) {
+      if (singleAttempt && phantom && isPhantomWallet) {
         var singleSenderAddress = __wkNormalizeAccountAddress(account) || (conn && conn.address) || '';
         var singleNetworkCandidates = __wkNetworkCandidates(chain);
         if (preferTransactionBlock && typeof phantom.signAndExecuteTransactionBlock === 'function') {
@@ -563,7 +574,7 @@ export function generateWalletTxJs(): string {
         if (byBlockDefault) return byBlockDefault;
       }
 
-      if (phantom) {
+      if (phantom && isPhantomWallet) {
         try {
           var networkCandidates = __wkNetworkCandidates(chain);
           var senderAddress = __wkNormalizeAccountAddress(account) || (conn && conn.address) || '';
@@ -726,15 +737,11 @@ export function generateWalletTxJs(): string {
 	          var sessionConn = SuiWalletKit.$connection.value || {};
 	          var sessionAccount = (options && options.account) || sessionConn.account;
 	          var expectedSender = __wkNormalizeAccountAddress(sessionAccount) || sessionConn.address || '';
-	          return await __skiPostAndWait(frame, b64, txOptions, expectedSender);
+            var preferredWalletName = __skiResolvePreferredWalletName();
+	          return await __skiPostAndWait(frame, b64, txOptions, expectedSender, preferredWalletName);
 	        } catch (err) {
 	          bridgeError = err;
 	          console.warn('Sign bridge unavailable, falling back to direct wallet signing:', err && err.message ? err.message : err);
-	        }
-
-	        if (options && options.forceSignBridge) {
-	          if (bridgeError) throw bridgeError;
-	          throw new Error('Sign bridge unavailable');
 	        }
 
 	        var reconnected = await __skiEnsureConnectedWalletForSigning();
@@ -757,15 +764,11 @@ export function generateWalletTxJs(): string {
 	          var conn = SuiWalletKit.$connection.value || {};
 	          var account = (options && options.account) || conn.account;
 	          var expectedSender = __wkNormalizeAccountAddress(account) || conn.address || '';
-	          return await __skiPostAndWait(frame, b64, {}, expectedSender);
+            var preferredWalletName = __skiResolvePreferredWalletName();
+	          return await __skiPostAndWait(frame, b64, {}, expectedSender, preferredWalletName);
 	        } catch (err) {
 	          bridgeError = err;
 	          console.warn('Sign bridge unavailable, falling back to direct wallet signing:', err && err.message ? err.message : err);
-	        }
-
-	        if (options && options.forceSignBridge) {
-	          if (bridgeError) throw bridgeError;
-	          throw new Error('Sign bridge unavailable');
 	        }
 
 	        var reconnected = await __skiEnsureConnectedWalletForSigning();
@@ -955,7 +958,19 @@ export function generateWalletTxJs(): string {
       }
 
       var phantom = __wkGetPhantomProvider();
-      if (phantom && phantom.signTransactionBlock) {
+      var walletName = String((wallet && wallet.name) || '').toLowerCase();
+      var isPhantomWallet = !!(
+        (walletName && walletName.indexOf('phantom') !== -1)
+        || (wallet && wallet.isPhantom)
+        || (wallet && wallet._raw && wallet._raw.isPhantom)
+        || (
+          phantom && (
+            wallet === phantom
+            || (wallet && wallet._raw === phantom)
+          )
+        )
+      );
+      if (phantom && phantom.signTransactionBlock && isPhantomWallet) {
         try {
           return await __wkTryCalls([
             function() { return phantom.signTransactionBlock({ transactionBlock: txRaw }); },

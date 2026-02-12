@@ -50,6 +50,124 @@ function __resolveSigningAccount(conn, expectedSender) {
 	return null;
 }
 
+function __normalizeWalletName(name) {
+	return String(name || '').trim().toLowerCase();
+}
+
+function __walletNamesMatch(left, right) {
+	var leftName = __normalizeWalletName(left);
+	var rightName = __normalizeWalletName(right);
+	if (!leftName || !rightName) return false;
+	if (leftName === rightName) return true;
+	return leftName.indexOf(rightName) !== -1 || rightName.indexOf(leftName) !== -1;
+}
+
+function __readSessionWallet() {
+	try {
+		var addrMatch = document.cookie.split('; ').find(function(c) { return c.startsWith('wallet_address='); });
+		var nameMatch = document.cookie.split('; ').find(function(c) { return c.startsWith('wallet_name='); });
+		var address = addrMatch ? addrMatch.split('=')[1] : '';
+		var walletName = nameMatch ? decodeURIComponent(nameMatch.split('=')[1]) : '';
+		if (!walletName) return null;
+		return { address: address, walletName: walletName };
+	} catch (_e) {
+		return null;
+	}
+}
+
+function __walletHasAddress(wallet, targetAddress) {
+	if (!wallet || !targetAddress) return false;
+	var accounts = [];
+	try { accounts = Array.isArray(wallet.accounts) ? wallet.accounts : []; } catch (_e) {}
+	for (var i = 0; i < accounts.length; i++) {
+		if (__normalizeAddress(accounts[i] && accounts[i].address) === targetAddress) return true;
+	}
+	return false;
+}
+
+async function __ensureWalletConnection(preferredWalletName, expectedSender) {
+	var normalizedSender = __normalizeAddress(expectedSender);
+	var conn = SuiWalletKit.$connection.value || null;
+	if (conn && conn.wallet) {
+		if (!preferredWalletName || __walletNamesMatch(conn.wallet.name, preferredWalletName)) {
+			return conn;
+		}
+		if (normalizedSender && __walletHasAddress(conn.wallet, normalizedSender)) {
+			return conn;
+		}
+	}
+
+	var wallets = [];
+	try {
+		wallets = await SuiWalletKit.detectWallets();
+	} catch (_e) {
+		wallets = SuiWalletKit.$wallets.value || [];
+	}
+	if (!Array.isArray(wallets) || wallets.length === 0) return conn;
+
+	console.log('[SignBridge] Detected wallets:', wallets.map(function(w) { return w && w.name; }));
+
+	var session = __readSessionWallet();
+	var targetWalletName = preferredWalletName || (session && session.walletName ? session.walletName : '');
+	var match = null;
+
+	if (targetWalletName) {
+		for (var i = 0; i < wallets.length; i++) {
+			if (__walletNamesMatch(wallets[i] && wallets[i].name, targetWalletName)) {
+				match = wallets[i];
+				break;
+			}
+		}
+	}
+
+	if (!match && normalizedSender) {
+		for (var a = 0; a < wallets.length; a++) {
+			if (wallets[a] && !wallets[a].__isPasskey && __walletHasAddress(wallets[a], normalizedSender)) {
+				match = wallets[a];
+				console.log('[SignBridge] Matched wallet by address:', match.name);
+				break;
+			}
+		}
+	}
+
+	if (!match) {
+		for (var p = 0; p < wallets.length; p++) {
+			if (!wallets[p] || wallets[p].__isPasskey) continue;
+			match = wallets[p];
+			break;
+		}
+	}
+
+	if (!match) match = wallets[0] || null;
+	if (!match) return conn;
+
+	console.log('[SignBridge] Connecting to wallet:', match.name);
+	try {
+		await SuiWalletKit.connect(match);
+	} catch (_e) {
+		return SuiWalletKit.$connection.value || conn;
+	}
+
+	conn = SuiWalletKit.$connection.value || conn;
+
+	if (normalizedSender && conn && conn.wallet && !__walletHasAddress(conn.wallet, normalizedSender)) {
+		console.warn('[SignBridge] Connected wallet does not have expected address, trying others...');
+		for (var r = 0; r < wallets.length; r++) {
+			if (wallets[r] === match || !wallets[r] || wallets[r].__isPasskey) continue;
+			try {
+				await SuiWalletKit.connect(wallets[r]);
+				var retryConn = SuiWalletKit.$connection.value;
+				if (retryConn && retryConn.wallet && __walletHasAddress(retryConn.wallet, normalizedSender)) {
+					console.log('[SignBridge] Found wallet with matching address:', wallets[r].name);
+					return retryConn;
+				}
+			} catch (_e) {}
+		}
+	}
+
+	return SuiWalletKit.$connection.value || conn;
+}
+
 function __notifyReady() {
 	if (__signReady || !window.parent || window.parent === window) return;
 	__signReady = true;
@@ -348,12 +466,19 @@ window.addEventListener('message', function(e) {
 	var requestId = e.data.requestId;
 	var execOptions = e.data.options || {};
 	var expectedSender = e.data.sender || '';
+	var preferredWalletName = e.data.walletName || '';
 	if (!txData || !requestId) return;
 
 	(async function() {
 		try {
-			var conn = SuiWalletKit.$connection.value;
+			var conn = await __ensureWalletConnection(preferredWalletName, expectedSender);
 			if (!conn || !conn.wallet) throw new Error('Wallet not connected in sign bridge');
+			if (
+				preferredWalletName
+				&& !__walletNamesMatch(conn.wallet && conn.wallet.name, preferredWalletName)
+			) {
+				console.warn('[SignBridge] Wallet name mismatch: expected', preferredWalletName, 'got', conn.wallet && conn.wallet.name);
+			}
 			var signingAccount = __resolveSigningAccount(conn, expectedSender);
 			if (expectedSender && !signingAccount) {
 				throw new Error('Connected wallet account does not match transaction sender');
@@ -439,34 +564,17 @@ async function __loadWalletStandard() {
 }
 
 __loadWalletStandard().then(function() {
-	return SuiWalletKit.detectWallets();
-}).then(function(wallets) {
-	if (!wallets || wallets.length === 0) return;
-
-	var session = null;
-	try {
-		var addrMatch = document.cookie.split('; ').find(function(c) { return c.startsWith('wallet_address='); });
-		var nameMatch = document.cookie.split('; ').find(function(c) { return c.startsWith('wallet_name='); });
-		var address = addrMatch ? addrMatch.split('=')[1] : '';
-		var walletName = nameMatch ? decodeURIComponent(nameMatch.split('=')[1]) : '';
-		if (address && walletName) session = { address: address, walletName: walletName };
-	} catch (_e) {}
-
-	if (!session || !session.walletName) return;
-
-	var match = null;
-	for (var i = 0; i < wallets.length; i++) {
-		if (wallets[i].name === session.walletName) { match = wallets[i]; break; }
-	}
-	if (!match) return;
-
-	SuiWalletKit.connect(match).then(function() {
-		__getTransactionClass().then(function() {
-			__notifyReady();
-		}).catch(function() {
-			__notifyReady();
-		});
-	}).catch(function() {});
+	var session = __readSessionWallet();
+	var sessionAddr = session && session.address ? session.address : '';
+	return __ensureWalletConnection('', sessionAddr);
+}).catch(function() {
+	return null;
+}).then(function() {
+	return __getTransactionClass();
+}).catch(function() {
+	return null;
+}).then(function() {
+	__notifyReady();
 });
 </script>
 </body></html>`

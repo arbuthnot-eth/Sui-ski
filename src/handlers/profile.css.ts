@@ -712,7 +712,7 @@ export const profileStyles = `
 			}
 			.side-rail-module > .linked-controls-module .linked-names-header {
 				display: grid;
-				grid-template-columns: 1fr auto auto;
+				grid-template-columns: 1fr auto auto auto;
 				grid-template-rows: auto auto;
 				gap: 4px 6px;
 				align-items: center;
@@ -733,6 +733,13 @@ export const profileStyles = `
 				grid-column: 3;
 				grid-row: 1;
 				font-size: 0.6rem;
+			}
+			.side-rail-module > .linked-controls-module .linked-refresh-btn {
+				grid-column: 4;
+				grid-row: 1;
+				font-size: 0.56rem;
+				padding: 2px 7px;
+				gap: 3px;
 			}
 			.side-rail-module > .linked-controls-module .linked-renewal-savings {
 				grid-column: 2 / -1;
@@ -3893,6 +3900,25 @@ export const profileStyles = `
 			pointer-events: none;
 			text-decoration: none;
 		}
+		.marketplace-delist-btn {
+			background: none;
+			border: none;
+			color: #ef4444;
+			font-size: 0.85rem;
+			font-weight: 700;
+			cursor: pointer;
+			padding: 0 2px;
+			line-height: 1;
+			opacity: 0.7;
+			transition: opacity 0.15s ease;
+		}
+		.marketplace-delist-btn:hover {
+			opacity: 1;
+		}
+		.marketplace-delist-btn:disabled {
+			opacity: 0.3;
+			cursor: not-allowed;
+		}
 		.marketplace-value {
 			font-weight: 600;
 			font-family: var(--font-mono, monospace);
@@ -5522,6 +5548,18 @@ export const profileStyles = `
 		}
 		.renewal-status.error {
 			color: var(--danger);
+		}
+		.renewal-relist-status {
+			font-size: 0.72rem;
+			margin-top: 4px;
+			color: var(--text-dim);
+		}
+		.renewal-relist-status.success {
+			color: var(--success);
+		}
+		.renewal-relist-status.error {
+			color: var(--danger);
+			opacity: 0.8;
 		}
 		.renewal-card .renewal-expiry-compact {
 			justify-content: flex-start;
@@ -8831,6 +8869,36 @@ export const profileStyles = `
 			border-radius: 10px;
 			border: 1px solid rgba(59, 130, 246, 0.35);
 		}
+		.linked-refresh-btn {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			padding: 3px;
+			color: var(--text-muted);
+			background: none;
+			border: none;
+			border-radius: 50%;
+			cursor: pointer;
+			transition: color 0.15s ease, transform 0.15s ease;
+		}
+		.linked-refresh-btn:hover:not(:disabled) {
+			color: var(--text);
+		}
+		.linked-refresh-btn:disabled {
+			opacity: 0.5;
+			cursor: wait;
+		}
+		.linked-refresh-btn svg {
+			width: 13px;
+			height: 13px;
+		}
+		.linked-refresh-btn.loading svg {
+			animation: linked-refresh-spin 0.7s linear infinite;
+		}
+		@keyframes linked-refresh-spin {
+			from { transform: rotate(0deg); }
+			to { transform: rotate(360deg); }
+		}
 		.linked-renewal-cost {
 			display: none;
 			margin-left: auto;
@@ -8968,7 +9036,7 @@ export const profileStyles = `
 			line-height: 1.2;
 			font-family: inherit;
 			font-weight: 620;
-			color: #e2e8f0;
+			color: #ffffff;
 			text-decoration: none;
 			cursor: pointer;
 			transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
@@ -8998,9 +9066,9 @@ export const profileStyles = `
 			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 1px 5px rgba(148, 163, 184, 0.22);
 		}
 		.linked-name-chip.current:hover {
-			background: linear-gradient(135deg, rgba(248, 251, 255, 0.38), rgba(226, 232, 240, 0.32));
-			border-color: rgba(248, 251, 255, 0.72);
-			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 8px rgba(148, 163, 184, 0.35);
+			background: rgba(15, 23, 42, 0.92);
+			border-color: rgba(167, 139, 250, 0.5);
+			box-shadow: 0 6px 16px rgba(2, 6, 23, 0.42);
 		}
 		.linked-name-chip.current .linked-name-text {
 			color: #f8fbff;
@@ -9011,7 +9079,7 @@ export const profileStyles = `
 			border-color: rgba(250, 204, 21, 0.4);
 		}
 		.linked-name-chip.primary .linked-name-text {
-			color: #fde68a;
+			color: #ffffff;
 			font-weight: 600;
 		}
 			.linked-name-chip.primary .primary-icon {
@@ -9025,14 +9093,14 @@ export const profileStyles = `
 				border-color: rgba(168, 85, 247, 0.6);
 			}
 			.linked-name-chip.listed .linked-name-text {
-				color: #e9d5ff;
+				color: #ffffff;
 			}
 			.linked-name-chip.listed .linked-name-sep {
 				color: rgba(192, 132, 252, 0.6);
 				margin: 0 -2px 0 0;
 			}
 			.linked-name-chip.listed .linked-name-price {
-				color: #e9d5ff;
+				color: #ffffff;
 				font-weight: 600;
 				font-size: 0.95em;
 				display: inline-flex;
@@ -9052,7 +9120,7 @@ export const profileStyles = `
 				margin: 0 -2px 0 0;
 			}
 			.linked-name-chip.primary .linked-name-price {
-				color: #fef08a;
+				color: #ffffff;
 				font-weight: 600;
 				font-size: 0.95em;
 				display: inline-flex;
@@ -9072,28 +9140,28 @@ export const profileStyles = `
 				border-color: rgba(96, 165, 250, 0.5);
 			}
 			.linked-name-chip.blue .linked-name-text {
-				color: #bfdbfe;
+				color: #ffffff;
 			}
 			.linked-name-chip.white {
 				background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(226, 232, 240, 0.1));
 				border-color: rgba(255, 255, 255, 0.45);
 			}
 			.linked-name-chip.white .linked-name-text {
-				color: #f1f5f9;
+				color: #ffffff;
 			}
 			.linked-name-chip.expired {
 				background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(185, 28, 28, 0.18));
 				border-color: rgba(248, 113, 113, 0.5);
 			}
 			.linked-name-chip.expired .linked-name-text {
-				color: #fca5a5;
+				color: #ffffff;
 			}
 			.linked-name-chip svg {
 				width: 10px;
 				height: 10px;
 			}
 		.linked-name-text {
-			color: #f8fafc;
+			color: #ffffff;
 			text-decoration: none;
 			cursor: pointer;
 			transition: color 0.15s ease;

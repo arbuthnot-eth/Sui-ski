@@ -8,6 +8,7 @@ export function generateWalletSessionJs(): string {
 
     function connectWalletSession(walletName, address) {
       if (!walletName || !address) return;
+      localStorage.setItem(__WALLET_NAME_KEY, walletName);
       fetch('/api/wallet/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

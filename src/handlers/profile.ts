@@ -417,6 +417,18 @@ ${generateZkSendCss()}</style>
 						<span class="linked-renewal-cost" id="linked-renewal-cost"></span>
 						<span class="linked-renewal-savings" id="linked-renewal-savings"></span>
 						<span class="linked-names-count" id="linked-names-count">Loading...</span>
+						<button
+							type="button"
+							class="linked-refresh-btn"
+							id="linked-names-refresh"
+							title="Refresh linked names now"
+							aria-label="Refresh linked names now"
+						>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M21.5 2v6h-6"></path>
+								<path d="M21.34 13a10 10 0 1 1-2.79-7.95L21.5 8"></path>
+							</svg>
+						</button>
 					</div>
 					<div class="linked-names-sort" id="linked-names-sort" style="display:none;">
 						<button type="button" class="linked-sort-pill active" data-sort="price">
@@ -564,6 +576,7 @@ ${generateZkSendCss()}</style>
 								target="_blank"
 								rel="noopener noreferrer"
 							>--</a>
+							<button type="button" class="marketplace-delist-btn hidden" id="marketplace-delist-btn" title="Cancel listing" aria-label="Cancel listing">&times;</button>
 						</span>
 						<span class="marketplace-value listing-price" id="marketplace-listing-price"><span class="price-amount">--</span><span class="price-sui"></span></span>
 					</div>
@@ -602,9 +615,9 @@ ${generateZkSendCss()}</style>
 						<div class="marketplace-bid-input" id="marketplace-bid-input">
 							<div class="marketplace-bid-estimate" id="marketplace-bid-estimate"></div>
 							<div class="marketplace-bid-price-control">
-										<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-down" aria-label="Decrease bid amount">-</button>
-									<input type="text" id="marketplace-bid-amount" placeholder="Bid amount" inputmode="numeric" pattern="[0-9]*" step="1">
-								<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-up" aria-label="Increase bid amount">+</button>
+										<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-down" aria-label="Decrease offer amount">-</button>
+									<input type="text" id="marketplace-bid-amount" placeholder="Offer amount" inputmode="numeric" pattern="[0-9]*" step="1">
+								<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-up" aria-label="Increase offer amount">+</button>
 							</div>
 							<button class="marketplace-bid-btn" id="marketplace-place-bid-btn" disabled>
 								<span class="marketplace-bid-text">Offer SUI for ${escapeHtml(cleanName)}.sui</span>
@@ -1358,6 +1371,7 @@ ${generateZkSendCss()}</style>
 		const marketplaceBidRow = document.getElementById('marketplace-bid-row');
 		const marketplaceListingPrice = document.getElementById('marketplace-listing-price');
 		const marketplaceLister = document.getElementById('marketplace-lister');
+		const marketplaceDelistBtn = document.getElementById('marketplace-delist-btn');
 		const marketplaceBidPrice = document.getElementById('marketplace-bid-price');
 		const marketplaceBidder = document.getElementById('marketplace-bidder');
 		const marketplaceAcceptBidBtn = document.getElementById('marketplace-accept-bid-btn');
@@ -1830,7 +1844,7 @@ ${generateZkSendCss()}</style>
 
 					if (txt) txt.textContent = 'Approve in wallet...';
 
-					const result = await SuiWalletKit.signAndExecute(tx);
+					const result = await SuiWalletKit.signAndExecute(tx, { forceSignBridge: true });
 
 					if (!result?.digest) throw new Error('No transaction digest');
 
@@ -1992,7 +2006,7 @@ ${generateZkSendCss()}</style>
 				});
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true } });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: true });
 
 				showBurnStatus(
 					'NFT burned! ' + renderTxExplorerLinks(result.digest, true) + '<br>' +
@@ -2350,7 +2364,7 @@ ${generateZkSendCss()}</style>
 				showStatus(sendStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
 
 				showStatus(sendStatus, '<strong>Sent!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 				try {
@@ -4087,7 +4101,7 @@ ${generateZkSendCss()}</style>
 				tx.setGasBudget(50000000);
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
 
 					// Update UI
 					document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
@@ -4178,7 +4192,7 @@ ${generateZkSendCss()}</style>
 				tx.setGasBudget(50000000);
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
 
 					connectedPrimaryName = FULL_NAME;
 					ownerDisplayAddress = connectedAddress;
@@ -4320,7 +4334,7 @@ ${generateZkSendCss()}</style>
 				showStatus(modalStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
 
 				showStatus(modalStatus, '<strong>Updated!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 
@@ -4479,7 +4493,7 @@ ${generateZkSendCss()}</style>
 				}
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true } });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: true });
 				const listingId = await extractDecayListingIdFromTxResult(result);
 				await registerDecayListingForNft(NFT_ID, listingId);
 
@@ -4676,7 +4690,7 @@ ${generateZkSendCss()}</style>
 					});
 					const linkUrl = result.link.getLink();
 					showStatus(zkStatus, '<span class="loading"></span> Approve in wallet...', 'info');
-					await SuiWalletKit.signAndExecute(result.tx);
+					await SuiWalletKit.signAndExecute(result.tx, { forceSignBridge: true });
 					hideStatus(zkStatus);
 					if (zkResult) {
 						zkResult.style.display = 'block';
@@ -5377,7 +5391,7 @@ ${generateZkSendCss()}</style>
 				if (statusEl) statusEl.textContent = 'Confirm in wallet...';
 
 				let txResult;
-				txResult = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+				txResult = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
 
 				if (statusEl) statusEl.textContent = 'Purchased! Redirecting...';
 				closeSearch();
@@ -6518,25 +6532,46 @@ ${generateZkSendCss()}</style>
 				if (!connectedAddress) return false;
 				const nameToRenew = selectedRenewalName || NAME;
 				if (normalizeLinkedNameKey(nameToRenew) === normalizeLinkedNameKey(NAME)) {
-					return connectedAddress.toLowerCase() === getResolvedOwnerAddress();
+					const normalizedOwner = getResolvedOwnerAddress();
+					const normalizedProfileOwner = String(OWNER_ADDRESS || '').toLowerCase();
+					return Boolean(
+						(normalizedOwner && connectedAddress.toLowerCase() === normalizedOwner)
+						|| (normalizedProfileOwner && connectedAddress.toLowerCase() === normalizedProfileOwner),
+					);
 				}
 				return true;
+			}
+
+			function isRenewalBlockedByMarketplace() {
+				if (!connectedAddress) return false;
+				const nameToRenew = selectedRenewalName || NAME;
+				if (normalizeLinkedNameKey(nameToRenew) !== normalizeLinkedNameKey(NAME)) return false;
+				if (isRenewalNameOwnedByConnected()) return false;
+				return Boolean(
+					currentListing?.seller
+					&& connectedAddress.toLowerCase() === currentListing.seller.toLowerCase(),
+				);
 			}
 
 			function updateRenewalButton() {
 				const nameToExtend = selectedRenewalName || NAME;
 				const isOwned = isRenewalNameOwnedByConnected();
+				const listedOnMarketplace = isRenewalBlockedByMarketplace();
+				const canRenew = isOwned || listedOnMarketplace;
 				if (ovRenewalCard) {
 					ovRenewalCard.classList.toggle('renewal-disconnected', !connectedAddress);
 			}
 			if (ovRenewalYearsMinus) ovRenewalYearsMinus.disabled = currentRenewalYears <= MIN_YEARS;
 			if (ovRenewalYearsPlus) ovRenewalYearsPlus.disabled = currentRenewalYears >= MAX_YEARS;
+			const btnLabel = isOwned
+				? 'Renew ' + nameToExtend + '.sui'
+				: listedOnMarketplace
+					? 'Delist & Renew ' + nameToExtend + '.sui'
+					: 'Only owner can renew';
 			if (ovRenewalBtn && ovRenewalBtnText) {
 				if (connectedAddress) {
-					ovRenewalBtn.disabled = !isOwned;
-					ovRenewalBtnText.textContent = isOwned
-						? 'Renew ' + nameToExtend + '.sui'
-						: 'Only owner can renew';
+					ovRenewalBtn.disabled = !canRenew;
+					ovRenewalBtnText.textContent = btnLabel;
 				} else {
 					ovRenewalBtn.disabled = false;
 					ovRenewalBtnText.textContent = 'Connect Wallet to Renew';
@@ -6544,17 +6579,15 @@ ${generateZkSendCss()}</style>
 			}
 			if (renewalBtn && renewalBtnText) {
 				if (connectedAddress) {
-					renewalBtn.disabled = !isOwned;
-					renewalBtnText.textContent = isOwned
-						? 'Renew ' + nameToExtend + '.sui'
-						: 'Only owner can renew';
+					renewalBtn.disabled = !canRenew;
+					renewalBtnText.textContent = btnLabel;
 				} else {
 					renewalBtn.disabled = true;
 					renewalBtnText.textContent = 'Connect Wallet to Renew';
 				}
 				}
 			if (expiryQuickRenewBtn) {
-				expiryQuickRenewBtn.style.display = (!connectedAddress || isOwned) ? '' : 'none';
+				expiryQuickRenewBtn.style.display = (!connectedAddress || canRenew) ? '' : 'none';
 			}
 			}
 
@@ -6957,17 +6990,16 @@ ${generateZkSendCss()}</style>
 					account: account || undefined,
 					chain: requestChain,
 					txOptions: txOptions || {},
-					forceSignBridge: true,
 					preferTransactionBlock: true,
 					singleAttempt: true,
 				};
 
-				if (typeof SuiWalletKit?.signAndExecuteFromBytes === 'function') {
-					return await SuiWalletKit.signAndExecuteFromBytes(txBytes, signOptions);
-				}
-
 				if (txBlockInput && typeof SuiWalletKit?.signAndExecute === 'function') {
 					return await SuiWalletKit.signAndExecute(txBlockInput, signOptions);
+				}
+
+				if (typeof SuiWalletKit?.signAndExecuteFromBytes === 'function') {
+					return await SuiWalletKit.signAndExecuteFromBytes(txBytes, signOptions);
 				}
 
 				if (typeof SuiWalletKit?.signAndExecute === 'function') {
@@ -6992,9 +7024,19 @@ ${generateZkSendCss()}</style>
 				return;
 			}
 
+			const needsDelistForRenewal = Boolean(
+				normalizeLinkedNameKey(nameToExtend) === normalizeLinkedNameKey(NAME)
+				&& connectedAddress
+				&& !isRenewalNameOwnedByConnected()
+				&& isRenewalBlockedByMarketplace(),
+			);
+			const savedListingPrice = needsDelistForRenewal && currentListing ? currentListing.price : null;
+			const savedListingNonce = needsDelistForRenewal && currentListing ? (currentListing.nonce || '') : '';
+
 			if (normalizeLinkedNameKey(nameToExtend) === normalizeLinkedNameKey(NAME)
 				&& connectedAddress
-				&& connectedAddress.toLowerCase() !== getResolvedOwnerAddress()) {
+				&& !isRenewalNameOwnedByConnected()
+				&& !needsDelistForRenewal) {
 				if (statusEl) {
 					statusEl.textContent = 'Only the NFT owner can renew this name';
 					statusEl.className = 'renewal-status error';
@@ -7040,6 +7082,39 @@ ${generateZkSendCss()}</style>
 				if (!senderAddress) {
 					throw new Error('Please reconnect your wallet and try renewal again');
 				}
+
+				if (needsDelistForRenewal) {
+					if (!savedListingNonce.startsWith('0::')) {
+						throw new Error('This listing format requires delisting on Tradeport first');
+					}
+					if (statusEl) {
+						statusEl.textContent = 'Cancelling marketplace listing...';
+						statusEl.className = 'renewal-status';
+					}
+					const delistResult = await cancelTradeportListing();
+					const delistDigest = delistResult?.digest || delistResult?.result?.digest || '';
+					if (!delistDigest) throw new Error('Delist transaction failed');
+					currentListing = null;
+					nftOwnerAddress = senderAddress;
+					const delistNameKey = String(NAME || '').replace(/.sui$/i, '');
+					if (delistNameKey) {
+						delete linkedNamesPrices[delistNameKey];
+						if (linkedNamesMarketData[delistNameKey]) {
+							linkedNamesMarketData[delistNameKey] = {
+								listingPriceSui: null,
+								bestBidSui: linkedNamesMarketData[delistNameKey]?.bestBidSui || null,
+								bidder: linkedNamesMarketData[delistNameKey]?.bidder || '',
+								seller: '',
+							};
+						}
+					}
+					if (marketplaceListingRow) marketplaceListingRow.style.display = 'none';
+					if (marketplaceBuyBtn) marketplaceBuyBtn.style.display = 'none';
+					if (statusEl) {
+						statusEl.textContent = 'Delisted! Building renewal...';
+					}
+				}
+
 				const renewalDomain = String(nameToExtend || '').endsWith('.sui')
 					? String(nameToExtend)
 					: String(nameToExtend) + '.sui';
@@ -7171,6 +7246,45 @@ ${generateZkSendCss()}</style>
 					fetchLinkedNames({ forceRefresh: true }).catch((refreshError) => {
 						console.warn('Failed to refresh linked names after renewal:', refreshError)
 					})
+
+					if (savedListingPrice && nftIdToUse) {
+						try {
+							if (statusEl) {
+								statusEl.innerHTML += '<div class="renewal-relist-status">Relisting on marketplace...</div>';
+							}
+							const relistTx = new Transaction();
+							relistTx.setSender(senderAddress);
+							const relistStoreRef = relistTx.sharedObjectRef({
+								objectId: TRADEPORT_LISTINGS_STORE,
+								initialSharedVersion: TRADEPORT_LISTINGS_STORE_VERSION,
+								mutable: true,
+							});
+							relistTx.moveCall({
+								target: TRADEPORT_LISTINGS_PACKAGE + '::tradeport_listings::create_listing_without_transfer_policy',
+								typeArguments: [SUINS_REGISTRATION_TYPE],
+								arguments: [
+									relistStoreRef,
+									relistTx.object(nftIdToUse),
+									relistTx.pure.u64(BigInt(savedListingPrice)),
+								],
+							});
+							const relistResult = await SuiWalletKit.signAndExecute(relistTx, { txOptions: { showEffects: true }, forceSignBridge: true });
+							const relistDigest = relistResult?.digest || relistResult?.result?.digest || '';
+							if (relistDigest && statusEl) {
+								statusEl.innerHTML += '<div class="renewal-relist-status success">Relisted at same price! ' + renderTxExplorerLinks(relistDigest, true) + '</div>';
+							}
+							fetchMarketplaceData().catch(() => null);
+						} catch (relistErr) {
+							console.warn('[Renewal] Auto-relist failed:', relistErr);
+							if (statusEl) {
+								const relistMsg = relistErr?.message || '';
+								const relistLabel = relistMsg.includes('rejected') || relistMsg.includes('cancelled')
+									? 'Relist cancelled'
+									: 'Auto-relist failed — you can list manually';
+								statusEl.innerHTML += '<div class="renewal-relist-status error">' + relistLabel + '</div>';
+							}
+						}
+					}
 				} else {
 					throw new Error('Transaction failed or was cancelled');
 				}
@@ -7427,7 +7541,7 @@ ${generateZkSendCss()}</style>
 				let result = null;
 				showBidBountyStatus(createBountyStatus, 'Sign transaction in wallet...', 'loading');
 				try {
-					result = await SuiWalletKit.signAndExecute(txWrapper, { txOptions: { showEffects: true, showObjectChanges: true } });
+					result = await SuiWalletKit.signAndExecute(txWrapper, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: true });
 				} catch (error) {
 					console.warn('signAndExecute failed, falling back to manual execution:', error);
 				}
@@ -7530,6 +7644,7 @@ ${generateZkSendCss()}</style>
 		// ========== LINKED NAMES (Reverse Resolution) ==========
 		const linkedNamesList = document.getElementById('linked-names-list');
 		const linkedNamesCount = document.getElementById('linked-names-count');
+		const linkedNamesRefresh = document.getElementById('linked-names-refresh');
 		const linkedRenewalCost = document.getElementById('linked-renewal-cost');
 		const linkedRenewalSavings = document.getElementById('linked-renewal-savings');
 		const linkedNamesSort = document.getElementById('linked-names-sort');
@@ -8014,7 +8129,7 @@ function shortAddr(addr) {
 			const market = linkedNamesMarketData[name];
 			if (!market) return 'No active listing';
 			if (market.listingPriceSui) return 'Listed ' + market.listingPriceSui + ' SUI';
-			if (market.bestBidSui) return 'Best bid ' + market.bestBidSui + ' SUI';
+			if (market.bestBidSui) return 'Best offer ' + market.bestBidSui + ' SUI';
 			return 'No active listing';
 		}
 
@@ -8477,6 +8592,20 @@ function shortAddr(addr) {
 			});
 		}
 
+		if (linkedNamesRefresh) {
+			linkedNamesRefresh.addEventListener('click', async function() {
+				if (linkedNamesRefresh.disabled) return;
+				linkedNamesRefresh.disabled = true;
+				linkedNamesRefresh.classList.add('loading');
+				try {
+					await fetchLinkedNames({ forceRefresh: true });
+				} finally {
+					linkedNamesRefresh.classList.remove('loading');
+					linkedNamesRefresh.disabled = false;
+				}
+			});
+		}
+
 			async function fetchLinkedNames(options = {}) {
 			const primaryAddr = TARGET_ADDRESS || OWNER_ADDRESS;
 			const forceRefresh = options?.forceRefresh === true;
@@ -8876,12 +9005,12 @@ function shortAddr(addr) {
 					const bidStep = 1;
 				const bidStepText = formatSuiInputValue(bidStep) || String(bidStep);
 				if (marketplaceBidPriceUpBtn) {
-					const upLabel = 'Increase bid by ' + bidStepText + ' SUI';
+					const upLabel = 'Increase offer by ' + bidStepText + ' SUI';
 					marketplaceBidPriceUpBtn.setAttribute('aria-label', upLabel);
 					marketplaceBidPriceUpBtn.title = upLabel;
 				}
 				if (marketplaceBidPriceDownBtn) {
-					const downLabel = 'Decrease bid by ' + bidStepText + ' SUI';
+					const downLabel = 'Decrease offer by ' + bidStepText + ' SUI';
 					marketplaceBidPriceDownBtn.setAttribute('aria-label', downLabel);
 					marketplaceBidPriceDownBtn.title = downLabel;
 				}
@@ -9024,7 +9153,7 @@ function shortAddr(addr) {
 					const totalPortfolio = await estimatePortfolioSui(suiClient, connectedAddress);
 					const maxBidSui = totalPortfolio > 0 ? (totalPortfolio * 0.95).toFixed(2) : '?';
 					throw new Error(
-						'Not enough funds for this bid. Max offer ~' + maxBidSui + ' SUI',
+						'Not enough funds for this offer. Max ~' + maxBidSui + ' SUI',
 					);
 				}
 
@@ -9663,10 +9792,13 @@ function shortAddr(addr) {
 
 			function isConnectedProfileOwner() {
 				const normalizedOwner = getResolvedOwnerAddress();
+				const normalizedProfileOwner = String(OWNER_ADDRESS || '').toLowerCase();
 				const isOnChainOwner = Boolean(
 					connectedAddress
-					&& normalizedOwner
-					&& connectedAddress.toLowerCase() === normalizedOwner,
+					&& (
+						(normalizedOwner && connectedAddress.toLowerCase() === normalizedOwner)
+						|| (normalizedProfileOwner && connectedAddress.toLowerCase() === normalizedProfileOwner)
+					),
 				);
 				// Also check if connected wallet is the seller in marketplace listing
 				// This handles cases where NFT is listed (ObjectOwner) and on-chain owner is the marketplace contract
@@ -10103,6 +10235,11 @@ function shortAddr(addr) {
 					}
 				}
 
+				if (marketplaceDelistBtn) {
+					const canDelist = Boolean(isOwner && currentListing && hasOwnerListingForCurrentNft());
+					marketplaceDelistBtn.classList.toggle('hidden', !canDelist);
+				}
+
 				if (marketplaceBidInputWrap) {
 					marketplaceBidInputWrap.style.display = isOwner ? 'none' : 'flex';
 				}
@@ -10166,6 +10303,7 @@ function shortAddr(addr) {
 					}
 				}
 				updateEditButton();
+				if (renewalUiReady && typeof updateRenewalButton === 'function') updateRenewalButton();
 				queueMarketplaceLayoutSync();
 			}
 
@@ -10467,7 +10605,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -10569,7 +10707,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -10598,6 +10736,85 @@ function shortAddr(addr) {
 					marketplaceListText?.classList.remove('hidden');
 					marketplaceListLoading?.classList.add('hidden');
 					updateMarketplaceButton();
+				}
+			});
+		}
+
+		async function cancelTradeportListing() {
+			if (!currentListing?.tokenId) throw new Error('No active listing found');
+			const nonce = currentListing.nonce || '';
+			if (!nonce.startsWith('0::')) throw new Error('Only new-format listings can be cancelled in-app');
+			const tx = new Transaction();
+			tx.setSender(connectedAddress);
+			const listingsStoreRef = tx.sharedObjectRef({
+				objectId: TRADEPORT_LISTINGS_STORE,
+				initialSharedVersion: TRADEPORT_LISTINGS_STORE_VERSION,
+				mutable: true,
+			});
+			tx.moveCall({
+				target: TRADEPORT_LISTINGS_PACKAGE + '::tradeport_listings::cancel_listing_without_transfer_policy',
+				typeArguments: [SUINS_REGISTRATION_TYPE],
+				arguments: [
+					listingsStoreRef,
+					tx.pure.id(currentListing.tokenId),
+				],
+			});
+			return SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+		}
+
+		if (marketplaceDelistBtn) {
+			marketplaceDelistBtn.addEventListener('click', async () => {
+				if (!canSign() || !currentListing || !hasOwnerListingForCurrentNft()) return;
+				const nonce = currentListing.nonce || '';
+				if (!nonce.startsWith('0::')) {
+					const tradeportUrl = 'https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=' + encodeURIComponent(NFT_ID || '') + '&modalSlug=suins&nav=1';
+					window.open(tradeportUrl, '_blank');
+					marketplaceStatus.textContent = 'Cancel listing on Tradeport';
+					marketplaceStatus.className = 'marketplace-status';
+					return;
+				}
+				marketplaceDelistBtn.disabled = true;
+				marketplaceStatus.textContent = 'Cancelling listing...';
+				marketplaceStatus.className = 'marketplace-status';
+				try {
+					const result = await cancelTradeportListing();
+					const digest = result?.digest || result?.result?.digest || '';
+					if (digest) {
+						marketplaceStatus.innerHTML = 'Listing cancelled! ' + renderTxExplorerLinks(digest, true);
+						marketplaceStatus.className = 'marketplace-status success';
+						currentListing = null;
+						nftOwnerAddress = connectedAddress;
+						const currentNameKey = String(NAME || '').replace(/.sui$/i, '');
+						if (currentNameKey) {
+							delete linkedNamesPrices[currentNameKey];
+							if (linkedNamesMarketData[currentNameKey]) {
+								linkedNamesMarketData[currentNameKey] = {
+									listingPriceSui: null,
+									bestBidSui: linkedNamesMarketData[currentNameKey]?.bestBidSui || null,
+									bidder: linkedNamesMarketData[currentNameKey]?.bidder || '',
+									seller: '',
+								};
+							}
+						}
+						if (marketplaceListingRow) marketplaceListingRow.style.display = 'none';
+						if (marketplaceBuyBtn) marketplaceBuyBtn.style.display = 'none';
+						if (marketplaceLister) setMarketplaceListerLink('', '');
+					} else {
+						marketplaceStatus.textContent = 'Delist submitted';
+						marketplaceStatus.className = 'marketplace-status success';
+					}
+				} catch (e) {
+					const msg = e?.message || 'Transaction failed';
+					if (msg.includes('rejected') || msg.includes('cancelled')) {
+						marketplaceStatus.textContent = 'Transaction cancelled';
+					} else {
+						marketplaceStatus.textContent = 'Delist failed: ' + msg.slice(0, 100);
+					}
+					marketplaceStatus.className = 'marketplace-status error';
+				} finally {
+					marketplaceDelistBtn.disabled = false;
+					updateMarketplaceButton();
+					if (renewalUiReady && typeof updateRenewalButton === 'function') updateRenewalButton();
 				}
 			});
 		}
@@ -10720,14 +10937,14 @@ function shortAddr(addr) {
 					return;
 				}
 					if (isConnectedProfileOwner()) {
-						marketplaceStatus.textContent = 'Owners should list this name instead of bidding';
+						marketplaceStatus.textContent = 'Owners should list this name instead of making offers';
 						marketplaceStatus.className = 'marketplace-status error';
 						return;
 					}
 
 					const bidAmountSui = normalizeBidAmountInput();
 					if (!bidAmountSui || bidAmountSui <= 0) {
-						marketplaceStatus.textContent = 'Enter a valid bid amount';
+						marketplaceStatus.textContent = 'Enter a valid offer amount';
 						marketplaceStatus.className = 'marketplace-status error';
 						return;
 					}
@@ -10735,7 +10952,7 @@ function shortAddr(addr) {
 					const minBidSui = getBidMinimumSui();
 					if (bidAmountSui + 1e-9 < minBidSui) {
 						marketplaceStatus.textContent =
-							'Bid must be at least ' + minBidSui + ' SUI';
+							'Offer must be at least ' + minBidSui + ' SUI';
 						marketplaceStatus.className = 'marketplace-status error';
 						return;
 					}
@@ -10787,21 +11004,21 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
-						marketplaceStatus.innerHTML = 'Bid placed! ' + renderTxExplorerLinks(digest, true);
+						marketplaceStatus.innerHTML = 'Offer placed! ' + renderTxExplorerLinks(digest, true);
 						marketplaceStatus.className = 'marketplace-status success';
 						bidInputTouched = false;
 						fetchMarketplaceData();
 					} else {
-						marketplaceStatus.textContent = 'Bid submitted';
+						marketplaceStatus.textContent = 'Offer submitted';
 						marketplaceStatus.className = 'marketplace-status success';
 					}
 					applyTaggedIdentityToProfile();
 				} catch (e) {
-					console.error('Bid transaction failed:', e);
+					console.error('Offer transaction failed:', e);
 					const msg = e.message || 'Transaction failed';
 					if (msg.includes('rejected') || msg.includes('cancelled')) {
 						marketplaceStatus.textContent = 'Transaction cancelled';
@@ -10957,7 +11174,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 				const isOwner = isConnectedProfileOwner();
 				if (!isOwner) {
-					marketplaceStatus.textContent = 'Only the NFT owner can accept bids';
+					marketplaceStatus.textContent = 'Only the NFT owner can accept offers';
 					marketplaceStatus.className = 'marketplace-status error';
 					return;
 				}
@@ -10967,7 +11184,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					!currentBestBid.tokenId ||
 					currentBestBid.tokenId.toLowerCase() === NFT_ID.toLowerCase();
 				if (!bidMatchesCurrentNft) {
-					marketplaceStatus.textContent = 'Highest bid is for a different NFT';
+					marketplaceStatus.textContent = 'Highest offer is for a different NFT';
 					marketplaceStatus.className = 'marketplace-status error';
 					return;
 				}
@@ -10975,7 +11192,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					marketplaceAcceptBidBtn.disabled = true;
 					marketplaceAcceptText?.classList.add('hidden');
 					marketplaceAcceptLoading?.classList.remove('hidden');
-					marketplaceStatus.textContent = 'Building accept transaction...';
+					marketplaceStatus.textContent = 'Building accept offer transaction...';
 					marketplaceStatus.className = 'marketplace-status';
 
 					try {
@@ -10983,13 +11200,50 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 						if (!isLikelySuiAddress(senderAddress)) {
 							throw new Error('Wallet sender unavailable');
 						}
-						const bidId = String(currentBestBid?.id || '').trim();
-						if (!bidId || !bidId.startsWith('0x')) {
-							throw new Error('Invalid bid id');
+						const bidderAddress = String(currentBestBid?.bidder || '').trim();
+						const bidTokenId = String(currentBestBid?.tokenId || NFT_ID || '').trim();
+						const bidPriceMist = String(currentBestBid?.price || '');
+						if (!bidderAddress || !bidTokenId) {
+							throw new Error('Missing offer details');
 						}
+
+						marketplaceStatus.textContent = 'Resolving on-chain offer...';
+						const BID_EVENT_TYPE = '0x53134eb544c5a0b5085e99efaf7eab13b28ad123de35d61f941f8c8c40b72033::tradeport_biddings::CreateSingleBidEvent';
+						const suiClient = getSuiClient();
+						let onchainBidId = null;
+						let cursor = null;
+						for (let page = 0; page < 10 && !onchainBidId; page++) {
+							const eventsRes = await suiClient.queryEvents({
+								query: { Sender: bidderAddress },
+								cursor,
+								limit: 50,
+								order: 'descending',
+							});
+							for (const evt of eventsRes.data) {
+								if (evt.type !== BID_EVENT_TYPE) continue;
+								const pj = evt.parsedJson;
+								if (!pj) continue;
+								const evtNftId = String(pj.maybe_nft_id || '').toLowerCase();
+								const evtPrice = String(pj.price || '');
+								if (
+									evtNftId === bidTokenId.toLowerCase()
+									&& evtPrice === bidPriceMist
+								) {
+									onchainBidId = String(pj.bid_id);
+									break;
+								}
+							}
+							if (!eventsRes.hasNextPage) break;
+							cursor = eventsRes.nextCursor;
+						}
+
+						if (!onchainBidId || !onchainBidId.startsWith('0x')) {
+							throw new Error('Could not resolve on-chain offer. Try accepting on TradePort directly.');
+						}
+
 						const listingTokenId = getMarketplaceListingTokenId();
 						if (!listingTokenId || !listingTokenId.startsWith('0x')) {
-							throw new Error('Missing listing token id');
+							throw new Error('Missing NFT token id');
 						}
 
 						const tx = new Transaction();
@@ -11007,7 +11261,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 							arguments: [
 								tx.object(TRADEPORT_CLOCK_OBJECT),
 								multiBidStoreRef,
-								tx.pure.id(bidId),
+								tx.pure.id(onchainBidId),
 								tx.pure.option('address', null),
 								tx.object(listingTokenId),
 							],
@@ -11017,13 +11271,13 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 						marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
 						lastSoldPriceMist = currentBestBid?.price || null;
 						marketplaceStatus.innerHTML =
-							'Bid accepted! ' + renderTxExplorerLinks(digest, true);
+							'Offer accepted! ' + renderTxExplorerLinks(digest, true);
 						marketplaceStatus.className = 'marketplace-status success';
 						currentBestBid = null;
 						currentListing = null;
@@ -11225,7 +11479,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					const tx = Transaction.from(data.txBytes);
 					auctionStatus.textContent = 'Confirm in wallet...';
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
 
 					const digest = result.digest || '';
 					auctionStatus.innerHTML = 'Purchased! ' + renderTxExplorerLinks(digest, true);
@@ -11286,7 +11540,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					const tx = Transaction.from(data.txBytes);
 					auctionStatus.textContent = 'Confirm cancel in wallet...';
 
-					const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
 					const digest = result.digest || result.result?.digest || '';
 					auctionStatus.innerHTML = 'Wrap cancelled. ' + renderTxExplorerLinks(digest, true);
 					auctionStatus.className = 'auction-status success';
