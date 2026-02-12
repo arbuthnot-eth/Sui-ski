@@ -1124,6 +1124,32 @@ async function handleNamesByAddress(
 			)
 		}
 
+		const missingExpiration = allNames.filter((n) => n.expirationMs === null && n.nftId)
+		if (missingExpiration.length > 0) {
+			for (let i = 0; i < missingExpiration.length; i += BATCH_SIZE) {
+				const batch = missingExpiration.slice(i, i + BATCH_SIZE)
+				const objectIds = batch.map((n) => n.nftId)
+				try {
+					const objects = await client.multiGetObjects({
+						ids: objectIds,
+						options: { showContent: true },
+					})
+					for (let j = 0; j < objects.length; j++) {
+						const obj = objects[j]
+						if (obj.data?.content?.dataType === 'moveObject') {
+							const fields = obj.data.content.fields as Record<string, unknown>
+							const rawExp = fields?.expiration_timestamp_ms ?? fields?.expirationTimestampMs
+							if (rawExp) {
+								batch[j].expirationMs = Number(rawExp)
+							}
+						}
+					}
+				} catch {
+					// NFT objects may have been deleted
+				}
+			}
+		}
+
 		// Step 3: Get unique target addresses and fetch their default names (reverse resolution)
 		// Include the queried address itself so the owner's primary name is always detected
 		const uniqueAddresses = [

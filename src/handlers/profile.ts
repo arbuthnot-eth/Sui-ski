@@ -289,10 +289,10 @@ ${generateZkSendCss()}</style>
 							</div>
 								${
 									daysToExpire !== null
-										? `<span class="badge expiry${daysToExpire <= 0 ? ' danger' : daysToExpire <= 7 ? ' danger' : daysToExpire <= 90 ? ' warning' : daysToExpire > 365 ? ' premium' : ''}">
+										? `<span class="badge expiry${daysToExpire <= 0 ? ' danger' : daysToExpire <= 7 ? ' danger' : daysToExpire <= 90 ? ' warning' : daysToExpire > 730 ? ' safe' : daysToExpire > 365 ? ' royalty' : ''}">
 											<span class="expiry-badge-text">${
 												daysToExpire <= 0
-													? 'Expired'
+													? (options.inGracePeriod ? 'Grace' : 'Expired')
 													: daysToExpire > 365
 														? `${Math.floor(daysToExpire / 365)}y ${daysToExpire % 365}d`
 														: `${daysToExpire}d`
@@ -356,6 +356,38 @@ ${generateZkSendCss()}</style>
 							</div>
 						</div>
 
+			${
+				options.inGracePeriod
+					? `
+		<div class="grace-period-card">
+			<div class="grace-period-header">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+					<circle cx="12" cy="12" r="10"></circle>
+					<polyline points="12 6 12 12 16 14"></polyline>
+				</svg>
+				<span>Grace Period</span>
+			</div>
+			<div class="grace-period-body">
+				<div class="grace-period-info">
+					<span class="grace-period-message" id="grace-period-message">This name expired and is in grace period.</span>
+					<span class="grace-period-countdown" id="grace-period-countdown">Available for registration in <strong id="days-until-available">--</strong> days</span>
+				</div>
+				<button class="burn-nft-btn hidden" id="burn-nft-btn">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+						<polyline points="3 6 5 6 21 6"></polyline>
+						<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+						<line x1="10" y1="11" x2="10" y2="17"></line>
+						<line x1="14" y1="11" x2="14" y2="17"></line>
+					</svg>
+					<span id="burn-nft-text">Burn NFT & Release Name</span>
+					<span class="burn-nft-loading hidden"><span class="loading"></span></span>
+				</button>
+				<div class="grace-period-status hidden" id="grace-period-burn-status"></div>
+			</div>
+		</div>
+		`
+					: ''
+			}
 						<div class="overview-module linked-owner-row">
 						<div class="owner-display linked-owner-card">
 							<div class="owner-info" id="owner-info">
@@ -396,8 +428,9 @@ ${generateZkSendCss()}</style>
 							Price
 						</button>
 					</div>
-						<span class="linked-names-count" id="linked-names-count">Loading...</span>
 						<span class="linked-renewal-cost" id="linked-renewal-cost"></span>
+						<span class="linked-renewal-savings" id="linked-renewal-savings"></span>
+						<span class="linked-names-count" id="linked-names-count">Loading...</span>
 					</div>
 					<div class="linked-names-filter" id="linked-names-filter" style="display:none;">
 						<label for="linked-names-filter-input" class="visually-hidden">Filter linked names</label>
@@ -413,42 +446,17 @@ ${generateZkSendCss()}</style>
 					</div>
 						</div>
 						</div>
+						<div class="linked-wide-module">
+						<div class="linked-names-section linked-names-results">
+							<div class="linked-names-list" id="linked-names-list">
+								<div class="linked-names-loading"><span class="loading"></span> Fetching linked names...</div>
+							</div>
+							<div class="linked-names-hint" id="linked-names-hint"></div>
+						</div>
+					</div>
 						</div>
 						</div>
 						</div>
-
-			${
-				options.inGracePeriod
-					? `
-		<div class="grace-period-card">
-			<div class="grace-period-header">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-					<circle cx="12" cy="12" r="10"></circle>
-					<polyline points="12 6 12 12 16 14"></polyline>
-				</svg>
-				<span>Grace Period</span>
-			</div>
-			<div class="grace-period-body">
-				<div class="grace-period-info">
-					<span class="grace-period-message" id="grace-period-message">This name expired and is in grace period.</span>
-					<span class="grace-period-countdown" id="grace-period-countdown">Available for registration in <strong id="days-until-available">--</strong> days</span>
-				</div>
-				<button class="burn-nft-btn hidden" id="burn-nft-btn">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-						<polyline points="3 6 5 6 21 6"></polyline>
-						<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-						<line x1="10" y1="11" x2="10" y2="17"></line>
-						<line x1="14" y1="11" x2="14" y2="17"></line>
-					</svg>
-					<span id="burn-nft-text">Burn NFT & Release Name</span>
-					<span class="burn-nft-loading hidden"><span class="loading"></span></span>
-				</button>
-				<div class="grace-period-status hidden" id="grace-period-burn-status"></div>
-			</div>
-		</div>
-		`
-					: ''
-			}
 
 			${
 				record.contentHash || record.walrusSiteId
@@ -685,14 +693,6 @@ ${generateZkSendCss()}</style>
 							</div>
 						</div>
 
-						<div class="overview-module linked-wide-module">
-						<div class="linked-names-section linked-names-results">
-							<div class="linked-names-list" id="linked-names-list">
-								<div class="linked-names-loading"><span class="loading"></span> Fetching linked names...</div>
-							</div>
-							<div class="linked-names-hint" id="linked-names-hint"></div>
-						</div>
-					</div>
 					</div><!-- end overview-secondary-grid -->
 				</div><!-- end profile-hero -->
 
@@ -1008,6 +1008,7 @@ ${generateZkSendCss()}</style>
 		const NAME = window.NAME;
 		const FULL_NAME = window.FULL_NAME;
 		const NETWORK = window.NETWORK;
+		const SUI_ICON_SVG = '<svg class="sui-price-icon" viewBox="0 0 300 384" fill="#4da2ff"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z"/></svg>';
 		window.NFT_ID = NFT_ID;
 		window.TARGET_ADDRESS = TARGET_ADDRESS;
 		window.OWNER_ADDRESS = OWNER_ADDRESS;
@@ -6031,7 +6032,7 @@ ${generateZkSendCss()}</style>
 				if (daysRemaining !== null) {
 					if (daysRemaining <= 0) expiryClass = 'expired';
 					else if (daysRemaining <= 30) expiryClass = 'warning';
-					else if (daysRemaining > 365) expiryClass = 'premium';
+					else if (daysRemaining > 365) expiryClass = 'royalty';
 				}
 				const overlayName = cleanedName ? escapeHtmlJs(cleanedName) : 'unknown';
 				const overlayExpiryTag = daysRemaining === null
@@ -6321,10 +6322,12 @@ ${generateZkSendCss()}</style>
 				expiryBadge.className = 'badge expiry';
 				if (daysFromNow <= 0) {
 					expiryBadge.classList.add('danger');
+				} else if (daysFromNow > 730) {
+					expiryBadge.classList.add('safe');
 				} else if (daysFromNow > 365) {
-					expiryBadge.classList.add('premium');
+					expiryBadge.classList.add('royalty');
 				} else if (daysFromNow > 90) {
-					expiryBadge.classList.remove('warning', 'danger', 'premium');
+					expiryBadge.classList.remove('warning', 'danger', 'royalty', 'safe');
 				} else if (daysFromNow > 7) {
 					expiryBadge.classList.add('warning');
 				} else {
@@ -6492,33 +6495,48 @@ ${generateZkSendCss()}</style>
 		// Initialize stepper state (must be after pricing functions are defined)
 		updateYearsStepper();
 
+			function isRenewalNameOwnedByConnected() {
+				if (!connectedAddress) return false;
+				const nameToRenew = selectedRenewalName || NAME;
+				if (normalizeLinkedNameKey(nameToRenew) === normalizeLinkedNameKey(NAME)) {
+					return connectedAddress.toLowerCase() === getResolvedOwnerAddress();
+				}
+				return true;
+			}
+
 			function updateRenewalButton() {
 				const nameToExtend = selectedRenewalName || NAME;
+				const isOwned = isRenewalNameOwnedByConnected();
 				if (ovRenewalCard) {
 					ovRenewalCard.classList.toggle('renewal-disconnected', !connectedAddress);
 			}
 			if (ovRenewalYearsMinus) ovRenewalYearsMinus.disabled = currentRenewalYears <= MIN_YEARS;
 			if (ovRenewalYearsPlus) ovRenewalYearsPlus.disabled = currentRenewalYears >= MAX_YEARS;
-			// Update overview renewal button
 			if (ovRenewalBtn && ovRenewalBtnText) {
 				if (connectedAddress) {
-					ovRenewalBtn.disabled = false;
-					ovRenewalBtnText.textContent = 'Renew ' + nameToExtend + '.sui';
+					ovRenewalBtn.disabled = !isOwned;
+					ovRenewalBtnText.textContent = isOwned
+						? 'Renew ' + nameToExtend + '.sui'
+						: 'Only owner can renew';
 				} else {
 					ovRenewalBtn.disabled = false;
 					ovRenewalBtnText.textContent = 'Connect Wallet to Renew';
 				}
 			}
-			// Update bid tab renewal button
 			if (renewalBtn && renewalBtnText) {
 				if (connectedAddress) {
-					renewalBtn.disabled = false;
-					renewalBtnText.textContent = 'Renew ' + nameToExtend + '.sui';
+					renewalBtn.disabled = !isOwned;
+					renewalBtnText.textContent = isOwned
+						? 'Renew ' + nameToExtend + '.sui'
+						: 'Only owner can renew';
 				} else {
 					renewalBtn.disabled = true;
 					renewalBtnText.textContent = 'Connect Wallet to Renew';
 				}
 				}
+			if (expiryQuickRenewBtn) {
+				expiryQuickRenewBtn.style.display = (!connectedAddress || isOwned) ? '' : 'none';
+			}
 			}
 
 			renewalUiReady = true
@@ -6950,6 +6968,16 @@ ${generateZkSendCss()}</style>
 			if (!canSign()) {
 				if (statusEl) {
 					statusEl.textContent = 'Please connect your wallet';
+					statusEl.className = 'renewal-status error';
+				}
+				return;
+			}
+
+			if (normalizeLinkedNameKey(nameToExtend) === normalizeLinkedNameKey(NAME)
+				&& connectedAddress
+				&& connectedAddress.toLowerCase() !== getResolvedOwnerAddress()) {
+				if (statusEl) {
+					statusEl.textContent = 'Only the NFT owner can renew this name';
 					statusEl.className = 'renewal-status error';
 				}
 				return;
@@ -7484,6 +7512,7 @@ ${generateZkSendCss()}</style>
 		const linkedNamesList = document.getElementById('linked-names-list');
 		const linkedNamesCount = document.getElementById('linked-names-count');
 		const linkedRenewalCost = document.getElementById('linked-renewal-cost');
+		const linkedRenewalSavings = document.getElementById('linked-renewal-savings');
 		const linkedNamesSort = document.getElementById('linked-names-sort');
 		const linkedNamesFilter = document.getElementById('linked-names-filter');
 		const linkedNamesFilterInput = document.getElementById('linked-names-filter-input');
@@ -7494,25 +7523,33 @@ ${generateZkSendCss()}</style>
 		const linkedWideModule = document.querySelector('.linked-wide-module');
 		const linkedNamesResultsSection = linkedWideModule?.querySelector('.linked-names-results');
 		const linkedControlsAnchor = document.createComment('linked-controls-anchor');
+		const linkedWideAnchor = document.createComment('linked-wide-anchor');
 
 		if (linkedControlsModule && linkedControlsModule.parentNode) {
 			linkedControlsModule.parentNode.insertBefore(linkedControlsAnchor, linkedControlsModule);
+		}
+		if (linkedWideModule && linkedWideModule.parentNode) {
+			linkedWideModule.parentNode.insertBefore(linkedWideAnchor, linkedWideModule);
 		}
 
 		const mobileLinkedControlsQuery = window.matchMedia
 			? window.matchMedia('(max-width: 600px)')
 			: null;
+		const compactLinkedQuery = window.matchMedia
+			? window.matchMedia('(max-width: 860px)')
+			: null;
+
+		const sideRailModule = overviewSecondaryGrid?.querySelector('.side-rail-module');
+		const renewalModule = sideRailModule?.querySelector('.renewal-module');
 
 		function positionLinkedControlsForViewport() {
 			if (!linkedControlsModule || !linkedWideModule) return;
 
-			if (mobileLinkedControlsQuery && mobileLinkedControlsQuery.matches) {
-				if (linkedNamesResultsSection && linkedNamesResultsSection.parentNode === linkedWideModule) {
-					linkedWideModule.insertBefore(linkedControlsModule, linkedNamesResultsSection);
-				} else {
-					linkedWideModule.insertBefore(linkedControlsModule, linkedWideModule.firstChild);
-				}
-				linkedControlsModule.classList.add('linked-controls-mobile');
+			if (compactLinkedQuery && compactLinkedQuery.matches && sideRailModule && renewalModule) {
+				sideRailModule.insertBefore(linkedControlsModule, renewalModule.nextSibling);
+				linkedControlsModule.classList.remove('linked-controls-mobile');
+				const target = overviewSecondaryGrid.parentNode;
+				target.insertBefore(linkedWideModule, overviewSecondaryGrid.nextSibling);
 				return;
 			}
 
@@ -7521,9 +7558,20 @@ ${generateZkSendCss()}</style>
 				anchorParent.insertBefore(linkedControlsModule, linkedControlsAnchor.nextSibling);
 			}
 			linkedControlsModule.classList.remove('linked-controls-mobile');
+			const wideAnchorParent = linkedWideAnchor.parentNode;
+			if (wideAnchorParent) {
+				wideAnchorParent.insertBefore(linkedWideModule, linkedWideAnchor.nextSibling);
+			}
 		}
 
 		positionLinkedControlsForViewport();
+		if (compactLinkedQuery) {
+			if (typeof compactLinkedQuery.addEventListener === 'function') {
+				compactLinkedQuery.addEventListener('change', positionLinkedControlsForViewport);
+			} else if (typeof compactLinkedQuery.addListener === 'function') {
+				compactLinkedQuery.addListener(positionLinkedControlsForViewport);
+			}
+		}
 		if (mobileLinkedControlsQuery) {
 			if (typeof mobileLinkedControlsQuery.addEventListener === 'function') {
 				mobileLinkedControlsQuery.addEventListener('change', positionLinkedControlsForViewport);
@@ -7578,11 +7626,18 @@ ${generateZkSendCss()}</style>
 						else if (rLen >= 5) totalUsd += 10;
 					}
 					var discountedUsd = totalUsd * 0.75;
-					linkedRenewalCost.textContent = '$' + discountedUsd.toFixed(0) + '/yr';
-					linkedRenewalCost.title = '$' + totalUsd + '/yr before 25% discount';
+					var savings = totalUsd - discountedUsd;
+					linkedRenewalCost.textContent = '$' + totalUsd + '/yr';
+					linkedRenewalCost.title = 'Full SuiNS renewal cost per year';
 					linkedRenewalCost.style.display = 'inline';
+					if (linkedRenewalSavings) {
+						linkedRenewalSavings.textContent = '-$' + savings.toFixed(0) + '/yr with Sui.Ski';
+						linkedRenewalSavings.title = '$' + discountedUsd.toFixed(0) + '/yr via sui.ski (25% off)';
+						linkedRenewalSavings.style.display = 'inline';
+					}
 				} else {
 					linkedRenewalCost.style.display = 'none';
+					if (linkedRenewalSavings) linkedRenewalSavings.style.display = 'none';
 				}
 			}
 
@@ -7605,14 +7660,18 @@ ${generateZkSendCss()}</style>
 			const now = Date.now();
 			const daysLeft = Math.floor((expirationMs - now) / (24 * 60 * 60 * 1000));
 
-			if (daysLeft < 0) {
+			if (daysLeft < -30) {
 				return { color: 'red', text: 'Expired' };
+			} else if (daysLeft < 0) {
+				return { color: 'red', text: 'Grace' };
 			} else if (daysLeft <= 30) {
 				return { color: 'red', text: daysLeft + 'd' };
 			} else if (daysLeft <= 90) {
 				return { color: 'yellow', text: daysLeft + 'd' };
 			} else if (daysLeft <= 180) {
 				return { color: 'green', text: daysLeft + 'd' };
+			} else if (daysLeft > 730) {
+				return { color: 'white', text: daysLeft + 'd' };
 			} else {
 				return { color: 'blue', text: daysLeft + 'd' };
 			}
@@ -7706,9 +7765,6 @@ function shortAddr(addr) {
 
 		function getLinkedNameListingPriceSui(item) {
 			if (!item || !item.name) return null;
-			if (typeof item.listingPriceMist === 'number' && Number.isFinite(item.listingPriceMist) && item.listingPriceMist > 0) {
-				return item.listingPriceMist / 1e9;
-			}
 			const cleanName = String(item.name).replace(/\\.sui$/, '');
 			const isCurrent = cleanName.toLowerCase() === NAME.toLowerCase();
 			if (isCurrent && Number.isFinite(Number(currentListing?.price)) && Number(currentListing.price) > 0) {
@@ -7717,11 +7773,14 @@ function shortAddr(addr) {
 			const marketData = linkedNamesMarketData[cleanName];
 			if (marketData?.listingPriceSui) {
 				const parsed = parseFloat(marketData.listingPriceSui);
-				return Number.isFinite(parsed) ? parsed : null;
+				if (Number.isFinite(parsed) && parsed > 0) return parsed;
 			}
 			if (linkedNamesPrices[cleanName]) {
 				const parsed = parseFloat(linkedNamesPrices[cleanName]);
-				return Number.isFinite(parsed) ? parsed : null;
+				if (Number.isFinite(parsed) && parsed > 0) return parsed;
+			}
+			if (typeof item.listingPriceMist === 'number' && Number.isFinite(item.listingPriceMist) && item.listingPriceMist > 0) {
+				return item.listingPriceMist / 1e9;
 			}
 			return null;
 		}
@@ -7845,29 +7904,21 @@ function shortAddr(addr) {
 			}
 
 		if (linkedSortMode === 'price') {
-			const nameA = a.name.replace(/\\.sui$/, '');
-			const nameB = b.name.replace(/\\.sui$/, '');
-			const priceA = linkedNamesPrices[nameA] ? parseFloat(linkedNamesPrices[nameA]) : null;
-			const priceB = linkedNamesPrices[nameB] ? parseFloat(linkedNamesPrices[nameB]) : null;
+			const priceA = getLinkedNameListingPriceSui(a);
+			const priceB = getLinkedNameListingPriceSui(b);
+			const listedA = priceA !== null || isLinkedNameListed(a);
+			const listedB = priceB !== null || isLinkedNameListed(b);
 
-			// Listed names (with or without price loaded) come before unlisted
-			const hasPriceA = priceA !== null || a.isListed;
-			const hasPriceB = priceB !== null || b.isListed;
-
-			if (hasPriceA && hasPriceB) {
-				// Both have price data - sort by actual price
+			if (listedA && listedB) {
 				if (priceA !== null && priceB !== null) return priceA - priceB;
-				// If only one has price loaded, it comes first
 				if (priceA !== null) return -1;
 				if (priceB !== null) return 1;
-				// Both listed but no price loaded - sort by expiration
 				if (a.expirationMs === null) return 1;
 				if (b.expirationMs === null) return -1;
 				return a.expirationMs - b.expirationMs;
 			}
-			if (hasPriceA) return -1;
-			if (hasPriceB) return 1;
-			// Neither has price - sort by expiration
+			if (listedA) return -1;
+			if (listedB) return 1;
 			if (a.expirationMs === null) return 1;
 			if (b.expirationMs === null) return -1;
 			return a.expirationMs - b.expirationMs;
@@ -7891,6 +7942,8 @@ function shortAddr(addr) {
 				if (isCurrent) classes.push('current');
 				if (item.isPrimary) classes.push('primary');
 				else if (isListed) classes.push('listed');
+				else if (tag.color === 'red' && (tag.text === 'Expired' || tag.text === 'Grace')) classes.push('expired');
+				else if (tag.color === 'white') classes.push('white');
 				else classes.push('blue');
 				if (linkedFilterQuery && !isFilterMatch) classes.push('dimmed');
 				if (isFilterMatch) linkedMatchedCount++;
@@ -8238,9 +8291,7 @@ function shortAddr(addr) {
 			const withPrice = [];
 			const withoutPrice = [];
 			for (const item of linkedNamesData) {
-				const cleanName = item.name.replace(/\\.sui$/, '');
-				// Listed names (with or without price loaded) go in withPrice
-				if (linkedNamesPrices[cleanName] || item.isListed) {
+				if (getLinkedNameListingPriceSui(item) !== null || isLinkedNameListed(item)) {
 					withPrice.push(item);
 				} else {
 					withoutPrice.push(item);
@@ -8249,16 +8300,11 @@ function shortAddr(addr) {
 			withPrice.sort(function(a, b) {
 					if (a.isPrimary && !b.isPrimary) return -1;
 					if (!a.isPrimary && b.isPrimary) return 1;
-					const nameA = a.name.replace(/\\.sui$/, '');
-					const nameB = b.name.replace(/\\.sui$/, '');
-					const priceA = linkedNamesPrices[nameA] ? parseFloat(linkedNamesPrices[nameA]) : null;
-					const priceB = linkedNamesPrices[nameB] ? parseFloat(linkedNamesPrices[nameB]) : null;
-					// Both have price - sort by price
+					const priceA = getLinkedNameListingPriceSui(a);
+					const priceB = getLinkedNameListingPriceSui(b);
 					if (priceA !== null && priceB !== null) return priceA - priceB;
-					// Only one has price - it comes first
 					if (priceA !== null) return -1;
 					if (priceB !== null) return 1;
-					// Neither has price loaded - sort by expiration
 					if (a.expirationMs === null) return 1;
 					if (b.expirationMs === null) return -1;
 					return a.expirationMs - b.expirationMs;
@@ -8396,6 +8442,7 @@ function shortAddr(addr) {
 				}
 				if (linkedNamesCount) linkedNamesCount.textContent = '0';
 				if (linkedRenewalCost) linkedRenewalCost.style.display = 'none';
+				if (linkedRenewalSavings) linkedRenewalSavings.style.display = 'none';
 				if (linkedNamesSort) linkedNamesSort.style.display = 'none';
 				if (linkedNamesFilter) linkedNamesFilter.style.display = 'none';
 				return;
@@ -8583,12 +8630,49 @@ function shortAddr(addr) {
 				if (linkedNamesSort) linkedNamesSort.style.display = '';
 				if (linkedNamesFilter) linkedNamesFilter.style.display = '';
 				await renderLinkedNames();
+
+				const missingExp = names.filter(function(n) {
+					return n.expirationMs === null && n.nftId && !String(n.nftId).startsWith('primary-injected-') && !String(n.nftId).startsWith('profile-');
+				});
+				if (missingExp.length > 0) {
+					(async function() {
+						try {
+							const suiClient = getSuiClient();
+							const ENRICH_BATCH = 50;
+							let enriched = 0;
+							for (let ei = 0; ei < missingExp.length; ei += ENRICH_BATCH) {
+								const batch = missingExp.slice(ei, ei + ENRICH_BATCH);
+								const ids = batch.map(function(n) { return n.nftId; });
+								const objects = await suiClient.multiGetObjects({ ids: ids, options: { showContent: true } });
+								for (let oi = 0; oi < objects.length; oi++) {
+									const obj = objects[oi];
+									if (obj && obj.data && obj.data.content && obj.data.content.dataType === 'moveObject' && obj.data.content.fields) {
+										const fields = obj.data.content.fields;
+										const rawExp = fields.expiration_timestamp_ms || fields.expirationTimestampMs;
+										if (rawExp) {
+											batch[oi].expirationMs = Number(rawExp);
+											enriched++;
+										}
+									}
+								}
+							}
+							if (enriched > 0) {
+								await renderLinkedNames();
+								updateLinkedNamesMeta();
+							}
+						} catch (e) {
+							console.log('Expiration enrichment failed:', e);
+						}
+					})();
+				}
+
 				fetchListingPrices(names);
 			} catch (error) {
 				console.error('Failed to fetch linked names:', error);
 				linkedNamesList.innerHTML = '<div class="linked-names-empty">Could not load linked names</div>';
 				if (linkedNamesCount) linkedNamesCount.textContent = '--';
 				if (linkedRenewalCost) linkedRenewalCost.style.display = 'none';
+				if (linkedRenewalSavings) linkedRenewalSavings.style.display = 'none';
 				if (linkedNamesSort) linkedNamesSort.style.display = 'none';
 				if (linkedNamesFilter) linkedNamesFilter.style.display = 'none';
 			}
@@ -9222,16 +9306,16 @@ function shortAddr(addr) {
 						const filteredActions = actions.filter((action) => {
 							if (!derivedSaleEventMs) return true;
 							const actionType = String(action?.type || '').replace(/-/g, '_').toLowerCase();
-							if (actionType !== 'bid' && actionType !== 'cancel_bid') return true;
+							if (actionType !== 'bid' && actionType !== 'solo_bid' && actionType !== 'cancel_bid') return true;
 							const actionMs = parseMarketEventTimeMs(action?.blockTime || action?.block_time || '');
 							if (!actionMs) return true;
 							return actionMs >= derivedSaleEventMs;
 						});
 
-						const sawBidEvents = actions.some((action) => String(action?.type || '').replace(/-/g, '_').toLowerCase() === 'bid');
+						const sawBidEvents = actions.some((action) => { const t = String(action?.type || '').replace(/-/g, '_').toLowerCase(); return t === 'bid' || t === 'solo_bid'; });
 						const hasBidAfterSale = actions.some((action) => {
 							const actionType = String(action?.type || '').replace(/-/g, '_').toLowerCase();
-							if (actionType !== 'bid') return false;
+							if (actionType !== 'bid' && actionType !== 'solo_bid') return false;
 							const actionMs = parseMarketEventTimeMs(action?.blockTime || action?.block_time || '');
 							if (!actionMs) return true;
 							return !derivedSaleEventMs || actionMs >= derivedSaleEventMs;
@@ -9335,6 +9419,7 @@ function shortAddr(addr) {
 								relist: 'Relist',
 								delist: 'Delist',
 								bid: 'Offer',
+								solo_bid: 'Offer',
 								cancel_bid: 'Offer Cancelled',
 								accept_bid: 'Sale',
 								buy: 'Buy',
@@ -9356,7 +9441,7 @@ function shortAddr(addr) {
 							const sender = typeof action.sender === 'string' ? action.sender.trim() : '';
 							const receiver = typeof action.receiver === 'string' ? action.receiver.trim() : '';
 							const isSuiAddress = (value) => value && value.startsWith('0x');
-							if (actionType === 'bid') {
+							if (actionType === 'bid' || actionType === 'solo_bid') {
 								if (isSuiAddress(receiver)) return receiver;
 								if (isSuiAddress(sender)) return sender;
 								return '';
@@ -9446,7 +9531,7 @@ function shortAddr(addr) {
 												}
 												const actionSui = Number(action.price) / 1e9;
 												return formatMarketplaceBidSuiDisplay(actionSui);
-											})()) + '</span><span class="marketplace-activity-amount-sui"> SUI</span>'
+											})()) + '</span><span class="marketplace-activity-amount-sui"> ' + SUI_ICON_SVG + '</span>'
 											: '';
 								const priceDisplay = '<span class="marketplace-activity-amount">' + amountContent + '</span>';
 
@@ -10100,7 +10185,7 @@ function shortAddr(addr) {
 					const listingAmountEl = marketplaceListingPrice.querySelector('.price-amount');
 					const listingSuiEl = marketplaceListingPrice.querySelector('.price-sui');
 					if (listingAmountEl) listingAmountEl.textContent = priceInSui;
-					if (listingSuiEl) listingSuiEl.textContent = ' ' + 'SUI';
+					if (listingSuiEl) listingSuiEl.innerHTML = ' ' + SUI_ICON_SVG;
 					if (marketplaceLister) {
 						const sellerAddress = typeof data.bestListing.seller === 'string' ? data.bestListing.seller : '';
 						setMarketplaceListerLink(sellerAddress);
@@ -10158,7 +10243,7 @@ function shortAddr(addr) {
 					const bidAmountEl = marketplaceBidPrice.querySelector('.price-amount');
 					const bidSuiEl = marketplaceBidPrice.querySelector('.price-sui');
 					if (bidAmountEl) bidAmountEl.textContent = bidInSui;
-					if (bidSuiEl) bidSuiEl.textContent = ' ' + 'SUI';
+					if (bidSuiEl) bidSuiEl.innerHTML = ' ' + SUI_ICON_SVG;
 					marketplaceBidRow.style.display = 'grid';
 					if (marketplaceBidder) {
 						const bidderAddress = resolvedBestBid.bidder || '';
@@ -10184,7 +10269,7 @@ function shortAddr(addr) {
 					const soldAmountEl = marketplaceSoldPrice.querySelector('.price-amount');
 					const soldSuiEl = marketplaceSoldPrice.querySelector('.price-sui');
 					if (soldAmountEl) soldAmountEl.textContent = soldInSui;
-					if (soldSuiEl) soldSuiEl.textContent = ' ' + 'SUI';
+					if (soldSuiEl) soldSuiEl.innerHTML = ' ' + SUI_ICON_SVG;
 					marketplaceSoldRow.style.display = 'flex';
 					const latestSale = sales.find(s => Number(s?.price || 0) === lastSoldPriceMist);
 					if (latestSale && latestSale.receiver) {
