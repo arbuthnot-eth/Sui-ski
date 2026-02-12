@@ -700,14 +700,20 @@ export const profileStyles = `
 				grid-column: 1;
 				grid-row: 2;
 				min-width: 0;
+				align-self: stretch;
+				display: flex;
+				flex-direction: column;
 			}
 			.side-rail-module > .linked-controls-module .linked-names-section {
 				padding: 8px 8px 6px;
+				flex: 1 1 auto;
+				display: flex;
+				flex-direction: column;
 			}
 			.side-rail-module > .linked-controls-module .linked-names-header {
 				display: grid;
 				grid-template-columns: 1fr auto auto;
-				grid-template-rows: auto auto auto;
+				grid-template-rows: auto auto;
 				gap: 4px 6px;
 				align-items: center;
 				margin-bottom: 6px;
@@ -735,8 +741,7 @@ export const profileStyles = `
 				font-size: 0.56rem;
 			}
 			.side-rail-module > .linked-controls-module .linked-names-sort {
-				grid-column: 1 / -1;
-				grid-row: 3;
+				margin-top: auto;
 				margin-bottom: 0;
 				gap: 3px;
 			}
@@ -3757,7 +3762,7 @@ export const profileStyles = `
 			display: flex;
 			align-items: center;
 			gap: 7px;
-			color: #FF6B00;
+			color: #f59e0b;
 			font-size: 0.84rem;
 			font-weight: 600;
 		}
@@ -3893,7 +3898,7 @@ export const profileStyles = `
 			font-family: var(--font-mono, monospace);
 		}
 		.marketplace-value.listing-price {
-			color: #FF6B00;
+			color: #f59e0b;
 			font-size: 1.2rem;
 			font-weight: 700;
 		}
@@ -3901,7 +3906,7 @@ export const profileStyles = `
 			color: var(--accent-secondary, #8b5cf6);
 		}
 		.marketplace-value.bid-price {
-			color: #FF6B00;
+			color: #f59e0b;
 			font-size: 1.15rem;
 			font-weight: 700;
 			justify-self: end;
@@ -3967,7 +3972,7 @@ export const profileStyles = `
 			gap: 8px;
 			width: 100%;
 			padding: 8px 10px;
-			background: linear-gradient(135deg, #FF6B00, #f97316);
+			background: linear-gradient(135deg, #f59e0b, #d97706);
 			border: none;
 			border-radius: 10px;
 			color: white;
@@ -4391,12 +4396,14 @@ export const profileStyles = `
 				color: #a78bfa;
 			}
 			.marketplace-card.marketplace-tradeport-empty .marketplace-activity-item.bid .marketplace-activity-kind,
-			.marketplace-card.marketplace-tradeport-empty .marketplace-activity-item.solo_bid .marketplace-activity-kind {
-				color: #FF6B00;
+			.marketplace-card.marketplace-tradeport-empty .marketplace-activity-item.solo_bid .marketplace-activity-kind,
+			.marketplace-card.marketplace-tradeport-empty .marketplace-activity-item.offer .marketplace-activity-kind {
+				color: #f59e0b;
 			}
 			.marketplace-card.marketplace-tradeport-empty .marketplace-activity-item.bid .marketplace-activity-actor,
-			.marketplace-card.marketplace-tradeport-empty .marketplace-activity-item.solo_bid .marketplace-activity-actor {
-				color: #FF6B00;
+			.marketplace-card.marketplace-tradeport-empty .marketplace-activity-item.solo_bid .marketplace-activity-actor,
+			.marketplace-card.marketplace-tradeport-empty .marketplace-activity-item.offer .marketplace-activity-actor {
+				color: #f59e0b;
 			}
 			.marketplace-card.marketplace-tradeport-empty .marketplace-activity-item.transfer .marketplace-activity-kind {
 				color: #fbbf24;
@@ -4555,9 +4562,11 @@ export const profileStyles = `
 		.marketplace-activity-item.list .marketplace-activity-kind,
 		.marketplace-activity-item.relist .marketplace-activity-kind { color: #a78bfa; }
 		.marketplace-activity-item.bid .marketplace-activity-kind,
-		.marketplace-activity-item.solo_bid .marketplace-activity-kind { color: #FF6B00; }
+		.marketplace-activity-item.solo_bid .marketplace-activity-kind,
+		.marketplace-activity-item.offer .marketplace-activity-kind { color: #f59e0b; }
 		.marketplace-activity-item.bid .marketplace-activity-actor,
-		.marketplace-activity-item.solo_bid .marketplace-activity-actor { color: #FF6B00; }
+		.marketplace-activity-item.solo_bid .marketplace-activity-actor,
+		.marketplace-activity-item.offer .marketplace-activity-actor { color: #f59e0b; }
 		.marketplace-activity-item.cancel_bid .marketplace-activity-kind { color: #f0f0f5; }
 		.marketplace-activity-item.accept_bid .marketplace-activity-actor { color: #34d399; }
 		.marketplace-activity-item.sale .marketplace-activity-kind,
@@ -4619,7 +4628,9 @@ export const profileStyles = `
 		.marketplace-activity-item.bid .marketplace-activity-actor-link,
 		.marketplace-activity-item.bid .marketplace-activity-actor-link:visited,
 		.marketplace-activity-item.solo_bid .marketplace-activity-actor-link,
-		.marketplace-activity-item.solo_bid .marketplace-activity-actor-link:visited { color: #FF6B00; }
+		.marketplace-activity-item.solo_bid .marketplace-activity-actor-link:visited,
+		.marketplace-activity-item.offer .marketplace-activity-actor-link,
+		.marketplace-activity-item.offer .marketplace-activity-actor-link:visited { color: #f59e0b; }
 		.marketplace-activity-item.accept_bid .marketplace-activity-actor-link,
 		.marketplace-activity-item.accept_bid .marketplace-activity-actor-link:visited { color: #34d399; }
 		.marketplace-activity-amount {
@@ -8859,34 +8870,59 @@ export const profileStyles = `
 			font-size: 0.75rem;
 			padding: 8px 0;
 		}
+		.linked-collapse-all {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			margin-right: 2px;
+			padding: 2px;
+			background: none;
+			border: none;
+			color: #f8fbff;
+			cursor: pointer;
+			opacity: 0.7;
+			transition: opacity 0.15s;
+		}
+		.linked-collapse-all:hover {
+			opacity: 1;
+		}
+		.linked-collapse-all svg {
+			width: 16px;
+			height: 16px;
+		}
 		/* Grouped layout */
 		.linked-group {
 			background: rgba(0, 0, 0, 0.1);
 			border-radius: 8px;
 			padding: 8px;
 		}
+		.linked-group.collapsed {
+			background: transparent;
+			padding: 0;
+		}
 		.linked-group-header {
 			display: flex;
 			align-items: center;
 			gap: 8px;
-			width: 100%;
-			padding: 8px;
+			width: calc(100% + 16px);
+			padding: 6px 10px;
 			margin: -8px -8px 6px -8px;
-			background: rgba(139, 92, 246, 0.1);
-			border: none;
+			background: linear-gradient(135deg, rgba(248, 251, 255, 0.26), rgba(226, 232, 240, 0.2));
+			border: 1px solid rgba(248, 251, 255, 0.58);
+			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 1px 5px rgba(148, 163, 184, 0.22);
 			border-radius: 6px 6px 0 0;
 			cursor: pointer;
 			font-family: inherit;
-			color: var(--text);
+			color: #f8fbff;
 			transition: background 0.15s ease;
 		}
 		.linked-group-header:hover {
-			background: rgba(139, 92, 246, 0.2);
+			background: rgba(248, 251, 255, 0.12);
 		}
 		.linked-group-chevron {
 			width: 16px;
 			height: 16px;
-			color: var(--text-muted);
+			color: #f8fbff;
 			transition: transform 0.2s ease;
 			flex-shrink: 0;
 		}
@@ -8902,19 +8938,20 @@ export const profileStyles = `
 			display: none;
 		}
 		.linked-group.collapsed .linked-group-header {
-			margin-bottom: -8px;
-			border-radius: 6px;
+			margin: 0;
+			width: 100%;
+			border-radius: 8px;
 		}
 		.linked-group-addr {
 			font-size: 0.65rem;
 			font-family: var(--font-mono, monospace);
-			color: var(--text-muted);
+			color: #f8fbff;
 		}
 		.linked-group-count {
 			font-size: 0.6rem;
 			font-weight: 600;
-			color: var(--text-muted);
-			background: rgba(139, 92, 246, 0.15);
+			color: #f8fbff;
+			background: rgba(248, 251, 255, 0.18);
 			padding: 1px 6px;
 			margin-left: auto;
 			border-radius: 8px;
@@ -8955,12 +8992,18 @@ export const profileStyles = `
 			color: #d8b4fe;
 		}
 		.linked-name-chip.current {
-			background: linear-gradient(135deg, rgba(76, 29, 149, 0.3), rgba(30, 64, 175, 0.22));
-			border-color: rgba(168, 85, 247, 0.72);
+			background: linear-gradient(135deg, rgba(248, 251, 255, 0.26), rgba(226, 232, 240, 0.2));
+			border-color: rgba(248, 251, 255, 0.58);
 			font-weight: 600;
+			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 1px 5px rgba(148, 163, 184, 0.22);
+		}
+		.linked-name-chip.current:hover {
+			background: linear-gradient(135deg, rgba(248, 251, 255, 0.38), rgba(226, 232, 240, 0.32));
+			border-color: rgba(248, 251, 255, 0.72);
+			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 8px rgba(148, 163, 184, 0.35);
 		}
 		.linked-name-chip.current .linked-name-text {
-			color: #ddd6fe;
+			color: #f8fbff;
 		}
 		/* Primary name highlighting */
 		.linked-name-chip.primary {
@@ -10479,10 +10522,12 @@ export const profileStyles = `
 				order: 2;
 			}
 			.side-rail-module {
+				display: flex;
+				grid-template-columns: none;
+				flex-direction: column;
 				grid-column: 1 / -1;
 				order: 2;
 				gap: 8px;
-				flex-direction: column;
 				width: 100%;
 				max-width: 100%;
 			}
@@ -10491,6 +10536,12 @@ export const profileStyles = `
 				width: 100%;
 				max-width: 100%;
 				min-width: 0;
+			}
+			.side-rail-module > .renewal-module { order: 0; }
+			.side-rail-module > .side-rail-market { order: 1; }
+			.side-rail-module > .linked-controls-module {
+				order: 2;
+				align-self: auto;
 			}
 			.renewal-module,
 			.side-rail-market {

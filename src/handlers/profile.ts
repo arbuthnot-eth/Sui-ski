@@ -414,23 +414,23 @@ ${generateZkSendCss()}</style>
 							</svg>
 								Linked Names
 							</span>
+						<span class="linked-renewal-cost" id="linked-renewal-cost"></span>
+						<span class="linked-renewal-savings" id="linked-renewal-savings"></span>
+						<span class="linked-names-count" id="linked-names-count">Loading...</span>
+					</div>
 					<div class="linked-names-sort" id="linked-names-sort" style="display:none;">
+						<button type="button" class="linked-sort-pill active" data-sort="price">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+							Price
+						</button>
 						<button type="button" class="linked-sort-pill" data-sort="address">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
 							Address
 						</button>
-						<button type="button" class="linked-sort-pill active" data-sort="expiry">
+						<button type="button" class="linked-sort-pill" data-sort="expiry">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
 							Expiry
 						</button>
-						<button type="button" class="linked-sort-pill" data-sort="price">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-							Price
-						</button>
-					</div>
-						<span class="linked-renewal-cost" id="linked-renewal-cost"></span>
-						<span class="linked-renewal-savings" id="linked-renewal-savings"></span>
-						<span class="linked-names-count" id="linked-names-count">Loading...</span>
 					</div>
 					<div class="linked-names-filter" id="linked-names-filter" style="display:none;">
 						<label for="linked-names-filter-input" class="visually-hidden">Filter linked names</label>
@@ -2934,6 +2934,12 @@ ${generateZkSendCss()}</style>
 				if (hasListing || hasBestBid || hasSold) {
 					let tradeportLogo = null;
 					try { tradeportLogo = await loadImageForCanvas(TRADEPORT_LOGO_URL); } catch {}
+					let suiIconImg = null;
+					try {
+						const suiSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="384" viewBox="0 0 300 384"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg>';
+						const suiIconDataUrl = 'data:image/svg+xml;base64,' + btoa(suiSvg);
+						suiIconImg = await loadImageForCanvas(suiIconDataUrl);
+					} catch {}
 						const basePriceTextSize = Math.max(26, Math.round(Math.min(srcWidth, srcHeight) * 0.067));
 						const priceTextSize = basePriceTextSize + 13;
 						const baseLabelTextSize = Math.max(22, Math.round(basePriceTextSize * 0.88));
@@ -2956,18 +2962,20 @@ ${generateZkSendCss()}</style>
 						} else {
 							if (hasListing) {
 								const listPrice = formatListingSuiPrice(listingPriceMist);
-								entries.push({ label: 'List:', priceNum: listPrice, labelColor: '#c084fc', priceColor: '#ffffff', suiColor: '#60a5fa' });
+								entries.push({ label: 'List:', priceNum: listPrice, labelColor: '#a78bfa', priceColor: '#ffffff', suiColor: '#60a5fa' });
 							}
 							if (hasBestBid) {
 								const offerPrice = formatBidSuiPrice(bestBidPriceMist);
-								entries.push({ label: 'Offer:', priceNum: offerPrice, labelColor: '#8b5cf6', priceColor: '#ffffff', suiColor: '#60a5fa' });
+								entries.push({ label: 'Offer:', priceNum: offerPrice, labelColor: '#f59e0b', priceColor: '#ffffff', suiColor: '#60a5fa' });
 							}
 						}
 					ctx.font = '700 ' + priceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
 					let maxWidth = 0;
+					const suiIconH = Math.round(priceTextSize * 1.05);
+					const suiIconW = Math.round(suiIconH * (300 / 384));
 					for (const entry of entries) {
 						const labelWidth = ctx.measureText(entry.label).width;
-						const valueWidth = ctx.measureText(entry.priceNum + ' SUI').width;
+						const valueWidth = ctx.measureText(entry.priceNum + ' ').width + (suiIconImg ? suiIconW : ctx.measureText('SUI').width);
 						maxWidth = Math.max(maxWidth, labelWidth, valueWidth);
 					}
 						const qrBottom = qrY + qrBadgeSize;
@@ -3018,13 +3026,24 @@ ${generateZkSendCss()}</style>
 						currentY += scaledLabelLineHeight;
 						ctx.font = '800 ' + scaledPriceTextSize + 'px Inter, system-ui, -apple-system, sans-serif';
 						const numText = entry.priceNum + ' ';
-						const suiText = 'SUI';
-						ctx.strokeText(numText + suiText, textX, currentY);
-						ctx.fillStyle = entry.priceColor;
-						ctx.fillText(numText, textX, currentY);
-						const numWidth = ctx.measureText(numText).width;
-						ctx.fillStyle = entry.suiColor;
-						ctx.fillText(suiText, textX + numWidth, currentY);
+						if (suiIconImg) {
+							ctx.strokeText(numText, textX, currentY);
+							ctx.fillStyle = entry.priceColor;
+							ctx.fillText(numText, textX, currentY);
+							const numWidth = ctx.measureText(numText).width;
+							const iconH = Math.round(scaledPriceTextSize * 1.05);
+							const iconW = Math.round(iconH * (300 / 384));
+							const iconY = currentY + Math.round((scaledPriceTextSize - iconH) * 0.5);
+							ctx.drawImage(suiIconImg, textX + numWidth, iconY, iconW, iconH);
+						} else {
+							const suiText = 'SUI';
+							ctx.strokeText(numText + suiText, textX, currentY);
+							ctx.fillStyle = entry.priceColor;
+							ctx.fillText(numText, textX, currentY);
+							const numWidth = ctx.measureText(numText).width;
+							ctx.fillStyle = entry.suiColor;
+							ctx.fillText(suiText, textX + numWidth, currentY);
+						}
 						currentY += scaledValueLineHeight + 4;
 					}
 					ctx.shadowColor = 'transparent';
@@ -7590,7 +7609,7 @@ ${generateZkSendCss()}</style>
 		var linkedNamesGrouped = {};
 		var linkedNamesPrices = {};
 		var linkedNamesMarketData = {};
-		var linkedSortMode = 'expiry';
+		var linkedSortMode = 'price';
 		var linkedFilterQuery = '';
 		var linkedMatchedCount = 0;
 		const linkedNameHoverCard = document.getElementById('linked-name-hover-card');
@@ -8263,6 +8282,9 @@ function shortAddr(addr) {
 					const collapseByDefault = isLinkedGroupAllExpired(group);
 					html += '<div class="linked-group' + (collapseByDefault ? ' collapsed' : '') + '" data-group-index="' + groupIndex + '">';
 					html += '<button type="button" class="linked-group-header">';
+					if (groupIndex === 0) {
+						html += '<span class="linked-collapse-all" id="linked-collapse-all" title="Collapse All"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg></span>';
+					}
 					html += '<svg class="linked-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
 					html += '<span class="linked-group-addr">' + addrLabel + '</span>';
 					html += '<span class="linked-group-count">' + group.length + '</span>';
@@ -8276,10 +8298,6 @@ function shortAddr(addr) {
 				const sorted = linkedNamesData.slice().sort(function(a, b) {
 					if (a.isPrimary && !b.isPrimary) return -1;
 					if (!a.isPrimary && b.isPrimary) return 1;
-					const aListed = isLinkedNameListed(a);
-					const bListed = isLinkedNameListed(b);
-					if (aListed && !bListed) return -1;
-					if (!aListed && bListed) return 1;
 					if (a.expirationMs === null) return 1;
 					if (b.expirationMs === null) return -1;
 					return a.expirationMs - b.expirationMs;
@@ -8316,7 +8334,16 @@ function shortAddr(addr) {
 					if (b.expirationMs === null) return -1;
 					return a.expirationMs - b.expirationMs;
 				});
-				const sorted = withPrice.concat(withoutPrice);
+				var primaryItem = null;
+				for (var pi = 0; pi < withoutPrice.length; pi++) {
+					if (withoutPrice[pi].isPrimary) { primaryItem = withoutPrice.splice(pi, 1)[0]; break; }
+				}
+				if (!primaryItem) {
+					for (var pi = 0; pi < withPrice.length; pi++) {
+						if (withPrice[pi].isPrimary) { primaryItem = withPrice.splice(pi, 1)[0]; break; }
+					}
+				}
+				const sorted = (primaryItem ? [primaryItem] : []).concat(withPrice, withoutPrice);
 				html += '<div class="linked-group-names">';
 				for (const item of sorted) html += renderNameChip(item);
 				html += '</div>';
@@ -8327,6 +8354,7 @@ function shortAddr(addr) {
 			linkedNamesList.querySelectorAll('.linked-group-header').forEach(function(header) {
 				header.addEventListener('click', function(e) {
 					e.preventDefault();
+					if (e.target.closest('.linked-collapse-all')) return;
 					const addrEl = e.target.closest('.linked-group-addr');
 					if (addrEl instanceof Element) {
 						const text = addrEl.textContent || '';
@@ -8345,6 +8373,27 @@ function shortAddr(addr) {
 					if (group) group.classList.toggle('collapsed');
 				});
 			});
+
+			var collapseAllBtn = document.getElementById('linked-collapse-all');
+			if (collapseAllBtn) {
+				collapseAllBtn.addEventListener('click', function(e) {
+					e.stopPropagation();
+					var groups = linkedNamesList.querySelectorAll('.linked-group');
+					var allCollapsed = true;
+					for (var i = 0; i < groups.length; i++) {
+						if (!groups[i].classList.contains('collapsed')) { allCollapsed = false; break; }
+					}
+					for (var i = 0; i < groups.length; i++) {
+						if (allCollapsed) groups[i].classList.remove('collapsed');
+						else groups[i].classList.add('collapsed');
+					}
+					var icon = allCollapsed
+						? '<polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline>'
+						: '<polyline points="7 11 12 6 17 11"></polyline><polyline points="7 18 12 13 17 18"></polyline>';
+					this.title = allCollapsed ? 'Collapse All' : 'Expand All';
+					this.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' + icon + '</svg>';
+				});
+			}
 
 			updateLinkedNamesMeta();
 		}
@@ -9420,6 +9469,7 @@ function shortAddr(addr) {
 								delist: 'Delist',
 								bid: 'Offer',
 								solo_bid: 'Offer',
+								offer: 'Offer',
 								cancel_bid: 'Offer Cancelled',
 								accept_bid: 'Sale',
 								buy: 'Buy',
