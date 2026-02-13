@@ -52,6 +52,8 @@ JACKET_FEE_OBJECT_ID = "0x3961518f5fd71ff6ac3d221ed20e13f8ce7159912a4b00b0d6bbbe
 # JACKET_ALLOWLIST_OBJECT_ID = ""
 # JACKET_RATE_LIMIT_OBJECT_ID = ""
 DECAY_AUCTION_PACKAGE_ID = "0x10dbff33383bdb68d0bbf6aadeed5e2d3911c45b03664130ebb16437954a2f40"
+# SUI_AGENT_PRIVATE_KEY set via `wrangler secret put SUI_AGENT_PRIVATE_KEY`
+SUI_AGENT_MAX_SPEND_MIST = "10000000000"
 # BOUNTY_ESCROW_PACKAGE_ID = ""
 # X402_VERIFIERS = "cloudflare,coinbase"
 # X402_AGENT_FEE_MIST = "1000000000"
@@ -71,6 +73,23 @@ name = "WALLET_SESSIONS"
 class_name = "WalletSession"
 script_name = "sui-ski-gateway"
 
+[[durable_objects.bindings]]
+name = "SUI_PAY_AGENT"
+class_name = "SuiPayAgent"
+script_name = "sui-ski-gateway"
+
+[[durable_objects.bindings]]
+name = "SUI_MCP_SERVER"
+class_name = "SuiMcpServer"
+script_name = "sui-ski-gateway"
+
+[triggers]
+crons = ["*/30 * * * *"]
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["WalletSession"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["SuiPayAgent", "SuiMcpServer"]

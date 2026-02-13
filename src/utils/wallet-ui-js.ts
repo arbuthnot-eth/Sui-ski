@@ -576,7 +576,7 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	        var walletIcon = conn.wallet && conn.wallet.icon ? conn.wallet.icon : '';
 	        var nextBtnMarkup = '';
 	        if (walletIcon) {
-	          nextBtnMarkup = '<img src="' + walletIcon + '" alt="" style="width:18px;height:18px;border-radius:5px;flex-shrink:0" onerror="this.style.display=\\\'none\\\'"> ' + safeLabel;
+	          nextBtnMarkup = '<img src="' + walletIcon + '" alt="" style="width:18px;height:18px;border-radius:5px;flex-shrink:0" onerror="this.style.display=\\'none\\'"> ' + safeLabel;
 	        } else if (conn.status === 'session') {
 	          nextBtnMarkup = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ' + safeLabel;
 	        } else {

@@ -4,6 +4,7 @@ import { SuinsClient } from '@mysten/suins'
 import { Hono } from 'hono'
 import type { Env } from '../types'
 import { cacheKey, getCached, setCache } from '../utils/cache'
+import { generateNameCardSvg } from '../utils/name-card-svg'
 import { getDeepBookSuiPools, getNSSuiPrice, getUSDCSuiPrice } from '../utils/ns-price'
 import { generateLogoSvg, getDefaultOgImageUrl } from '../utils/og-image'
 import { calculateRegistrationPrice, formatPricingResponse, getBasePricing } from '../utils/pricing'
@@ -712,6 +713,35 @@ apiRoutes.get('/suggest-names', async (c) => {
 	return handleNameSuggestions(query, c.get('env'), mode)
 })
 
+apiRoutes.get('/name-card/:name', (c) => {
+	const rawName = c.req
+		.param('name')
+		.replace(/\.svg$/i, '')
+		.replace(/\.sui$/i, '')
+		.toLowerCase()
+	if (!rawName || rawName.length < 3) {
+		return jsonResponse({ error: 'Name must be at least 3 characters' }, 400)
+	}
+	const years = Number(c.req.query('years')) || 1
+	const isPrimary = c.req.query('primary') !== 'false'
+	const svg = generateNameCardSvg(rawName, { years, isPrimary })
+	return new Response(svg, {
+		headers: {
+			'Content-Type': 'image/svg+xml',
+			'Cache-Control': 'public, max-age=3600',
+			'Access-Control-Allow-Origin': '*',
+		},
+	})
+})
+
+apiRoutes.get('/register-suggestions', async (c) => {
+	const query = c.req.query('q')
+	if (!query || query.length < 3) {
+		return jsonResponse({ error: 'Query parameter required (min 3 chars)' }, 400)
+	}
+	return handleRegisterSuggestions(query, c.get('env'))
+})
+
 apiRoutes.get('/featured-names', async (c) => {
 	return handleFeaturedNames(c.get('env'))
 })
@@ -722,6 +752,24 @@ apiRoutes.get('/owned-names', async (c) => {
 		return jsonResponse({ error: 'Valid Sui address required (address query param)' }, 400)
 	}
 	return handleOwnedNames(address, c.get('env'))
+})
+
+apiRoutes.get('/expiring-names', async (c) => {
+	const { handleExpiringNames } = await import('./expiring-names')
+	return handleExpiringNames(c.get('env'))
+})
+
+apiRoutes.post('/expiring-names/scan', async (c) => {
+	const { debugScan } = await import('./expiring-names')
+	const env = c.get('env')
+	try {
+		const result = await debugScan(env)
+		return jsonResponse(result)
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err)
+		const stack = err instanceof Error ? err.stack : undefined
+		return jsonResponse({ ok: false, error: message, stack }, 500)
+	}
 })
 
 /**
@@ -1098,9 +1146,12 @@ async function handleNamesByAddress(
 
 		const listedNames = allNames.filter((n) => n.isListed).length
 		const ownedNames = allNames.filter((n) => !n.isListed).length
-		console.log(`SUMMARY after indexer: ${allNames.length} total (${ownedNames} owned, ${listedNames} listed)`)
+		console.log(
+			`SUMMARY after indexer: ${allNames.length} total (${ownedNames} owned, ${listedNames} listed)`,
+		)
 
-		const SUINS_V1_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration'
+		const SUINS_V1_TYPE =
+			'0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration'
 		let rpcFallbackCount = 0
 		try {
 			let cursor: string | null | undefined = null
@@ -1211,7 +1262,7 @@ async function handleNamesByAddress(
 		const uniqueAddresses = [
 			...new Set([
 				normalizedAddress,
-				...allNames.map((n) => n.targetAddress).filter(Boolean) as string[],
+				...(allNames.map((n) => n.targetAddress).filter(Boolean) as string[]),
 			]),
 		]
 		const addressDefaultName = new Map<string, string>()
@@ -2494,6 +2545,171 @@ async function handleNameSuggestions(
 	}
 	suggestionMemCache.set(key, { data: finalized, exp: Date.now() + SUGGESTION_CACHE_TTL_MS })
 	return jsonResponse({ query: normalizedQuery, mode, suggestions: finalized })
+}
+
+interface RegisterSuggestion {
+	name: string
+	status: 'available' | 'taken' | 'listed' | 'grace' | 'expiring'
+	expiresIn?: number
+	listingPrice?: string
+	tradeportUrl?: string
+}
+
+const REGISTER_SUGGESTION_CACHE_TTL_MS = 300000
+const registerSuggestionCache = new Map<string, { data: RegisterSuggestion[]; exp: number }>()
+
+async function fetchSearchKeywords(
+	query: string,
+	braveKey: string,
+	aiKey: string,
+): Promise<string[]> {
+	const braveContext = await fetchBraveContext(query, braveKey)
+	if (braveContext.length === 0) return []
+
+	const res = await fetch(OPENROUTER_URL, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
+		body: JSON.stringify({
+			model: SUGGESTION_MODEL,
+			max_tokens: 300,
+			temperature: 0.6,
+			messages: [
+				{
+					role: 'user',
+					content: `Analyze these web search results for "${query}" and extract the most impactful, repeated, and thematically important single words or short compound words. These will become .sui blockchain domain name suggestions.
+
+Search results:
+${braveContext.slice(0, 12).join('\n')}
+
+Extract 20 keywords that:
+- Appear repeatedly or carry the most weight/meaning across results
+- Are strong standalone identity words (nouns, brands, concepts)
+- Would make premium, desirable .sui domain names (3-18 chars)
+- Capture what "${query}" is most associated with in the real world
+
+Rules: lowercase a-z 0-9 and optional hyphens only, 3-18 chars each. Return ONLY a JSON array of strings, nothing else.`,
+				},
+			],
+		}),
+	})
+
+	if (!res.ok) return []
+	const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
+	const content = data.choices?.[0]?.message?.content?.trim() || '[]'
+	const jsonMatch = content.match(/\[[\s\S]*\]/)
+	if (!jsonMatch) return []
+
+	const parsed = JSON.parse(jsonMatch[0]) as unknown[]
+	const valid: string[] = []
+	for (const item of parsed) {
+		if (typeof item !== 'string') continue
+		const cleaned = normalizeSuggestionName(item)
+		if (cleaned) valid.push(cleaned)
+	}
+	return valid
+}
+
+async function handleRegisterSuggestions(query: string, env: Env): Promise<Response> {
+	const normalized =
+		normalizeSuggestionName(query) ||
+		query
+			.toLowerCase()
+			.replace(/[^a-z0-9-]/g, '')
+			.slice(0, 18)
+	const cacheKey = `reg:${normalized}`
+	const cached = registerSuggestionCache.get(cacheKey)
+	if (cached && cached.exp > Date.now()) {
+		return jsonResponse({ suggestions: cached.data })
+	}
+
+	const braveKey = env.BRAVE_SEARCH_API_KEY
+	const aiKey = env.OPENROUTER_API_KEY
+
+	let keywords: string[] = []
+	if (braveKey && aiKey) {
+		keywords = await fetchSearchKeywords(normalized, braveKey, aiKey).catch(() => [])
+	} else if (aiKey) {
+		const aiNames = await fetchAISuggestions(normalized, [], aiKey, 'related').catch(() => [])
+		keywords = aiNames
+	}
+
+	const seen = new Set<string>()
+	seen.add(normalized)
+	const candidateNames: string[] = []
+	for (const kw of keywords) {
+		if (seen.has(kw)) continue
+		seen.add(kw)
+		candidateNames.push(kw)
+		if (candidateNames.length >= 16) break
+	}
+
+	const suinsClient = new SuinsClient({
+		client: new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK }),
+		network: env.SUI_NETWORK,
+	})
+
+	const suggestions: RegisterSuggestion[] = await Promise.all(
+		candidateNames.map(async (name): Promise<RegisterSuggestion> => {
+			try {
+				const [record, marketRes] = await Promise.all([
+					suinsClient.getNameRecord(name + '.sui').catch(() => null),
+					handleMarketplaceData(name, env).catch(() => null),
+				])
+
+				let listingPrice: string | undefined
+				let tradeportUrl: string | undefined
+				if (marketRes?.ok) {
+					const marketData = (await marketRes.json().catch(() => null)) as
+						| (MarketplaceData & { error?: string })
+						| null
+					if (marketData && !marketData.error && marketData.bestListing?.price) {
+						listingPrice = (Number(marketData.bestListing.price) / 1e9).toFixed(2)
+						tradeportUrl =
+							'https://www.tradeport.xyz/sui/collection/suins?search=' +
+							encodeURIComponent(name)
+					}
+				}
+
+				if (!record) {
+					if (listingPrice) {
+						return { name, status: 'listed', listingPrice, tradeportUrl }
+					}
+					return { name, status: 'available' }
+				}
+
+				let expiresIn: number | undefined
+				if (record.expirationTimestampMs) {
+					const expiresMs = parseInt(String(record.expirationTimestampMs))
+					expiresIn = Math.ceil((expiresMs - Date.now()) / (24 * 60 * 60 * 1000))
+				}
+
+				if (listingPrice) {
+					return { name, status: 'listed', expiresIn, listingPrice, tradeportUrl }
+				}
+
+				if (expiresIn !== undefined && expiresIn <= 0) {
+					return { name, status: 'grace', expiresIn }
+				}
+				if (expiresIn !== undefined && expiresIn <= 90) {
+					return { name, status: 'expiring', expiresIn }
+				}
+				return { name, status: 'taken', expiresIn }
+			} catch {
+				return { name, status: 'taken' }
+			}
+		}),
+	)
+
+	if (registerSuggestionCache.size > MAX_SUGGESTION_CACHE_SIZE) {
+		const first = registerSuggestionCache.keys().next().value
+		if (first) registerSuggestionCache.delete(first)
+	}
+	registerSuggestionCache.set(cacheKey, {
+		data: suggestions,
+		exp: Date.now() + REGISTER_SUGGESTION_CACHE_TTL_MS,
+	})
+
+	return jsonResponse({ suggestions })
 }
 
 interface FeaturedName {

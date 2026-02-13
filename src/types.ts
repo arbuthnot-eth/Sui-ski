@@ -1,4 +1,6 @@
 import type { DurableObjectNamespace, KVNamespace } from '@cloudflare/workers-types'
+import type { SuiMcpServer } from './durable-objects/sui-mcp-server'
+import type { SuiPayAgent } from './durable-objects/sui-pay-agent'
 import type { WalletSession } from './durable-objects/wallet-session'
 
 export interface Env {
@@ -7,6 +9,10 @@ export interface Env {
 	WALRUS_NETWORK: 'mainnet' | 'testnet'
 	CACHE: KVNamespace
 	WALLET_SESSIONS: DurableObjectNamespace<WalletSession>
+	SUI_PAY_AGENT: DurableObjectNamespace<SuiPayAgent>
+	SUI_MCP_SERVER: DurableObjectNamespace<SuiMcpServer>
+	SUI_AGENT_PRIVATE_KEY?: string
+	SUI_AGENT_MAX_SPEND_MIST?: string
 	SERVICE_FEE_NAME?: string
 	DISCOUNT_RECIPIENT_NAME?: string
 	MESSAGING_CONTRACT_ADDRESS?: string

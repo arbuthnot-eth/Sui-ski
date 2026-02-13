@@ -1,7 +1,11 @@
 import { Hono } from 'hono'
+import { SuiMcpServer } from './durable-objects/sui-mcp-server'
+import { SuiPayAgent } from './durable-objects/sui-pay-agent'
 import { WalletSession } from './durable-objects/wallet-session'
+import { createAgentRoutes } from './handlers/agent-routes'
 import { handleAppRequest } from './handlers/app'
 import { generateDashboardPage } from './handlers/dashboard'
+import { scanExpiringNames } from './handlers/expiring-names'
 import { agentGraceVaultRoutes } from './handlers/grace-vault-agent'
 import { apiRoutes, landingPageHTML } from './handlers/landing'
 import { generateProfilePage } from './handlers/profile'
@@ -18,6 +22,7 @@ import {
 	handleWalletConnect,
 	handleWalletDisconnect,
 } from './handlers/wallet-api'
+import { createPremiumRoutes } from './handlers/x402-routes'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
@@ -33,7 +38,7 @@ import { ensureRpcEnv } from './utils/rpc'
 import { isTwitterPreviewBot } from './utils/social'
 import { parseSubdomain } from './utils/subdomain'
 
-export { WalletSession }
+export { WalletSession, SuiPayAgent, SuiMcpServer }
 
 type AppEnv = {
 	Bindings: Env
@@ -173,6 +178,15 @@ app.use('/api/agents/grace-vault/*', async (c, next) => {
 	await next()
 })
 app.route('/api/agents/grace-vault', agentGraceVaultRoutes)
+app.use('/api/agents/pay/*', async (c, next) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	await next()
+})
+app.use('/api/agents/mcp/*', async (c, next) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	await next()
+})
+app.route('/api/agents', createAgentRoutes())
 app.all('/api/agents/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.all('/api/ika/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
@@ -180,6 +194,7 @@ app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.g
 app.route('/api/sol-swap', solSwapRoutes)
 app.route('/api/subnamecap', subnameCapRoutes)
 app.route('/api/vault', vaultRoutes)
+app.route('/premium', createPremiumRoutes())
 app.route('/api', apiRoutes)
 
 const SVG_HEADERS = { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=604800' }
@@ -341,4 +356,9 @@ app.onError((err, _c) => {
 	return errorResponse(`Gateway error: ${message}`, 'GATEWAY_ERROR', 500)
 })
 
-export default app
+export default {
+	fetch: app.fetch,
+	async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+		ctx.waitUntil(scanExpiringNames(ensureRpcEnv(env)))
+	},
+}

@@ -292,7 +292,9 @@ ${generateZkSendCss()}</style>
 										? `<span class="badge expiry${daysToExpire <= 0 ? ' danger' : daysToExpire <= 7 ? ' danger' : daysToExpire <= 90 ? ' warning' : daysToExpire > 730 ? ' safe' : daysToExpire > 365 ? ' royalty' : ''}">
 											<span class="expiry-badge-text">${
 												daysToExpire <= 0
-													? (options.inGracePeriod ? 'Grace' : 'Expired')
+													? options.inGracePeriod
+														? 'Grace'
+														: 'Expired'
 													: daysToExpire > 365
 														? `${Math.floor(daysToExpire / 365)}y ${daysToExpire % 365}d`
 														: `${daysToExpire}d`
@@ -7753,7 +7755,7 @@ ${generateZkSendCss()}</style>
 				if (linkedNamesData.length > 0) {
 					var totalUsd = 0;
 					for (var ri = 0; ri < linkedNamesData.length; ri++) {
-						var rName = String(linkedNamesData[ri].name || '').replace(/\.sui$/i, '');
+						var rName = String(linkedNamesData[ri].name || '').replace(/.sui$/i, '');
 						var rLen = rName.length;
 						if (rLen === 3) totalUsd += 500;
 						else if (rLen === 4) totalUsd += 100;

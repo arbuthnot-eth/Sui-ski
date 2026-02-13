@@ -16,6 +16,8 @@ const createMockEnv = (network: 'mainnet' | 'testnet' = 'mainnet'): Env => ({
 	WALRUS_NETWORK: 'mainnet',
 	CACHE: {} as never,
 	WALLET_SESSIONS: {} as Env['WALLET_SESSIONS'],
+	SUI_PAY_AGENT: {} as Env['SUI_PAY_AGENT'],
+	SUI_MCP_SERVER: {} as Env['SUI_MCP_SERVER'],
 	MOVE_REGISTRY_PARENT_ID: '0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727',
 })
 

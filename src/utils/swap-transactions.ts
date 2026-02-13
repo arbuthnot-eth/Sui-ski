@@ -476,10 +476,7 @@ export async function buildSwapAndRenewTx(
 	)
 	const senderLower = senderAddress.toLowerCase()
 	const feeRecipientLower = feeRecipient.toLowerCase()
-	const residualRecipient =
-		feeRecipientLower === senderLower
-			? DUST_SINK_ADDRESS
-			: feeRecipient
+	const residualRecipient = feeRecipientLower === senderLower ? DUST_SINK_ADDRESS : feeRecipient
 
 	const [postRenewNsLeftover, nsSweepSui, nsSweepDeep] = tx.moveCall({
 		target: `${deepbookPackage}::pool::swap_exact_base_for_quote`,

@@ -7,9 +7,9 @@ const DEFAULT_RPC_URLS: Record<Env['SUI_NETWORK'], string> = {
 }
 
 const GRAPHQL_URLS: Record<Env['SUI_NETWORK'], string> = {
-	mainnet: 'https://sui-mainnet.mystenlabs.com/graphql',
-	testnet: 'https://sui-testnet.mystenlabs.com/graphql',
-	devnet: 'https://sui-devnet.mystenlabs.com/graphql',
+	mainnet: 'https://graphql.mainnet.sui.io/graphql',
+	testnet: 'https://graphql.testnet.sui.io/graphql',
+	devnet: 'https://graphql.devnet.sui.io/graphql',
 }
 
 const GRPC_URLS: Record<Env['SUI_NETWORK'], string> = {
