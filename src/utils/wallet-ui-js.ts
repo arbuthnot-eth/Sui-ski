@@ -1231,8 +1231,11 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	        var normalizedAddress = __wkNormalizeSuiAddress(conn.address);
 	        var hasValidAddress = __wkIsValidSuiAddress(normalizedAddress);
 	        var addressForLabel = hasValidAddress ? normalizedAddress : String(conn.address || '');
-	        var label = ${showPrimaryName} && conn.primaryName ? conn.primaryName : __wkTruncAddr(addressForLabel);
-	        var safeLabel = __wkEscapeHtml(label);
+	        var isPrimaryName = ${showPrimaryName} && conn.primaryName;
+	        var label = isPrimaryName ? conn.primaryName : __wkTruncAddr(addressForLabel);
+	        var safeLabel = isPrimaryName
+	          ? '<span style="color:#ffd700;font-weight:700">' + __wkEscapeHtml(label) + '</span>'
+	          : __wkEscapeHtml(label);
 	        var walletIcon = conn.wallet && conn.wallet.icon ? conn.wallet.icon : '';
 	        var connectionHint = __wkGetWaaPConnectionHint(conn);
 		        var balanceLine = '';
@@ -1241,7 +1244,7 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 		          balanceLine = '<div style="display:flex;flex-direction:column;gap:0;opacity:1;color:#fff;font-weight:500;margin-top:1px;">';
 		          balanceLine += '<span style="font-size:0.66rem;line-height:1.15;">~' + suiFmt + __wkSuiIconSvg + '</span>';
 		          if (__wkPortfolioData.usdcPerSui > 0) {
-		            balanceLine += '<span style="font-size:0.6rem;line-height:1.1;opacity:0.88;color:#dbeafe;">' + __wkFormatUsd(__wkPortfolioData.totalSui * __wkPortfolioData.usdcPerSui) + '</span>';
+		            balanceLine += '<span style="font-size:0.6rem;line-height:1.1;opacity:0.88;color:#ffe8a0;">' + __wkFormatUsd(__wkPortfolioData.totalSui * __wkPortfolioData.usdcPerSui) + '</span>';
 		          }
 		          balanceLine += '</div>';
 		        }

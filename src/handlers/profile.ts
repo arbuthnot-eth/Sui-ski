@@ -1242,6 +1242,7 @@ ${generateZkSendCss()}</style>
 			connectedAddress = conn.address;
 			connectedWalletName = conn.wallet ? conn.wallet.name : null;
 			connectedPrimaryName = conn.primaryName;
+			updateWalletProfileButton();
 
 			if (connectedAddress) {
 				if (connectedAddress !== __lastVaultAddress) {
@@ -2090,8 +2091,9 @@ ${generateZkSendCss()}</style>
 		}
 
 		function getWalletProfileHref() {
-			if (connectedPrimaryName) {
-				const cleanedName = connectedPrimaryName.replace(/.sui$/i, '');
+			const primaryName = typeof connectedPrimaryName === 'string' ? connectedPrimaryName.trim().replace(/\\.sui$/i, '') : ''
+			if (primaryName) {
+				const cleanedName = primaryName
 				return \`https://\${cleanedName}.sui.ski\`;
 			}
 			return 'https://sui.ski';
@@ -2099,9 +2101,13 @@ ${generateZkSendCss()}</style>
 
 		function updateWalletProfileButton() {
 			if (!walletProfileBtn) return;
+			const primaryName = typeof connectedPrimaryName === 'string' ? connectedPrimaryName.trim().replace(/\\.sui$/i, '') : ''
 			const href = getWalletProfileHref();
 			walletProfileBtn.dataset.href = href;
-			walletProfileBtn.title = connectedPrimaryName ? 'View my primary profile' : 'Go to sui.ski';
+			walletProfileBtn.title = primaryName ? primaryName + '.sui' : 'Go to sui.ski';
+			if (walletWidget) {
+				walletWidget.classList.toggle('has-primary-name', !!primaryName);
+			}
 		}
 
 		if (walletProfileBtn) {
@@ -4876,6 +4882,7 @@ ${generateZkSendCss()}</style>
 			checkEditPermission();
 			updateUIForWallet();
 			updateGlobalWalletWidget();
+			updateWalletProfileButton();
 			var conn = SuiWalletKit.$connection.value;
 			if (conn && conn.address) resolveWalletName(conn.address);
 		};
@@ -4886,6 +4893,7 @@ ${generateZkSendCss()}</style>
 			updateEditButton();
 			updateUIForWallet();
 			updateGlobalWalletWidget();
+			updateWalletProfileButton();
 		};
 
 		${generateSharedWalletMountJs({
@@ -4897,6 +4905,7 @@ ${generateZkSendCss()}</style>
 			profileFallbackHref: 'https://sui.ski',
 		})}
 
+		updateWalletProfileButton();
 		fetchAndDisplayOwnerInfo();
 		updateGracePeriodOwnerInfo();
 		updateGracePeriodCountdown();

@@ -3543,10 +3543,35 @@ ${socialMeta}
 			width: 18px;
 			height: 18px;
 		}
-		.wallet-profile-btn:hover {
+			.wallet-profile-btn:hover {
 			background: rgba(96, 165, 250, 0.2);
 			border-color: rgba(96, 165, 250, 0.55);
 			transform: translateY(-1px);
+		}
+		.wallet-widget.has-primary-name .wallet-profile-btn {
+			background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
+			border-color: rgba(250, 204, 21, 0.42);
+			box-shadow: 0 0 24px rgba(250, 204, 21, 0.16);
+		}
+		.wallet-widget.has-primary-name .wallet-profile-btn:hover {
+			background: linear-gradient(135deg, rgba(120, 84, 14, 0.45), rgba(58, 42, 12, 0.56));
+			border-color: rgba(250, 204, 21, 0.62);
+			box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
+		}
+		.wallet-widget.has-primary-name .wallet-profile-btn svg {
+			filter: sepia(1) saturate(3) hue-rotate(15deg) brightness(1.08);
+		}
+		.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected,
+		.wallet-widget.has-primary-name #wk-widget > div > button.connected {
+			background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
+			border-color: rgba(250, 204, 21, 0.42);
+			color: #fef3c7;
+			box-shadow: 0 0 24px rgba(250, 204, 21, 0.14);
+		}
+		.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected:hover,
+		.wallet-widget.has-primary-name #wk-widget > div > button.connected:hover {
+			border-color: rgba(250, 204, 21, 0.62);
+			box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
 		}
 		@media (max-width: 540px) {
 			.wallet-widget { top: 12px; right: 12px; }
@@ -3968,7 +3993,7 @@ ${socialMeta}
 
 				function getConnectedAddress() {
 					var conn = SuiWalletKit.$connection.value;
-					return conn && conn.status === 'connected' ? conn.address : null;
+					return conn && (conn.status === 'connected' || conn.status === 'session') ? conn.address : null;
 				}
 
 				function getViewerAddress() {
@@ -3978,7 +4003,8 @@ ${socialMeta}
 
 				function getConnectedPrimaryName() {
 					var conn = SuiWalletKit.$connection.value;
-					if (!conn || !conn.primaryName) return null;
+					if (!conn || (conn.status !== 'connected' && conn.status !== 'session')) return null;
+					if (!conn.primaryName) return null;
 					return String(conn.primaryName).replace(/\\.sui$/i, '');
 				}
 
@@ -4010,11 +4036,17 @@ ${socialMeta}
 				${generateWalletTxJs()}
 				${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onLandingWalletConnected', onDisconnect: 'onLandingWalletDisconnected' })}
 
+					const walletWidgetEl = document.getElementById('wallet-widget');
 					const walletProfileBtnEl = document.getElementById('wallet-profile-btn');
 					function syncWalletProfileButtonVisibility() {
 						if (!walletProfileBtnEl) return;
 						const hasWallet = !!getConnectedAddress();
+						const primaryName = getConnectedPrimaryName();
 						walletProfileBtnEl.classList.toggle('visible', hasWallet);
+						walletProfileBtnEl.title = primaryName ? primaryName + '.sui' : 'Go to sui.ski';
+						if (walletWidgetEl) {
+							walletWidgetEl.classList.toggle('has-primary-name', !!primaryName);
+						}
 					}
 
 					window.onLandingWalletConnected = function() {

@@ -159,6 +159,31 @@ export const profileStyles = `
 			border-color: rgba(96, 165, 250, 0.55);
 			transform: translateY(-1px);
 		}
+		.wallet-widget.has-primary-name .wallet-profile-btn {
+			background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
+			border-color: rgba(250, 204, 21, 0.42);
+			box-shadow: 0 0 24px rgba(250, 204, 21, 0.16);
+		}
+		.wallet-widget.has-primary-name .wallet-profile-btn:hover {
+			background: linear-gradient(135deg, rgba(120, 84, 14, 0.45), rgba(58, 42, 12, 0.56));
+			border-color: rgba(250, 204, 21, 0.62);
+			box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
+		}
+		.wallet-widget.has-primary-name .wallet-profile-btn svg {
+			filter: sepia(1) saturate(3) hue-rotate(15deg) brightness(1.08);
+		}
+		.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected,
+		.wallet-widget.has-primary-name #wk-widget > div > button.connected {
+			background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
+			border-color: rgba(250, 204, 21, 0.42);
+			color: #fef3c7;
+			box-shadow: 0 0 24px rgba(250, 204, 21, 0.14);
+		}
+		.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected:hover,
+		.wallet-widget.has-primary-name #wk-widget > div > button.connected:hover {
+			border-color: rgba(250, 204, 21, 0.62);
+			box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
+		}
 		.wallet-btn {
 			display: flex;
 			align-items: center;

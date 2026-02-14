@@ -72,6 +72,10 @@ export function generateRegistrationPage(
 				<input id="years" type="hidden" value="1">
 			</div>
 			</div>
+			<div class="nft-brand">
+				<a class="nft-brand-link" href="https://sui.ski">${generateLogoSvg(16)}<span class="nft-brand-name">.ski</span></a>
+				<span class="nft-brand-tagline">Lift every 0xAddr to human-readability at scale</span>
+			</div>
 			<div class="reg-form">
 				<button class="button" id="register-btn">Connect Wallet</button>
 				<div class="wallet-balance" id="wallet-balance"></div>
@@ -154,7 +158,7 @@ export function generateRegistrationPage(
 					background-repeat: repeat;
 				}
 				body::before {
-					opacity: 0.32;
+					opacity: calc(0.32 + var(--snow-boost, 0));
 					background-image:
 						radial-gradient(circle, rgba(var(--snow-rgb), 0.86) 0 1px, transparent 1.8px),
 						radial-gradient(circle, rgba(var(--snow-rgb), 0.6) 0 1.2px, transparent 2px);
@@ -163,7 +167,7 @@ export function generateRegistrationPage(
 					animation: snow-fall-a 23s linear infinite;
 				}
 				body::after {
-					opacity: 0.2;
+					opacity: calc(0.2 + var(--snow-boost, 0) * 0.7);
 					background-image:
 						radial-gradient(circle, rgba(var(--snow-rgb), 0.64) 0 0.9px, transparent 1.6px),
 						radial-gradient(circle, rgba(var(--snow-rgb), 0.5) 0 0.8px, transparent 1.4px);
@@ -194,26 +198,40 @@ export function generateRegistrationPage(
 						gap: 12px;
 						align-items: start;
 					}
-			.nav {
+			.nft-brand {
 			display: flex;
-			justify-content: space-between;
 			align-items: center;
 			gap: 10px;
+			max-width: 380px;
+			margin: 0 auto;
+			width: 100%;
+			padding: 0 4px;
 		}
-		.nav-home {
+		.nft-brand-link {
 			display: inline-flex;
 			align-items: center;
-			gap: 8px;
+			gap: 5px;
+			text-decoration: none;
+			flex-shrink: 0;
+		}
+		.nft-brand-name {
+			font-size: 1rem;
 			font-weight: 800;
 			color: var(--text);
-			text-decoration: none;
 		}
-		.nav-meta {
-			display: inline-flex;
-			align-items: center;
-			gap: 8px;
+		.nft-brand-tagline {
+			font-size: 0.62rem;
+			font-weight: 500;
+			color: var(--muted);
+			line-height: 1.3;
+			opacity: 0.75;
 		}
-			.nft-card {
+			@keyframes portal-ring {
+			0% { opacity: 0.5; transform: scale(0.97); }
+			50% { opacity: 1; transform: scale(1); }
+			100% { opacity: 0.5; transform: scale(0.97); }
+		}
+		.nft-card {
 			width: 100%;
 			max-width: 380px;
 			aspect-ratio: 1;
@@ -221,8 +239,8 @@ export function generateRegistrationPage(
 			padding: 22px;
 			border-radius: 20px;
 			background: linear-gradient(155deg, #0a1a13 0%, #040d09 100%);
-			border: 1px solid rgba(255, 255, 255, 0.22);
-			box-shadow: 0 0 25px rgba(255, 255, 255, 0.12), 0 0 60px rgba(255, 255, 255, 0.06), 0 0 120px rgba(255, 255, 255, 0.03), 0 24px 60px rgba(0, 0, 0, 0.55);
+			border: 1px solid rgba(var(--ski-green-rgb), 0.18);
+			box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
 			display: flex;
 			flex-direction: column;
 			justify-content: space-between;
@@ -232,11 +250,17 @@ export function generateRegistrationPage(
 		.nft-card::before {
 			content: '';
 			position: absolute;
-			inset: -80px;
-			border-radius: 60px;
-			background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 40%, transparent 70%);
+			inset: -2px;
+			border-radius: 21px;
+			background: conic-gradient(from 0deg, transparent 0%, rgba(var(--portal-r, 73), var(--portal-g, 218), var(--portal-b, 145), var(--portal-a, 0.35)) 25%, transparent 50%, rgba(var(--portal-r, 73), var(--portal-g, 218), var(--portal-b, 145), calc(var(--portal-a, 0.35) * 0.6)) 75%, transparent 100%);
 			pointer-events: none;
 			z-index: -1;
+			mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+			mask-composite: exclude;
+			-webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+			-webkit-mask-composite: xor;
+			padding: 1px;
+			animation: portal-ring 4s ease-in-out infinite;
 		}
 		.nft-top {
 			display: flex;
@@ -281,21 +305,34 @@ export function generateRegistrationPage(
 			gap: 6px;
 			overflow-wrap: anywhere;
 		}
+		@keyframes name-shimmer {
+			0% { background-position: 200% 0, 0 0; }
+			100% { background-position: -200% 0, 0 0; }
+		}
 		.nft-name {
 			font-size: clamp(2.2rem, 10vw, 3.2rem);
 			font-weight: 900;
 			letter-spacing: -0.04em;
 			line-height: 1.05;
-			background: linear-gradient(180deg, #ffffff 0%, #b8ffda 40%, #49da91 70%, #27bd74 100%);
+			background:
+				linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.4) 48%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0.4) 52%, transparent 70%),
+				linear-gradient(180deg, #ffffff 0%, #d0d4d8 40%, #b0b6be 60%, #e0e4e8 100%);
+			background-size: 400% 100%, 100% 100%;
 			-webkit-background-clip: text;
 			background-clip: text;
 			-webkit-text-fill-color: transparent;
-			filter: drop-shadow(0 2px 8px rgba(var(--ski-green-rgb), 0.3));
+			animation: name-shimmer 5s ease-in-out infinite;
 		}
 		.nft-name-tld {
-			background: linear-gradient(180deg, rgba(73, 218, 145, 0.45) 0%, rgba(39, 189, 116, 0.3) 100%);
+			background:
+				linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.25) 48%, rgba(255, 255, 255, 0.35) 50%, rgba(255, 255, 255, 0.25) 52%, transparent 70%),
+				linear-gradient(180deg, #3d9966 0%, #1a7a4a 35%, #0d5c35 65%, #2a8a56 100%);
+			background-size: 400% 100%, 100% 100%;
 			-webkit-background-clip: text;
 			background-clip: text;
+			-webkit-text-fill-color: transparent;
+			animation: name-shimmer 5s ease-in-out infinite;
+			transition: filter 0.4s ease;
 		}
 		.primary-star {
 			width: 28px;
@@ -334,22 +371,24 @@ export function generateRegistrationPage(
 			align-items: center;
 			justify-content: center;
 			gap: 6px;
-			padding: 4px 0;
-			border-radius: 999px;
-			background: rgba(var(--ski-green-rgb), 0.15);
-			border: 1px solid rgba(var(--ski-green-rgb), 0.35);
-			font-size: 0.68rem;
+			padding: 5px 0;
+			border-radius: 6px;
+			background: rgba(13, 82, 48, 0.4);
+			border: 1px solid rgba(20, 130, 72, 0.5);
+			font-size: 0.78rem;
 			font-weight: 700;
-			color: #86efac;
-			letter-spacing: 0.04em;
+			color: #ffffff;
+			letter-spacing: 0.05em;
 			text-transform: uppercase;
+			transition: background 0.4s ease, border-color 0.4s ease;
 		}
 		.nft-dot {
-			width: 8px;
-			height: 8px;
+			width: 9px;
+			height: 9px;
 			border-radius: 50%;
-			background: #34d399;
-			box-shadow: 0 0 8px rgba(52, 211, 153, 0.8);
+			background: #16a34a;
+			box-shadow: 0 0 10px rgba(22, 163, 74, 0.9);
+			transition: background 0.4s ease, box-shadow 0.4s ease;
 		}
 		.nft-body {
 			display: flex;
@@ -387,7 +426,7 @@ export function generateRegistrationPage(
 			display: flex;
 			flex-direction: row;
 			align-items: center;
-			gap: 8px;
+			gap: 4px;
 			font-size: 0.72rem;
 			font-weight: 700;
 			color: rgba(255, 255, 255, 0.9);
@@ -401,7 +440,8 @@ export function generateRegistrationPage(
 			height: 0.85em;
 			display: inline-block;
 			vertical-align: -0.1em;
-			margin-left: 2px;
+			margin-left: 1px;
+			margin-right: 0;
 		}
 		.nft-price-stack {
 			display: flex;
@@ -412,7 +452,7 @@ export function generateRegistrationPage(
 		.nft-price-main {
 			display: flex;
 			align-items: baseline;
-			gap: 6px;
+			justify-content: space-between;
 			font-size: clamp(1.8rem, 5.5vw, 2.2rem);
 			font-weight: 800;
 		}
@@ -421,14 +461,15 @@ export function generateRegistrationPage(
 			width: 0.5em;
 			height: 0.65em;
 			display: inline-block;
-			vertical-align: -0.04em;
+			vertical-align: baseline;
 			fill: #4DA2FF;
 		}
 		.nft-price-stack .price-usd {
 			color: var(--muted);
-			font-size: 0.72rem;
-			font-weight: 600;
+			font-size: 0.92rem;
+			font-weight: 700;
 			white-space: nowrap;
+			align-self: flex-end;
 		}
 		.nft-price-stack .price-decimals {
 			font-size: 0.56em;
@@ -483,6 +524,7 @@ export function generateRegistrationPage(
 			border: 1px solid rgba(var(--ski-green-rgb), 0.28);
 			background: rgba(10, 34, 22, 0.55);
 			flex-shrink: 0;
+			transition: border-color 0.4s ease;
 		}
 		.year-btn-v {
 			flex: 1;
@@ -570,13 +612,38 @@ export function generateRegistrationPage(
 					display: none;
 					align-items: center;
 					justify-content: center;
-					background: rgba(var(--ski-green-rgb), 0.14);
-					border: 1px solid rgba(var(--ski-green-rgb), 0.35);
+					background: rgba(255, 215, 0, 0.1);
+					border: 1px solid rgba(255, 215, 0, 0.35);
 					padding: 0;
 					cursor: pointer;
 				}
+				.wallet-profile-btn svg {
+					filter: sepia(1) saturate(3) hue-rotate(15deg) brightness(1.1);
+				}
 				.wallet-profile-btn.visible { display: inline-flex; }
-			.wallet-profile-btn:hover { background: rgba(var(--ski-green-rgb), 0.24); }
+			.wallet-profile-btn:hover { background: rgba(255, 215, 0, 0.2); border-color: rgba(255, 215, 0, 0.55); }
+			.wallet-widget.has-primary-name .wallet-profile-btn {
+				background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
+				border-color: rgba(250, 204, 21, 0.42);
+				box-shadow: 0 0 24px rgba(250, 204, 21, 0.16);
+			}
+			.wallet-widget.has-primary-name .wallet-profile-btn:hover {
+				background: linear-gradient(135deg, rgba(120, 84, 14, 0.45), rgba(58, 42, 12, 0.56));
+				border-color: rgba(250, 204, 21, 0.62);
+				box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
+			}
+			.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected,
+			.wallet-widget.has-primary-name #wk-widget > div > button.connected {
+				background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
+				border-color: rgba(250, 204, 21, 0.42);
+				color: #fef3c7;
+				box-shadow: 0 0 24px rgba(250, 204, 21, 0.14);
+			}
+			.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected:hover,
+			.wallet-widget.has-primary-name #wk-widget > div > button.connected:hover {
+				border-color: rgba(250, 204, 21, 0.62);
+				box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
+			}
 			.tracker-footer {
 				position: fixed;
 				left: 0;
@@ -635,34 +702,34 @@ export function generateRegistrationPage(
 			align-items: center;
 			gap: 8px;
 			padding: 10px 16px;
-			background: rgba(5, 13, 10, 0.94);
+			background: rgba(13, 10, 5, 0.94);
 			backdrop-filter: blur(16px);
 			-webkit-backdrop-filter: blur(16px);
-			border: 1px solid rgba(var(--ski-green-rgb), 0.28);
+			border: 1px solid rgba(255, 215, 0, 0.28);
 			border-radius: 10px;
-			color: #c7f5db;
+			color: #ffeeb0;
 			font-size: 0.82rem;
 			font-weight: 600;
 			cursor: pointer;
 			transition: all 0.3s ease;
-			box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42), 0 0 24px rgba(var(--ski-green-rgb), 0.14);
+			box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
 		}
 		#wk-widget .wk-widget-btn:hover,
 		#wk-widget > div > button:hover {
-			border-color: rgba(var(--ski-green-rgb), 0.46);
-			color: var(--text);
+			border-color: rgba(255, 215, 0, 0.5);
+			color: #fff;
 			transform: translateY(-1px);
-			box-shadow: 0 14px 32px rgba(0, 0, 0, 0.48), 0 0 30px rgba(var(--ski-green-rgb), 0.2);
+			box-shadow: 0 14px 32px rgba(0, 0, 0, 0.48), 0 0 20px rgba(255, 215, 0, 0.1);
 		}
 		#wk-widget .wk-widget-btn.connected,
 		#wk-widget > div > button.connected {
-			background: linear-gradient(135deg, rgba(40, 160, 103, 0.2), rgba(22, 110, 68, 0.2));
-			border-color: rgba(var(--ski-green-rgb), 0.38);
+			background: linear-gradient(135deg, rgba(160, 130, 20, 0.15), rgba(120, 90, 10, 0.15));
+			border-color: rgba(255, 215, 0, 0.38);
 		}
 		#wk-widget .wk-widget-btn.session-only,
 		#wk-widget > div > button.session-only {
 			border-style: dashed;
-			background: linear-gradient(135deg, rgba(21, 90, 59, 0.28), rgba(11, 46, 30, 0.3));
+			background: linear-gradient(135deg, rgba(90, 70, 10, 0.25), rgba(60, 45, 5, 0.25));
 		}
 	</style>
 </head>
@@ -676,11 +743,6 @@ export function generateRegistrationPage(
 	</div>
 
 	<div class="container">
-			<nav class="nav">
-				<a class="nav-home" href="https://sui.ski">${generateLogoSvg(22)} sui.ski</a>
-				<div class="nav-meta"></div>
-			</nav>
-
 		<div class="layout-grid">
 			${registrationCardHtml}
 			${discoveryColumnHtml}
@@ -762,6 +824,7 @@ export function generateRegistrationPage(
 			const registerStatus = document.getElementById('register-status')
 			const priceValue = document.getElementById('price-value')
 			const suiPriceEl = document.getElementById('sui-price')
+			const walletWidget = document.getElementById('wallet-widget')
 			const walletProfileBtn = document.getElementById('wallet-profile-btn')
 		const walletBalanceEl = document.getElementById('wallet-balance')
 		const x402PriceEl = document.getElementById('x402-price')
@@ -833,25 +896,112 @@ export function generateRegistrationPage(
 			return Math.min(MAX_YEARS, Math.max(MIN_YEARS, Math.floor(years)))
 		}
 
+		function yearProgress(years) {
+			return Math.min(1, Math.max(0, (years - MIN_YEARS) / (MAX_YEARS - MIN_YEARS)))
+		}
+
+		function lerpRgb(r0, g0, b0, r1, g1, b1, t) {
+			return 'rgb(' + Math.round(r0 + (r1 - r0) * t) + ',' + Math.round(g0 + (g1 - g0) * t) + ',' + Math.round(b0 + (b1 - b0) * t) + ')'
+		}
+
+		function yearColor(years) {
+			return lerpRgb(26, 153, 96, 255, 255, 255, yearProgress(years))
+		}
+
+		function updateYearTheme(years) {
+			const t = yearProgress(years)
+
+			const nameEl = document.querySelector('.nft-name')
+			if (nameEl) {
+				const s1 = lerpRgb(208, 212, 218, 255, 255, 255, t)
+				const s2 = lerpRgb(176, 182, 190, 240, 242, 248, t)
+				const s3 = lerpRgb(138, 146, 158, 220, 225, 235, t)
+				const s4 = lerpRgb(200, 206, 214, 252, 252, 255, t)
+				nameEl.style.background =
+					'linear-gradient(110deg, transparent 30%, rgba(255,255,255,' + (0.4 + t * 0.4).toFixed(2) + ') 48%, rgba(255,255,255,' + (0.55 + t * 0.35).toFixed(2) + ') 50%, rgba(255,255,255,' + (0.4 + t * 0.4).toFixed(2) + ') 52%, transparent 70%),' +
+					'linear-gradient(180deg, ' + s1 + ' 0%, ' + s2 + ' 40%, ' + s3 + ' 60%, ' + s4 + ' 100%)'
+				nameEl.style.backgroundSize = '400% 100%, 100% 100%'
+				nameEl.style.webkitBackgroundClip = 'text'
+				nameEl.style.backgroundClip = 'text'
+			}
+
+			const tldEl = document.querySelector('.nft-name-tld')
+			if (tldEl) {
+				const g1 = lerpRgb(61, 153, 102, 232, 238, 245, t)
+				const g2 = lerpRgb(26, 122, 74, 210, 218, 230, t)
+				const g3 = lerpRgb(13, 92, 53, 185, 196, 212, t)
+				const g4 = lerpRgb(42, 138, 86, 224, 232, 242, t)
+				tldEl.style.background =
+					'linear-gradient(110deg, transparent 30%, rgba(255,255,255,' + (0.25 + t * 0.5).toFixed(2) + ') 48%, rgba(255,255,255,' + (0.35 + t * 0.5).toFixed(2) + ') 50%, rgba(255,255,255,' + (0.25 + t * 0.5).toFixed(2) + ') 52%, transparent 70%),' +
+					'linear-gradient(180deg, ' + g1 + ' 0%, ' + g2 + ' 35%, ' + g3 + ' 65%, ' + g4 + ' 100%)'
+				tldEl.style.backgroundSize = '400% 100%, 100% 100%'
+				tldEl.style.webkitBackgroundClip = 'text'
+				tldEl.style.backgroundClip = 'text'
+			}
+
+			const borderColor = lerpRgb(73, 218, 145, 200, 210, 225, t)
+			const borderA = (0.18 + t * 0.3).toFixed(2)
+			const cardEl = document.querySelector('.nft-card')
+			if (cardEl) {
+				cardEl.style.borderColor = borderColor.replace('rgb(', 'rgba(').replace(')', ',' + borderA + ')')
+			}
+
+			const pr = Math.round(73 + 127 * t)
+			const pg = Math.round(218 - 8 * t)
+			const pb = Math.round(145 + 80 * t)
+			document.documentElement.style.setProperty('--portal-r', String(pr))
+			document.documentElement.style.setProperty('--portal-g', String(pg))
+			document.documentElement.style.setProperty('--portal-b', String(pb))
+			document.documentElement.style.setProperty('--portal-a', (0.35 + t * 0.5).toFixed(2))
+
+			const chipEl = document.querySelector('.nft-chip')
+			if (chipEl) {
+				chipEl.style.color = '#ffffff'
+				const cbg = lerpRgb(13, 82, 48, 80, 90, 100, t)
+				chipEl.style.background = cbg.replace('rgb(', 'rgba(').replace(')', ',' + (0.4 - t * 0.1).toFixed(2) + ')')
+				const cbd = lerpRgb(20, 130, 72, 180, 195, 210, t)
+				chipEl.style.borderColor = cbd.replace('rgb(', 'rgba(').replace(')', ',' + (0.5 + t * 0.2).toFixed(2) + ')')
+			}
+
+			const dotEl = document.querySelector('.nft-dot')
+			if (dotEl) {
+				const dotColor = lerpRgb(22, 163, 74, 220, 235, 245, t)
+				dotEl.style.background = dotColor
+				dotEl.style.boxShadow = '0 0 ' + (8 + t * 6) + 'px ' + dotColor
+			}
+
+			const stepperEl = document.querySelector('.year-stepper-v')
+			if (stepperEl) {
+				const sb = lerpRgb(73, 218, 145, 200, 210, 225, t)
+				stepperEl.style.borderColor = sb.replace('rgb(', 'rgba(').replace(')', ',' + (0.28 + t * 0.3).toFixed(2) + ')')
+			}
+
+			document.body.style.setProperty('--snow-boost', (t * 0.5).toFixed(3))
+		}
+
 		function setSelectedYears(nextYears) {
 			const normalized = Math.min(MAX_YEARS, Math.max(MIN_YEARS, Math.floor(Number(nextYears) || MIN_YEARS)))
 			if (yearsEl) yearsEl.value = String(normalized)
-			if (yearsValueEl) yearsValueEl.textContent = String(normalized)
+			if (yearsValueEl) {
+				yearsValueEl.textContent = String(normalized)
+				yearsValueEl.style.color = yearColor(normalized)
+			}
 			if (yearsDecreaseBtn) yearsDecreaseBtn.disabled = normalized <= MIN_YEARS
 			if (yearsIncreaseBtn) yearsIncreaseBtn.disabled = normalized >= MAX_YEARS
+			updateYearTheme(normalized)
 		}
 
 		function getConnectedAddress() {
 			const conn = SuiWalletKit.$connection.value
 			if (!conn) return null
-			if (conn.status !== 'connected') return null
+			if (conn.status !== 'connected' && conn.status !== 'session') return null
 			return conn.address || null
 		}
 
 		function getConnectedPrimaryName() {
 			const conn = SuiWalletKit.$connection.value
 			if (!conn) return null
-			if (conn.status !== 'connected') return null
+			if (conn.status !== 'connected' && conn.status !== 'session') return null
 			if (!conn.primaryName || typeof conn.primaryName !== 'string') return null
 			const normalized = conn.primaryName.trim().replace(/\\.sui$/i, '')
 			return normalized || null
@@ -937,12 +1087,27 @@ export function generateRegistrationPage(
 			return null
 		}
 
+		function updateWalletProfileButton() {
+			if (!walletProfileBtn) return
+			const address = getConnectedAddress()
+			const primaryName = getConnectedPrimaryName()
+			walletProfileBtn.classList.toggle('visible', !!address)
+			if (walletWidget) {
+				walletWidget.classList.toggle('has-primary-name', !!primaryName)
+			}
+			if (primaryName) {
+				walletProfileBtn.dataset.href = 'https://' + encodeURIComponent(primaryName) + '.sui.ski'
+				walletProfileBtn.title = primaryName + '.sui'
+			} else {
+				walletProfileBtn.dataset.href = 'https://sui.ski'
+				walletProfileBtn.title = 'Go to sui.ski'
+			}
+		}
+
 		function updateRegisterButton() {
 			if (!registerBtn) return
 			const address = getConnectedAddress()
-			if (walletProfileBtn) {
-				walletProfileBtn.classList.toggle('visible', !!address)
-			}
+			updateWalletProfileButton()
 			if (!address) {
 				registerBtn.style.display = 'none'
 				return
@@ -988,9 +1153,10 @@ export function generateRegistrationPage(
 								'<span>-' + Math.round(savingsSui) + discountSuiIcon + '</span>' +
 								'<span>($' + (savingsUsdText || '--') + ')</span>'
 						}
+						const usdColor = yearColor(years)
 						priceValue.innerHTML =
 							'<div class="nft-price-main"><span class="price-amount">' + primaryPriceHtml + '</span>' + suiIcon + '</div>' +
-							'<span class="price-usd">\u2248 ' + usdLabel + '</span>'
+							'<span class="price-usd" style="color:' + usdColor + '">\u2248 ' + usdLabel + '</span>'
 					}
 					updateRegisterButton()
 				} catch (error) {
@@ -1348,6 +1514,7 @@ export function generateRegistrationPage(
 
 		window.onRegisterWalletConnected = function() {
 			updateRegisterButton()
+			updateWalletProfileButton()
 			syncPrimaryStarState()
 			updateWalletBalance()
 			updateCardWalletInfo()
@@ -1355,6 +1522,7 @@ export function generateRegistrationPage(
 
 		window.onRegisterWalletDisconnected = function() {
 			updateRegisterButton()
+			updateWalletProfileButton()
 			syncPrimaryStarState()
 			updateWalletBalance()
 			updateCardWalletInfo()
@@ -1411,6 +1579,13 @@ export function generateRegistrationPage(
 			yearsIncreaseBtn.addEventListener('click', () => {
 				setSelectedYears(getSelectedYears() + 1)
 				fetchPricing()
+			})
+		}
+		if (walletProfileBtn && !walletProfileBtn.dataset.registerBound) {
+			walletProfileBtn.dataset.registerBound = '1'
+			walletProfileBtn.addEventListener('click', (e) => {
+				e.stopPropagation()
+				window.location.href = walletProfileBtn.dataset.href || 'https://sui.ski'
 			})
 		}
 		if (primaryStarEl) {
