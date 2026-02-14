@@ -13375,15 +13375,29 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			const tabs = swapPanel ? swapPanel.querySelectorAll('.swap-tab') : [];
 			const tabSwap = document.getElementById('swap-tab-swap');
 			const tabCrosschain = document.getElementById('swap-tab-crosschain');
+			const shouldAutoOpenSwap = (() => {
+				const tabParam = String(new URLSearchParams(window.location.search).get('tab') || '').toLowerCase();
+				const hashParam = String(window.location.hash || '').toLowerCase();
+				return tabParam === 'swap' || hashParam === '#swap';
+			})();
 			let terminalLoaded = false;
+
+			function openSwapPanel() {
+				if (!swapPanel) return;
+				swapPanel.style.display = 'block';
+				if (!terminalLoaded) {
+					loadTerminal();
+				}
+			}
 
 			function toggleSwapPanel() {
 				if (!swapPanel) return;
 				const isOpen = swapPanel.style.display !== 'none';
-				swapPanel.style.display = isOpen ? 'none' : 'block';
-				if (!isOpen && !terminalLoaded) {
-					loadTerminal();
+				if (isOpen) {
+					swapPanel.style.display = 'none';
+					return;
 				}
+				openSwapPanel();
 			}
 
 			function loadTerminal() {
@@ -13437,6 +13451,10 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 						}
 					});
 				});
+
+			if (shouldAutoOpenSwap) {
+				openSwapPanel();
+			}
 
 			document.addEventListener('click', (e) => {
 				if (!swapPanel || swapPanel.style.display === 'none') return;
