@@ -196,8 +196,8 @@ apiRoutes.get('/renew-quote', async (c) => {
 		const nsNeededMist = pricing.nsNeededMist
 		const nsTokensNeeded = Number(nsNeededMist) / 1e6
 		const suiForNsSwap = nsTokensNeeded * nsPrice.suiPerNs
-		const DEEP_FEE_OVERHEAD = 1.15
-		const suiWithDeepFee = suiForNsSwap * DEEP_FEE_OVERHEAD
+		const SLIPPAGE_BUFFER = 1.03
+		const suiWithBuffer = suiForNsSwap * SLIPPAGE_BUFFER
 
 		const NS_COIN_TYPE =
 			'0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS'
@@ -216,22 +216,22 @@ apiRoutes.get('/renew-quote', async (c) => {
 		paymentOptions.push({
 			name: 'SUI',
 			coinType: SUI_COIN_TYPE,
-			tokensNeeded: suiWithDeepFee,
+			tokensNeeded: suiWithBuffer,
 			decimals: 9,
-			suiEquivalent: suiWithDeepFee,
-			usdEquivalent: suiWithDeepFee * usdcPrice.usdcPerSui,
+			suiEquivalent: suiWithBuffer,
+			usdEquivalent: suiWithBuffer * usdcPrice.usdcPerSui,
 		})
 
 		for (const pool of pools) {
 			if (pool.coinType === NS_COIN_TYPE || pool.coinType === SUI_COIN_TYPE) continue
-			const tokensNeeded = suiWithDeepFee / pool.suiPerToken
+			const tokensNeeded = suiWithBuffer / pool.suiPerToken
 			paymentOptions.push({
 				name: pool.name,
 				coinType: pool.coinType,
 				tokensNeeded,
 				decimals: pool.decimals,
-				suiEquivalent: suiWithDeepFee,
-				usdEquivalent: suiWithDeepFee * usdcPrice.usdcPerSui,
+				suiEquivalent: suiWithBuffer,
+				usdEquivalent: suiWithBuffer * usdcPrice.usdcPerSui,
 			})
 		}
 
@@ -240,9 +240,9 @@ apiRoutes.get('/renew-quote', async (c) => {
 				domain,
 				years,
 				nsNeededMist: String(nsNeededMist),
-				suiNeeded: suiWithDeepFee,
+				suiNeeded: suiWithBuffer,
 				usdcPerSui: usdcPrice.usdcPerSui,
-				usdNeeded: suiWithDeepFee * usdcPrice.usdcPerSui,
+				usdNeeded: suiWithBuffer * usdcPrice.usdcPerSui,
 				nsPerSui: nsPrice.nsPerSui,
 				suiPerNs: nsPrice.suiPerNs,
 				paymentOptions,
@@ -3548,30 +3548,30 @@ ${socialMeta}
 			border-color: rgba(96, 165, 250, 0.55);
 			transform: translateY(-1px);
 		}
-		.wallet-widget.has-primary-name .wallet-profile-btn {
-			background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
-			border-color: rgba(250, 204, 21, 0.42);
-			box-shadow: 0 0 24px rgba(250, 204, 21, 0.16);
+		.wallet-widget.has-black-diamond .wallet-profile-btn {
+			background: linear-gradient(135deg, rgba(10, 10, 18, 0.6), rgba(18, 18, 28, 0.7));
+			border-color: rgba(120, 130, 155, 0.42);
+			box-shadow: 0 0 24px rgba(0, 0, 0, 0.4);
 		}
-		.wallet-widget.has-primary-name .wallet-profile-btn:hover {
-			background: linear-gradient(135deg, rgba(120, 84, 14, 0.45), rgba(58, 42, 12, 0.56));
-			border-color: rgba(250, 204, 21, 0.62);
-			box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
+		.wallet-widget.has-black-diamond .wallet-profile-btn:hover {
+			background: linear-gradient(135deg, rgba(16, 16, 26, 0.7), rgba(24, 24, 36, 0.8));
+			border-color: rgba(140, 150, 175, 0.62);
+			box-shadow: 0 0 28px rgba(0, 0, 0, 0.5);
 		}
-		.wallet-widget.has-primary-name .wallet-profile-btn svg {
-			filter: sepia(1) saturate(3) hue-rotate(15deg) brightness(1.08);
+		.wallet-widget.has-black-diamond .wallet-profile-btn svg {
+			filter: brightness(0.7) contrast(1.2) saturate(0.4);
 		}
-		.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected,
-		.wallet-widget.has-primary-name #wk-widget > div > button.connected {
-			background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
-			border-color: rgba(250, 204, 21, 0.42);
-			color: #fef3c7;
-			box-shadow: 0 0 24px rgba(250, 204, 21, 0.14);
+		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
+		.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
+			background: linear-gradient(135deg, rgba(10, 10, 18, 0.6), rgba(18, 18, 28, 0.7));
+			border-color: rgba(120, 130, 155, 0.42);
+			color: #d0d4e0;
+			box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
 		}
-		.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected:hover,
-		.wallet-widget.has-primary-name #wk-widget > div > button.connected:hover {
-			border-color: rgba(250, 204, 21, 0.62);
-			box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
+		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected:hover,
+		.wallet-widget.has-black-diamond #wk-widget > div > button.connected:hover {
+			border-color: rgba(140, 150, 175, 0.62);
+			box-shadow: 0 0 28px rgba(0, 0, 0, 0.5);
 		}
 		@media (max-width: 540px) {
 			.wallet-widget { top: 12px; right: 12px; }
@@ -4045,7 +4045,7 @@ ${socialMeta}
 						walletProfileBtnEl.classList.toggle('visible', hasWallet);
 						walletProfileBtnEl.title = primaryName ? primaryName + '.sui' : 'Go to sui.ski';
 						if (walletWidgetEl) {
-							walletWidgetEl.classList.toggle('has-primary-name', !!primaryName);
+							walletWidgetEl.classList.toggle('has-black-diamond', !!primaryName);
 						}
 					}
 

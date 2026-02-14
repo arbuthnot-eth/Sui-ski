@@ -282,7 +282,7 @@ export function generateX402ChatJs(config: X402ChatConfig): string {
 					+ '<span class="x402-msg-sender">' + escapeHtml(displayName) + '</span>'
 					+ '<span class="x402-msg-time">' + escapeHtml(timeText) + '</span>'
 					+ '</div>'
-					+ '<div>' + escapeHtml(message.content || '').replace(/\n/g, '<br>') + '</div>';
+					+ '<div>' + escapeHtml(message.content || '').replace(/\\n/g, '<br>') + '</div>';
 
 				if (server.isModerator && !isMine && sender) {
 					var serverMuted = isAddressMuted(sender, 'server');

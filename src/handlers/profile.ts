@@ -374,6 +374,7 @@ ${generateZkSendCss()}</style>
 								<svg class="visit-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polyline points="9 18 15 12 9 6"></polyline></svg>
 							</div>
 							<div class="owner-actions">
+								<button class="edit-btn hidden" id="transfer-btn" title="Transfer NFT ownership">Transfer</button>
 								<button class="edit-btn hidden" id="jacket-btn" title="List for decay auction">Jacket</button>
 							</div>
 						</div>
@@ -465,7 +466,7 @@ ${generateZkSendCss()}</style>
 									<p class="vault-panel-hint">Visit any .sui profile and tap the diamond to .SKI it.</p>
 									<p class="vault-panel-attribution">Encrypted with Seal &middot; Sui Key-In standard</p>
 								</div>
-								<div class="vault-card-grid" id="vault-card-grid"></div>
+								<div class="vault-ski-grid" id="vault-card-grid"></div>
 							</div>
 						</div><!-- end panel-vault -->
 						</div>
@@ -819,6 +820,35 @@ ${generateZkSendCss()}</style>
 			<div class="jacket-modal-buttons">
 				<button class="cancel-btn" id="jacket-cancel-btn">Cancel</button>
 				<button class="list-btn" id="jacket-list-btn">List</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Transfer NFT Modal -->
+	<div class="transfer-modal" id="transfer-modal">
+		<div class="transfer-modal-content">
+			<h3>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+				Transfer ${escapeHtml(cleanName)}.sui
+			</h3>
+			<p>Transfer ownership of this name's registration NFT to another address.</p>
+			<label for="transfer-recipient">Recipient (address or .sui name)</label>
+			<input type="text" id="transfer-recipient" placeholder="0x... or name.sui" autocomplete="off" spellcheck="false" />
+			<div class="transfer-resolved" id="transfer-resolved"></div>
+			<div class="transfer-gas-section">
+				<span class="transfer-gas-label">Pay gas with</span>
+				<div class="transfer-gas-toggle" id="transfer-gas-toggle">
+					<button type="button" class="transfer-gas-pill active" data-gas="sui">SUI</button>
+					<button type="button" class="transfer-gas-pill" data-gas="usdc">USDC</button>
+				</div>
+				<span class="transfer-gas-estimate" id="transfer-gas-estimate"></span>
+			</div>
+			<div class="transfer-warning">This will transfer full ownership of the NFT. The new owner will control this name, its target address, and renewal rights.</div>
+			<div class="transfer-status" id="transfer-status"></div>
+			<div id="transfer-confirm-step" class="transfer-confirm-step"></div>
+			<div class="transfer-modal-buttons">
+				<button class="cancel-btn" id="transfer-cancel-btn">Cancel</button>
+				<button class="confirm-btn" id="transfer-confirm-btn">Transfer</button>
 			</div>
 		</div>
 	</div>
@@ -1309,6 +1339,21 @@ ${generateZkSendCss()}</style>
 		const jacketCancelBtn = document.getElementById('jacket-cancel-btn');
 		const jacketListBtn = document.getElementById('jacket-list-btn');
 
+		const transferBtn = document.getElementById('transfer-btn');
+		const transferModal = document.getElementById('transfer-modal');
+		const transferRecipientInput = document.getElementById('transfer-recipient');
+		const transferResolvedEl = document.getElementById('transfer-resolved');
+		const transferGasToggle = document.getElementById('transfer-gas-toggle');
+		const transferGasEstimate = document.getElementById('transfer-gas-estimate');
+		const transferStatus = document.getElementById('transfer-status');
+		const transferConfirmStep = document.getElementById('transfer-confirm-step');
+		const transferCancelBtn = document.getElementById('transfer-cancel-btn');
+		const transferConfirmBtn = document.getElementById('transfer-confirm-btn');
+		let transferResolvedAddress = '';
+		let transferResolvedName = '';
+		let transferGasToken = 'sui';
+		let transferConfirmPending = false;
+
 		// Shared wallet widget elements (same pattern as landing page)
 		const walletWidget = document.getElementById('wallet-widget');
 		const walletBtn = document.getElementById('wallet-btn');
@@ -1726,6 +1771,11 @@ ${generateZkSendCss()}</style>
 					document.body.classList.toggle('profile-primary-active', isAlreadyPrimary);
 				}
 				syncIdentityPrimaryBadgeState();
+
+				// Transfer button - visible when owner and NFT exists
+				if (transferBtn) {
+					transferBtn.classList.toggle('hidden', !isOwner || !NFT_ID);
+				}
 
 				// Jacket button - visible when owner and package configured
 				if (jacketBtn) {
@@ -4533,9 +4583,246 @@ ${generateZkSendCss()}</style>
 			}
 		}
 
+		function openTransferModal() {
+			if (!canSign()) {
+				connectWallet().then(() => {
+					if (canSign()) openTransferModal();
+				});
+				return;
+			}
+			const normalizedOwner = getResolvedOwnerAddress();
+			const isOwner = Boolean(
+				connectedAddress
+				&& normalizedOwner
+				&& connectedAddress.toLowerCase() === normalizedOwner,
+			);
+			if (!isOwner) {
+				showOwnerInlineStatus('Only the NFT owner can transfer', 'error');
+				return;
+			}
+			if (!NFT_ID) {
+				showOwnerInlineStatus('No NFT found for this name', 'error');
+				return;
+			}
+			transferResolvedAddress = '';
+			transferResolvedName = '';
+			transferConfirmPending = false;
+			transferGasToken = 'sui';
+			if (transferRecipientInput) transferRecipientInput.value = '';
+			if (transferResolvedEl) { transferResolvedEl.textContent = ''; transferResolvedEl.className = 'transfer-resolved'; }
+			if (transferStatus) { transferStatus.textContent = ''; transferStatus.className = 'transfer-status'; }
+			if (transferConfirmStep) transferConfirmStep.className = 'transfer-confirm-step';
+			if (transferConfirmBtn) { transferConfirmBtn.textContent = 'Transfer'; transferConfirmBtn.disabled = false; }
+			if (transferGasEstimate) transferGasEstimate.textContent = '';
+			if (transferGasToggle) {
+				transferGasToggle.querySelectorAll('.transfer-gas-pill').forEach(function(pill) {
+					pill.classList.toggle('active', pill.dataset.gas === 'sui');
+				});
+			}
+			if (transferModal) transferModal.classList.add('open');
+			if (transferRecipientInput) setTimeout(function() { transferRecipientInput.focus(); }, 100);
+		}
+
+		function closeTransferModal() {
+			if (transferModal) transferModal.classList.remove('open');
+			transferConfirmPending = false;
+		}
+
+		let transferResolveTimeout = null;
+		function resolveTransferRecipient(input) {
+			clearTimeout(transferResolveTimeout);
+			transferResolvedAddress = '';
+			transferResolvedName = '';
+			transferConfirmPending = false;
+			if (transferConfirmBtn) { transferConfirmBtn.textContent = 'Transfer'; transferConfirmBtn.disabled = false; }
+			if (transferConfirmStep) transferConfirmStep.className = 'transfer-confirm-step';
+
+			if (!input) {
+				if (transferResolvedEl) { transferResolvedEl.textContent = ''; transferResolvedEl.className = 'transfer-resolved'; }
+				return;
+			}
+
+			if (isLikelySuiAddress(input) && input.length >= 60) {
+				transferResolvedAddress = input;
+				transferResolvedName = '';
+				if (transferResolvedEl) {
+					transferResolvedEl.className = 'transfer-resolved resolved';
+					transferResolvedEl.textContent = truncAddr(input);
+				}
+				return;
+			}
+
+			if (isSuiNSName(input)) {
+				if (transferResolvedEl) {
+					transferResolvedEl.className = 'transfer-resolved resolving';
+					transferResolvedEl.innerHTML = '<span class="loading" style="width:12px;height:12px;border-width:1px;"></span> Resolving...';
+				}
+				transferResolveTimeout = setTimeout(async function() {
+					try {
+						const result = await resolveSuiNSName(input);
+						transferResolvedAddress = result.address;
+						transferResolvedName = result.name;
+						if (transferResolvedEl) {
+							transferResolvedEl.className = 'transfer-resolved resolved';
+							transferResolvedEl.innerHTML = result.name + ' → <span style="color:var(--accent);">' + truncAddr(result.address) + '</span>';
+						}
+					} catch (e) {
+						transferResolvedAddress = '';
+						if (transferResolvedEl) {
+							transferResolvedEl.className = 'transfer-resolved error';
+							transferResolvedEl.textContent = 'Could not resolve "' + input + '"';
+						}
+					}
+				}, 400);
+			} else {
+				if (transferResolvedEl) { transferResolvedEl.textContent = ''; transferResolvedEl.className = 'transfer-resolved'; }
+			}
+		}
+
+		function selectTransferGas(token) {
+			transferGasToken = token;
+			if (transferGasToggle) {
+				transferGasToggle.querySelectorAll('.transfer-gas-pill').forEach(function(pill) {
+					pill.classList.toggle('active', pill.dataset.gas === token);
+				});
+			}
+			if (transferGasEstimate) {
+				transferGasEstimate.textContent = token === 'usdc' ? '(auto-swap via DeepBook)' : '';
+			}
+		}
+
+		async function handleTransferNft() {
+			if (!transferStatus || !transferConfirmBtn) return;
+
+			if (!canSign() || !NFT_ID) {
+				transferStatus.textContent = 'Connect wallet first';
+				transferStatus.className = 'transfer-status error';
+				return;
+			}
+
+			if (!transferResolvedAddress || !isLikelySuiAddress(transferResolvedAddress)) {
+				transferStatus.textContent = 'Enter a valid recipient address or .sui name';
+				transferStatus.className = 'transfer-status error';
+				return;
+			}
+
+			const normalizedOwner = getResolvedOwnerAddress();
+			if (transferResolvedAddress.toLowerCase() === normalizedOwner) {
+				transferStatus.textContent = 'Cannot transfer to the current owner';
+				transferStatus.className = 'transfer-status error';
+				return;
+			}
+
+			if (!transferConfirmPending) {
+				transferConfirmPending = true;
+				const recipientDisplay = transferResolvedName || truncAddr(transferResolvedAddress);
+				if (transferConfirmStep) {
+					transferConfirmStep.innerHTML =
+						'<div class="transfer-confirm-name">' + FULL_NAME + '</div>' +
+						'<div class="transfer-confirm-arrow">↓</div>' +
+						'<div class="transfer-confirm-recipient">' + recipientDisplay + '</div>';
+					transferConfirmStep.className = 'transfer-confirm-step visible';
+				}
+				transferConfirmBtn.textContent = 'Confirm Transfer';
+				transferStatus.textContent = 'Review the transfer above, then click Confirm';
+				transferStatus.className = 'transfer-status info';
+				return;
+			}
+
+			const senderAddress = getConnectedSenderAddress();
+			if (!isLikelySuiAddress(senderAddress)) {
+				transferStatus.textContent = 'Wallet sender address is unavailable';
+				transferStatus.className = 'transfer-status error';
+				return;
+			}
+
+			transferConfirmBtn.disabled = true;
+			transferStatus.innerHTML = '<span class="loading"></span> Building transaction...';
+			transferStatus.className = 'transfer-status info';
+
+			try {
+				const tx = new Transaction();
+				tx.setSender(senderAddress);
+
+				if (transferGasToken === 'usdc' || transferGasToken !== 'sui') {
+					const suiClient = getSuiClient();
+					const balanceRes = await suiClient.getBalance({ owner: senderAddress, coinType: SUI_TYPE });
+					const availableMist = BigInt(balanceRes?.totalBalance || '0');
+					const GAS_RESERVE = 50_000_000n;
+					const SWAP_OVERHEAD = 50_000_000n;
+
+					if (availableMist < GAS_RESERVE) {
+						const shortfall = GAS_RESERVE + SWAP_OVERHEAD - availableMist;
+						transferStatus.innerHTML = '<span class="loading"></span> Routing USDC → SUI via DeepBook...';
+						transferStatus.className = 'transfer-status info';
+
+						const swapInfo = await findBestSwapForSui(suiClient, shortfall, senderAddress);
+						if (!swapInfo) {
+							transferStatus.textContent = 'No tokens available to swap for gas. Fund wallet with SUI.';
+							transferStatus.className = 'transfer-status error';
+							transferConfirmBtn.disabled = false;
+							return;
+						}
+						prependSwapToTx(tx, swapInfo, senderAddress);
+					}
+				}
+
+				tx.transferObjects([tx.object(NFT_ID)], tx.pure.address(transferResolvedAddress));
+
+				transferStatus.innerHTML = '<span class="loading"></span> Approve in wallet...';
+				transferStatus.className = 'transfer-status info';
+
+				const result = await SuiWalletKit.signAndExecute(tx, {
+					txOptions: { showEffects: true, showObjectChanges: true },
+					forceSignBridge: true,
+				});
+
+				const recipientDisplay = transferResolvedName || truncAddr(transferResolvedAddress);
+				transferStatus.innerHTML =
+					'<strong>Transferred!</strong> ' + FULL_NAME + ' → ' + recipientDisplay + '<br>' +
+					renderTxExplorerLinks(result.digest, true);
+				transferStatus.className = 'transfer-status success';
+				transferConfirmBtn.disabled = false;
+				transferConfirmBtn.textContent = 'Done';
+				transferConfirmBtn.onclick = function() {
+					var refreshUrl = new URL(window.location.href);
+					refreshUrl.searchParams.set('nocache', '1');
+					window.location.href = refreshUrl.toString();
+				};
+
+			} catch (e) {
+				const msg = e.message || '';
+				if (msg.includes('rejected') || msg.includes('cancelled')) {
+					transferStatus.textContent = 'Cancelled';
+					transferStatus.className = 'transfer-status error';
+				} else {
+					transferStatus.textContent = 'Error: ' + msg;
+					transferStatus.className = 'transfer-status error';
+				}
+				transferConfirmBtn.disabled = false;
+			}
+		}
+
 		// Event listeners
 		if (editBtn) editBtn.addEventListener('click', openEditModal);
 		if (ownerPrimaryStar) ownerPrimaryStar.addEventListener('click', setPrimary);
+		if (transferBtn) transferBtn.addEventListener('click', openTransferModal);
+		if (transferCancelBtn) transferCancelBtn.addEventListener('click', closeTransferModal);
+		if (transferConfirmBtn) transferConfirmBtn.addEventListener('click', handleTransferNft);
+		if (transferModal) transferModal.addEventListener('click', function(e) {
+			if (e.target === transferModal) closeTransferModal();
+		});
+		if (transferRecipientInput) {
+			transferRecipientInput.addEventListener('input', function(e) {
+				resolveTransferRecipient(e.target.value.trim());
+			});
+		}
+		if (transferGasToggle) {
+			transferGasToggle.addEventListener('click', function(e) {
+				const pill = e.target.closest('.transfer-gas-pill');
+				if (pill && pill.dataset.gas) selectTransferGas(pill.dataset.gas);
+			});
+		}
 		if (jacketBtn) jacketBtn.addEventListener('click', openJacketModal);
 		if (jacketCancelBtn) jacketCancelBtn.addEventListener('click', closeJacketModal);
 		if (jacketListBtn) jacketListBtn.addEventListener('click', listForAuction);
@@ -8186,6 +8473,17 @@ function shortAddr(addr) {
 
 		function getLinkedItemMatchScore(item) {
 			const cleanName = item.name.replace(/\\.sui$/, '');
+			if (linkedFilterQuery.indexOf(',') !== -1) {
+				var terms = linkedFilterQuery.split(',');
+				var best = 0;
+				for (var ti = 0; ti < terms.length; ti++) {
+					var term = terms[ti].trim();
+					if (!term) continue;
+					var s = getLinkedNameMatchScore(cleanName, term);
+					if (s > best) best = s;
+				}
+				return best;
+			}
 			return getLinkedNameMatchScore(cleanName, linkedFilterQuery);
 		}
 
@@ -12619,6 +12917,73 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		}
 		window.loadUserVault = loadUserVault;
 
+		var vaultNameData = {};
+
+		async function fetchVaultNameData(names) {
+			var fetches = [];
+			for (var i = 0; i < names.length; i++) {
+				(function(name) {
+					var cleanName = name.replace(/\\.sui$/, '');
+					var infoFetch = fetch('https://' + encodeURIComponent(cleanName) + '.sui.ski/json')
+						.then(function(r) { return r.ok ? r.json() : null; })
+						.then(function(data) {
+							if (!data) return;
+							if (!vaultNameData[cleanName]) vaultNameData[cleanName] = {};
+							if (data.expirationTimestampMs) {
+								vaultNameData[cleanName].expirationMs = Number(data.expirationTimestampMs);
+							}
+							if (data.address) {
+								vaultNameData[cleanName].targetAddress = data.address;
+							}
+						})
+						.catch(function() {});
+					var marketFetch = fetch('/api/marketplace/' + encodeURIComponent(cleanName))
+						.then(function(r) { return r.ok ? r.json() : null; })
+						.then(function(data) {
+							if (!data) return;
+							if (!vaultNameData[cleanName]) vaultNameData[cleanName] = {};
+							if (data.bestListing && data.bestListing.price) {
+								vaultNameData[cleanName].listingPriceSui = (Number(data.bestListing.price) / 1e9).toFixed(2);
+							}
+							if (data.bestBid && data.bestBid.price) {
+								vaultNameData[cleanName].bestBidSui = (Number(data.bestBid.price) / 1e9).toFixed(2);
+							}
+						})
+						.catch(function() {});
+					fetches.push(infoFetch, marketFetch);
+				})(names[i]);
+			}
+			await Promise.all(fetches);
+		}
+
+		function renderVaultChip(name) {
+			var cleanName = name.replace(/\\.sui$/, '');
+			var data = vaultNameData[cleanName] || {};
+			var profileUrl = 'https://' + encodeURIComponent(cleanName) + '.sui.ski';
+			var tag = getExpirationTag(data.expirationMs);
+			var listingPriceSui = data.listingPriceSui ? parseFloat(data.listingPriceSui) : null;
+			var isListed = Number.isFinite(listingPriceSui) && listingPriceSui > 0;
+
+			var classes = ['vault-ski-chip'];
+			if (cleanName.toLowerCase() === NAME.toLowerCase()) classes.push('current');
+			if (isListed) classes.push('listed');
+			else if (tag.color === 'red' && (tag.text === 'Expired' || tag.text === 'Grace')) classes.push('expired');
+
+			var h = '<a href="' + escapeHtmlJs(profileUrl) + '" class="' + classes.join(' ') + '">';
+			h += '<svg class="vault-ski-diamond" viewBox="0 0 24 24" width="12" height="12"><path d="M12 2L22 12L12 22L2 12Z" fill="currentColor"/></svg>';
+			h += '<span class="vault-ski-name">' + escapeHtmlJs(cleanName) + '</span>';
+			if (isListed) {
+				var priceText = formatLinkedTagListingPriceSui(listingPriceSui);
+				h += '<span class="vault-ski-sep">|</span>';
+				h += '<span class="vault-ski-price"><svg class="sui-price-icon" viewBox="0 0 300 384" fill="#4da2ff"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z"/></svg>' + priceText + '</span>';
+			} else if (tag.text) {
+				h += '<span class="vault-ski-tag ' + tag.color + '">' + tag.text + '</span>';
+			}
+			h += '<button class="vault-ski-remove" data-name="' + escapeHtmlJs(cleanName) + '" title="Remove" onclick="event.preventDefault();event.stopPropagation();removeVaultItem(this.dataset.name)">×</button>';
+			h += '</a>';
+			return h;
+		}
+
 		function renderVaultDashboard() {
 			const gridEl = document.getElementById('vault-card-grid');
 			const emptyEl = document.getElementById('vault-panel-empty');
@@ -12651,51 +13016,26 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			const names = Array.from(window.userVaultNames).sort();
 			var html = '';
 			for (var i = 0; i < names.length; i++) {
-				var name = names[i];
-				var profileUrl = 'https://' + encodeURIComponent(name) + '.sui.ski';
-				var embedUrl = profileUrl + '?embed=1';
-				html += '<div class="vault-card">' +
-					'<div class="vault-card-iframe-wrap">' +
-					'<iframe class="vault-card-iframe" data-src="' + embedUrl + '" sandbox="allow-scripts" loading="lazy" title="' + name + '.sui"></iframe>' +
-					'</div>' +
-					'<a class="vault-card-overlay" href="' + profileUrl + '" title="' + name + '.sui"></a>' +
-					'<div class="vault-card-footer">' +
-					'<svg viewBox="0 0 24 24" width="10" height="10"><path d="M12 2L22 12L12 22L2 12Z" fill="currentColor"/></svg>' +
-					'<span class="vault-card-footer-name">' + name + '.sui</span>' +
-					'<button class="vault-card-remove" data-name="' + name + '" title="Remove" onclick="event.stopPropagation();removeVaultItem(this.dataset.name)">×</button>' +
-					'</div></div>';
+				html += renderVaultChip(names[i]);
 			}
 			gridEl.innerHTML = html;
-			initVaultIframeObserver();
+
+			var needsFetch = [];
+			for (var j = 0; j < names.length; j++) {
+				if (!vaultNameData[names[j]]) needsFetch.push(names[j]);
+			}
+			if (needsFetch.length > 0) {
+				fetchVaultNameData(needsFetch).then(function() {
+					var updatedHtml = '';
+					var sortedNames = Array.from(window.userVaultNames).sort();
+					for (var k = 0; k < sortedNames.length; k++) {
+						updatedHtml += renderVaultChip(sortedNames[k]);
+					}
+					if (gridEl) gridEl.innerHTML = updatedHtml;
+				});
+			}
 		}
 		window.renderVaultDashboard = renderVaultDashboard;
-
-		var vaultIframeObserver = null;
-		function initVaultIframeObserver() {
-			if (vaultIframeObserver) vaultIframeObserver.disconnect();
-			var iframes = document.querySelectorAll('.vault-card-iframe[data-src]');
-			if (!iframes.length) return;
-			if (!('IntersectionObserver' in window)) {
-				for (var i = 0; i < iframes.length; i++) {
-					iframes[i].src = iframes[i].getAttribute('data-src');
-					iframes[i].removeAttribute('data-src');
-				}
-				return;
-			}
-			vaultIframeObserver = new IntersectionObserver(function(entries) {
-				for (var j = 0; j < entries.length; j++) {
-					if (entries[j].isIntersecting) {
-						var iframe = entries[j].target;
-						iframe.src = iframe.getAttribute('data-src');
-						iframe.removeAttribute('data-src');
-						vaultIframeObserver.unobserve(iframe);
-					}
-				}
-			}, { rootMargin: '200px' });
-			for (var k = 0; k < iframes.length; k++) {
-				vaultIframeObserver.observe(iframes[k]);
-			}
-		}
 
 		function switchProfileTab(tabId) {
 			var tabs = document.querySelectorAll('.profile-tab');

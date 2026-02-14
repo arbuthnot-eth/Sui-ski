@@ -237,6 +237,41 @@ function __isAllowedOrigin(origin) {
 	return origin.indexOf('https://') === 0 && origin.length > 8 + suffix.length && origin.slice(-(suffix.length)) === suffix;
 }
 
+function __errorMessage(err) {
+	if (!err) return '';
+	if (typeof err === 'string') return err.toLowerCase();
+	if (err && typeof err.message === 'string') return err.message.toLowerCase();
+	return String(err).toLowerCase();
+}
+
+function __isSigningCompatibilityError(err) {
+	var message = __errorMessage(err);
+	if (!message) return false;
+	return (
+		message.indexOf('missing required fields') !== -1
+		|| message.indexOf('invalid transaction object') !== -1
+		|| message.indexOf('invalid transaction') !== -1
+		|| message.indexOf('unsupported transaction') !== -1
+		|| message.indexOf('no compatible signing method found') !== -1
+		|| message.indexOf('wallet does not support transaction signing') !== -1
+		|| message.indexOf('wallet does not support signing') !== -1
+		|| message.indexOf('account, transaction, or chain') !== -1
+	);
+}
+
+function __shouldFallbackToSignOnly(err) {
+	if (!err) return true;
+	if (__isSigningCompatibilityError(err)) return true;
+	var message = __errorMessage(err);
+	if (!message) return true;
+	return (
+		message.indexOf('no compatible signing method found') !== -1
+		|| message.indexOf('wallet does not support') !== -1
+		|| message.indexOf('method not found') !== -1
+		|| message.indexOf('unavailable') !== -1
+	);
+}
+
 function __bytesToBase64(bytes) {
 	if (typeof bytes === 'string') return bytes;
 	if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
@@ -548,13 +583,15 @@ window.addEventListener('message', function(e) {
 			if (expectedSender && typeof tx.setSenderIfNotSet === 'function') {
 				tx.setSenderIfNotSet(expectedSender);
 			}
-			var txForWallet;
+			var txForWallet = tx;
+			var txBytesForFallback = null;
 			try {
-				txForWallet = await __buildTransactionBytes(tx, expectedSender);
+				txBytesForFallback = await __buildTransactionBytes(tx, expectedSender);
 			} catch (preBuildErr) {
-				console.warn('[SignBridge] Pre-build to bytes failed, passing raw tx:', preBuildErr && preBuildErr.message);
-				txForWallet = tx;
+				console.warn('[SignBridge] Pre-build to bytes failed, continuing with raw tx:', preBuildErr && preBuildErr.message);
 			}
+			var signingInputs = [txForWallet];
+			if (txBytesForFallback) signingInputs.push(txBytesForFallback);
 			var requestedChain = (
 				signingAccount
 				&& Array.isArray(signingAccount.chains)
@@ -567,21 +604,50 @@ window.addEventListener('message', function(e) {
 					var signExecOptions = {
 						txOptions: execOptions,
 						chain: requestedChain,
-						singleAttempt: false,
+						singleAttempt: true,
 						preferTransactionBlock: false,
 					};
 					if (signingAccount) signExecOptions.account = signingAccount;
-					result = await SuiWalletKit.signAndExecute(txForWallet, signExecOptions);
+					var signExecError = null;
+					for (var si = 0; si < signingInputs.length; si++) {
+						try {
+							result = await SuiWalletKit.signAndExecute(signingInputs[si], signExecOptions);
+							signExecError = null;
+							break;
+						} catch (attemptErr) {
+							signExecError = attemptErr;
+							if (__wkIsUserRejection(attemptErr)) throw attemptErr;
+							if (!__isSigningCompatibilityError(attemptErr)) break;
+						}
+					}
+					if (!result) {
+						throw signExecError || new Error('Wallet failed to sign and execute transaction');
+					}
 				} catch (signErr) {
+					if (!__shouldFallbackToSignOnly(signErr)) throw signErr;
 					console.warn('[SignBridge] signAndExecute failed, trying sign+execute fallback:', signErr);
 					var signOptions = {
 						chain: requestedChain,
-						singleAttempt: false,
+						singleAttempt: true,
 						preferTransactionBlock: false,
 					};
 				if (signingAccount) signOptions.account = signingAccount;
-				var signed = await SuiWalletKit.signTransaction(txForWallet, signOptions);
-				result = await __executeSignedTransaction(signed, txForWallet, execOptions);
+				var signOnlyError = null;
+				for (var sj = 0; sj < signingInputs.length; sj++) {
+					try {
+						var signed = await SuiWalletKit.signTransaction(signingInputs[sj], signOptions);
+						result = await __executeSignedTransaction(signed, signingInputs[sj], execOptions);
+						signOnlyError = null;
+						break;
+					} catch (signOnlyErr) {
+						signOnlyError = signOnlyErr;
+						if (__wkIsUserRejection(signOnlyErr)) throw signOnlyErr;
+						if (!__isSigningCompatibilityError(signOnlyErr)) break;
+					}
+				}
+				if (!result) {
+					throw signOnlyError || new Error('Wallet failed to sign transaction');
+				}
 			}
 
 			console.log('[SignBridge] result:', result);

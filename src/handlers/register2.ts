@@ -39,46 +39,43 @@ export function generateRegistrationPage(
 		JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
 	const suiIconSvg = '<svg class="price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg>'
 	const registrationCardHtml = isRegisterable
-		? `<div class="card-with-stepper">
-			<div class="nft-card">
+		? `<div class="nft-card">
 				<div class="nft-top">
 					<div class="nft-name-block">
 						<div class="nft-name-line"><button type="button" class="primary-star" id="primary-star" aria-label="Set as primary" aria-pressed="false" title="Set as primary name">\u2606</button><span class="nft-name">${escapeHtml(cleanName)}<span class="nft-name-tld">.sui</span></span></div>
 					</div>
-					<div class="nft-card-wallet" id="nft-card-wallet"></div>
 				</div>
 				<div class="nft-body">
 					<div class="nft-qr-col">
 						<div class="nft-price-stack" id="price-value">
-							<div class="nft-price-main">
-								<span class="price-amount">--</span>
-								${suiIconSvg}
+							<div class="nft-price-main"><span class="price-amount">--</span></div>
+							<div class="price-rest">
+								<span class="price-rest-top">${suiIconSvg}</span>
+								<span class="price-usd">\u2248 $--</span>
 							</div>
-							<span class="price-usd">\u2248 $--</span>
 						</div>
 						<span class="nft-chip"><span class="nft-dot"></span>Available</span>
 						<canvas class="nft-qr" id="nft-qr" width="140" height="140" title="${escapeHtml(cleanName)}.sui"></canvas>
 					</div>
+					<div class="nft-wallet-icons" id="nft-wallet-icons"></div>
 					<div class="nft-logo-col">
-						<div class="nft-logo-badge"><svg viewBox="0 0 512 560" fill="none" aria-hidden="true"><defs><linearGradient id="nlg" x1="0" y1="0" x2="0.5" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#b8ffda"/></linearGradient></defs><path d="M256 96L416 352H336L280 256L256 296L232 256L176 352H96Z" fill="url(#nlg)"/><path d="M128 384Q208 348 288 384Q368 420 432 384" stroke="url(#nlg)" stroke-width="24" fill="none" stroke-linecap="round"/><text x="256" y="480" font-family="Inter,system-ui,sans-serif" font-size="90" font-weight="800" fill="url(#nlg)" text-anchor="middle">sui.ski</text></svg></div>
+						<div class="nft-logo-badge"><svg viewBox="0 0 512 560" fill="none" aria-hidden="true"><defs><linearGradient id="nlg" x1="0" y1="0" x2="0.5" y2="1"><stop offset="0%" stop-color="#ffffff"><animate attributeName="stop-color" values="#ffffff;#b8ffda;#49da91;#ffffff" dur="6s" repeatCount="indefinite"/></stop><stop offset="100%" stop-color="#b8ffda"><animate attributeName="stop-color" values="#b8ffda;#49da91;#ffffff;#b8ffda" dur="6s" repeatCount="indefinite"/></stop></linearGradient></defs><path d="M256 96L416 352H336L280 256L256 296L232 256L176 352H96Z" fill="url(#nlg)"/><path d="M128 384Q208 348 288 384Q368 420 432 384" stroke="url(#nlg)" stroke-width="24" fill="none" stroke-linecap="round"/><text x="256" y="480" font-family="Inter,system-ui,sans-serif" font-size="90" font-weight="800" fill="url(#nlg)" text-anchor="middle">sui.ski</text></svg></div>
 						<div class="nft-discount" id="price-savings"></div>
 					</div>
 				</div>
 			</div>
-			<div class="year-stepper-v" role="group" aria-label="Registration duration">
-				<button type="button" class="year-btn-v" id="years-increase" aria-label="Increase">+</button>
-				<div class="year-display-v"><span id="years-value">1</span><span class="year-unit">yr</span></div>
-				<button type="button" class="year-btn-v" id="years-decrease" aria-label="Decrease">\u2212</button>
-				<input id="years" type="hidden" value="1">
-			</div>
-			</div>
-			<div class="nft-brand">
-				<a class="nft-brand-link" href="https://sui.ski">${generateLogoSvg(16)}<span class="nft-brand-name">.ski</span></a>
-				<span class="nft-brand-tagline">Lift every 0xAddr to human-readability at scale</span>
-			</div>
 			<div class="reg-form">
-				<button class="button" id="register-btn">Connect Wallet</button>
-				<div class="wallet-balance" id="wallet-balance"></div>
+				<div class="reg-action-row">
+					<button class="download-qr-btn" id="scrub-btn" title="Toggle private mode"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
+					<button class="download-qr-btn" id="download-qr-btn" title="Download QR card"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+					<button class="button" id="register-btn">Connect Wallet</button>
+					<div class="year-stepper-h" role="group" aria-label="Registration duration" tabindex="0">
+						<button type="button" class="year-btn-h" id="years-decrease" aria-label="Decrease">\u2212</button>
+						<div class="year-display-h"><span id="years-value">1</span><span class="year-unit">yr</span></div>
+						<button type="button" class="year-btn-h" id="years-increase" aria-label="Increase">+</button>
+						<input id="years" type="hidden" value="1">
+					</div>
+				</div>
 				<div class="status" id="register-status"></div>
 			</div>`
 		: `<div class="nft-card" style="aspect-ratio:1;justify-content:center;align-items:center;text-align:center;"><span style="font-size:1.6rem;font-weight:800;color:#fff;">${escapeHtml(cleanName)}<span style="color:var(--ski-green);">.sui</span></span><span style="font-size:0.85rem;color:var(--muted);margin-top:8px;">Minimum length is 3 characters.</span></div>`
@@ -145,7 +142,7 @@ export function generateRegistrationPage(
 							linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
 					color: var(--text);
 						padding: 20px;
-						padding-bottom: 82px;
+						padding-bottom: 52px;
 						overflow-x: hidden;
 					}
 				body::before,
@@ -198,24 +195,15 @@ export function generateRegistrationPage(
 						gap: 12px;
 						align-items: start;
 					}
-			.nft-brand {
-			display: flex;
-			align-items: center;
-			gap: 10px;
-			max-width: 380px;
-			margin: 0 auto;
-			width: 100%;
-			padding: 0 4px;
-		}
-		.nft-brand-link {
+			.nft-brand-link {
 			display: inline-flex;
 			align-items: center;
-			gap: 5px;
+			gap: 4px;
 			text-decoration: none;
 			flex-shrink: 0;
 		}
 		.nft-brand-name {
-			font-size: 1rem;
+			font-size: 0.84rem;
 			font-weight: 800;
 			color: var(--text);
 		}
@@ -225,6 +213,7 @@ export function generateRegistrationPage(
 			color: var(--muted);
 			line-height: 1.3;
 			opacity: 0.75;
+			white-space: nowrap;
 		}
 			@keyframes portal-ring {
 			0% { opacity: 0.5; transform: scale(0.97); }
@@ -232,6 +221,7 @@ export function generateRegistrationPage(
 			100% { opacity: 0.5; transform: scale(0.97); }
 		}
 		.nft-card {
+			color-scheme: only light;
 			width: 100%;
 			max-width: 380px;
 			aspect-ratio: 1;
@@ -267,80 +257,72 @@ export function generateRegistrationPage(
 			justify-content: space-between;
 			align-items: flex-start;
 		}
-		.nft-card-wallet {
+		.nft-wallet-icons {
 			display: none;
 			flex-direction: column;
-			align-items: flex-end;
-			gap: 2px;
+			align-items: flex-start;
+			gap: 5px;
+			align-self: flex-end;
+			margin-bottom: 2px;
 			flex-shrink: 0;
 		}
-		.nft-card-wallet.show {
-			display: flex;
-		}
-		.nft-card-wallet-badge {
+		.nft-wallet-icons.show { display: flex; }
+		.nft-wallet-icon-row {
 			display: flex;
 			align-items: center;
 			gap: 5px;
-			font-size: 0.7rem;
+		}
+		.nft-wallet-icon-row img,
+		.nft-wallet-icon-row > svg {
+			width: 20px;
+			height: 20px;
+			border-radius: 4px;
+			display: block;
+			flex-shrink: 0;
+			filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4));
+		}
+		.nft-wallet-icon-label {
+			font-size: 0.6rem;
 			font-weight: 700;
-			color: rgba(255, 255, 255, 0.75);
-		}
-		.nft-card-wallet-badge img {
-			width: 18px;
-			height: 18px;
-			border-radius: 5px;
-		}
-		.nft-card-wallet-badge .waap-blue {
-			filter: hue-rotate(-50deg) saturate(1.4) brightness(1.15);
-		}
-		.nft-card-wallet-balance {
-			font-size: 0.65rem;
-			font-weight: 600;
-			color: rgba(255, 255, 255, 0.45);
+			color: rgba(255, 255, 255, 0.6);
+			white-space: nowrap;
+			max-width: 60px;
+			overflow: hidden;
+			text-overflow: ellipsis;
 		}
 		.nft-name-block { flex: 1; min-width: 0; }
 		.nft-name-line {
 			display: flex;
-			align-items: center;
+			align-items: baseline;
 			gap: 6px;
-			overflow-wrap: anywhere;
+			flex-wrap: wrap;
 		}
-		@keyframes name-shimmer {
-			0% { background-position: 200% 0, 0 0; }
-			100% { background-position: -200% 0, 0 0; }
+		@keyframes tld-pulse {
+			0%, 100% { text-shadow: 0 0 8px rgba(73, 218, 145, 0.5), 0 0 20px rgba(73, 218, 145, 0.2); }
+			50% { text-shadow: 0 0 12px rgba(73, 218, 145, 0.7), 0 0 30px rgba(73, 218, 145, 0.3), 0 0 50px rgba(73, 218, 145, 0.1); }
 		}
 		.nft-name {
 			font-size: clamp(2.2rem, 10vw, 3.2rem);
 			font-weight: 900;
 			letter-spacing: -0.04em;
 			line-height: 1.05;
-			background:
-				linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.4) 48%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0.4) 52%, transparent 70%),
-				linear-gradient(180deg, #ffffff 0%, #d0d4d8 40%, #b0b6be 60%, #e0e4e8 100%);
-			background-size: 400% 100%, 100% 100%;
-			-webkit-background-clip: text;
-			background-clip: text;
-			-webkit-text-fill-color: transparent;
-			animation: name-shimmer 5s ease-in-out infinite;
+			color: #f0f4f8;
+			text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 12px rgba(200, 220, 240, 0.15);
+			transition: color 0.4s ease, text-shadow 0.4s ease;
 		}
 		.nft-name-tld {
-			background:
-				linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.25) 48%, rgba(255, 255, 255, 0.35) 50%, rgba(255, 255, 255, 0.25) 52%, transparent 70%),
-				linear-gradient(180deg, #3d9966 0%, #1a7a4a 35%, #0d5c35 65%, #2a8a56 100%);
-			background-size: 400% 100%, 100% 100%;
-			-webkit-background-clip: text;
-			background-clip: text;
-			-webkit-text-fill-color: transparent;
-			animation: name-shimmer 5s ease-in-out infinite;
-			transition: filter 0.4s ease;
+			color: var(--ski-green);
+			text-shadow: 0 0 8px rgba(73, 218, 145, 0.5), 0 0 20px rgba(73, 218, 145, 0.2);
+			animation: tld-pulse 3s ease-in-out infinite;
+			transition: color 0.4s ease;
 		}
 		.primary-star {
 			width: 28px;
 			height: 28px;
 			border-radius: 999px;
-			border: 1px solid rgba(148, 163, 184, 0.25);
-			background: rgba(148, 163, 184, 0.06);
-			color: rgba(148, 163, 184, 0.5);
+			border: 1px solid rgba(180, 195, 210, 0.4);
+			background: rgba(180, 195, 210, 0.1);
+			color: rgba(200, 210, 225, 0.7);
 			font-size: 0.95rem;
 			line-height: 1;
 			display: inline-flex;
@@ -351,12 +333,12 @@ export function generateRegistrationPage(
 			transition: all 0.15s ease;
 			margin-top: 4px;
 		}
-		.primary-star:hover { background: rgba(148, 163, 184, 0.14); border-color: rgba(148, 163, 184, 0.5); color: rgba(148, 163, 184, 0.7); }
+		.primary-star:hover { background: rgba(180, 195, 210, 0.2); border-color: rgba(200, 210, 225, 0.6); color: rgba(220, 225, 235, 0.85); }
 		.primary-star.active {
-			color: #ffd700;
-			background: rgba(255, 215, 0, 0.18);
-			border-color: rgba(255, 215, 0, 0.7);
-			box-shadow: 0 0 12px rgba(255, 215, 0, 0.2);
+			color: #c8d0e0;
+			background: rgba(120, 130, 155, 0.18);
+			border-color: rgba(120, 130, 155, 0.7);
+			box-shadow: 0 0 12px rgba(120, 130, 155, 0.2);
 		}
 		.nft-qr-col {
 			display: flex;
@@ -393,8 +375,7 @@ export function generateRegistrationPage(
 		.nft-body {
 			display: flex;
 			align-items: flex-end;
-			justify-content: space-between;
-			gap: 12px;
+			gap: 8px;
 		}
 		.nft-qr {
 			width: 100%;
@@ -409,13 +390,13 @@ export function generateRegistrationPage(
 			gap: 0;
 			align-self: flex-end;
 			flex-shrink: 0;
+			margin-left: auto;
 			margin-right: -22px;
 			margin-bottom: -18px;
 		}
 		.nft-logo-badge {
 			width: 130px;
-			opacity: 0.85;
-			filter: drop-shadow(0 2px 12px rgba(var(--ski-green-rgb), 0.25));
+			filter: drop-shadow(0 2px 12px rgba(var(--ski-green-rgb), 0.35));
 		}
 		.nft-logo-badge svg {
 			width: 100%;
@@ -445,44 +426,90 @@ export function generateRegistrationPage(
 		}
 		.nft-price-stack {
 			display: flex;
-			flex-direction: column;
-			gap: 2px;
+			align-items: stretch;
+			gap: 0;
 			margin-bottom: -4px;
 		}
 		.nft-price-main {
 			display: flex;
-			align-items: baseline;
-			justify-content: space-between;
-			font-size: clamp(1.8rem, 5.5vw, 2.2rem);
-			font-weight: 800;
+			align-items: center;
 		}
-		.nft-price-stack .price-amount { color: #e9fff3; }
+		.nft-price-stack .price-amount {
+			font-size: clamp(2.4rem, 7vw, 3rem);
+			font-weight: 800;
+			color: #e9fff3;
+			line-height: 1;
+		}
+		.nft-price-stack .price-rest {
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			gap: 1px;
+			margin-left: 2px;
+		}
+		.nft-price-stack .price-rest-top {
+			display: flex;
+			align-items: baseline;
+			gap: 4px;
+		}
+		.nft-price-stack .price-decimals {
+			font-size: 1.05rem;
+			font-weight: 700;
+			color: rgba(233, 255, 243, 0.75);
+		}
 		.nft-price-stack .price-sui-icon {
-			width: 0.5em;
-			height: 0.65em;
+			width: 14px;
+			height: 18px;
 			display: inline-block;
 			vertical-align: baseline;
 			fill: #4DA2FF;
 		}
 		.nft-price-stack .price-usd {
 			color: var(--muted);
-			font-size: 0.92rem;
+			font-size: 0.88rem;
 			font-weight: 700;
 			white-space: nowrap;
-			align-self: flex-end;
-		}
-		.nft-price-stack .price-decimals {
-			font-size: 0.56em;
-			font-weight: 700;
-			opacity: 0.9;
-			margin-left: 2px;
 		}
 		.reg-form {
-			max-width: 380px;
-			margin: 14px auto 0;
+			max-width: 440px;
+			margin: 8px auto 0;
 			display: grid;
 			gap: 10px;
 			width: 100%;
+		}
+		.reg-action-row {
+			display: flex;
+			align-items: stretch;
+			gap: 6px;
+		}
+		.reg-action-row .button {
+			flex: 1;
+			white-space: nowrap;
+		}
+		.download-qr-btn {
+			width: 38px;
+			flex-shrink: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 0;
+			border-radius: 10px;
+			border: 1px solid rgba(var(--ski-green-rgb), 0.18);
+			background: rgba(var(--ski-green-rgb), 0.05);
+			color: var(--muted);
+			cursor: pointer;
+			opacity: 0.45;
+			transition: opacity 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+		}
+		.download-qr-btn:hover { opacity: 1; border-color: rgba(var(--ski-green-rgb), 0.45); color: var(--ski-green-light); background: rgba(var(--ski-green-rgb), 0.1); }
+		.download-qr-btn.active { opacity: 0.9; border-color: rgba(var(--ski-green-rgb), 0.5); color: var(--ski-green); background: rgba(var(--ski-green-rgb), 0.12); }
+		.download-qr-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+		.reg-sui-icon {
+			width: 0.85em;
+			height: 1.1em;
+			display: inline-block;
+			vertical-align: -0.15em;
+			margin-left: 1px;
 		}
 		.price-amount { color: #e9fff3; }
 		.price-sui-icon {
@@ -504,36 +531,25 @@ export function generateRegistrationPage(
 			opacity: 0.9;
 			margin-left: 2px;
 		}
-		.card-with-stepper {
+		.year-stepper-h {
 			display: flex;
-			align-items: stretch;
-			gap: 10px;
-			justify-content: center;
-		}
-		.card-with-stepper .nft-card {
-			margin: 0;
-		}
-		.year-stepper-v {
-			display: flex;
-			flex-direction: column;
-			align-items: stretch;
-			gap: 8px;
-			width: 200px;
-			padding: 10px;
-			border-radius: 20px;
+			align-items: center;
+			gap: 0;
+			border-radius: 10px;
 			border: 1px solid rgba(var(--ski-green-rgb), 0.28);
 			background: rgba(10, 34, 22, 0.55);
 			flex-shrink: 0;
 			transition: border-color 0.4s ease;
+			outline: none;
 		}
-		.year-btn-v {
-			flex: 1;
-			min-height: 60px;
-			border-radius: 14px;
-			border: 1px solid rgba(var(--ski-green-rgb), 0.38);
-			background: rgba(var(--ski-green-rgb), 0.12);
+		.year-stepper-h:focus-within { border-color: rgba(var(--ski-green-rgb), 0.5); }
+		.year-btn-h {
+			width: 34px;
+			height: 38px;
+			border: none;
+			background: rgba(var(--ski-green-rgb), 0.1);
 			color: var(--ski-green-light);
-			font-size: 1.8rem;
+			font-size: 1rem;
 			font-weight: 800;
 			line-height: 1;
 			cursor: pointer;
@@ -541,20 +557,23 @@ export function generateRegistrationPage(
 			align-items: center;
 			justify-content: center;
 		}
-		.year-btn-v:hover { background: rgba(var(--ski-green-rgb), 0.2); }
-		.year-btn-v:disabled { opacity: 0.4; cursor: not-allowed; }
-		.year-display-v {
+		.year-btn-h:first-child { border-radius: 9px 0 0 9px; }
+		.year-btn-h:last-of-type { border-radius: 0 9px 9px 0; }
+		.year-btn-h:hover { background: rgba(var(--ski-green-rgb), 0.22); }
+		.year-btn-h:disabled { opacity: 0.35; cursor: not-allowed; }
+		.year-display-h {
 			display: flex;
-			flex-direction: column;
-			align-items: center;
+			align-items: baseline;
 			gap: 2px;
-			font-size: 2rem;
+			font-size: 1rem;
 			font-weight: 800;
 			color: var(--text);
-			padding: 4px 0;
+			padding: 0 6px;
+			white-space: nowrap;
+			user-select: none;
 		}
 		.year-unit {
-			font-size: 0.7rem;
+			font-size: 0.6rem;
 			font-weight: 600;
 			color: var(--muted);
 			text-transform: uppercase;
@@ -562,8 +581,8 @@ export function generateRegistrationPage(
 		}
 		.button {
 			width: 100%;
-			padding: 12px 14px;
-			border-radius: 999px;
+			padding: 14px 18px;
+			border-radius: 14px;
 			border: 1px solid rgba(var(--ski-green-rgb), 0.5);
 			background: linear-gradient(135deg, rgba(14, 56, 36, 0.95), rgba(8, 42, 27, 0.96));
 			box-shadow: inset 0 1px 0 rgba(var(--ski-green-rgb), 0.2);
@@ -574,14 +593,6 @@ export function generateRegistrationPage(
 		}
 		.button:hover { background: linear-gradient(135deg, rgba(16, 67, 42, 0.96), rgba(9, 50, 31, 0.98)); }
 		.button:disabled { opacity: 0.55; cursor: not-allowed; }
-		.wallet-balance {
-			display: none;
-			text-align: center;
-			font-size: 0.72rem;
-			font-weight: 500;
-			color: var(--muted);
-		}
-		.wallet-balance.show { display: block; }
 		.status {
 			display: none;
 			padding: 8px 10px;
@@ -612,37 +623,37 @@ export function generateRegistrationPage(
 					display: none;
 					align-items: center;
 					justify-content: center;
-					background: rgba(255, 215, 0, 0.1);
-					border: 1px solid rgba(255, 215, 0, 0.35);
+					background: rgba(120, 130, 155, 0.1);
+					border: 1px solid rgba(120, 130, 155, 0.35);
 					padding: 0;
 					cursor: pointer;
 				}
 				.wallet-profile-btn svg {
-					filter: sepia(1) saturate(3) hue-rotate(15deg) brightness(1.1);
+					filter: brightness(0.7) contrast(1.2) saturate(0.4);
 				}
 				.wallet-profile-btn.visible { display: inline-flex; }
-			.wallet-profile-btn:hover { background: rgba(255, 215, 0, 0.2); border-color: rgba(255, 215, 0, 0.55); }
-			.wallet-widget.has-primary-name .wallet-profile-btn {
-				background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
-				border-color: rgba(250, 204, 21, 0.42);
-				box-shadow: 0 0 24px rgba(250, 204, 21, 0.16);
+			.wallet-profile-btn:hover { background: rgba(120, 130, 155, 0.2); border-color: rgba(120, 130, 155, 0.55); }
+			.wallet-widget.has-black-diamond .wallet-profile-btn {
+				background: linear-gradient(135deg, rgba(10, 10, 18, 0.6), rgba(18, 18, 28, 0.7));
+				border-color: rgba(120, 130, 155, 0.42);
+				box-shadow: 0 0 24px rgba(0, 0, 0, 0.4);
 			}
-			.wallet-widget.has-primary-name .wallet-profile-btn:hover {
-				background: linear-gradient(135deg, rgba(120, 84, 14, 0.45), rgba(58, 42, 12, 0.56));
-				border-color: rgba(250, 204, 21, 0.62);
-				box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
+			.wallet-widget.has-black-diamond .wallet-profile-btn:hover {
+				background: linear-gradient(135deg, rgba(16, 16, 26, 0.7), rgba(24, 24, 36, 0.8));
+				border-color: rgba(140, 150, 175, 0.62);
+				box-shadow: 0 0 28px rgba(0, 0, 0, 0.5);
 			}
-			.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected,
-			.wallet-widget.has-primary-name #wk-widget > div > button.connected {
-				background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
-				border-color: rgba(250, 204, 21, 0.42);
-				color: #fef3c7;
-				box-shadow: 0 0 24px rgba(250, 204, 21, 0.14);
+			.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
+			.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
+				background: linear-gradient(135deg, rgba(10, 10, 18, 0.6), rgba(18, 18, 28, 0.7));
+				border-color: rgba(120, 130, 155, 0.42);
+				color: #d0d4e0;
+				box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
 			}
-			.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected:hover,
-			.wallet-widget.has-primary-name #wk-widget > div > button.connected:hover {
-				border-color: rgba(250, 204, 21, 0.62);
-				box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
+			.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected:hover,
+			.wallet-widget.has-black-diamond #wk-widget > div > button.connected:hover {
+				border-color: rgba(140, 150, 175, 0.62);
+				box-shadow: 0 0 28px rgba(0, 0, 0, 0.5);
 			}
 			.tracker-footer {
 				position: fixed;
@@ -653,9 +664,17 @@ export function generateRegistrationPage(
 				background: rgba(2, 9, 6, 0.94);
 				backdrop-filter: blur(10px);
 				border-top: 1px solid rgba(var(--ski-green-rgb), 0.35);
-			padding: 11px 16px;
 			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 0;
+		}
+		.tracker-brand {
+			display: flex;
+			align-items: center;
 			justify-content: center;
+			gap: 8px;
+			padding: 7px 16px 0;
 		}
 		.tracker-line {
 			display: flex;
@@ -667,6 +686,7 @@ export function generateRegistrationPage(
 			overflow-x: auto;
 			max-width: 100%;
 			scrollbar-width: none;
+			padding: 5px 16px 9px;
 		}
 		.tracker-line::-webkit-scrollbar { display: none; }
 		.tracker-price-label { color: #deffec; font-weight: 600; }
@@ -688,9 +708,8 @@ export function generateRegistrationPage(
 				.nft-card { padding: 16px; gap: 8px; }
 				.nft-qr-col { width: 90px; }
 				.nft-logo-badge { width: 100px; }
-				.year-stepper-v { width: 80px; padding: 8px; }
-				.year-btn-v { min-height: 40px; font-size: 1.3rem; }
-				.year-display-v { font-size: 1.4rem; }
+				.year-btn-h { width: 28px; height: 34px; font-size: 0.9rem; }
+				.year-display-h { font-size: 0.85rem; padding: 0 4px; }
 			}
 			@media (max-width: 1020px) {
 				.layout-grid { grid-template-columns: 1fr; }
@@ -705,9 +724,9 @@ export function generateRegistrationPage(
 			background: rgba(13, 10, 5, 0.94);
 			backdrop-filter: blur(16px);
 			-webkit-backdrop-filter: blur(16px);
-			border: 1px solid rgba(255, 215, 0, 0.28);
+			border: 1px solid rgba(120, 130, 155, 0.28);
 			border-radius: 10px;
-			color: #ffeeb0;
+			color: #d0d4e0;
 			font-size: 0.82rem;
 			font-weight: 600;
 			cursor: pointer;
@@ -716,20 +735,20 @@ export function generateRegistrationPage(
 		}
 		#wk-widget .wk-widget-btn:hover,
 		#wk-widget > div > button:hover {
-			border-color: rgba(255, 215, 0, 0.5);
+			border-color: rgba(140, 150, 175, 0.5);
 			color: #fff;
 			transform: translateY(-1px);
-			box-shadow: 0 14px 32px rgba(0, 0, 0, 0.48), 0 0 20px rgba(255, 215, 0, 0.1);
+			box-shadow: 0 14px 32px rgba(0, 0, 0, 0.48), 0 0 20px rgba(0, 0, 0, 0.2);
 		}
 		#wk-widget .wk-widget-btn.connected,
 		#wk-widget > div > button.connected {
-			background: linear-gradient(135deg, rgba(160, 130, 20, 0.15), rgba(120, 90, 10, 0.15));
-			border-color: rgba(255, 215, 0, 0.38);
+			background: linear-gradient(135deg, rgba(10, 10, 18, 0.3), rgba(18, 18, 28, 0.3));
+			border-color: rgba(120, 130, 155, 0.38);
 		}
 		#wk-widget .wk-widget-btn.session-only,
 		#wk-widget > div > button.session-only {
 			border-style: dashed;
-			background: linear-gradient(135deg, rgba(90, 70, 10, 0.25), rgba(60, 45, 5, 0.25));
+			background: linear-gradient(135deg, rgba(10, 10, 18, 0.25), rgba(18, 18, 28, 0.25));
 		}
 	</style>
 </head>
@@ -750,6 +769,10 @@ export function generateRegistrationPage(
 	</div>
 
 	<div class="tracker-footer">
+		<div class="tracker-brand">
+			<a class="nft-brand-link" href="https://sui.ski">${generateLogoSvg(14)}<span class="nft-brand-name">.ski</span></a>
+			<span class="nft-brand-tagline">Lift every 0xAddr to human-readability at scale</span>
+		</div>
 		<span class="tracker-line">
 			<span class="tracker-price-label">SUI <span id="sui-price">$--</span></span>
 			<span class="tracker-sep">\u00b7</span>
@@ -814,6 +837,17 @@ export function generateRegistrationPage(
 		const REGISTER_FLOW = ${serializeJson(registerFlow)}
 		const REGISTER_BUCKET = ${serializeJson(registerBucket)}
 		const IS_REGISTERABLE = ${isRegisterable ? 'true' : 'false'}
+		const WAAP_REFERRAL_ADDRESS = '0x53f1e3d5f1e3f5aefa47fd3d5a47c9b8cc87e26a2c7bf39e26c870ded4eca7df'
+
+		function isValidSuiAddress(addr) {
+			return typeof addr === 'string' && /^0x[0-9a-fA-F]{64}$/.test(addr)
+		}
+
+		const urlParams = new URLSearchParams(window.location.search)
+		const referrerAddress = isValidSuiAddress(urlParams.get('ref')) ? urlParams.get('ref') : null
+		const waapReferralAddress = isValidSuiAddress(urlParams.get('rw')) ? urlParams.get('rw') : WAAP_REFERRAL_ADDRESS
+		let referralFeeMist = 0n
+		let waapFeeMist = 0n
 
 			const yearsEl = document.getElementById('years')
 			const yearsValueEl = document.getElementById('years-value')
@@ -826,7 +860,8 @@ export function generateRegistrationPage(
 			const suiPriceEl = document.getElementById('sui-price')
 			const walletWidget = document.getElementById('wallet-widget')
 			const walletProfileBtn = document.getElementById('wallet-profile-btn')
-		const walletBalanceEl = document.getElementById('wallet-balance')
+		const downloadQrBtn = document.getElementById('download-qr-btn')
+		const scrubBtn = document.getElementById('scrub-btn')
 		const x402PriceEl = document.getElementById('x402-price')
 		const x402LinkEl = document.getElementById('x402-link')
 		const suggestionsGrid = document.getElementById('suggestions-grid')
@@ -834,6 +869,7 @@ export function generateRegistrationPage(
 
 		let pricingData = null
 		const suggestionStatusCache = new Map()
+		let scrubMode = false
 		let wantsPrimaryName = false
 		let primaryStarManualOverride = null
 		let primaryStarAddress = ''
@@ -846,20 +882,20 @@ export function generateRegistrationPage(
 			devnet: 'https://fullnode.devnet.sui.io:443',
 		}
 
-			function formatPrimaryPriceHtml(sui) {
-				if (!Number.isFinite(sui) || sui <= 0) return '--'
+			function formatPrimaryPriceParts(sui) {
+				if (!Number.isFinite(sui) || sui <= 0) return { whole: '--', decimals: '' }
 				const whole = Math.trunc(sui)
 				const fraction = sui - whole
 				if (fraction > 0.95) {
-					return String(whole + 1)
+					return { whole: String(whole + 1), decimals: '' }
 				}
-				const decimals = Math.floor(fraction * 100)
-				if (decimals < 5) {
-					return String(whole)
+				const dec = Math.floor(fraction * 100)
+				if (dec < 5) {
+					return { whole: String(whole), decimals: '' }
 				}
-				const decimalsText = String(decimals).padStart(2, '0')
-				const normalizedDecimals = decimalsText.endsWith('0') ? decimalsText.slice(0, 1) : decimalsText
-				return String(whole) + '<span class="price-decimals">.' + normalizedDecimals + '</span>'
+				const decText = String(dec).padStart(2, '0')
+				const normalized = decText.endsWith('0') ? decText.slice(0, 1) : decText
+				return { whole: String(whole), decimals: '.' + normalized }
 			}
 
 		function formatUsdAmount(usdValue) {
@@ -913,30 +949,19 @@ export function generateRegistrationPage(
 
 			const nameEl = document.querySelector('.nft-name')
 			if (nameEl) {
-				const s1 = lerpRgb(208, 212, 218, 255, 255, 255, t)
-				const s2 = lerpRgb(176, 182, 190, 240, 242, 248, t)
-				const s3 = lerpRgb(138, 146, 158, 220, 225, 235, t)
-				const s4 = lerpRgb(200, 206, 214, 252, 252, 255, t)
-				nameEl.style.background =
-					'linear-gradient(110deg, transparent 30%, rgba(255,255,255,' + (0.4 + t * 0.4).toFixed(2) + ') 48%, rgba(255,255,255,' + (0.55 + t * 0.35).toFixed(2) + ') 50%, rgba(255,255,255,' + (0.4 + t * 0.4).toFixed(2) + ') 52%, transparent 70%),' +
-					'linear-gradient(180deg, ' + s1 + ' 0%, ' + s2 + ' 40%, ' + s3 + ' 60%, ' + s4 + ' 100%)'
-				nameEl.style.backgroundSize = '400% 100%, 100% 100%'
-				nameEl.style.webkitBackgroundClip = 'text'
-				nameEl.style.backgroundClip = 'text'
+				nameEl.style.color = lerpRgb(240, 244, 248, 255, 255, 255, t)
+				const ng = (0.15 + t * 0.25).toFixed(2)
+				nameEl.style.textShadow = '0 1px 3px rgba(0,0,0,' + (0.4 - t * 0.2).toFixed(2) + '), 0 0 ' + (12 + t * 18) + 'px rgba(200,220,240,' + ng + ')'
 			}
 
 			const tldEl = document.querySelector('.nft-name-tld')
 			if (tldEl) {
-				const g1 = lerpRgb(61, 153, 102, 232, 238, 245, t)
-				const g2 = lerpRgb(26, 122, 74, 210, 218, 230, t)
-				const g3 = lerpRgb(13, 92, 53, 185, 196, 212, t)
-				const g4 = lerpRgb(42, 138, 86, 224, 232, 242, t)
-				tldEl.style.background =
-					'linear-gradient(110deg, transparent 30%, rgba(255,255,255,' + (0.25 + t * 0.5).toFixed(2) + ') 48%, rgba(255,255,255,' + (0.35 + t * 0.5).toFixed(2) + ') 50%, rgba(255,255,255,' + (0.25 + t * 0.5).toFixed(2) + ') 52%, transparent 70%),' +
-					'linear-gradient(180deg, ' + g1 + ' 0%, ' + g2 + ' 35%, ' + g3 + ' 65%, ' + g4 + ' 100%)'
-				tldEl.style.backgroundSize = '400% 100%, 100% 100%'
-				tldEl.style.webkitBackgroundClip = 'text'
-				tldEl.style.backgroundClip = 'text'
+				tldEl.style.color = lerpRgb(73, 218, 145, 240, 248, 255, t)
+				tldEl.style.animation = 'none'
+				const ga = (0.5 + t * 0.4).toFixed(2)
+				const gb = (0.2 + t * 0.4).toFixed(2)
+				const gc = (t * 0.25).toFixed(2)
+				tldEl.style.textShadow = '0 0 ' + (8 + t * 12) + 'px rgba(73,218,145,' + ga + '), 0 0 ' + (20 + t * 30) + 'px rgba(73,218,145,' + gb + '), 0 0 ' + (50 + t * 30) + 'px rgba(73,218,145,' + gc + ')'
 			}
 
 			const borderColor = lerpRgb(73, 218, 145, 200, 210, 225, t)
@@ -970,7 +995,7 @@ export function generateRegistrationPage(
 				dotEl.style.boxShadow = '0 0 ' + (8 + t * 6) + 'px ' + dotColor
 			}
 
-			const stepperEl = document.querySelector('.year-stepper-v')
+			const stepperEl = document.querySelector('.year-stepper-h')
 			if (stepperEl) {
 				const sb = lerpRgb(73, 218, 145, 200, 210, 225, t)
 				stepperEl.style.borderColor = sb.replace('rgb(', 'rgba(').replace(')', ',' + (0.28 + t * 0.3).toFixed(2) + ')')
@@ -1093,7 +1118,7 @@ export function generateRegistrationPage(
 			const primaryName = getConnectedPrimaryName()
 			walletProfileBtn.classList.toggle('visible', !!address)
 			if (walletWidget) {
-				walletWidget.classList.toggle('has-primary-name', !!primaryName)
+				walletWidget.classList.toggle('has-black-diamond', !!primaryName)
 			}
 			if (primaryName) {
 				walletProfileBtn.dataset.href = 'https://' + encodeURIComponent(primaryName) + '.sui.ski'
@@ -1104,23 +1129,32 @@ export function generateRegistrationPage(
 			}
 		}
 
+		const REG_SUI_ICON = '<svg class="reg-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg>'
+
 		function updateRegisterButton() {
 			if (!registerBtn) return
 			const address = getConnectedAddress()
 			updateWalletProfileButton()
+			const stepperEl = document.querySelector('.year-stepper-h')
 			if (!address) {
 				registerBtn.style.display = 'none'
+				if (downloadQrBtn) downloadQrBtn.style.display = 'none'
+				if (scrubBtn) scrubBtn.style.display = 'none'
+				if (stepperEl) stepperEl.style.display = 'none'
 				return
 			}
 			registerBtn.style.display = ''
+			if (downloadQrBtn) downloadQrBtn.style.display = ''
+			if (scrubBtn) scrubBtn.style.display = ''
+			if (stepperEl) stepperEl.style.display = ''
 			if (pricingData && pricingData.discountedSuiMist) {
 				const sui = Number(pricingData.discountedSuiMist) / 1e9
 				if (Number.isFinite(sui) && sui > 0) {
-					registerBtn.textContent = 'Register for ' + sui.toFixed(2) + ' SUI'
+					registerBtn.innerHTML = 'Accept ' + Math.ceil(sui) + ' ' + REG_SUI_ICON
 					return
 				}
 			}
-			registerBtn.textContent = 'Register ' + NAME + '.sui'
+			registerBtn.innerHTML = 'Accept ' + NAME + '.sui'
 		}
 
 		async function fetchPricing() {
@@ -1138,13 +1172,19 @@ export function generateRegistrationPage(
 				const savingsSui = savingsMist / 1e9
 				const directUsd = Number(pricingData?.breakdown?.basePriceUsd || 0)
 				const savingsUsd = directUsd - discountedUsdRaw
+				if (referrerAddress && savingsMist > 0) {
+					referralFeeMist = BigInt(Math.floor(savingsMist * 10 / 100))
+					waapFeeMist = BigInt(Math.floor(savingsMist * 5 / 100))
+				} else {
+					referralFeeMist = 0n
+					waapFeeMist = 0n
+				}
 					if (priceValue) {
-						const primaryPriceHtml = formatPrimaryPriceHtml(sui)
+						const priceParts = formatPrimaryPriceParts(sui)
 						const perYearUsd = years > 0 ? discountedUsdRaw / years : discountedUsdRaw
 						const perYearUsdText = formatUsdAmount(perYearUsd)
-						const usdLabel = perYearUsdText ? '$' + perYearUsdText + '/yr' : '$--'
+						const usdLabel = perYearUsdText ? '= $' + perYearUsdText + '/yr' : '= $--'
 						const suiIcon = '<svg class="price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg>'
-						let savingsHtml = ''
 						const discountEl = document.getElementById('price-savings')
 						if (savingsSui > 0.5 && savingsUsd > 0.5 && discountEl) {
 							const savingsUsdText = formatUsdAmount(savingsUsd)
@@ -1154,17 +1194,23 @@ export function generateRegistrationPage(
 								'<span>($' + (savingsUsdText || '--') + ')</span>'
 						}
 						const usdColor = yearColor(years)
+						const decimalsHtml = priceParts.decimals ? '<span class="price-decimals">' + priceParts.decimals + '</span>' : ''
 						priceValue.innerHTML =
-							'<div class="nft-price-main"><span class="price-amount">' + primaryPriceHtml + '</span>' + suiIcon + '</div>' +
-							'<span class="price-usd" style="color:' + usdColor + '">\u2248 ' + usdLabel + '</span>'
+							'<div class="nft-price-main"><span class="price-amount">' + priceParts.whole + '</span></div>' +
+							'<div class="price-rest">' +
+								'<span class="price-rest-top">' + decimalsHtml + suiIcon + '</span>' +
+								'<span class="price-usd" style="color:' + usdColor + '">' + usdLabel + '</span>' +
+							'</div>'
 					}
 					updateRegisterButton()
 				} catch (error) {
 					if (priceValue) {
 						priceValue.innerHTML =
-							'<div class="nft-price-main"><span class="price-amount">--</span>' +
-							'<svg class="price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg></div>' +
-							'<span class="price-usd">\u2248 $--</span>'
+							'<div class="nft-price-main"><span class="price-amount">--</span></div>' +
+							'<div class="price-rest">' +
+								'<span class="price-rest-top"><svg class="price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg></span>' +
+								'<span class="price-usd">\u2248 $--</span>' +
+							'</div>'
 					}
 				}
 			}
@@ -1185,26 +1231,6 @@ export function generateRegistrationPage(
 			}
 		}
 
-		async function updateWalletBalance() {
-			if (!walletBalanceEl) return
-			const address = getConnectedAddress()
-			if (!address || typeof SuiJsonRpcClient !== 'function') {
-				walletBalanceEl.className = 'wallet-balance'
-				walletBalanceEl.textContent = ''
-				return
-			}
-			try {
-				const client = new SuiJsonRpcClient({ url: getRpcUrlForNetwork() })
-				const result = await client.getBalance({ owner: address })
-				const totalMist = Number(result?.totalBalance || 0)
-				const sui = totalMist / 1e9
-				walletBalanceEl.className = 'wallet-balance show'
-				walletBalanceEl.textContent = 'Balance: ' + sui.toFixed(2) + ' SUI'
-			} catch {
-				walletBalanceEl.className = 'wallet-balance'
-			}
-		}
-
 		function getConnectedWalletName() {
 			const conn = SuiWalletKit.$connection.value
 			if (conn && conn.wallet && conn.wallet.name) return String(conn.wallet.name)
@@ -1218,37 +1244,65 @@ export function generateRegistrationPage(
 			return ''
 		}
 
-		async function updateCardWalletInfo() {
-			const el = document.getElementById('nft-card-wallet')
+		function getConnectedAccountLabel() {
+			const conn = SuiWalletKit.$connection.value
+			if (!conn || !conn.account) return ''
+			return typeof conn.account.label === 'string' ? conn.account.label.trim() : ''
+		}
+
+		function updateCardWalletInfo() {
+			const el = document.getElementById('nft-wallet-icons')
 			if (!el) return
 			const address = getConnectedAddress()
-			if (!address) {
-				el.className = 'nft-card-wallet'
+			if (!address || scrubMode) {
+				el.className = 'nft-wallet-icons'
 				el.innerHTML = ''
 				return
 			}
 			const walletName = getConnectedWalletName()
 			const isWaaP = walletName.toLowerCase() === 'waap'
-			let badgeHtml = ''
-			if (isWaaP) {
-				const waapIcon = typeof __wkWaaPIcon === 'string' ? __wkWaaPIcon : ''
-				badgeHtml = (waapIcon ? '<img class="waap-blue" src="' + waapIcon + '">' : '') + ' WaaP'
-			} else if (walletName) {
-				const icon = getConnectedWalletIcon()
-				badgeHtml = (icon ? '<img src="' + icon + '">' : '') + ' ' + walletName
+			let accountLabel = getConnectedAccountLabel()
+			if (!accountLabel && isWaaP && typeof __wkGetWaaPLabelForAddress === 'function') {
+				accountLabel = __wkGetWaaPLabelForAddress(address)
 			}
-			el.className = 'nft-card-wallet show'
-			el.innerHTML =
-				'<div class="nft-card-wallet-badge">' + badgeHtml + '</div>' +
-				'<div class="nft-card-wallet-balance" id="nft-card-balance"></div>'
-			try {
-				const client = new SuiJsonRpcClient({ url: getRpcUrlForNetwork() })
-				const result = await client.getBalance({ owner: address })
-				const totalMist = Number(result?.totalBalance || 0)
-				const sui = totalMist / 1e9
-				const balanceEl = document.getElementById('nft-card-balance')
-				if (balanceEl) balanceEl.textContent = sui.toFixed(2) + ' SUI'
-			} catch {}
+			if (!accountLabel && isWaaP) {
+				const pName = getConnectedPrimaryName()
+				if (pName) accountLabel = pName
+			}
+			let html = ''
+			if (isWaaP && typeof __wkWaaPIcon === 'string' && __wkWaaPIcon) {
+				html += '<div class="nft-wallet-icon-row">' +
+					'<img src="' + __wkWaaPIcon + '" alt="WaaP" onerror="this.style.display=\\'none\\'">' +
+					'<span class="nft-wallet-icon-label">WaaP</span>' +
+					'</div>'
+			}
+			const waapMethod = isWaaP && typeof __wkGetWaaPMethodForAddress === 'function'
+				? __wkGetWaaPMethodForAddress(address)
+				: (isWaaP && typeof __wkPendingWaaPMethod === 'string' ? __wkPendingWaaPMethod : '')
+			if (waapMethod && typeof __wkSocialIcons === 'object' && __wkSocialIcons[waapMethod]) {
+				const methodSvg = __wkSocialIcons[waapMethod]
+					.replace(/width="\\d+"/, 'width="20"')
+					.replace(/height="\\d+"/, 'height="20"')
+					.replace(/fill="[^"]*"/, 'fill="#e2e8f0"')
+				let methodLabel = accountLabel || ''
+				if (!methodLabel) {
+					const fallbackLabels = { x: 'X', google: 'Google', discord: 'Discord', apple: 'Apple', email: 'Email', phone: 'Phone' }
+					methodLabel = fallbackLabels[waapMethod] || ''
+				}
+				html += '<div class="nft-wallet-icon-row">' + methodSvg +
+					(methodLabel ? '<span class="nft-wallet-icon-label">' + methodLabel + '</span>' : '') +
+					'</div>'
+			}
+			if (!isWaaP && walletName) {
+				html += '<div class="nft-wallet-icon-row"><span class="nft-wallet-icon-label">' + walletName + '</span></div>'
+			}
+			if (html) {
+				el.className = 'nft-wallet-icons show'
+				el.innerHTML = html
+			} else {
+				el.className = 'nft-wallet-icons'
+				el.innerHTML = ''
+			}
 		}
 
 		function formatCompactSuiPrice(suiAmount) {
@@ -1470,6 +1524,15 @@ export function generateRegistrationPage(
 
 				tx.transferObjects([nft], recipient)
 
+				if (referrerAddress && referralFeeMist > 0n) {
+					const [refCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(referralFeeMist)])
+					tx.transferObjects([refCoin], referrerAddress)
+				}
+				if (waapReferralAddress && waapFeeMist > 0n) {
+					const [waapCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(waapFeeMist)])
+					tx.transferObjects([waapCoin], waapReferralAddress)
+				}
+
 				showStatus('Approve in wallet...', 'info')
 				const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } })
 				const digest = result?.digest ? String(result.digest) : ''
@@ -1480,6 +1543,9 @@ export function generateRegistrationPage(
 					registerName: NAME,
 					registerNetwork: NETWORK,
 					txDigest: digest,
+					referrer: referrerAddress || '',
+					referralFee: referralFeeMist > 0n ? String(referralFeeMist) : '',
+					waapFee: waapFeeMist > 0n ? String(waapFeeMist) : '',
 				})
 
 				const links = digest
@@ -1516,16 +1582,16 @@ export function generateRegistrationPage(
 			updateRegisterButton()
 			updateWalletProfileButton()
 			syncPrimaryStarState()
-			updateWalletBalance()
 			updateCardWalletInfo()
+			renderNftQr()
 		}
 
 		window.onRegisterWalletDisconnected = function() {
 			updateRegisterButton()
 			updateWalletProfileButton()
 			syncPrimaryStarState()
-			updateWalletBalance()
 			updateCardWalletInfo()
+			renderNftQr()
 		}
 
 		${generateSharedWalletMountJs({
@@ -1536,6 +1602,20 @@ export function generateRegistrationPage(
 			profileButtonId: 'wallet-profile-btn',
 			profileFallbackHref: 'https://sui.ski',
 		})}
+
+		;(function fitNameSize() {
+			const nameEl = document.querySelector('.nft-name')
+			if (!nameEl) return
+			const fullName = NAME + '.sui'
+			const len = fullName.length
+			if (len > 12) {
+				nameEl.style.fontSize = 'clamp(1.4rem, 6vw, 2rem)'
+			} else if (len > 9) {
+				nameEl.style.fontSize = 'clamp(1.7rem, 7.5vw, 2.4rem)'
+			} else if (len > 7) {
+				nameEl.style.fontSize = 'clamp(2rem, 8.5vw, 2.8rem)'
+			}
+		})()
 
 		markRegisterFlowImpression()
 		updatePrimaryStarUi()
@@ -1550,14 +1630,27 @@ export function generateRegistrationPage(
 		setInterval(updateX402Listing, 120000)
 		loadSuggestions()
 
-		;(async function renderNftQr() {
+		let __qrCreatorMod = null
+		async function renderNftQr() {
 			const canvas = document.getElementById('nft-qr')
 			if (!canvas || !canvas.getContext) return
 			try {
-				const qrMod = await import('https://esm.sh/qr-creator@1.0.0')
-				const QrCreator = qrMod.default || qrMod
+				if (!__qrCreatorMod) __qrCreatorMod = await import('https://esm.sh/qr-creator@1.0.0')
+				const QrCreator = __qrCreatorMod.default || __qrCreatorMod
+				let qrUrl = 'https://' + NAME + '.sui.ski'
+				if (!scrubMode) {
+					const address = getConnectedAddress()
+					if (address) {
+						const qrParams = new URLSearchParams()
+						qrParams.set('ref', address)
+						qrParams.set('rw', waapReferralAddress || WAAP_REFERRAL_ADDRESS)
+						qrUrl += '?' + qrParams.toString()
+					}
+				}
+				const ctx = canvas.getContext('2d')
+				ctx.clearRect(0, 0, canvas.width, canvas.height)
 				QrCreator.render({
-					text: 'https://' + NAME + '.sui.ski',
+					text: qrUrl,
 					radius: 0.4,
 					ecLevel: 'M',
 					fill: '#49da91',
@@ -1567,7 +1660,8 @@ export function generateRegistrationPage(
 			} catch {
 				canvas.style.display = 'none'
 			}
-		})()
+		}
+		renderNftQr()
 
 		if (yearsDecreaseBtn) {
 			yearsDecreaseBtn.addEventListener('click', () => {
@@ -1609,6 +1703,35 @@ export function generateRegistrationPage(
 		})
 		if (refreshSuggestionsBtn) refreshSuggestionsBtn.addEventListener('click', () => loadSuggestions(true))
 		if (registerBtn) registerBtn.addEventListener('click', registerName)
+		if (scrubBtn) {
+			scrubBtn.addEventListener('click', function() {
+				scrubMode = !scrubMode
+				scrubBtn.classList.toggle('active', scrubMode)
+				updateCardWalletInfo()
+				renderNftQr()
+			})
+		}
+		let __html2canvasMod = null
+		if (downloadQrBtn) {
+			downloadQrBtn.addEventListener('click', async function() {
+				const card = document.querySelector('body > div.container > div > div.nft-card')
+				if (!card) return
+				try {
+					if (!__html2canvasMod) __html2canvasMod = await import('https://esm.sh/html2canvas@1.4.1')
+					const html2canvas = __html2canvasMod.default || __html2canvasMod
+					const canvas = await html2canvas(card, {
+						backgroundColor: '#040d09',
+						scale: 2,
+						useCORS: true,
+						logging: false,
+					})
+					const link = document.createElement('a')
+					link.download = NAME + '-sui-ski.png'
+					link.href = canvas.toDataURL('image/png')
+					link.click()
+				} catch {}
+			})
+		}
 	</script>
 </body>
 </html>`

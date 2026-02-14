@@ -717,6 +717,139 @@ export const profileStyles = `
 			margin-top: 8px;
 			letter-spacing: 0.02em;
 		}
+		.vault-ski-grid {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px;
+			padding: 4px 0;
+		}
+		.vault-ski-chip {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 6px 10px 6px 8px;
+			border-radius: 8px;
+			background: linear-gradient(135deg, rgba(6, 6, 14, 0.85), rgba(12, 12, 22, 0.75));
+			border: 1px solid rgba(60, 65, 85, 0.4);
+			color: rgba(200, 205, 220, 0.9);
+			font-size: 0.78rem;
+			font-weight: 600;
+			text-decoration: none;
+			cursor: pointer;
+			transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+			position: relative;
+		}
+		.vault-ski-chip:hover {
+			background: linear-gradient(135deg, rgba(14, 14, 28, 0.92), rgba(22, 22, 38, 0.85));
+			border-color: rgba(120, 130, 170, 0.55);
+			box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+			transform: translateY(-1px);
+		}
+		.vault-ski-chip.current {
+			background: linear-gradient(135deg, rgba(20, 20, 35, 0.9), rgba(30, 30, 50, 0.8));
+			border-color: rgba(150, 160, 200, 0.55);
+			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 5px rgba(0, 0, 0, 0.3);
+		}
+		.vault-ski-chip.current .vault-ski-name {
+			color: #e8ecf4;
+		}
+		.vault-ski-chip.listed {
+			background: linear-gradient(135deg, rgba(40, 10, 70, 0.55), rgba(20, 8, 50, 0.65));
+			border-color: rgba(168, 85, 247, 0.5);
+		}
+		.vault-ski-chip.listed .vault-ski-name {
+			color: #ffffff;
+		}
+		.vault-ski-chip.expired {
+			background: linear-gradient(135deg, rgba(60, 15, 15, 0.5), rgba(40, 10, 10, 0.6));
+			border-color: rgba(248, 113, 113, 0.45);
+		}
+		.vault-ski-diamond {
+			flex-shrink: 0;
+			color: rgba(160, 170, 200, 0.7);
+			filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.6));
+		}
+		.vault-ski-chip:hover .vault-ski-diamond {
+			color: rgba(200, 210, 240, 0.9);
+			filter: drop-shadow(0 0 5px rgba(100, 120, 180, 0.4));
+		}
+		.vault-ski-name {
+			flex: 1;
+			letter-spacing: 0.01em;
+			white-space: nowrap;
+			color: rgba(200, 205, 220, 0.88);
+		}
+		.vault-ski-sep {
+			color: rgba(120, 130, 160, 0.5);
+			margin: 0 -2px 0 0;
+		}
+		.vault-ski-price {
+			color: #ffffff;
+			font-weight: 600;
+			font-size: 0.72rem;
+			display: inline-flex;
+			align-items: center;
+			gap: 2px;
+		}
+		.vault-ski-price .sui-price-icon {
+			width: 14px;
+			height: 14px;
+			flex-shrink: 0;
+			vertical-align: middle;
+			display: inline-block;
+			padding: 0;
+		}
+		.vault-ski-tag {
+			font-size: 0.65rem;
+			font-weight: 700;
+			padding: 1px 5px;
+			border-radius: 4px;
+			white-space: nowrap;
+		}
+		.vault-ski-tag.red {
+			color: #fca5a5;
+			background: rgba(239, 68, 68, 0.15);
+		}
+		.vault-ski-tag.yellow {
+			color: #fde68a;
+			background: rgba(250, 204, 21, 0.12);
+		}
+		.vault-ski-tag.green {
+			color: #86efac;
+			background: rgba(34, 197, 94, 0.12);
+		}
+		.vault-ski-tag.blue {
+			color: #93c5fd;
+			background: rgba(96, 165, 250, 0.12);
+		}
+		.vault-ski-tag.white {
+			color: #e2e8f0;
+			background: rgba(255, 255, 255, 0.08);
+		}
+		.vault-ski-remove {
+			display: none;
+			align-items: center;
+			justify-content: center;
+			width: 16px;
+			height: 16px;
+			border: none;
+			border-radius: 50%;
+			background: rgba(239, 68, 68, 0.2);
+			color: #f87171;
+			font-size: 0.72rem;
+			font-weight: 700;
+			cursor: pointer;
+			padding: 0;
+			line-height: 1;
+			margin-left: 2px;
+			transition: background 0.12s ease;
+		}
+		.vault-ski-chip:hover .vault-ski-remove {
+			display: inline-flex;
+		}
+		.vault-ski-remove:hover {
+			background: rgba(239, 68, 68, 0.4);
+		}
 		.vault-panel-list {
 			display: flex;
 			flex-wrap: wrap;
@@ -3172,6 +3305,218 @@ export const profileStyles = `
 			opacity: 0.5;
 			cursor: not-allowed;
 			transform: none;
+		}
+
+		.transfer-modal {
+			display: none;
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background: rgba(0, 0, 0, 0.7);
+			backdrop-filter: blur(8px);
+			z-index: 100;
+			align-items: center;
+			justify-content: center;
+			padding: 20px;
+		}
+		.transfer-modal.open { display: flex; }
+		.transfer-modal-content {
+			background: var(--card-bg-solid);
+			border: 1px solid var(--glass-border);
+			border-radius: 20px;
+			padding: 28px;
+			max-width: 480px;
+			width: 100%;
+			box-shadow: var(--shadow-lg);
+		}
+		.transfer-modal h3 {
+			color: var(--text);
+			margin-bottom: 8px;
+			font-size: 1.15rem;
+			font-weight: 700;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.transfer-modal h3 svg {
+			width: 20px;
+			height: 20px;
+			color: var(--accent);
+		}
+		.transfer-modal p {
+			color: var(--text-muted);
+			font-size: 0.85rem;
+			margin-bottom: 18px;
+		}
+		.transfer-modal label {
+			display: block;
+			color: var(--text-muted);
+			font-size: 0.8rem;
+			margin-bottom: 6px;
+			font-weight: 600;
+		}
+		.transfer-modal input {
+			width: 100%;
+			padding: 14px 16px;
+			border: 2px solid var(--border);
+			border-radius: 12px;
+			background: var(--card-bg-solid);
+			color: var(--text);
+			font-family: ui-monospace, SFMono-Regular, monospace;
+			font-size: 0.85rem;
+			margin-bottom: 4px;
+			transition: all 0.2s;
+		}
+		.transfer-modal input:focus {
+			outline: none;
+			border-color: var(--accent);
+			box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
+		}
+		.transfer-modal input::placeholder {
+			color: var(--text-dim);
+		}
+		.transfer-resolved {
+			min-height: 22px;
+			font-size: 0.75rem;
+			color: var(--text-muted);
+			margin-bottom: 14px;
+			font-family: ui-monospace, SFMono-Regular, monospace;
+			word-break: break-all;
+			transition: color 0.2s;
+		}
+		.transfer-resolved.resolving {
+			color: var(--accent);
+		}
+		.transfer-resolved.resolved {
+			color: var(--success);
+		}
+		.transfer-resolved.error {
+			color: var(--error);
+		}
+		.transfer-gas-section {
+			margin-bottom: 16px;
+		}
+		.transfer-gas-label {
+			display: block;
+			color: var(--text-muted);
+			font-size: 0.8rem;
+			margin-bottom: 8px;
+			font-weight: 600;
+		}
+		.transfer-gas-toggle {
+			display: inline-flex;
+			gap: 0;
+			border-radius: 10px;
+			border: 1px solid var(--border);
+			overflow: hidden;
+			background: rgba(10, 10, 16, 0.7);
+		}
+		.transfer-gas-pill {
+			padding: 8px 18px;
+			font-size: 0.78rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+			border: none;
+			background: transparent;
+			color: var(--text-muted);
+		}
+		.transfer-gas-pill:hover {
+			color: var(--text);
+		}
+		.transfer-gas-pill.active {
+			background: rgba(96, 165, 250, 0.15);
+			color: var(--accent);
+		}
+		.transfer-gas-estimate {
+			display: inline-block;
+			margin-left: 12px;
+			font-size: 0.75rem;
+			color: var(--text-dim);
+		}
+		.transfer-warning {
+			background: rgba(251, 191, 36, 0.08);
+			border: 1px solid rgba(251, 191, 36, 0.2);
+			border-radius: 10px;
+			padding: 12px 14px;
+			font-size: 0.8rem;
+			color: var(--warning);
+			margin-bottom: 16px;
+			line-height: 1.5;
+		}
+		.transfer-status {
+			min-height: 20px;
+			font-size: 0.82rem;
+			margin-bottom: 12px;
+		}
+		.transfer-status.error { color: var(--error); }
+		.transfer-status.success { color: var(--success); }
+		.transfer-status.info { color: var(--accent); }
+		.transfer-modal-buttons {
+			display: flex;
+			gap: 10px;
+		}
+		.transfer-modal-buttons button {
+			flex: 1;
+			padding: 10px 16px;
+			border-radius: 10px;
+			font-size: 0.82rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.transfer-modal-buttons .cancel-btn {
+			background: transparent;
+			color: #94a3b8;
+			border: 1px solid rgba(148, 163, 184, 0.2);
+		}
+		.transfer-modal-buttons .cancel-btn:hover {
+			background: rgba(255, 255, 255, 0.05);
+			color: #f0f0f5;
+			border-color: rgba(148, 163, 184, 0.35);
+		}
+		.transfer-modal-buttons .confirm-btn {
+			background: rgba(96, 165, 250, 0.2);
+			border: 1px solid rgba(96, 165, 250, 0.4);
+			color: var(--accent-bright);
+		}
+		.transfer-modal-buttons .confirm-btn:hover:not(:disabled) {
+			background: rgba(96, 165, 250, 0.3);
+			border-color: rgba(96, 165, 250, 0.55);
+			transform: translateY(-1px);
+			box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
+		}
+		.transfer-modal-buttons .confirm-btn:disabled {
+			opacity: 0.4;
+			cursor: not-allowed;
+			transform: none;
+			box-shadow: none;
+		}
+		.transfer-confirm-step {
+			display: none;
+			text-align: center;
+			padding: 8px 0 4px;
+		}
+		.transfer-confirm-step.visible {
+			display: block;
+		}
+		.transfer-confirm-step .transfer-confirm-name {
+			font-size: 1rem;
+			font-weight: 700;
+			color: var(--text-bright);
+		}
+		.transfer-confirm-step .transfer-confirm-arrow {
+			color: var(--text-dim);
+			margin: 6px 0;
+			font-size: 1.2rem;
+		}
+		.transfer-confirm-step .transfer-confirm-recipient {
+			font-size: 0.85rem;
+			color: var(--accent);
+			font-family: ui-monospace, SFMono-Regular, monospace;
+			word-break: break-all;
 		}
 
 		/* Wallet status bar */
@@ -10945,6 +11290,7 @@ export const profileStyles = `
 			.edit-modal-content { margin: 12px; padding: 18px; }
 			.send-modal-content { margin: 12px; padding: 18px; }
 			.jacket-modal-content { margin: 12px; padding: 18px; }
+			.transfer-modal-content { margin: 12px; padding: 18px; }
 		}
 
 		@media (max-width: 380px) {

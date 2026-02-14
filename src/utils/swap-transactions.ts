@@ -5,7 +5,6 @@ import type { Env } from '../types'
 import {
 	calculateSuiNeededForNs,
 	DEEP_TYPE,
-	DEEPBOOK_DEEP_SUI_POOL,
 	DEEPBOOK_NS_SUI_POOL,
 	DEEPBOOK_PACKAGE,
 	DEEPBOOK_SUI_USDC_POOL,
@@ -23,8 +22,6 @@ import { getDefaultRpcUrl } from './rpc'
 
 const CLOCK_OBJECT = '0x6'
 const DUST_SINK_ADDRESS = '0x0000000000000000000000000000000000000000000000000000000000000000'
-const DEEP_FEE_PERCENT = 15n
-const MIN_DEEP_OUT = 50_000n
 
 async function resolveFeeRecipient(
 	client: SuiClient,
@@ -120,10 +117,9 @@ export async function buildSwapAndRegisterTx(
 	const registrationCostNsMist = pricing.nsNeededMist
 
 	const nsPoolAddress = DEEPBOOK_NS_SUI_POOL[network]
-	const deepPoolAddress = DEEPBOOK_DEEP_SUI_POOL[network]
 	const deepbookPackage = DEEPBOOK_PACKAGE[network]
 
-	if (!nsPoolAddress || !deepPoolAddress || !deepbookPackage) {
+	if (!nsPoolAddress || !deepbookPackage) {
 		throw new Error(`DeepBook pools not available on ${network}`)
 	}
 
@@ -156,8 +152,7 @@ export async function buildSwapAndRegisterTx(
 		minNsOutput = registrationCostNsMist
 	}
 
-	const suiForDeepSwap = (suiForNsSwap * DEEP_FEE_PERCENT) / 100n
-	const suiInputMist = suiForNsSwap + suiForDeepSwap
+	const suiInputMist = suiForNsSwap
 
 	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
 	const suinsClient = new SuinsClient({ client: client as never, network })
@@ -165,26 +160,11 @@ export async function buildSwapAndRegisterTx(
 	const tx = new Transaction()
 	tx.setSender(senderAddress)
 
-	const [suiCoinForNs, suiCoinForDeep] = tx.splitCoins(tx.gas, [
-		tx.pure.u64(suiForNsSwap),
-		tx.pure.u64(suiForDeepSwap),
-	])
+	const [suiCoinForNs] = tx.splitCoins(tx.gas, [tx.pure.u64(suiForNsSwap)])
 
 	const [zeroDeepCoin] = tx.moveCall({
 		target: '0x2::coin::zero',
 		typeArguments: [DEEP_TYPE],
-	})
-
-	const [deepCoin, deepLeftoverSui, deepLeftoverDeep] = tx.moveCall({
-		target: `${deepbookPackage}::pool::swap_exact_quote_for_base`,
-		typeArguments: [DEEP_TYPE, SUI_TYPE],
-		arguments: [
-			tx.object(deepPoolAddress),
-			suiCoinForDeep,
-			zeroDeepCoin,
-			tx.pure.u64(MIN_DEEP_OUT),
-			tx.object(CLOCK_OBJECT),
-		],
 	})
 
 	const [nsCoin, nsLeftoverSui, nsLeftoverDeep] = tx.moveCall({
@@ -193,13 +173,12 @@ export async function buildSwapAndRegisterTx(
 		arguments: [
 			tx.object(nsPoolAddress),
 			suiCoinForNs,
-			deepCoin,
+			zeroDeepCoin,
 			tx.pure.u64(minNsOutput),
 			tx.object(CLOCK_OBJECT),
 		],
 	})
 
-	tx.transferObjects([deepLeftoverSui, deepLeftoverDeep], senderAddress)
 	tx.transferObjects([nsLeftoverSui, nsLeftoverDeep], senderAddress)
 
 	const suinsTx = new SuinsTransaction(suinsClient, tx)
@@ -621,10 +600,9 @@ export async function buildMultiCoinRenewTx(
 	const renewalCostNsMist = pricing.nsNeededMist
 
 	const nsPoolAddress = DEEPBOOK_NS_SUI_POOL[network]
-	const deepPoolAddress = DEEPBOOK_DEEP_SUI_POOL[network]
 	const deepbookPackage = DEEPBOOK_PACKAGE[network]
 
-	if (!nsPoolAddress || !deepPoolAddress || !deepbookPackage) {
+	if (!nsPoolAddress || !deepbookPackage) {
 		throw new Error(`DeepBook pools not available on ${network}`)
 	}
 
@@ -655,8 +633,7 @@ export async function buildMultiCoinRenewTx(
 		minNsOutput = renewalCostNsMist
 	}
 
-	const suiForDeepSwap = (suiForNsSwap * DEEP_FEE_PERCENT) / 100n
-	const totalSuiNeeded = suiForNsSwap + suiForDeepSwap
+	const totalSuiNeeded = suiForNsSwap
 
 	const tokensNeededFloat = Number(totalSuiNeeded) / 1e9 / pool.suiPerToken
 	const tokenMistNeeded = BigInt(Math.ceil(tokensNeededFloat * 10 ** pool.decimals))
@@ -679,25 +656,10 @@ export async function buildMultiCoinRenewTx(
 
 	const [tokenToSell] = tx.splitCoins(sourceCoin, [tx.pure.u64(tokenMistWithSlippage)])
 
-	const [suiForDeep] = tx.splitCoins(tx.gas, [tx.pure.u64(suiForDeepSwap)])
 	const [zeroDeepCoin] = tx.moveCall({
 		target: '0x2::coin::zero',
 		typeArguments: [DEEP_TYPE],
 	})
-
-	const [deepFeeCoin, deepLeftoverSui, deepLeftoverDeep] = tx.moveCall({
-		target: `${deepbookPackage}::pool::swap_exact_quote_for_base`,
-		typeArguments: [DEEP_TYPE, SUI_TYPE],
-		arguments: [
-			tx.object(deepPoolAddress),
-			suiForDeep,
-			zeroDeepCoin,
-			tx.pure.u64(MIN_DEEP_OUT),
-			tx.object(CLOCK_OBJECT),
-		],
-	})
-
-	tx.transferObjects([deepLeftoverSui, deepLeftoverDeep], senderAddress)
 
 	const minSuiFromSwap = suiForNsSwap - (suiForNsSwap * BigInt(Math.max(slippageBps, 500))) / 10000n
 
@@ -707,13 +669,17 @@ export async function buildMultiCoinRenewTx(
 		if (!suiUsdcPoolAddress) {
 			throw new Error('SUI/USDC pool not available for indirect swap')
 		}
+		const [zeroDeep1] = tx.moveCall({
+			target: '0x2::coin::zero',
+			typeArguments: [DEEP_TYPE],
+		})
 		const [tokenLeft1, usdcOut, deepLeft1] = tx.moveCall({
 			target: `${deepbookPackage}::pool::swap_exact_base_for_quote`,
 			typeArguments: [sourceCoinType, USDC_TYPE],
 			arguments: [
 				tx.object(pool.poolAddress),
 				tokenToSell,
-				deepFeeCoin,
+				zeroDeepCoin,
 				tx.pure.u64(0n),
 				tx.object(CLOCK_OBJECT),
 			],
@@ -724,13 +690,13 @@ export async function buildMultiCoinRenewTx(
 			arguments: [
 				tx.object(suiUsdcPoolAddress),
 				usdcOut,
-				deepLeft1,
+				zeroDeep1,
 				tx.pure.u64(minSuiFromSwap),
 				tx.object(CLOCK_OBJECT),
 			],
 		})
 		swappedSuiCoin = suiOut
-		tx.transferObjects([tokenLeft1, usdcLeft, deepLeft2, sourceCoin], senderAddress)
+		tx.transferObjects([tokenLeft1, usdcLeft, deepLeft1, deepLeft2, sourceCoin], senderAddress)
 	} else if (pool.suiIsBase) {
 		const [suiOut, tokenLeft, deepLeft2] = tx.moveCall({
 			target: `${deepbookPackage}::pool::swap_exact_quote_for_base`,
@@ -738,7 +704,7 @@ export async function buildMultiCoinRenewTx(
 			arguments: [
 				tx.object(pool.poolAddress),
 				tokenToSell,
-				deepFeeCoin,
+				zeroDeepCoin,
 				tx.pure.u64(minSuiFromSwap),
 				tx.object(CLOCK_OBJECT),
 			],
@@ -752,7 +718,7 @@ export async function buildMultiCoinRenewTx(
 			arguments: [
 				tx.object(pool.poolAddress),
 				tokenToSell,
-				deepFeeCoin,
+				zeroDeepCoin,
 				tx.pure.u64(minSuiFromSwap),
 				tx.object(CLOCK_OBJECT),
 			],

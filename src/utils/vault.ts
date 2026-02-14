@@ -1,11 +1,30 @@
+export interface VaultPriceSnapshot {
+	listingMist: number | null
+	bestBidMist: number | null
+	floorMist: number | null
+	capturedAt: number
+}
+
+export interface VaultCategory {
+	id: string
+	label: string
+	color: string
+	createdAt: number
+}
+
 export interface VaultBookmark {
 	name: string
 	address: string
 	addedAt: number
+	note: string
+	category: string
+	priceSnapshot: VaultPriceSnapshot | null
+	lastActivityAt: number
 }
 
 export interface VaultData {
 	bookmarks: VaultBookmark[]
+	categories: VaultCategory[]
 	ownerAddress: string
 	version: number
 	updatedAt: number

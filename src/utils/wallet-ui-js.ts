@@ -313,9 +313,123 @@ export function generateWalletUiCss(): string {
 	box-shadow: 0 4px 20px rgba(2,6,23,0.4), 0 0 20px rgba(255,255,255,0.1);
 }
 .wk-widget-btn.connected {
-	background: linear-gradient(135deg, rgba(59,130,246,0.19), rgba(99,102,241,0.18));
-	border-color: rgba(96,165,250,0.36);
-	color: #fff;
+	background: linear-gradient(135deg, rgba(8,8,14,0.72), rgba(16,16,24,0.68));
+	border-color: rgba(100,110,135,0.32);
+	color: #c8cde0;
+	width: auto;
+	max-width: 72vw;
+	gap: 8px;
+	padding: 7px 12px;
+	justify-content: flex-start;
+	position: relative;
+	overflow: hidden;
+}
+.wk-widget-btn.connected::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(110deg, transparent 20%, rgba(160,170,200,0.06) 40%, rgba(200,210,235,0.1) 50%, rgba(160,170,200,0.06) 60%, transparent 80%);
+	background-size: 250% 100%;
+	animation: wk-liquid 6s ease-in-out infinite;
+	pointer-events: none;
+}
+@keyframes wk-liquid {
+	0% { background-position: 200% 0; }
+	100% { background-position: -200% 0; }
+}
+.wk-widget-btn.connected .wk-widget-icon {
+	width: 18px;
+	height: 18px;
+	border-radius: 5px;
+	flex-shrink: 0;
+}
+.wk-widget-btn.connected .wk-waap-badge {
+	width: 18px;
+	height: 18px;
+	border-radius: 5px;
+	flex-shrink: 0;
+}
+.wk-widget-btn.connected .wk-waap-badge + .wk-widget-icon,
+.wk-widget-btn.connected .wk-waap-badge + .wk-widget-icon-fallback {
+	margin-left: -6px;
+	opacity: 0.85;
+}
+.wk-widget-btn.connected .wk-widget-icon-fallback {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+.wk-widget-btn.connected .wk-widget-label-wrap {
+	min-width: 0;
+	flex: 1;
+	display: inline-flex;
+	align-items: center;
+}
+.wk-widget-btn.connected .wk-widget-title {
+	display: block;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	background: #050507;
+	border: 1px solid rgba(180,190,210,0.25);
+	border-radius: 8px;
+	padding: 4px 10px;
+	position: relative;
+	color: #e8ecf4;
+	font-weight: 700;
+	box-shadow: inset 0 1px 4px rgba(0,0,0,0.6), 0 0 8px rgba(140,150,180,0.08);
+}
+.wk-widget-btn.connected .wk-widget-title::after {
+	content: '';
+	position: absolute;
+	inset: -1px;
+	border-radius: 9px;
+	background: linear-gradient(90deg, transparent 0%, rgba(200,210,230,0.5) 50%, transparent 100%);
+	background-size: 200% 100%;
+	animation: wk-silver-sweep 3s ease-in-out infinite;
+	mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+	mask-composite: exclude;
+	-webkit-mask-composite: xor;
+	padding: 1px;
+	pointer-events: none;
+}
+@keyframes wk-silver-sweep {
+	0% { background-position: 200% 0; }
+	100% { background-position: -200% 0; }
+}
+.wk-widget-btn.connected .wk-widget-primary-name {
+	color: #c8d0e0;
+	font-weight: 700;
+}
+.wk-widget-btn.connected .wk-widget-balance-wrap {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 1px;
+	flex-shrink: 0;
+}
+.wk-widget-btn.connected .wk-widget-token-row {
+	font-size: 0.58rem;
+	line-height: 1.15;
+	color: rgba(255,255,255,0.96);
+	white-space: nowrap;
+}
+.wk-widget-btn.connected .wk-widget-usd-row {
+	font-size: 0.58rem;
+	line-height: 1.1;
+	color: rgba(255,232,160,0.92);
+	white-space: nowrap;
+}
+@media (max-width: 640px) {
+	.wk-widget-btn.connected {
+		width: clamp(176px, 62vw, 242px);
+	}
+	.wk-widget-btn.connected .wk-widget-token-row,
+	.wk-widget-btn.connected .wk-widget-usd-row {
+		font-size: 0.56rem;
+	}
 }
 .wk-widget-btn.session-only {
 	background: linear-gradient(135deg, rgba(96,165,250,0.1), rgba(139,92,246,0.1));
@@ -332,8 +446,9 @@ export function generateWalletUiCss(): string {
 	position: absolute;
 	right: 0;
 	top: calc(100% + 6px);
-	min-width: 224px;
-	padding: 8px;
+	min-width: 198px;
+	max-width: min(90vw, 320px);
+	padding: 6px;
 	background:
 		linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.98)),
 		radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 55%);
@@ -354,12 +469,12 @@ export function generateWalletUiCss(): string {
 	align-items: center;
 	gap: 10px;
 	width: 100%;
-	padding: 11px 12px;
+	padding: 9px 10px;
 	background: none;
 	border: 1px solid transparent;
 	border-radius: 10px;
 	color: #e2e8f0;
-	font-size: 0.85rem;
+	font-size: 0.82rem;
 	font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 	cursor: pointer;
 	transition: background 0.16s, border-color 0.16s, color 0.16s, transform 0.16s;
@@ -471,6 +586,7 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 
     var __wkPortfolioTimer = null;
     var __wkPortfolioData = null;
+    var __wkExpandedL1 = {};
 
 	    function __wkFormatBalance(sui) {
 	      if (sui < 0.01) return '< 0.01';
@@ -492,6 +608,103 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       if (usd < 10000) return '$' + usd.toFixed(0);
       if (usd < 1000000) return '$' + (usd / 1000).toFixed(1) + 'k';
       return '$' + (usd / 1000000).toFixed(1) + 'M';
+    }
+
+    function __wkNormalizeHoldingSymbol(name) {
+      return String(name || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    }
+
+    function __wkHoldingBucket(symbol) {
+      if (!symbol) return '';
+      if (symbol === 'SUI' || symbol === 'WSUI') return 'SUI';
+      if (symbol === 'ETH' || symbol === 'WETH') return 'ETH';
+      if (symbol === 'SOL' || symbol === 'WSOL') return 'SOL';
+      return '';
+    }
+
+    function __wkFormatTokenAmount(value) {
+      if (!Number.isFinite(value) || value <= 0) return '0';
+      if (value < 0.0001) return '<0.0001';
+      if (value < 1) return value.toFixed(4).replace(/\\.?0+$/, '');
+      if (value < 100) return value.toFixed(3).replace(/\\.?0+$/, '');
+      if (value < 10000) return value.toFixed(2).replace(/\\.?0+$/, '');
+      if (value < 1000000) return (value / 1000).toFixed(1) + 'k';
+      return (value / 1000000).toFixed(1) + 'M';
+    }
+
+    function __wkGetNonL1Holdings(portfolioData) {
+      if (!portfolioData || !Array.isArray(portfolioData.holdings)) return [];
+      var merged = {};
+      for (var i = 0; i < portfolioData.holdings.length; i++) {
+        var holding = portfolioData.holdings[i];
+        var symbol = __wkNormalizeHoldingSymbol(holding && holding.name);
+        if (!symbol || __wkHoldingBucket(symbol)) continue;
+        var amount = Number(holding && holding.balance);
+        if (!Number.isFinite(amount) || amount <= 0) continue;
+        var suiValue = Number(holding && holding.suiValue);
+        if (!merged[symbol]) {
+          merged[symbol] = { name: symbol, balance: 0, suiValue: 0 };
+        }
+        merged[symbol].balance += amount;
+        if (Number.isFinite(suiValue) && suiValue > 0) {
+          merged[symbol].suiValue += suiValue;
+        }
+      }
+      return Object.keys(merged)
+        .map(function(key) { return merged[key]; })
+        .sort(function(a, b) { return b.suiValue - a.suiValue; });
+    }
+
+    var __wkL1Order = ['SUI', 'ETH', 'SOL'];
+
+    var __wkL1Icons = {
+      SUI: '<svg viewBox="0 0 300 384" width="14" height="18" style="display:inline-block;vertical-align:-3px;fill:#4DA2FF;"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z"></path></svg>',
+      ETH: '<svg viewBox="0 0 256 417" width="10" height="18" style="display:inline-block;vertical-align:-3px;"><path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z" fill="#627EEA"/><path d="M127.962 0L0 212.32l127.962 75.639V154.158z" fill="#8C8FE6"/><path d="M127.961 312.187l-1.575 1.92V414.79l1.575 4.6L256 236.587z" fill="#627EEA"/><path d="M127.962 419.39V312.187L0 236.587z" fill="#8C8FE6"/><path d="M127.961 287.958l127.96-75.637-127.96-58.162z" fill="#3C3C94"/><path d="M0 212.32l127.96 75.639V154.159z" fill="#627EEA"/></svg>',
+      SOL: '<svg viewBox="0 0 398 312" width="16" height="14" style="display:inline-block;vertical-align:-2px;"><defs><linearGradient id="sol-a" x1="360.879" y1="351.455" x2="141.213" y2="-69.294" gradientUnits="userSpaceOnUse"><stop stop-color="#00FFA3"/><stop offset="1" stop-color="#DC1FFF"/></linearGradient><linearGradient id="sol-b" x1="264.829" y1="401.601" x2="45.163" y2="-19.148" gradientUnits="userSpaceOnUse"><stop stop-color="#00FFA3"/><stop offset="1" stop-color="#DC1FFF"/></linearGradient><linearGradient id="sol-c" x1="312.548" y1="376.688" x2="92.882" y2="-44.061" gradientUnits="userSpaceOnUse"><stop stop-color="#00FFA3"/><stop offset="1" stop-color="#DC1FFF"/></linearGradient></defs><path d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1z" fill="url(#sol-a)"/><path d="M64.6 3.8C67.1 1.4 70.4 0 73.8 0h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1z" fill="url(#sol-b)"/><path d="M333.1 120.1c-2.4-2.4-5.7-3.8-9.2-3.8H6.5c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1z" fill="url(#sol-c)"/></svg>'
+    };
+
+    function __wkGetL1Holdings(portfolioData) {
+      if (!portfolioData || !Array.isArray(portfolioData.holdings)) return [];
+      var buckets = {};
+      for (var i = 0; i < portfolioData.holdings.length; i++) {
+        var holding = portfolioData.holdings[i];
+        var symbol = __wkNormalizeHoldingSymbol(holding && holding.name);
+        var bucket = __wkHoldingBucket(symbol);
+        if (!bucket) continue;
+        var amount = Number(holding && holding.balance);
+        if (!Number.isFinite(amount)) amount = 0;
+        var suiValue = Number(holding && holding.suiValue);
+        if (!Number.isFinite(suiValue)) suiValue = 0;
+        if (!buckets[bucket]) {
+          buckets[bucket] = { name: bucket, balance: 0, suiValue: 0 };
+        }
+        buckets[bucket].balance += amount;
+        buckets[bucket].suiValue += suiValue;
+      }
+      var result = [];
+      for (var o = 0; o < __wkL1Order.length; o++) {
+        var key = __wkL1Order[o];
+        if (buckets[key] && buckets[key].balance > 0) {
+          result.push(buckets[key]);
+        }
+      }
+      return result;
+    }
+
+    function __wkGetL1SubTokens(l1Name, portfolioData) {
+      if (l1Name === 'SUI') return __wkGetNonL1Holdings(portfolioData);
+      if (!portfolioData || !Array.isArray(portfolioData.holdings)) return [];
+      var entries = [];
+      for (var i = 0; i < portfolioData.holdings.length; i++) {
+        var holding = portfolioData.holdings[i];
+        var symbol = __wkNormalizeHoldingSymbol(holding && holding.name);
+        if (__wkHoldingBucket(symbol) !== l1Name || symbol === l1Name) continue;
+        var amount = Number(holding && holding.balance);
+        if (!Number.isFinite(amount) || amount <= 0) continue;
+        var suiValue = Number(holding && holding.suiValue);
+        entries.push({ name: symbol, balance: amount, suiValue: Number.isFinite(suiValue) ? suiValue : 0 });
+      }
+      return entries.sort(function(a, b) { return b.suiValue - a.suiValue; });
     }
 
     async function __wkFetchPortfolio(address) {
@@ -647,6 +860,36 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	      return __wkNormalizeWaaPMethod(map[normalizedAddress]);
 	    }
 
+	    var __wkWaaPLabelByAddressKey = 'sui_ski_waap_label_by_address_v1';
+
+	    function __wkGetWaaPLabelMap() {
+	      try {
+	        var raw = localStorage.getItem(__wkWaaPLabelByAddressKey);
+	        if (!raw) return {};
+	        var parsed = JSON.parse(raw);
+	        return parsed && typeof parsed === 'object' ? parsed : {};
+	      } catch (_e) {
+	        return {};
+	      }
+	    }
+
+	    function __wkSaveWaaPLabelForAddress(address, label) {
+	      var normalizedAddress = __wkNormalizeSuiAddress(address).toLowerCase();
+	      if (!normalizedAddress || !label) return;
+	      try {
+	        var map = __wkGetWaaPLabelMap();
+	        map[normalizedAddress] = String(label).trim();
+	        localStorage.setItem(__wkWaaPLabelByAddressKey, JSON.stringify(map));
+	      } catch (_e) {}
+	    }
+
+	    function __wkGetWaaPLabelForAddress(address) {
+	      var normalizedAddress = __wkNormalizeSuiAddress(address).toLowerCase();
+	      if (!normalizedAddress) return '';
+	      var map = __wkGetWaaPLabelMap();
+	      return typeof map[normalizedAddress] === 'string' ? map[normalizedAddress] : '';
+	    }
+
 	    function __wkPersistPendingWaaPMethod(address) {
 	      if (!__wkPendingWaaPMethod) return;
 	      __wkSaveWaaPMethodForAddress(address, __wkPendingWaaPMethod);
@@ -766,7 +1009,12 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	      SuiWalletKit.closeModal();
 	      SuiWalletKit.connect(waapWallet).then(function() {
 	        var conn = SuiWalletKit.$connection.value || null;
-	        if (conn && conn.address) __wkPersistPendingWaaPMethod(conn.address);
+	        if (conn && conn.address) {
+	          __wkPersistPendingWaaPMethod(conn.address);
+	          if (conn.account && typeof conn.account.label === 'string' && conn.account.label.trim()) {
+	            __wkSaveWaaPLabelForAddress(conn.address, conn.account.label.trim());
+	          }
+	        }
 	        __wkSetLastWallet('WaaP');
 	      }).catch(function(err) {
 	        __wkPendingWaaPMethod = '';
@@ -1105,27 +1353,52 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	      var html = '';
 
       if (__wkPortfolioData && __wkPortfolioData.holdings && __wkPortfolioData.holdings.length > 0) {
-        html += '<div style="padding:8px 12px 4px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:4px;">';
-        html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">';
-        html += '<span style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Portfolio</span>';
-	        html += '<span style="font-size:0.82rem;font-weight:600;color:#e2e8f0;">~' + __wkFormatBalance(__wkPortfolioData.totalSui) + __wkSuiIconSvg + '</span>';
-        html += '</div>';
-        var sorted = __wkPortfolioData.holdings.slice().sort(function(a, b) { return b.suiValue - a.suiValue; });
-        for (var h = 0; h < sorted.length && h < 6; h++) {
-          var holding = sorted[h];
-          if (holding.suiValue < 0.001) continue;
-          var balFmt = holding.balance < 0.01 ? '< 0.01' : holding.balance < 100 ? holding.balance.toFixed(2) : holding.balance < 10000 ? holding.balance.toFixed(1) : (holding.balance / 1000).toFixed(1) + 'k';
-          var suiValFmt = __wkFormatBalance(holding.suiValue);
-          html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:0.75rem;color:#94a3b8;">';
-          html += '<span>' + holding.name + '</span>';
-	          html += '<span style="color:#cbd5e1;">' + balFmt + ' <span style="opacity:0.5;">(' + suiValFmt + __wkSuiIconSvg + ')</span></span>';
+        var l1Holdings = __wkGetL1Holdings(__wkPortfolioData);
+        if (l1Holdings.length > 0) {
+          html += '<div style="padding:4px 4px 2px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:4px;">';
+          for (var l = 0; l < l1Holdings.length; l++) {
+            var l1 = l1Holdings[l];
+            var l1BalFmt = __wkFormatTokenAmount(l1.balance);
+            var l1UsdVal = __wkPortfolioData.usdcPerSui > 0 ? __wkFormatUsd(l1.suiValue * __wkPortfolioData.usdcPerSui) : '';
+            var l1Icon = __wkL1Icons[l1.name] || '';
+            var subTokens = __wkGetL1SubTokens(l1.name, __wkPortfolioData);
+            var hasSubTokens = subTokens.length > 0;
+            var isExpanded = !!__wkExpandedL1[l1.name];
+            html += '<button class="wk-dropdown-item' + (hasSubTokens ? ' __wk-dd-l1-toggle' : '') + '" data-l1="' + __wkEscapeHtml(l1.name) + '" style="padding:6px 8px;font-size:0.76rem;justify-content:space-between;' + (hasSubTokens ? 'cursor:pointer;' : 'cursor:default;') + '">';
+            html += '<span style="display:flex;align-items:center;gap:8px;">';
+            html += '<span style="width:18px;text-align:center;flex-shrink:0;">' + l1Icon + '</span>';
+            html += '<span style="color:#e2e8f0;font-weight:700;">' + __wkEscapeHtml(l1.name) + '</span>';
+            if (hasSubTokens) {
+              html += '<span style="opacity:0.5;font-size:0.6rem;margin-left:2px;">' + (isExpanded ? '\\u25B2' : '\\u25BC') + '</span>';
+            }
+            html += '</span>';
+            html += '<span style="display:flex;flex-direction:column;align-items:flex-end;gap:1px;">';
+            html += '<span style="color:#e2e8f0;font-weight:600;">' + __wkEscapeHtml(l1BalFmt) + '</span>';
+            if (l1UsdVal) {
+              html += '<span style="font-size:0.58rem;color:#94a3b8;">~' + __wkEscapeHtml(l1UsdVal) + '</span>';
+            }
+            html += '</span>';
+            html += '</button>';
+            if (hasSubTokens && isExpanded) {
+              html += '<div style="margin:0 0 2px 28px;display:flex;flex-direction:column;gap:1px;">';
+              for (var s = 0; s < subTokens.length; s++) {
+                var sub = subTokens[s];
+                var subBalFmt = __wkFormatTokenAmount(sub.balance);
+                var subSuiVal = __wkFormatBalance(sub.suiValue);
+                html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 8px 3px 0;font-size:0.7rem;color:#9fb0c7;">';
+                html += '<span>' + __wkEscapeHtml(sub.name) + '</span>';
+                html += '<span style="color:#cbd5e1;">' + __wkEscapeHtml(subBalFmt) + ' <span style="opacity:0.5;">(' + __wkEscapeHtml(subSuiVal) + __wkSuiIconSvg + ')</span></span>';
+                html += '</div>';
+              }
+              html += '</div>';
+            }
+          }
           html += '</div>';
         }
-        html += '</div>';
       }
 
       if (addr) {
-        html += '<div style="padding:6px 12px 6px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:4px;cursor:pointer;" id="__wk-dd-addr-display" title="Click to copy full address">';
+        html += '<div style="padding:6px 10px 6px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:4px;cursor:pointer;" id="__wk-dd-addr-display" title="Click to copy full address">';
         html += '<div style="font-size:0.65rem;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px">Your Address</div>';
         html += '<div style="font-size:0.68rem;color:#94a3b8;word-break:break-all;line-height:1.35;font-family:SF Mono,Fira Code,monospace">' + __wkEscapeHtml(addr) + '</div>';
 	        if (connectionHint) {
@@ -1171,6 +1444,7 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	    function __wkBindDropdownEvents(conn) {
       var copyBtn = document.getElementById('__wk-dd-copy');
       var addrDisplay = document.getElementById('__wk-dd-addr-display');
+      var l1Toggles = document.querySelectorAll('.__wk-dd-l1-toggle');
       var switchBtn = document.getElementById('__wk-dd-switch');
       var disconnectBtn = document.getElementById('__wk-dd-disconnect');
 
@@ -1192,6 +1466,24 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       }
       if (addrDisplay) {
         addrDisplay.addEventListener('click', function() { __wkCopyAddress(addrDisplay); });
+      }
+      for (var t = 0; t < l1Toggles.length; t++) {
+        (function(btn) {
+          btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            var l1Name = btn.getAttribute('data-l1');
+            if (!l1Name) return;
+            var wasOpen = false;
+            var dropdown = __wkWidgetContainer && __wkWidgetContainer.querySelector('.wk-dropdown');
+            if (dropdown && dropdown.classList.contains('open')) wasOpen = true;
+            __wkExpandedL1[l1Name] = !__wkExpandedL1[l1Name];
+            __wkUpdateWidget(SuiWalletKit.$connection.value);
+            if (wasOpen) {
+              var nextDropdown = __wkWidgetContainer && __wkWidgetContainer.querySelector('.wk-dropdown');
+              if (nextDropdown) nextDropdown.classList.add('open');
+            }
+          });
+        })(l1Toggles[t]);
       }
       if (switchBtn) {
         switchBtn.addEventListener('click', function() {
@@ -1234,39 +1526,48 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	        var isPrimaryName = ${showPrimaryName} && conn.primaryName;
 	        var label = isPrimaryName ? conn.primaryName : __wkTruncAddr(addressForLabel);
 	        var safeLabel = isPrimaryName
-	          ? '<span style="color:#ffd700;font-weight:700">' + __wkEscapeHtml(label) + '</span>'
+	          ? '<span class="wk-widget-primary-name">' + __wkEscapeHtml(label) + '</span>'
 	          : __wkEscapeHtml(label);
 	        var walletIcon = conn.wallet && conn.wallet.icon ? conn.wallet.icon : '';
 	        var connectionHint = __wkGetWaaPConnectionHint(conn);
-		        var balanceLine = '';
-		        if (__wkPortfolioData) {
-		          var suiFmt = __wkFormatBalance(__wkPortfolioData.totalSui);
-		          balanceLine = '<div style="display:flex;flex-direction:column;gap:0;opacity:1;color:#fff;font-weight:500;margin-top:1px;">';
-		          balanceLine += '<span style="font-size:0.66rem;line-height:1.15;">~' + suiFmt + __wkSuiIconSvg + '</span>';
-		          if (__wkPortfolioData.usdcPerSui > 0) {
-		            balanceLine += '<span style="font-size:0.6rem;line-height:1.1;opacity:0.88;color:#ffe8a0;">' + __wkFormatUsd(__wkPortfolioData.totalSui * __wkPortfolioData.usdcPerSui) + '</span>';
-		          }
-		          balanceLine += '</div>';
-		        }
+	        var balanceLine = '';
+	        if (__wkPortfolioData) {
+	          var suiSummary = __wkFormatBalance(__wkPortfolioData.totalSui);
+	          var usdSummary = __wkPortfolioData.usdcPerSui > 0
+	            ? __wkFormatUsd(__wkPortfolioData.totalSui * __wkPortfolioData.usdcPerSui)
+	            : '';
+	          if (suiSummary || usdSummary) {
+	            balanceLine = '<span class="wk-widget-balance-wrap">';
+	            if (suiSummary) {
+	              balanceLine += '<span class="wk-widget-token-row">' + __wkEscapeHtml(suiSummary) + __wkSuiIconSvg + '</span>';
+	            }
+	            if (usdSummary) {
+	              balanceLine += '<span class="wk-widget-usd-row">' + __wkEscapeHtml(usdSummary) + '</span>';
+	            }
+	            balanceLine += '</span>';
+	          }
+	        }
+	        var labelMarkup = '<span class="wk-widget-label-wrap"><span class="wk-widget-title">' + safeLabel + '</span></span>';
 	        var nextBtnMarkup = '';
+	        var waapBadge = connectionHint ? '<img src="' + __wkWaaPIcon + '" class="wk-widget-icon wk-waap-badge" alt="WaaP" onerror="this.style.display=\\'none\\'">' : '';
 	        if (walletIcon) {
-	          nextBtnMarkup = '<img src="' + walletIcon + '" alt="" style="width:18px;height:18px;border-radius:5px;flex-shrink:0" onerror="this.style.display=\\'none\\'"> <div style="display:flex;flex-direction:column;line-height:1.2;">' + safeLabel + balanceLine + '</div>';
+	          nextBtnMarkup = waapBadge + '<img src="' + walletIcon + '" class="wk-widget-icon" alt="" onerror="this.style.display=\\'none\\'">' + labelMarkup + balanceLine;
 	        } else if (conn.status === 'session') {
 	          var waapMethod = connectionHint ? (__wkGetWaaPMethodForAddress(conn.address || '') || __wkPendingWaaPMethod) : '';
 	          if (connectionHint && waapMethod) {
 	            var methodSvg = waapMethod && __wkSocialIcons[waapMethod] ? __wkSocialIcons[waapMethod].replace(/width="\\d+"/, 'width="18"').replace(/height="\\d+"/, 'height="18"').replace(/fill="[^"]*"/, 'fill="#e2e8f0"') : '';
 	            if (methodSvg) {
-	              nextBtnMarkup = '<span style="display:flex;align-items:center;justify-content:center;flex-shrink:0">' + methodSvg + '</span> <div style="display:flex;flex-direction:column;line-height:1.2;">' + safeLabel + balanceLine + '</div>';
+	              nextBtnMarkup = waapBadge + '<span class="wk-widget-icon-fallback">' + methodSvg + '</span>' + labelMarkup + balanceLine;
 	            } else {
-	              nextBtnMarkup = '<img src="' + __wkWaaPIcon + '" alt="" style="width:18px;height:18px;border-radius:5px;flex-shrink:0" onerror="this.style.display=\\'none\\'"> <div style="display:flex;flex-direction:column;line-height:1.2;">' + safeLabel + balanceLine + '</div>';
+	              nextBtnMarkup = '<img src="' + __wkWaaPIcon + '" class="wk-widget-icon" alt="" onerror="this.style.display=\\'none\\'">' + labelMarkup + balanceLine;
 	            }
 	          } else if (connectionHint) {
-	            nextBtnMarkup = '<img src="' + __wkWaaPIcon + '" alt="" style="width:18px;height:18px;border-radius:5px;flex-shrink:0" onerror="this.style.display=\\'none\\'"> <div style="display:flex;flex-direction:column;line-height:1.2;">' + safeLabel + balanceLine + '</div>';
+	            nextBtnMarkup = '<img src="' + __wkWaaPIcon + '" class="wk-widget-icon" alt="" onerror="this.style.display=\\'none\\'">' + labelMarkup + balanceLine;
 	          } else {
-	            nextBtnMarkup = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <div style="display:flex;flex-direction:column;line-height:1.2;">' + safeLabel + balanceLine + '</div>';
+	            nextBtnMarkup = '<span class="wk-widget-icon-fallback"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>' + labelMarkup + balanceLine;
 	          }
 	        } else {
-	          nextBtnMarkup = '<div style="display:flex;flex-direction:column;line-height:1.2;">' + safeLabel + balanceLine + '</div>';
+	          nextBtnMarkup = labelMarkup + balanceLine;
 	        }
 	        if (__wkWidgetBtnMarkup !== nextBtnMarkup) {
 	          btn.innerHTML = nextBtnMarkup;
