@@ -257,7 +257,10 @@ export async function buildMultiCoinRegisterTx(
 	env: Env,
 ): Promise<MultiCoinRegisterResult> {
 	const { domain, years, senderAddress, sourceCoinType, coinObjectIds, expirationMs } = params
-	const slippageBps = params.slippageBps ?? DEFAULT_SLIPPAGE_BPS
+	const slippageBps =
+		typeof params.slippageBps === 'number' && Number.isFinite(params.slippageBps)
+			? Math.max(0, Math.floor(params.slippageBps))
+			: DEFAULT_SLIPPAGE_BPS
 
 	if (!coinObjectIds.length) {
 		throw new Error('At least one coin object ID is required')
@@ -292,7 +295,7 @@ export async function buildMultiCoinRegisterTx(
 	let priceImpactBps = 0
 
 	if (nsPrice.asks?.length) {
-		const wideSlippage = Math.max(slippageBps, 1500)
+		const wideSlippage = slippageBps
 		const quote = calculateSuiNeededForNs(registrationCostNsMist, nsPrice.asks, wideSlippage)
 		suiForNsSwap = quote.suiNeeded
 		expectedNsOutput = quote.expectedNs
@@ -320,7 +323,7 @@ export async function buildMultiCoinRegisterTx(
 	const tokensNeededFloat = Number(totalSuiNeeded) / 1e9 / pool.suiPerToken
 	const tokenMistNeeded = BigInt(Math.ceil(tokensNeededFloat * 10 ** pool.decimals))
 	const tokenMistWithSlippage =
-		tokenMistNeeded + (tokenMistNeeded * BigInt(Math.max(slippageBps, 500))) / 10000n
+		tokenMistNeeded + (tokenMistNeeded * BigInt(slippageBps)) / 10000n
 
 	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
 	const suinsClient = new SuinsClient({ client: client as never, network })
@@ -343,7 +346,7 @@ export async function buildMultiCoinRegisterTx(
 		typeArguments: [DEEP_TYPE],
 	})
 
-	const minSuiFromSwap = suiForNsSwap - (suiForNsSwap * BigInt(Math.max(slippageBps, 500))) / 10000n
+	const minSuiFromSwap = suiForNsSwap - (suiForNsSwap * BigInt(slippageBps)) / 10000n
 
 	let swappedSuiCoin: ReturnType<Transaction['moveCall']>[0]
 	if (!pool.isDirect) {
@@ -829,7 +832,10 @@ export async function buildMultiCoinRenewTx(
 	env: Env,
 ): Promise<MultiCoinRenewResult> {
 	const { domain, years, senderAddress, nftId, sourceCoinType, coinObjectIds } = params
-	const slippageBps = params.slippageBps ?? DEFAULT_SLIPPAGE_BPS
+	const slippageBps =
+		typeof params.slippageBps === 'number' && Number.isFinite(params.slippageBps)
+			? Math.max(0, Math.floor(params.slippageBps))
+			: DEFAULT_SLIPPAGE_BPS
 
 	if (!coinObjectIds.length) {
 		throw new Error('At least one coin object ID is required')
@@ -864,7 +870,7 @@ export async function buildMultiCoinRenewTx(
 	let priceImpactBps = 0
 
 	if (nsPrice.asks?.length) {
-		const wideSlippage = Math.max(slippageBps, 1500)
+		const wideSlippage = slippageBps
 		const quote = calculateSuiNeededForNs(renewalCostNsMist, nsPrice.asks, wideSlippage)
 		suiForNsSwap = quote.suiNeeded
 		expectedNsOutput = quote.expectedNs
@@ -890,7 +896,7 @@ export async function buildMultiCoinRenewTx(
 	const tokensNeededFloat = Number(totalSuiNeeded) / 1e9 / pool.suiPerToken
 	const tokenMistNeeded = BigInt(Math.ceil(tokensNeededFloat * 10 ** pool.decimals))
 	const tokenMistWithSlippage =
-		tokenMistNeeded + (tokenMistNeeded * BigInt(Math.max(slippageBps, 500))) / 10000n
+		tokenMistNeeded + (tokenMistNeeded * BigInt(slippageBps)) / 10000n
 
 	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
 	const suinsClient = new SuinsClient({ client: client as never, network })
@@ -913,7 +919,7 @@ export async function buildMultiCoinRenewTx(
 		typeArguments: [DEEP_TYPE],
 	})
 
-	const minSuiFromSwap = suiForNsSwap - (suiForNsSwap * BigInt(Math.max(slippageBps, 500))) / 10000n
+	const minSuiFromSwap = suiForNsSwap - (suiForNsSwap * BigInt(slippageBps)) / 10000n
 
 	let swappedSuiCoin: ReturnType<Transaction['moveCall']>[0]
 	if (!pool.isDirect) {

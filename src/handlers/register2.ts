@@ -1760,20 +1760,15 @@ export function generateRegistrationPage(
 					wantsPrimary: wantsPrimaryName,
 				}
 
-if (selectedPaymentMode === 'coin') {
-					showStatus('Resolving USDC coins...', 'info')
-					const coinPayment = await resolveRegisterUsdCoinPayment(address, years)
-					if (!coinPayment || !coinPayment.sourceCoinType || !coinPayment.coinObjectIds.length) {
-						showStatus('No USDC found, switching to SUI payment...', 'info')
-						selectedPaymentMode = 'sui'
-						paymentModeManualOverride = false
-						buildPayload.paymentMode = 'sui'
-						updatePaymentChoiceUi()
-						updateRegisterButton()
-					} else {
+				if (selectedPaymentMode === 'coin') {
+					showStatus('Resolving USD route...', 'info')
+					const coinPayment = await resolveRegisterUsdCoinPayment(address, years).catch(() => null)
+					if (coinPayment && coinPayment.sourceCoinType && coinPayment.coinObjectIds.length) {
 						buildPayload.paymentMethod = 'coin'
 						buildPayload.sourceCoinType = coinPayment.sourceCoinType
 						buildPayload.coinObjectIds = coinPayment.coinObjectIds
+					} else {
+						showStatus('Building USD route with live pool balances...', 'info')
 					}
 				}
 
@@ -1894,7 +1889,16 @@ if (selectedPaymentMode === 'coin') {
 					registerNetwork: NETWORK,
 					error: String(msg),
 				})
-				showStatus(msg, 'err')
+				const normalizedMsg = String(msg).toLowerCase()
+				if (normalizedMsg.includes('no usable usdc balance was found for this wallet')) {
+					showStatus(
+						'No usable USDC balance was found for this wallet. <a href="https://me.sui.ski?tab=swap" style="color:#b8ffda;text-decoration:underline;">Swap USDC -> SUI on .ski</a> and try again.',
+						'err',
+						true,
+					)
+				} else {
+					showStatus(msg, 'err')
+				}
 				registerBtn.disabled = false
 				updateRegisterButton()
 			}
@@ -2237,26 +2241,65 @@ async function resolveCoinPayment(
 			.getBalance({ owner: sender, coinType: USDC_COIN_TYPE })
 			.catch(() => ({ totalBalance: '0' }))
 		const totalUsdcMist = parseMistAmount(usdcBalance?.totalBalance)
-		if (totalUsdcMist >= usdcRequiredMist) {
+		if (usdcOnly && totalUsdcMist > 0n) {
 			try {
-				const usdcCoins = await collectCoinObjectIdsForAmount(
+				const allUsdcCoins = await collectCoinObjectIdsForAmount(
 					client,
 					sender,
 					USDC_COIN_TYPE,
-					usdcRequiredMist,
+					totalUsdcMist,
 				)
-				if (usdcCoins.total >= usdcRequiredMist && usdcCoins.coinObjectIds.length > 0) {
+				if (allUsdcCoins.coinObjectIds.length > 0) {
 					return {
 						sourceCoinType: USDC_COIN_TYPE,
-						coinObjectIds: usdcCoins.coinObjectIds,
+						coinObjectIds: allUsdcCoins.coinObjectIds,
 					}
 				}
 			} catch {
-				// Fall through to generic pool selection.
+				// Continue to estimated-amount selection.
 			}
 		}
+		try {
+			const usdcCoins = await collectCoinObjectIdsForAmount(
+				client,
+				sender,
+				USDC_COIN_TYPE,
+				usdcRequiredMist,
+			)
+			if (usdcOnly && usdcCoins.coinObjectIds.length > 0) {
+				return {
+					sourceCoinType: USDC_COIN_TYPE,
+					coinObjectIds: usdcCoins.coinObjectIds,
+				}
+			}
+			if (totalUsdcMist >= usdcRequiredMist && usdcCoins.total >= usdcRequiredMist && usdcCoins.coinObjectIds.length > 0) {
+				return {
+					sourceCoinType: USDC_COIN_TYPE,
+					coinObjectIds: usdcCoins.coinObjectIds,
+				}
+			}
+		} catch {
+			// Fall through to generic pool selection.
+		}
 	}
-	if (usdcOnly) return null
+	if (usdcOnly) {
+		const usdcBalance = await client
+			.getBalance({ owner: sender, coinType: USDC_COIN_TYPE })
+			.catch(() => ({ totalBalance: '0' }))
+		const totalUsdcMist = parseMistAmount(usdcBalance?.totalBalance)
+		if (totalUsdcMist <= 0n) return null
+		const allUsdcCoins = await collectCoinObjectIdsForAmount(
+			client,
+			sender,
+			USDC_COIN_TYPE,
+			totalUsdcMist,
+		).catch(() => ({ coinObjectIds: [] as string[], total: 0n }))
+		if (allUsdcCoins.coinObjectIds.length === 0) return null
+		return {
+			sourceCoinType: USDC_COIN_TYPE,
+			coinObjectIds: allUsdcCoins.coinObjectIds,
+		}
+	}
 
 	const poolByCoin = new Map<string, (typeof pools)[number]>()
 	for (const pool of pools) {
@@ -2514,6 +2557,7 @@ export async function handleBuildRegisterTx(request: Request, env: Env): Promise
 						senderAddress: sender,
 						sourceCoinType: selectedSourceCoinType,
 						coinObjectIds: selectedCoinObjectIds,
+						slippageBps: 100,
 						extraSuiForFeesMist: extraSuiForFeesMist > 0n ? extraSuiForFeesMist : undefined,
 					},
 					env,
@@ -2570,6 +2614,7 @@ export async function handleBuildRegisterTx(request: Request, env: Env): Promise
 								senderAddress: sender,
 								sourceCoinType: coinFallback.sourceCoinType,
 								coinObjectIds: coinFallback.coinObjectIds,
+								slippageBps: 100,
 								extraSuiForFeesMist: extraSuiForFeesMist > 0n ? extraSuiForFeesMist : undefined,
 							},
 							env,

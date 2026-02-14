@@ -714,7 +714,30 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
         var totalSui = suiAmount;
         var holdings = [{ name: 'SUI', balance: suiAmount, suiValue: suiAmount }];
 
-        var pools = await fetch('/api/deepbook-pools').then(function(r) { return r.json(); }).catch(function() { return []; });
+        var poolsRaw = await fetch('/api/deepbook-pools').then(function(r) { return r.json(); }).catch(function() { return []; });
+        var pools = [];
+        if (Array.isArray(poolsRaw) && poolsRaw.length) {
+          var poolByCoinType = {};
+          for (var p = 0; p < poolsRaw.length; p++) {
+            var pool = poolsRaw[p];
+            if (!pool || typeof pool.coinType !== 'string' || !pool.coinType) continue;
+            var existing = poolByCoinType[pool.coinType];
+            if (!existing) {
+              poolByCoinType[pool.coinType] = pool;
+              continue;
+            }
+            if (!existing.isDirect && pool.isDirect) {
+              poolByCoinType[pool.coinType] = pool;
+              continue;
+            }
+            var nextRate = Number(pool.suiPerToken || 0);
+            var existingRate = Number(existing.suiPerToken || 0);
+            if (Number.isFinite(nextRate) && nextRate > existingRate) {
+              poolByCoinType[pool.coinType] = pool;
+            }
+          }
+          pools = Object.values(poolByCoinType);
+        }
         if (pools.length) {
           var balances = await Promise.all(
             pools.map(function(p) {
@@ -1414,6 +1437,11 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       html += '<a class="wk-dropdown-item" href="' + profileHref + '">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>'
         + 'My Profile</a>';
+
+      var swapHref = 'https://me.sui.ski?tab=swap';
+      html += '<a class="wk-dropdown-item" href="' + swapHref + '">'
+        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M20.49 15A9 9 0 0 1 5 7l2-2"/><path d="M3.51 9A9 9 0 0 1 19 17l-2 2"/></svg>'
+        + 'Swap USDC -> SUI</a>';
 
       html += '<button class="wk-dropdown-item" id="__wk-dd-switch">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>'
