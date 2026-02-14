@@ -159,30 +159,30 @@ export const profileStyles = `
 			border-color: rgba(96, 165, 250, 0.55);
 			transform: translateY(-1px);
 		}
-		.wallet-widget.has-primary-name .wallet-profile-btn {
-			background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
-			border-color: rgba(250, 204, 21, 0.42);
-			box-shadow: 0 0 24px rgba(250, 204, 21, 0.16);
+		.wallet-widget.has-black-diamond .wallet-profile-btn {
+			background: linear-gradient(135deg, rgba(10, 10, 18, 0.6), rgba(18, 18, 28, 0.7));
+			border-color: rgba(120, 130, 155, 0.42);
+			box-shadow: 0 0 24px rgba(0, 0, 0, 0.4);
 		}
-		.wallet-widget.has-primary-name .wallet-profile-btn:hover {
-			background: linear-gradient(135deg, rgba(120, 84, 14, 0.45), rgba(58, 42, 12, 0.56));
-			border-color: rgba(250, 204, 21, 0.62);
-			box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
+		.wallet-widget.has-black-diamond .wallet-profile-btn:hover {
+			background: linear-gradient(135deg, rgba(16, 16, 26, 0.7), rgba(24, 24, 36, 0.8));
+			border-color: rgba(140, 150, 175, 0.62);
+			box-shadow: 0 0 28px rgba(0, 0, 0, 0.5);
 		}
-		.wallet-widget.has-primary-name .wallet-profile-btn svg {
-			filter: sepia(1) saturate(3) hue-rotate(15deg) brightness(1.08);
+		.wallet-widget.has-black-diamond .wallet-profile-btn svg {
+			filter: brightness(0.7) contrast(1.2) saturate(0.4);
 		}
-		.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected,
-		.wallet-widget.has-primary-name #wk-widget > div > button.connected {
-			background: linear-gradient(135deg, rgba(94, 67, 12, 0.34), rgba(44, 33, 12, 0.5));
-			border-color: rgba(250, 204, 21, 0.42);
-			color: #fef3c7;
-			box-shadow: 0 0 24px rgba(250, 204, 21, 0.14);
+		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
+		.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
+			background: linear-gradient(135deg, rgba(10, 10, 18, 0.6), rgba(18, 18, 28, 0.7));
+			border-color: rgba(120, 130, 155, 0.42);
+			color: #d0d4e0;
+			box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
 		}
-		.wallet-widget.has-primary-name #wk-widget .wk-widget-btn.connected:hover,
-		.wallet-widget.has-primary-name #wk-widget > div > button.connected:hover {
-			border-color: rgba(250, 204, 21, 0.62);
-			box-shadow: 0 0 28px rgba(250, 204, 21, 0.22);
+		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected:hover,
+		.wallet-widget.has-black-diamond #wk-widget > div > button.connected:hover {
+			border-color: rgba(140, 150, 175, 0.62);
+			box-shadow: 0 0 28px rgba(0, 0, 0, 0.5);
 		}
 		.wallet-btn {
 			display: flex;
@@ -595,6 +595,282 @@ export const profileStyles = `
 		}
 		.tab-panel {
 			display: block;
+		}
+		.profile-tabs {
+			display: flex;
+			gap: 2px;
+			padding: 0 1px;
+			margin-bottom: 4px;
+		}
+		.profile-tab {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 7px 14px;
+			border: 1px solid transparent;
+			border-radius: 8px;
+			background: transparent;
+			color: var(--text-dim, rgba(255,255,255,0.38));
+			font-size: 0.78rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.18s ease;
+			white-space: nowrap;
+		}
+		.profile-tab:hover {
+			color: var(--text-mid, rgba(255,255,255,0.6));
+			background: rgba(255,255,255,0.03);
+		}
+		.profile-tab.active {
+			color: var(--text, rgba(255,255,255,0.92));
+			background: rgba(255,255,255,0.05);
+			border-color: rgba(255,255,255,0.08);
+		}
+		.profile-tab svg {
+			flex-shrink: 0;
+			opacity: 0.7;
+		}
+		.profile-tab.active svg {
+			opacity: 1;
+		}
+		.profile-tab-count {
+			font-size: 0.68rem;
+			font-weight: 700;
+			opacity: 0.5;
+		}
+		.profile-tab-count:empty {
+			display: none;
+		}
+		#tab-vault {
+			background:
+				radial-gradient(ellipse 120% 100% at 50% 60%, rgba(20, 22, 30, 0.7) 0%, rgba(4, 4, 8, 0.95) 80%);
+			border-color: rgba(50, 55, 70, 0.45);
+			color: rgba(180, 185, 200, 0.7);
+			text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+			box-shadow:
+				inset 0 1px 0 rgba(255, 255, 255, 0.03),
+				0 2px 8px rgba(0, 0, 0, 0.4);
+		}
+		#tab-vault svg {
+			opacity: 1 !important;
+			filter: drop-shadow(0 0 3px rgba(160, 170, 200, 0.3));
+			color: rgba(210, 215, 230, 0.9);
+		}
+		#tab-vault:hover {
+			background:
+				radial-gradient(ellipse 120% 100% at 50% 60%, rgba(28, 30, 42, 0.75) 0%, rgba(6, 6, 12, 0.95) 80%);
+			border-color: rgba(70, 75, 95, 0.55);
+			color: rgba(210, 215, 230, 0.85);
+			box-shadow:
+				inset 0 1px 0 rgba(255, 255, 255, 0.04),
+				0 2px 12px rgba(0, 0, 0, 0.5);
+		}
+		#tab-vault.active {
+			background:
+				radial-gradient(ellipse 130% 110% at 50% 55%, rgba(24, 26, 36, 0.8) 0%, rgba(2, 2, 5, 0.98) 75%);
+			border-color: rgba(80, 85, 110, 0.5);
+			color: rgba(225, 230, 245, 0.92);
+			box-shadow:
+				inset 0 1px 0 rgba(255, 255, 255, 0.05),
+				inset 0 -8px 20px rgba(0, 0, 0, 0.5),
+				0 4px 16px rgba(0, 0, 0, 0.6);
+		}
+		#tab-vault.active svg {
+			filter: drop-shadow(0 0 5px rgba(180, 190, 220, 0.45));
+			color: #e0e4f0;
+		}
+		#tab-vault .profile-tab-count {
+			opacity: 0.6;
+			color: rgba(160, 170, 200, 0.8);
+		}
+		.profile-tab-panel {
+			display: none;
+		}
+		.profile-tab-panel.active {
+			display: block;
+		}
+		.vault-panel-inner {
+			min-height: 80px;
+		}
+		.vault-panel-empty {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			padding: 32px 16px;
+			color: var(--text-dim, rgba(255,255,255,0.35));
+			text-align: center;
+		}
+		.vault-panel-empty p {
+			margin: 0;
+			font-size: 0.82rem;
+			font-weight: 500;
+		}
+		.vault-panel-hint {
+			font-size: 0.72rem !important;
+			opacity: 0.7;
+		}
+		.vault-panel-attribution {
+			font-size: 0.62rem !important;
+			opacity: 0.35;
+			margin-top: 8px;
+			letter-spacing: 0.02em;
+		}
+		.vault-panel-list {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px;
+			padding: 4px 0;
+		}
+		.vault-chip {
+			display: inline-flex;
+			align-items: center;
+			gap: 5px;
+			padding: 5px 10px;
+			border-radius: 8px;
+			background: rgba(0, 0, 0, 0.35);
+			border: 1px solid rgba(100, 110, 130, 0.22);
+			color: var(--text-mid, rgba(255,255,255,0.7));
+			font-size: 0.76rem;
+			font-weight: 600;
+			text-decoration: none;
+			transition: all 0.15s ease;
+			position: relative;
+		}
+		.vault-chip:hover {
+			background: rgba(0, 0, 0, 0.5);
+			border-color: rgba(140, 150, 170, 0.35);
+			color: var(--text, rgba(255,255,255,0.9));
+		}
+		.vault-chip-diamond {
+			display: inline-flex;
+			opacity: 0.6;
+		}
+		.vault-chip:hover .vault-chip-diamond {
+			opacity: 1;
+		}
+		.vault-chip-name {
+			white-space: nowrap;
+		}
+		.vault-chip-remove {
+			display: none;
+			align-items: center;
+			justify-content: center;
+			width: 16px;
+			height: 16px;
+			border: none;
+			border-radius: 50%;
+			background: rgba(239, 68, 68, 0.2);
+			color: #f87171;
+			font-size: 0.72rem;
+			font-weight: 700;
+			cursor: pointer;
+			padding: 0;
+			line-height: 1;
+			margin-left: 2px;
+			transition: background 0.12s ease;
+		}
+		.vault-chip:hover .vault-chip-remove {
+			display: inline-flex;
+		}
+		.vault-chip-remove:hover {
+			background: rgba(239, 68, 68, 0.4);
+		}
+		.vault-card-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+			gap: 12px;
+			padding: 4px 0;
+		}
+		.vault-card {
+			position: relative;
+			border-radius: 12px;
+			overflow: hidden;
+			background: rgba(4, 4, 8, 0.95);
+			border: 1px solid rgba(50, 55, 70, 0.35);
+			transition: border-color 0.2s ease, box-shadow 0.2s ease;
+		}
+		.vault-card:hover {
+			border-color: rgba(96, 165, 250, 0.3);
+			box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+		}
+		.vault-card-iframe-wrap {
+			position: relative;
+			width: 100%;
+			aspect-ratio: 1;
+			overflow: hidden;
+			background: #000;
+		}
+		.vault-card-iframe {
+			width: 200%;
+			height: 200%;
+			border: none;
+			transform: scale(0.5);
+			transform-origin: top left;
+			pointer-events: none;
+		}
+		.vault-card-overlay {
+			position: absolute;
+			inset: 0;
+			z-index: 2;
+			cursor: pointer;
+		}
+		.vault-card-footer {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			padding: 8px 10px;
+			background: rgba(8, 8, 14, 0.9);
+			border-top: 1px solid rgba(50, 55, 70, 0.25);
+		}
+		.vault-card-footer svg {
+			width: 10px;
+			height: 10px;
+			opacity: 0.5;
+			flex-shrink: 0;
+		}
+		.vault-card-footer-name {
+			flex: 1;
+			font-size: 0.76rem;
+			font-weight: 600;
+			color: var(--text-muted);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.vault-card:hover .vault-card-footer-name {
+			color: var(--text);
+		}
+		.vault-card-remove {
+			display: none;
+			align-items: center;
+			justify-content: center;
+			width: 20px;
+			height: 20px;
+			border: none;
+			border-radius: 50%;
+			background: rgba(239, 68, 68, 0.15);
+			color: #f87171;
+			font-size: 0.78rem;
+			font-weight: 700;
+			cursor: pointer;
+			padding: 0;
+			line-height: 1;
+			flex-shrink: 0;
+			transition: background 0.12s ease;
+		}
+		.vault-card:hover .vault-card-remove {
+			display: inline-flex;
+		}
+		.vault-card-remove:hover {
+			background: rgba(239, 68, 68, 0.35);
+		}
+		@media (max-width: 520px) {
+			.vault-card-grid {
+				grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+				gap: 8px;
+			}
 		}
 		.overview-primary-row {
 			display: grid;
@@ -1603,6 +1879,12 @@ export const profileStyles = `
 			height: 12px;
 			opacity: 0.75;
 		}
+		.header-top-expiry-date.grace-period-hero {
+			color: #f59e0b;
+			background: rgba(245, 158, 11, 0.08);
+			border-color: rgba(245, 158, 11, 0.3);
+			font-variant-numeric: tabular-nums;
+		}
 		@keyframes jacketed-glow {
 			0%, 100% { box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.25); }
 			50% { box-shadow: 0 0 10px 2px rgba(167, 139, 250, 0.15); }
@@ -1778,98 +2060,6 @@ export const profileStyles = `
 			-webkit-background-clip: text;
 			-webkit-text-fill-color: transparent;
 			background-clip: text;
-		}
-		.grace-period-card {
-			background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(234, 88, 12, 0.1));
-			border: 1px solid rgba(245, 158, 11, 0.3);
-			border-radius: 12px;
-			padding: 16px;
-			margin-top: 0;
-			max-width: 740px;
-			grid-column: 2;
-		}
-		.grace-period-header {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			font-weight: 600;
-			color: #f59e0b;
-			margin-bottom: 12px;
-			font-size: 0.9rem;
-		}
-		.grace-period-header svg {
-			flex-shrink: 0;
-		}
-		.grace-period-body {
-			display: flex;
-			flex-direction: column;
-			gap: 12px;
-		}
-		.grace-period-info {
-			display: flex;
-			flex-direction: column;
-			gap: 6px;
-		}
-		.grace-period-message {
-			font-size: 0.85rem;
-			color: var(--text-muted);
-		}
-		.grace-period-countdown {
-			font-size: 0.9rem;
-			color: var(--text);
-		}
-		.grace-period-countdown strong {
-			color: #f59e0b;
-			font-weight: 700;
-		}
-		.burn-nft-btn {
-			display: inline-flex;
-			align-items: center;
-			gap: 8px;
-			padding: 10px 16px;
-			background: rgba(239, 68, 68, 0.1);
-			border: 1px solid rgba(239, 68, 68, 0.3);
-			border-radius: 8px;
-			color: #ef4444;
-			font-weight: 600;
-			font-size: 0.875rem;
-			cursor: pointer;
-			transition: all 0.2s;
-		}
-		.burn-nft-btn:hover:not(:disabled) {
-			background: rgba(239, 68, 68, 0.2);
-			border-color: rgba(239, 68, 68, 0.5);
-		}
-		.burn-nft-btn:disabled {
-			opacity: 0.5;
-			cursor: not-allowed;
-		}
-		.burn-nft-btn svg {
-			flex-shrink: 0;
-		}
-		.burn-nft-loading {
-			display: inline-flex;
-		}
-		.grace-period-status {
-			padding: 10px 14px;
-			border-radius: 8px;
-			font-size: 0.85rem;
-			line-height: 1.4;
-		}
-		.grace-period-status.success {
-			background: rgba(34, 197, 94, 0.1);
-			border: 1px solid rgba(34, 197, 94, 0.3);
-			color: #22c55e;
-		}
-		.grace-period-status.error {
-			background: rgba(239, 68, 68, 0.1);
-			border: 1px solid rgba(239, 68, 68, 0.3);
-			color: #ef4444;
-		}
-		.grace-period-status.info {
-			background: rgba(96, 165, 250, 0.1);
-			border: 1px solid rgba(96, 165, 250, 0.3);
-			color: #60a5fa;
 		}
 		.owner-addr {
 			font-family: ui-monospace, SFMono-Regular, monospace;
@@ -5214,106 +5404,9 @@ export const profileStyles = `
 		.renewal-controls-row {
 			display: flex;
 			align-items: center;
+			flex-wrap: wrap;
 			gap: 8px;
 			margin-top: 2px;
-		}
-		.renewal-pay-selector {
-			position: relative;
-			flex-shrink: 0;
-		}
-		.renewal-pay-btn {
-			display: inline-flex;
-			align-items: center;
-			gap: 4px;
-			padding: 6px 10px;
-			background: rgba(255,255,255,0.06);
-			border: 1px solid rgba(255,255,255,0.12);
-			border-radius: 8px;
-			color: #e2e8f0;
-			font-size: 0.78rem;
-			font-weight: 600;
-			font-family: var(--font-mono, ui-monospace, monospace);
-			cursor: pointer;
-			transition: all 0.15s;
-			white-space: nowrap;
-		}
-		.renewal-pay-btn:hover {
-			background: rgba(255,255,255,0.1);
-			border-color: rgba(255,255,255,0.2);
-		}
-		.renewal-pay-dropdown {
-			display: none;
-			position: absolute;
-			left: 0;
-			top: calc(100% + 4px);
-			min-width: 200px;
-			max-height: 240px;
-			overflow-y: auto;
-			padding: 4px;
-			background: linear-gradient(180deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98));
-			border: 1px solid rgba(96,165,250,0.26);
-			border-radius: 10px;
-			box-shadow: 0 12px 36px rgba(2,6,23,0.7);
-			z-index: 100;
-		}
-		.renewal-pay-dropdown.open {
-			display: block;
-		}
-		.renewal-pay-option {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			width: 100%;
-			padding: 8px 10px;
-			background: none;
-			border: 1px solid transparent;
-			border-radius: 8px;
-			color: #e2e8f0;
-			font-size: 0.78rem;
-			font-family: var(--font-mono, ui-monospace, monospace);
-			cursor: pointer;
-			transition: all 0.12s;
-			text-align: left;
-		}
-		.renewal-pay-option:hover {
-			background: rgba(59,130,246,0.15);
-			border-color: rgba(96,165,250,0.3);
-		}
-		.renewal-pay-option.selected {
-			background: rgba(59,130,246,0.2);
-			border-color: rgba(96,165,250,0.4);
-		}
-		.renewal-pay-option.insufficient {
-			opacity: 0.45;
-		}
-		.renewal-pay-option .pay-opt-name {
-			font-weight: 600;
-			margin-right: 6px;
-		}
-		.renewal-pay-option .pay-opt-amount {
-			color: #94a3b8;
-			font-size: 0.72rem;
-		}
-		.renewal-pay-option .pay-opt-discount {
-			font-size: 0.65rem;
-			font-weight: 700;
-			color: #4ade80;
-			background: rgba(74,222,128,0.1);
-			padding: 1px 5px;
-			border-radius: 4px;
-			margin-left: 4px;
-		}
-		.renewal-pay-option .pay-opt-check {
-			color: #4ade80;
-			font-size: 0.7rem;
-			margin-left: auto;
-			padding-left: 8px;
-		}
-		.renewal-pay-option .pay-opt-insufficient {
-			color: #f87171;
-			font-size: 0.65rem;
-			margin-left: auto;
-			padding-left: 8px;
 		}
 		.renewal-price-meta-row .renewal-countdown-row {
 			flex: 0 0 auto;
@@ -10839,10 +10932,6 @@ export const profileStyles = `
 				flex-direction: column;
 			}
 
-			.grace-period-card {
-				grid-column: 1 / -1;
-				max-width: 100%;
-			}
 			.target-preview-value {
 				max-width: 120px;
 			}

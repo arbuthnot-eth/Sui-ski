@@ -317,12 +317,17 @@ ${generateZkSendCss()}</style>
 										: ''
 								}
 								${
-									expiresAt
-										? `<span class="header-top-expiry-date">
+									options.inGracePeriod
+										? `<span class="header-top-expiry-date grace-period-hero">
 											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-											Expires ${expiresAt.toLocaleDateString()}
+											<span id="grace-period-live">--</span>
 										</span>`
-										: ''
+										: expiresAt
+											? `<span class="header-top-expiry-date">
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+												Expires ${expiresAt.toLocaleDateString()}
+											</span>`
+											: ''
 								}
 								<span class="badge jacketed hidden" id="jacketed-badge" title="This name is listed in a decay auction">
 									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
@@ -357,38 +362,6 @@ ${generateZkSendCss()}</style>
 							</div>
 						</div>
 
-			${
-				options.inGracePeriod
-					? `
-		<div class="grace-period-card">
-			<div class="grace-period-header">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-					<circle cx="12" cy="12" r="10"></circle>
-					<polyline points="12 6 12 12 16 14"></polyline>
-				</svg>
-				<span>Grace Period</span>
-			</div>
-			<div class="grace-period-body">
-				<div class="grace-period-info">
-					<span class="grace-period-message" id="grace-period-message">This name expired and is in grace period.</span>
-					<span class="grace-period-countdown" id="grace-period-countdown">Available for registration in <strong id="days-until-available">--</strong> days</span>
-				</div>
-				<button class="burn-nft-btn hidden" id="burn-nft-btn">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-						<polyline points="3 6 5 6 21 6"></polyline>
-						<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-						<line x1="10" y1="11" x2="10" y2="17"></line>
-						<line x1="14" y1="11" x2="14" y2="17"></line>
-					</svg>
-					<span id="burn-nft-text">Burn NFT & Release Name</span>
-					<span class="burn-nft-loading hidden"><span class="loading"></span></span>
-				</button>
-				<div class="grace-period-status hidden" id="grace-period-burn-status"></div>
-			</div>
-		</div>
-		`
-					: ''
-			}
 						<div class="overview-module linked-owner-row">
 						<div class="owner-display linked-owner-card">
 							<div class="owner-info" id="owner-info">
@@ -405,16 +378,25 @@ ${generateZkSendCss()}</style>
 							</div>
 						</div>
 						<div id="owner-inline-status" class="status owner-inline-status linked-owner-status hidden"></div>
+						<div class="profile-tabs" id="profile-tabs">
+							<button class="profile-tab active" data-tab="linked" id="tab-linked">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+									<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+									<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+								</svg>
+								Linked Names
+								<span class="profile-tab-count" id="tab-linked-count"></span>
+							</button>
+							<button class="profile-tab" data-tab="vault" id="tab-vault" style="display:none">
+								<svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 2L22 12L12 22L2 12Z" fill="currentColor"/></svg>
+								.SKI Vault
+								<span class="profile-tab-count" id="tab-vault-count"></span>
+							</button>
+						</div>
+						<div class="profile-tab-panel active" id="panel-linked">
 						<div class="linked-controls-module">
 						<div class="linked-names-section" id="linked-names-section">
 						<div class="linked-names-header">
-							<span class="linked-names-title">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-								<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-							</svg>
-								Linked Names
-							</span>
 						<span class="linked-renewal-cost" id="linked-renewal-cost"></span>
 						<span class="linked-renewal-savings" id="linked-renewal-savings"></span>
 						<span class="linked-names-count" id="linked-names-count">Loading...</span>
@@ -474,7 +456,18 @@ ${generateZkSendCss()}</style>
 							<div class="linked-names-hint" id="linked-names-hint"></div>
 						</div>
 					</div>
-						</div>
+						</div><!-- end panel-linked -->
+						<div class="profile-tab-panel" id="panel-vault" style="display:none">
+							<div class="vault-panel-inner" id="vault-panel-inner">
+								<div class="vault-panel-empty" id="vault-panel-empty">
+									<svg viewBox="0 0 24 24" width="32" height="32" opacity="0.25"><path d="M12 2L22 12L12 22L2 12Z" fill="currentColor"/></svg>
+									<p>No .SKI bookmarks yet.</p>
+									<p class="vault-panel-hint">Visit any .sui profile and tap the diamond to .SKI it.</p>
+									<p class="vault-panel-attribution">Encrypted with Seal &middot; Sui Key-In standard</p>
+								</div>
+								<div class="vault-card-grid" id="vault-card-grid"></div>
+							</div>
+						</div><!-- end panel-vault -->
 						</div>
 						</div>
 
@@ -698,18 +691,6 @@ ${generateZkSendCss()}</style>
 					</div>
 					</div>
 
-						<div class="overview-module linked-wide-module vault-list-module" id="vault-list-module" style="display:none;">
-							<div class="vault-list-header">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-									<path d="M12 2L22 12L12 22L2 12Z" fill="currentColor"/>
-								</svg>
-								<span>YOUR BLACK DIAMONDS</span>
-							</div>
-							<div class="linked-names-list" id="vault-names-list">
-								<div class="linked-names-empty">No black diamonds saved yet.</div>
-							</div>
-						</div>
-
 					</div><!-- end overview-secondary-grid -->
 				</div><!-- end profile-hero -->
 
@@ -853,7 +834,7 @@ ${generateZkSendCss()}</style>
 				sealSdkLoaded = true;
 				try {
 					const [sealMod, bcsMod] = await Promise.allSettled([
-						import('https://esm.sh/@mysten/seal@0.2.0?bundle'),
+						import('https://esm.sh/@mysten/seal@1.0.1?bundle'),
 						import('https://esm.sh/@mysten/bcs@1.3.0?bundle'),
 					]);
 					if (sealMod.status === 'fulfilled') {
@@ -1248,13 +1229,13 @@ ${generateZkSendCss()}</style>
 				if (connectedAddress !== __lastVaultAddress) {
 					__lastVaultAddress = connectedAddress;
 					window.userVaultNames = new Set();
-					if (typeof window.renderVaultList === 'function') window.renderVaultList();
+					if (typeof window.renderVaultDashboard === 'function') window.renderVaultDashboard();
 					if (typeof window.loadUserVault === 'function') window.loadUserVault();
 				}
 			} else {
 				__lastVaultAddress = null;
 				window.userVaultNames = new Set();
-				if (typeof window.renderVaultList === 'function') window.renderVaultList();
+				if (typeof window.renderVaultDashboard === 'function') window.renderVaultDashboard();
 			}
 		});
 
@@ -1956,17 +1937,23 @@ ${generateZkSendCss()}</style>
 		const giftBtnEl = document.getElementById('gift-renewal-btn');
 		if (giftBtnEl) giftBtnEl.addEventListener('click', handleGiftRenewal);
 
-		// Update grace period countdown and burn button
 		function updateGracePeriodCountdown() {
 			if (!IS_IN_GRACE_PERIOD) return;
 
-			const daysEl = document.getElementById('days-until-available');
+			const liveEl = document.getElementById('grace-period-live');
 			const burnBtn = document.getElementById('burn-nft-btn');
 
-			if (daysEl && AVAILABLE_AT) {
-				const msUntilAvailable = AVAILABLE_AT - Date.now();
-				const daysUntilAvailable = Math.max(0, Math.ceil(msUntilAvailable / (24 * 60 * 60 * 1000)));
-				daysEl.textContent = String(daysUntilAvailable);
+			if (AVAILABLE_AT) {
+				const msLeft = Math.max(0, AVAILABLE_AT - Date.now());
+				const totalSec = Math.floor(msLeft / 1000);
+				const d = Math.floor(totalSec / 86400);
+				const h = Math.floor((totalSec % 86400) / 3600);
+				const m = Math.floor((totalSec % 3600) / 60);
+				const s = totalSec % 60;
+				if (liveEl) {
+					const pad = (n) => String(n).padStart(2, '0');
+					liveEl.textContent = d + 'd ' + pad(h) + 'h ' + pad(m) + 'm ' + pad(s) + 's';
+				}
 			}
 
 			if (burnBtn) {
@@ -1978,6 +1965,11 @@ ${generateZkSendCss()}</style>
 				);
 				burnBtn.classList.toggle('hidden', !isOwner);
 			}
+
+		}
+
+		if (IS_IN_GRACE_PERIOD && AVAILABLE_AT) {
+			setInterval(updateGracePeriodCountdown, 1000);
 		}
 
 		// Burn NFT and release name
@@ -2061,6 +2053,7 @@ ${generateZkSendCss()}</style>
 		const burnBtnEl = document.getElementById('burn-nft-btn');
 		if (burnBtnEl) burnBtnEl.addEventListener('click', handleBurnNft);
 
+
 		// Update grace period owner info display
 		async function updateGracePeriodOwnerInfo() {
 			if (!IS_IN_GRACE_PERIOD) return;
@@ -2106,7 +2099,7 @@ ${generateZkSendCss()}</style>
 			walletProfileBtn.dataset.href = href;
 			walletProfileBtn.title = primaryName ? primaryName + '.sui' : 'Go to sui.ski';
 			if (walletWidget) {
-				walletWidget.classList.toggle('has-primary-name', !!primaryName);
+				walletWidget.classList.toggle('has-black-diamond', !!primaryName);
 			}
 		}
 
@@ -2148,18 +2141,18 @@ ${generateZkSendCss()}</style>
 					if (vaultBtn) {
 						if (connectedAddress && connectedAddress !== TARGET_ADDRESS && connectedAddress !== OWNER_ADDRESS) {
 							vaultBtn.style.display = '';
-							if (!diamondWatching) {
-								checkWatchingState();
+							if (!window.__diamondWatching && typeof window.checkWatchingState === 'function') {
+								window.checkWatchingState();
 							}
 						} else {
 							vaultBtn.style.display = 'none';
-							if (diamondWatching) {
+							if (window.__diamondWatching) {
 								vaultBtn.classList.remove('bookmarked', 'diamond-transforming');
 								vaultBtn.title = 'Save to vault';
 								if (document.body) document.body.classList.remove('diamond-watch-active');
 								const identityCard = document.querySelector('.identity-card');
 								if (identityCard) identityCard.classList.remove('black-diamond-active');
-								try { diamondWatching = false; } catch {}
+								window.__diamondWatching = false;
 							}
 						}
 					}
@@ -6415,11 +6408,10 @@ ${generateZkSendCss()}</style>
 				ovRenewalExpiryDate.textContent = newExpiration.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 			}
 
-			updateExpirationCountdown();
-			updateExpiryBadgeWithRenewal();
-			updateRenewalDisplay(ovRenewalYears, ovRenewalPrice, ovRenewalSavings, ovRenewalSavingsText);
-			if (typeof refreshPaymentSelector === 'function') refreshPaymentSelector();
-		}
+				updateExpirationCountdown();
+				updateExpiryBadgeWithRenewal();
+				updateRenewalDisplay(ovRenewalYears, ovRenewalPrice, ovRenewalSavings, ovRenewalSavingsText);
+			}
 
 		if (ovRenewalYearsMinus) {
 			ovRenewalYearsMinus.addEventListener('click', () => {
@@ -6623,13 +6615,88 @@ ${generateZkSendCss()}</style>
 			}
 			}
 
-			var selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'NS' };
-			var renewQuoteCache = null;
-			var walletBalancesCache = {};
-			var paySelector = document.getElementById('renewal-pay-selector');
-			var payBtn = document.getElementById('renewal-pay-btn');
-			var payLabel = document.getElementById('renewal-pay-label');
-			var payDropdown = document.getElementById('renewal-pay-dropdown');
+			const SUI_TYPE_FULL = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
+			const NS_COIN_TYPE = '0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS';
+			const STABLE_SYMBOL_PRIORITY = ['USDC', 'USDT', 'AUSD', 'USDY', 'FDUSD', 'DAI']
+
+			function isStableSymbol(name) {
+				var symbol = String(name || '').toUpperCase();
+				if (!symbol) return false;
+				for (var i = 0; i < STABLE_SYMBOL_PRIORITY.length; i++) {
+					if (symbol === STABLE_SYMBOL_PRIORITY[i]) return true;
+				}
+				return symbol.indexOf('USD') >= 0;
+			}
+
+			function stableSymbolRank(name) {
+				var symbol = String(name || '').toUpperCase();
+				for (var i = 0; i < STABLE_SYMBOL_PRIORITY.length; i++) {
+					if (symbol === STABLE_SYMBOL_PRIORITY[i]) return i;
+				}
+				return 999;
+			}
+
+			function selectPaymentFromOption(option) {
+				if (!option) return { method: 'ns', coinType: null, coinObjectIds: null, label: 'NS' };
+				if (option.coinType === SUI_TYPE_FULL) {
+					return { method: 'ns', coinType: null, coinObjectIds: null, label: 'SUI' };
+				}
+				if (option.coinType === NS_COIN_TYPE) {
+					return { method: 'ns', coinType: null, coinObjectIds: null, label: 'NS' };
+				}
+				return { method: 'coin', coinType: option.coinType, coinObjectIds: null, label: option.name };
+			}
+
+			function pickAutomaticPaymentOption(quote, balances) {
+				if (!quote || !Array.isArray(quote.paymentOptions) || !quote.paymentOptions.length) return null;
+
+				var sufficient = [];
+				for (var i = 0; i < quote.paymentOptions.length; i++) {
+					var opt = quote.paymentOptions[i];
+					var walletBal = balances[opt.coinType] ? balances[opt.coinType].balance : 0;
+					if (walletBal >= opt.tokensNeeded) {
+						sufficient.push(opt);
+					}
+				}
+				if (!sufficient.length) return null;
+
+				for (var n = 0; n < sufficient.length; n++) {
+					if (sufficient[n].coinType === SUI_TYPE_FULL) return sufficient[n];
+				}
+
+				for (var n = 0; n < sufficient.length; n++) {
+					if (sufficient[n].coinType === NS_COIN_TYPE) return sufficient[n];
+				}
+
+				var stable = [];
+				for (var j = 0; j < sufficient.length; j++) {
+					if (isStableSymbol(sufficient[j].name)) stable.push(sufficient[j]);
+				}
+				if (stable.length) {
+					stable.sort(function(a, b) {
+						return stableSymbolRank(a.name) - stableSymbolRank(b.name);
+					});
+					return stable[0];
+				}
+
+				return sufficient[0];
+			}
+
+			async function resolveAutomaticRenewalPayment(address) {
+				var quote = await fetchRenewQuote();
+				var balances = await fetchWalletBalances(address);
+				var bestOption = pickAutomaticPaymentOption(quote, balances);
+				var payment = selectPaymentFromOption(bestOption);
+
+				if (payment.method === 'coin' && payment.coinType) {
+					payment.coinObjectIds = await fetchCoinObjects(address, payment.coinType);
+					if (!payment.coinObjectIds || !payment.coinObjectIds.length) {
+						throw new Error('No ' + payment.label + ' coins found in wallet');
+					}
+				}
+
+				return payment;
+			}
 
 			async function fetchRenewQuote() {
 				var nameToPrice = selectedRenewalName || NAME;
@@ -6645,7 +6712,6 @@ ${generateZkSendCss()}</style>
 
 			async function fetchWalletBalances(address) {
 				var suiClient = getSuiClient();
-				var SUI_TYPE_FULL = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
 				var suiBal = await suiClient.getBalance({ owner: address, coinType: SUI_TYPE_FULL }).catch(function() { return { totalBalance: '0' }; });
 				var balances = {};
 				balances[SUI_TYPE_FULL] = { balance: Number(BigInt(suiBal.totalBalance)) / 1e9, coins: null };
@@ -6673,102 +6739,6 @@ ${generateZkSendCss()}</style>
 				return coins.data.map(function(c) { return c.coinObjectId; });
 			}
 
-			function populatePaySelector(quote, balances) {
-				if (!payDropdown || !quote || !quote.paymentOptions) return;
-				payDropdown.innerHTML = '';
-				var bestOption = null;
-				var SUI_TYPE_FULL = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
-
-				for (var i = 0; i < quote.paymentOptions.length; i++) {
-					var opt = quote.paymentOptions[i];
-					var walletBal = balances[opt.coinType] ? balances[opt.coinType].balance : 0;
-					var sufficient = walletBal >= opt.tokensNeeded;
-
-					if (!bestOption && sufficient) {
-						bestOption = opt;
-					}
-
-					var btn = document.createElement('button');
-					btn.type = 'button';
-					btn.className = 'renewal-pay-option' + (sufficient ? '' : ' insufficient');
-					var amountFmt = opt.tokensNeeded < 0.01 ? '< 0.01' : opt.tokensNeeded < 100 ? opt.tokensNeeded.toFixed(2) : opt.tokensNeeded < 10000 ? opt.tokensNeeded.toFixed(1) : Math.round(opt.tokensNeeded).toString();
-					var discountHtml = opt.discount ? '<span class="pay-opt-discount">-' + opt.discount + '%</span>' : '';
-					var statusHtml = sufficient
-						? '<span class="pay-opt-check">\\u2713</span>'
-						: '<span class="pay-opt-insufficient">\\u2717</span>';
-					btn.innerHTML = '<span><span class="pay-opt-name">' + opt.name + '</span>' + discountHtml + '<br><span class="pay-opt-amount">' + amountFmt + ' ' + opt.name + '</span></span>' + statusHtml;
-
-					(function(optCopy) {
-						btn.addEventListener('click', function() {
-							var NS_COIN_TYPE = '0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS';
-							if (optCopy.coinType === SUI_TYPE_FULL) {
-								selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'SUI' };
-							} else if (optCopy.coinType === NS_COIN_TYPE) {
-								selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'NS' };
-							} else {
-								selectedPayment = { method: 'coin', coinType: optCopy.coinType, coinObjectIds: null, label: optCopy.name };
-							}
-							if (payLabel) payLabel.textContent = selectedPayment.label;
-							payDropdown.classList.remove('open');
-							var allOpts = payDropdown.querySelectorAll('.renewal-pay-option');
-							for (var j = 0; j < allOpts.length; j++) allOpts[j].classList.remove('selected');
-							btn.classList.add('selected');
-						});
-					})(opt);
-
-					payDropdown.appendChild(btn);
-				}
-
-				if (bestOption) {
-					var NS_COIN_TYPE = '0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS';
-					if (bestOption.coinType === SUI_TYPE_FULL) {
-						selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'SUI' };
-					} else if (bestOption.coinType === NS_COIN_TYPE) {
-						selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'NS' };
-					} else {
-						selectedPayment = { method: 'coin', coinType: bestOption.coinType, coinObjectIds: null, label: bestOption.name };
-					}
-					if (payLabel) payLabel.textContent = selectedPayment.label;
-					var firstOpt = payDropdown.querySelector('.renewal-pay-option');
-					if (firstOpt) firstOpt.classList.add('selected');
-				}
-			}
-
-			async function refreshPaymentSelector() {
-				if (!connectedAddress || !paySelector) return;
-				paySelector.style.display = '';
-				var quote = await fetchRenewQuote();
-				renewQuoteCache = quote;
-				var balances = await fetchWalletBalances(connectedAddress);
-				walletBalancesCache = balances;
-				populatePaySelector(quote, balances);
-			}
-
-			if (payBtn && payDropdown) {
-				payBtn.addEventListener('click', function(e) {
-					e.stopPropagation();
-					payDropdown.classList.toggle('open');
-				});
-				document.addEventListener('click', function(e) {
-					if (payDropdown && !payDropdown.contains(e.target) && e.target !== payBtn) {
-						payDropdown.classList.remove('open');
-					}
-				});
-			}
-
-			var __lastPaySelectorAddr = null;
-			SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
-				var addr = conn && (conn.status === 'connected' || conn.status === 'session') ? conn.address : null;
-				if (addr && addr !== __lastPaySelectorAddr) {
-					__lastPaySelectorAddr = addr;
-					refreshPaymentSelector();
-				} else if (!addr) {
-					__lastPaySelectorAddr = null;
-					if (paySelector) paySelector.style.display = 'none';
-					selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'NS' };
-				}
-			});
-
 			renewalUiReady = true
 
 			// DeepBook constants for client-side PTB building (must match register.ts)
@@ -6790,8 +6760,6 @@ ${generateZkSendCss()}</style>
 			: null;
 		const CLOCK_OBJECT = '0x6';
 		const SLIPPAGE_BPS = 100n;
-		const SUI_FOR_DEEP_SWAP = 10_000_000n;
-		const MIN_DEEP_OUT = 500_000n;
 		const FACILITATOR_NAME = DISCOUNT_RECIPIENT_NAME;
 		let facilitatorAddress = '';
 
@@ -6823,33 +6791,24 @@ ${generateZkSendCss()}</style>
 
 			const [tokenToSell] = tx.splitCoins(tokenCoin, [tx.pure.u64(swapInfo.amountToSell)]);
 
-			const [suiForDeep] = tx.splitCoins(tx.gas, [tx.pure.u64(SUI_FOR_DEEP_SWAP)]);
 			const [zeroDeep] = tx.moveCall({
 				target: '0x2::coin::zero',
 				typeArguments: [DEEP_TYPE],
 			});
-			const [deepFeeCoin, dsSuiLeft, dsDeepLeft] = tx.moveCall({
-				target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
-				typeArguments: [DEEP_TYPE, SUI_TYPE],
-				arguments: [
-					tx.object(DEEPBOOK_DEEP_SUI_POOL),
-					suiForDeep,
-					zeroDeep,
-					tx.pure.u64(MIN_DEEP_OUT),
-					tx.object(CLOCK_OBJECT),
-				],
-			});
-			tx.transferObjects([dsSuiLeft, dsDeepLeft], sender);
 
 			let swappedSui;
 			if (!swapInfo.isDirect) {
+				const [zeroDeep2] = tx.moveCall({
+					target: '0x2::coin::zero',
+					typeArguments: [DEEP_TYPE],
+				});
 				const [tokenLeft1, usdcOut, deepLeft1] = tx.moveCall({
 					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_base_for_quote',
 					typeArguments: [swapInfo.type, USDC_TYPE],
 					arguments: [
 						tx.object(swapInfo.usdcPoolAddress),
 						tokenToSell,
-						deepFeeCoin,
+						zeroDeep,
 						tx.pure.u64(0n),
 						tx.object(CLOCK_OBJECT),
 					],
@@ -6860,13 +6819,13 @@ ${generateZkSendCss()}</style>
 					arguments: [
 						tx.object(DEEPBOOK_SUI_USDC_POOL),
 						usdcOut,
-						deepLeft1,
+						zeroDeep2,
 						tx.pure.u64(swapInfo.minSuiOut),
 						tx.object(CLOCK_OBJECT),
 					],
 				});
 				swappedSui = suiOut;
-				tx.transferObjects([tokenLeft1, usdcLeft, deepLeft2, tokenCoin], sender);
+				tx.transferObjects([tokenLeft1, usdcLeft, deepLeft1, deepLeft2, tokenCoin], sender);
 			} else if (swapInfo.suiIsBase) {
 				const [suiOut, tokenLeft, deepLeft2] = tx.moveCall({
 					target: DEEPBOOK_PACKAGE + '::pool::swap_exact_quote_for_base',
@@ -6874,7 +6833,7 @@ ${generateZkSendCss()}</style>
 					arguments: [
 						tx.object(swapInfo.pool),
 						tokenToSell,
-						deepFeeCoin,
+						zeroDeep,
 						tx.pure.u64(swapInfo.minSuiOut),
 						tx.object(CLOCK_OBJECT),
 					],
@@ -6888,7 +6847,7 @@ ${generateZkSendCss()}</style>
 					arguments: [
 						tx.object(swapInfo.pool),
 						tokenToSell,
-						deepFeeCoin,
+						zeroDeep,
 						tx.pure.u64(swapInfo.minSuiOut),
 						tx.object(CLOCK_OBJECT),
 					],
@@ -7261,6 +7220,7 @@ ${generateZkSendCss()}</style>
 				if (!senderAddress) {
 					throw new Error('Please reconnect your wallet and try renewal again');
 				}
+				const selectedPayment = await resolveAutomaticRenewalPayment(senderAddress);
 
 				if (needsDelistForRenewal) {
 					if (!savedListingNonce.startsWith('0::')) {
@@ -7297,14 +7257,6 @@ ${generateZkSendCss()}</style>
 				const renewalDomain = String(nameToExtend || '').endsWith('.sui')
 					? String(nameToExtend)
 					: String(nameToExtend) + '.sui';
-
-				if (selectedPayment.method === 'coin' && selectedPayment.coinType && !selectedPayment.coinObjectIds) {
-					if (statusEl) statusEl.textContent = 'Fetching coin objects...';
-					selectedPayment.coinObjectIds = await fetchCoinObjects(senderAddress, selectedPayment.coinType);
-					if (!selectedPayment.coinObjectIds || !selectedPayment.coinObjectIds.length) {
-						throw new Error('No ' + selectedPayment.label + ' coins found in wallet');
-					}
-				}
 
 				if (statusEl) {
 					statusEl.textContent = 'Building transaction...';
@@ -7943,6 +7895,8 @@ ${generateZkSendCss()}</style>
 					linkedNamesCount.textContent =
 						linkedMatchedCount + ' match' + (linkedMatchedCount !== 1 ? 'es' : '') + ' / ' + totalLabel;
 				}
+				var tabLinkedCount = document.getElementById('tab-linked-count');
+				if (tabLinkedCount) tabLinkedCount.textContent = String(total);
 			}
 
 			if (linkedRenewalCost) {
@@ -9410,7 +9364,7 @@ function shortAddr(addr) {
 
 			const suiClient = getSuiClient();
 			const BASE_GAS_RESERVE = 50_000_000n;
-			const SWAP_OVERHEAD = SUI_FOR_DEEP_SWAP + 50_000_000n;
+			const SWAP_OVERHEAD = 50_000_000n;
 			const balanceRes = await suiClient.getBalance({
 				owner: connectedAddress,
 				coinType: SUI_TYPE,
@@ -12176,7 +12130,80 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			return subscriptionsCryptoKeyPromise;
 		}
 
-		async function encryptSubscriptions(subs, subscriberAddress) {
+		let sealVaultClient = null;
+		let sealVaultConfig = null;
+		let sealLegacyConfig = null;
+		let sealLegacyClient = null;
+
+		function toServerConfigs(keyServers) {
+			var configs = [];
+			for (var i = 0; i < keyServers.length; i++) {
+				var ks = keyServers[i];
+				if (typeof ks === 'string') {
+					configs.push({ objectId: ks, weight: 1 });
+				} else {
+					configs.push(ks);
+				}
+			}
+			return configs;
+		}
+
+		async function getSealVaultConfig() {
+			if (sealVaultConfig) return sealVaultConfig;
+			try {
+				const res = await fetch('/api/vault/config');
+				if (!res.ok) return null;
+				const data = await res.json();
+				if (data && data.seal && data.seal.packageId && data.seal.keyServers && data.seal.keyServers.length > 0) {
+					sealVaultConfig = data.seal;
+					if (data.sealLegacy && data.sealLegacy.packageId && data.sealLegacy.keyServers) {
+						sealLegacyConfig = data.sealLegacy;
+					}
+					return sealVaultConfig;
+				}
+			} catch {}
+			return null;
+		}
+
+		function createSealClientFromConfig(config) {
+			var serverConfigs = toServerConfigs(config.keyServers);
+			return new SealClient({
+				suiClient: getSuiClient(),
+				serverConfigs: serverConfigs,
+				verifyKeyServers: false,
+			});
+		}
+
+		async function getSealVaultClient() {
+			if (sealVaultClient) return sealVaultClient;
+			const sealAvailable = await initSealSdk();
+			if (!sealAvailable || !SealClient) return null;
+			const config = await getSealVaultConfig();
+			if (!config) return null;
+			try {
+				sealVaultClient = createSealClientFromConfig(config);
+				return sealVaultClient;
+			} catch (e) {
+				console.warn('Failed to create SealClient:', e.message);
+				return null;
+			}
+		}
+
+		async function getSealLegacyClient() {
+			if (sealLegacyClient) return sealLegacyClient;
+			if (!sealLegacyConfig) return null;
+			const sealAvailable = await initSealSdk();
+			if (!sealAvailable || !SealClient) return null;
+			try {
+				sealLegacyClient = createSealClientFromConfig(sealLegacyConfig);
+				return sealLegacyClient;
+			} catch (e) {
+				console.warn('Failed to create legacy SealClient:', e.message);
+				return null;
+			}
+		}
+
+		async function encryptWithAesGcm(subs, subscriberAddress) {
 			const key = await getSubscriptionsCryptoKey(subscriberAddress);
 			const data = JSON.stringify({
 				subscriptions: subs,
@@ -12194,24 +12221,121 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			});
 		}
 
+		async function decryptWithAesGcm(envelope, subscriberAddress) {
+			const key = await getSubscriptionsCryptoKey(subscriberAddress);
+			const plaintext = await crypto.subtle.decrypt(
+				{ name: 'AES-GCM', iv: base64ToBytes(envelope.iv) },
+				key,
+				base64ToBytes(envelope.cipher),
+			);
+			const data = JSON.parse(new TextDecoder().decode(new Uint8Array(plaintext)));
+			return Array.isArray(data.subscriptions) ? data.subscriptions : [];
+		}
+
+		async function encryptSubscriptions(subs, subscriberAddress) {
+			const client = await getSealVaultClient();
+			const config = sealVaultConfig;
+			if (client && config && fromHex) {
+				try {
+					const data = new TextEncoder().encode(JSON.stringify({
+						subscriptions: subs,
+						subscriberAddress: subscriberAddress,
+						encryptedAt: Date.now(),
+						version: SUBSCRIPTIONS_CIPHER_VERSION,
+					}));
+					const result = await client.encrypt({
+						threshold: config.threshold || 2,
+						packageId: config.packageId,
+						id: subscriberAddress,
+						data: data,
+					});
+					return JSON.stringify({
+						sealVersion: 1,
+						cipher: bytesToBase64(new Uint8Array(result.encryptedObject)),
+						policyAddress: subscriberAddress,
+						packageId: config.packageId,
+					});
+				} catch (e) {
+					console.warn('Seal encrypt failed, falling back to AES-GCM:', e.message);
+				}
+			}
+			return encryptWithAesGcm(subs, subscriberAddress);
+		}
+
+		async function decryptWithSeal(envelope, subscriberAddress, overrideClient, overrideConfig) {
+			const client = overrideClient || await getSealVaultClient();
+			const config = overrideConfig || sealVaultConfig;
+			if (!client || !config || !SessionKey || !fromHex || !Transaction) {
+				throw new Error('Seal SDK not available');
+			}
+			const sessionKey = await SessionKey.create({
+				address: subscriberAddress,
+				packageId: config.packageId,
+				ttlMin: 10,
+				suiClient: getSuiClient(),
+			});
+			const personalMsg = sessionKey.getPersonalMessage();
+			const signature = await signSubscriptionsMessage(personalMsg);
+			await sessionKey.setPersonalMessageSignature(signature);
+
+			var approveTarget = config.approveTarget || (config.packageId + '::vault::seal_approve');
+			var ownerBytes = fromHex(subscriberAddress.replace(/^0x/i, ''));
+			var tx = new Transaction();
+			tx.moveCall({
+				target: approveTarget,
+				arguments: [tx.pure.vector('u8', ownerBytes)],
+			});
+			var txBytes = await tx.build({ client: getSuiClient() });
+			var encryptedBytes = base64ToBytes(envelope.cipher);
+			var decryptedBytes = await client.decrypt({
+				data: encryptedBytes,
+				sessionKey: sessionKey,
+				txBytes: txBytes,
+				checkLEEncoding: true,
+			});
+			var data = JSON.parse(new TextDecoder().decode(decryptedBytes));
+			return Array.isArray(data.subscriptions) ? data.subscriptions : [];
+		}
+
 		async function decryptSubscriptions(encryptedData, subscriberAddress) {
 			if (!encryptedData) return [];
+
 			try {
 				const envelope = JSON.parse(encryptedData);
+
+				if (envelope && Number(envelope.sealVersion) === 1 && typeof envelope.cipher === 'string') {
+					try {
+						return await decryptWithSeal(envelope, subscriberAddress);
+					} catch (mainErr) {
+						if (sealLegacyConfig) {
+							try {
+								const legacyClient = await getSealLegacyClient();
+								if (legacyClient) {
+									const result = await decryptWithSeal(envelope, subscriberAddress, legacyClient, sealLegacyConfig);
+									try {
+										const reEncrypted = await encryptSubscriptions(result, subscriberAddress);
+										await syncSubscriptionsToWalrus(result);
+										console.log('Migrated vault from testnet to mainnet Seal');
+									} catch (migrateErr) {
+										console.warn('Migration re-encrypt failed:', migrateErr.message);
+									}
+									return result;
+								}
+							} catch (legacyErr) {
+								console.warn('Legacy testnet decrypt also failed:', legacyErr.message);
+							}
+						}
+						throw mainErr;
+					}
+				}
+
 				if (
 					envelope &&
 					Number(envelope.v) === SUBSCRIPTIONS_CIPHER_VERSION &&
 					typeof envelope.iv === 'string' &&
 					typeof envelope.cipher === 'string'
 				) {
-					const key = await getSubscriptionsCryptoKey(subscriberAddress);
-					const plaintext = await crypto.subtle.decrypt(
-						{ name: 'AES-GCM', iv: base64ToBytes(envelope.iv) },
-						key,
-						base64ToBytes(envelope.cipher),
-					);
-					const data = JSON.parse(new TextDecoder().decode(new Uint8Array(plaintext)));
-					return Array.isArray(data.subscriptions) ? data.subscriptions : [];
+					return await decryptWithAesGcm(envelope, subscriberAddress);
 				}
 			} catch {}
 
@@ -12300,7 +12424,11 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				targetAddress: targetAddress,
 				subscribedAt: Date.now(),
 				notifications: true,
-				lastCheckedAt: Date.now()
+				lastCheckedAt: Date.now(),
+				note: '',
+				category: '',
+				priceSnapshot: null,
+				lastActivityAt: Date.now()
 			});
 			saveLocalSubscriptions(subs);
 			return true;
@@ -12315,6 +12443,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		}
 
 		let diamondWatching = false;
+		window.__diamondWatching = false;
 		let diamondBusy = false;
 		let tendrilAnimId = null;
 
@@ -12434,8 +12563,8 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				}
 			}
 
-		// ===== BLACK DIAMOND VAULT (Seal + Walrus) =====
-		// Persistent list of "Black Diamonds" (watched names) for the connected wallet.
+		// ===== .SKI VAULT (Seal + Walrus) =====
+		// Persistent list of .SKI bookmarks (watched names) for the connected wallet.
 		window.userVaultNames = new Set();
 		let vaultLoadingForAddress = null;
 		let vaultLoadNonce = 0;
@@ -12479,7 +12608,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					updateDiamondState(isBlackDiamond);
 				}
 
-				renderVaultList();
+				renderVaultDashboard();
 			} catch (err) {
 				console.error('Failed to load user vault:', err);
 			} finally {
@@ -12490,34 +12619,116 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		}
 		window.loadUserVault = loadUserVault;
 
-		function renderVaultList() {
-			const container = document.getElementById('vault-names-list');
-			const module = document.getElementById('vault-list-module');
-			if (!container) return;
+		function renderVaultDashboard() {
+			const gridEl = document.getElementById('vault-card-grid');
+			const emptyEl = document.getElementById('vault-panel-empty');
+			const tabBtn = document.getElementById('tab-vault');
+			const countEl = document.getElementById('tab-vault-count');
 
-			// Only show the vault list to the owner of the profile
-			const isProfileOwner = window.connectedAddress && (
-				window.connectedAddress.toLowerCase() === String(OWNER_ADDRESS).toLowerCase() ||
-				window.connectedAddress.toLowerCase() === String(TARGET_ADDRESS).toLowerCase()
-			);
+			const walletAddr = (window.connectedAddress || '').toLowerCase();
+			const canSeeVault = Boolean(walletAddr);
 
-			if (!isProfileOwner || window.userVaultNames.size === 0) {
-				if (module) module.style.display = 'none';
+			if (tabBtn) tabBtn.style.display = canSeeVault ? '' : 'none';
+
+			if (!canSeeVault && document.getElementById('panel-vault')) {
+				const panelVault = document.getElementById('panel-vault');
+				if (panelVault.classList.contains('active')) {
+					switchProfileTab('linked');
+				}
+			}
+
+			if (!gridEl) return;
+
+			const vaultSize = window.userVaultNames ? window.userVaultNames.size : 0;
+			if (countEl) countEl.textContent = vaultSize > 0 ? String(vaultSize) : '';
+			if (emptyEl) emptyEl.style.display = vaultSize === 0 ? '' : 'none';
+
+			if (vaultSize === 0) {
+				gridEl.innerHTML = '';
 				return;
 			}
 
-			if (module) module.style.display = 'block';
-			
 			const names = Array.from(window.userVaultNames).sort();
-			container.innerHTML = names.map(name => {
-				const profileUrl = 'https://' + encodeURIComponent(name) + '.sui.ski';
-				return '<a href="' + profileUrl + '" class="linked-name-chip primary">' +
-					'<svg viewBox="0 0 24 24" width="12" height="12" style="margin-right:4px;"><path d="M12 2L22 12L12 22L2 12Z" fill="currentColor"/></svg>' +
-					'<span class="chip-name">' + name + '.sui</span>' +
-					'</a>';
-			}).join('');
+			var html = '';
+			for (var i = 0; i < names.length; i++) {
+				var name = names[i];
+				var profileUrl = 'https://' + encodeURIComponent(name) + '.sui.ski';
+				var embedUrl = profileUrl + '?embed=1';
+				html += '<div class="vault-card">' +
+					'<div class="vault-card-iframe-wrap">' +
+					'<iframe class="vault-card-iframe" data-src="' + embedUrl + '" sandbox="allow-scripts" loading="lazy" title="' + name + '.sui"></iframe>' +
+					'</div>' +
+					'<a class="vault-card-overlay" href="' + profileUrl + '" title="' + name + '.sui"></a>' +
+					'<div class="vault-card-footer">' +
+					'<svg viewBox="0 0 24 24" width="10" height="10"><path d="M12 2L22 12L12 22L2 12Z" fill="currentColor"/></svg>' +
+					'<span class="vault-card-footer-name">' + name + '.sui</span>' +
+					'<button class="vault-card-remove" data-name="' + name + '" title="Remove" onclick="event.stopPropagation();removeVaultItem(this.dataset.name)">×</button>' +
+					'</div></div>';
+			}
+			gridEl.innerHTML = html;
+			initVaultIframeObserver();
 		}
-		window.renderVaultList = renderVaultList;
+		window.renderVaultDashboard = renderVaultDashboard;
+
+		var vaultIframeObserver = null;
+		function initVaultIframeObserver() {
+			if (vaultIframeObserver) vaultIframeObserver.disconnect();
+			var iframes = document.querySelectorAll('.vault-card-iframe[data-src]');
+			if (!iframes.length) return;
+			if (!('IntersectionObserver' in window)) {
+				for (var i = 0; i < iframes.length; i++) {
+					iframes[i].src = iframes[i].getAttribute('data-src');
+					iframes[i].removeAttribute('data-src');
+				}
+				return;
+			}
+			vaultIframeObserver = new IntersectionObserver(function(entries) {
+				for (var j = 0; j < entries.length; j++) {
+					if (entries[j].isIntersecting) {
+						var iframe = entries[j].target;
+						iframe.src = iframe.getAttribute('data-src');
+						iframe.removeAttribute('data-src');
+						vaultIframeObserver.unobserve(iframe);
+					}
+				}
+			}, { rootMargin: '200px' });
+			for (var k = 0; k < iframes.length; k++) {
+				vaultIframeObserver.observe(iframes[k]);
+			}
+		}
+
+		function switchProfileTab(tabId) {
+			var tabs = document.querySelectorAll('.profile-tab');
+			var panels = document.querySelectorAll('.profile-tab-panel');
+			for (var i = 0; i < tabs.length; i++) {
+				var isTarget = tabs[i].getAttribute('data-tab') === tabId;
+				tabs[i].classList.toggle('active', isTarget);
+			}
+			for (var j = 0; j < panels.length; j++) {
+				var isTargetPanel = panels[j].id === 'panel-' + tabId;
+				panels[j].classList.toggle('active', isTargetPanel);
+				panels[j].style.display = isTargetPanel ? '' : 'none';
+			}
+		}
+		window.switchProfileTab = switchProfileTab;
+
+		(function initProfileTabs() {
+			var tabBar = document.getElementById('profile-tabs');
+			if (!tabBar) return;
+			tabBar.addEventListener('click', function(e) {
+				var btn = e.target.closest('.profile-tab');
+				if (!btn || btn.classList.contains('active')) return;
+				var tabId = btn.getAttribute('data-tab');
+				if (tabId) switchProfileTab(tabId);
+			});
+		})();
+
+		window.removeVaultItem = async function(name) {
+			await syncVaultAction(name, 'unwatch');
+		};
+		window.addVaultItem = async function(name) {
+			await syncVaultAction(name, 'watch');
+		};
 
 		async function syncVaultAction(name, action) {
 			const cleanName = String(name || '').replace(/.sui$/i, '').toLowerCase();
@@ -12535,13 +12746,14 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				await syncSubscriptionsToWalrus(subs);
 			}
 			
-			renderVaultList();
+			renderVaultDashboard();
 		}
 
 		function updateDiamondState(watching) {
 			const btn = document.getElementById('vault-diamond-btn');
 			const wasWatching = diamondWatching;
 			diamondWatching = watching;
+			window.__diamondWatching = watching;
 			if (btn) {
 				if (watching) {
 					if (!wasWatching) {
@@ -12570,6 +12782,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			}
 			updateDiamondState(window.userVaultNames.has(NAME.toLowerCase()));
 		}
+		window.checkWatchingState = checkWatchingState;
 
 		async function toggleVaultDiamond() {
 			if (diamondBusy) return;
@@ -13296,4 +13509,167 @@ function getSuinsNftPreviewUrl(origin: string, cleanName: string, expiresMs?: nu
 		return `${origin}/api/suins-image/${encodedName}?exp=${Math.floor(expiresMs)}&v=2`
 	}
 	return `${origin}/api/suins-image/${encodedName}?v=2`
+}
+
+export function generateEmbedProfilePage(
+	name: string,
+	record: SuiNSRecord,
+	_env: Env,
+	hostname?: string,
+): string {
+	const cleanName = name
+		.replace(/\.sui$/i, '')
+		.replace(/^@+/, '')
+		.toLowerCase()
+	const fullName = `${cleanName}.sui`
+	const addr = record.address || ''
+	const shortAddr = addr.length > 12 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr
+	const expiresMs = record.expirationTimestampMs
+		? (() => {
+				const num = Number(record.expirationTimestampMs)
+				return Number.isFinite(num) ? num : undefined
+			})()
+		: undefined
+	const rootOrigin = hostname ? `https://${hostname.replace(/^[^.]+\./, '')}` : 'https://sui.ski'
+	const nftImageUrl = getSuinsNftPreviewUrl(rootOrigin, cleanName, expiresMs)
+	const userAvatar = selectProfileImage(record, hostname)
+	const imageUrl = userAvatar || nftImageUrl
+	const escapeHtml = (value: string) =>
+		value.replace(/[&<>"']/g, (char) => {
+			switch (char) {
+				case '&':
+					return '&amp;'
+				case '<':
+					return '&lt;'
+				case '>':
+					return '&gt;'
+				case '"':
+					return '&quot;'
+				case "'":
+					return '&#39;'
+				default:
+					return char
+			}
+		})
+
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>${escapeHtml(fullName)}</title>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body {
+			font-family: 'Inter', system-ui, -apple-system, sans-serif;
+			background: #000;
+			color: #e4e4e7;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			min-height: 100vh;
+			overflow: hidden;
+		}
+		.embed-card {
+			width: 100%;
+			max-width: 320px;
+			background: #000;
+			border-radius: 16px;
+			overflow: hidden;
+		}
+		.embed-visual {
+			position: relative;
+			aspect-ratio: 1;
+			background: linear-gradient(180deg, #050505 0%, #000 100%);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			overflow: hidden;
+		}
+		.embed-visual img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			position: absolute;
+			top: 0;
+			left: 0;
+			filter: brightness(0.9) contrast(1.05);
+		}
+		.embed-visual canvas {
+			width: 85%;
+			height: 85%;
+			filter: brightness(0.9);
+		}
+		.embed-name-bar {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			padding: 10px 12px;
+			border-top: 1px solid rgba(255, 255, 255, 0.06);
+			background: linear-gradient(to top, rgba(104, 137, 176, 0.04), transparent);
+		}
+		.embed-name {
+			font-family: ui-monospace, SFMono-Regular, monospace;
+			font-size: 0.72rem;
+			font-weight: 500;
+			color: #60a5fa;
+			background: rgba(104, 137, 176, 0.06);
+			padding: 5px 10px;
+			border-radius: 5px;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.embed-addr {
+			font-family: ui-monospace, SFMono-Regular, monospace;
+			font-size: 0.64rem;
+			color: #71717a;
+			background: rgba(255, 255, 255, 0.04);
+			padding: 3px 8px;
+			border-radius: 4px;
+			white-space: nowrap;
+		}
+	</style>
+</head>
+<body>
+	<div class="embed-card">
+		<div class="embed-visual" id="embed-visual">
+			<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(fullName)}" onerror="this.style.display='none';document.getElementById('embed-canvas').style.display='block';">
+			<canvas id="embed-canvas" width="256" height="256" style="display:none;"></canvas>
+		</div>
+		<div class="embed-name-bar">
+			<span class="embed-name">${escapeHtml(fullName)}</span>
+			${shortAddr ? `<span class="embed-addr">${escapeHtml(shortAddr)}</span>` : ''}
+		</div>
+	</div>
+	<script>
+	(function(){
+		var c = document.getElementById('embed-canvas');
+		if (!c) return;
+		var ctx = c.getContext('2d');
+		if (!ctx) return;
+		var name = ${JSON.stringify(cleanName)};
+		var hash = 0;
+		for (var i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+		var r1 = ((hash >> 16) & 0xff), g1 = ((hash >> 8) & 0xff), b1 = (hash & 0xff);
+		var r2 = 255 - r1, g2 = 255 - g1, b2 = 255 - b1;
+		var grad = ctx.createLinearGradient(0, 0, 256, 256);
+		grad.addColorStop(0, 'rgb(' + Math.max(20, r1 * 0.3 | 0) + ',' + Math.max(20, g1 * 0.3 | 0) + ',' + Math.max(20, b1 * 0.3 | 0) + ')');
+		grad.addColorStop(1, 'rgb(' + Math.max(20, r2 * 0.25 | 0) + ',' + Math.max(20, g2 * 0.25 | 0) + ',' + Math.max(20, b2 * 0.25 | 0) + ')');
+		ctx.fillStyle = grad;
+		ctx.fillRect(0, 0, 256, 256);
+		for (var x = 0; x < 8; x++) {
+			for (var y = 0; y < 8; y++) {
+				var v = ((hash * (x * 8 + y + 1)) >>> 0) % 255;
+				if (v > 140) {
+					ctx.fillStyle = 'rgba(' + ((r1 + v) & 0xff) + ',' + ((g1 + v * 2) & 0xff) + ',' + ((b1 + v) & 0xff) + ',0.12)';
+					ctx.fillRect(x * 32, y * 32, 32, 32);
+				}
+			}
+		}
+	})();
+	</script>
+</body>
+</html>`
 }

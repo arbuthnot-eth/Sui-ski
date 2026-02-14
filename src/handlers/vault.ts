@@ -69,21 +69,79 @@ function sanitizeMeta(meta: Partial<VaultMeta>): VaultMeta {
 
 export const vaultRoutes = new Hono<VaultEnv>()
 
+const OVERCLOCK_OBJECT_ID = '0x145540d931f182fef76467dd8074c9839aea126852d90d18e1556fcbbd1208b6'
+
+interface KeyServerConfig {
+	objectId: string
+	weight: number
+	apiKeyName?: string
+	apiKey?: string
+}
+
+function buildKeyServerConfigs(env: Env): KeyServerConfig[] {
+	const ids = (env.SEAL_KEY_SERVERS || '').split(',')
+	const configs: KeyServerConfig[] = []
+	for (const raw of ids) {
+		const objectId = raw.trim()
+		if (!objectId) continue
+		const config: KeyServerConfig = { objectId, weight: 1 }
+		if (objectId === OVERCLOCK_OBJECT_ID) {
+			configs.push(config)
+			continue
+		}
+		if (env.NATSAI_SEAL_API_KEY) {
+			config.apiKeyName = 'x-api-key'
+			config.apiKey = env.NATSAI_SEAL_API_KEY
+			configs.push(config)
+			continue
+		}
+		if (env.PROVIDER3_SEAL_API_KEY) {
+			config.apiKeyName = 'x-api-key'
+			config.apiKey = env.PROVIDER3_SEAL_API_KEY
+			configs.push(config)
+			continue
+		}
+		configs.push(config)
+	}
+	return configs
+}
+
+function buildLegacyKeyServerConfigs(env: Env): KeyServerConfig[] | null {
+	const ids = env.SEAL_TESTNET_KEY_SERVERS
+	if (!ids) return null
+	const configs: KeyServerConfig[] = []
+	for (const raw of ids.split(',')) {
+		const objectId = raw.trim()
+		if (objectId) configs.push({ objectId, weight: 1 })
+	}
+	return configs.length > 0 ? configs : null
+}
+
 vaultRoutes.get('/config', (c) => {
 	const env = c.get('env')
-	const keyServers = (env.SEAL_KEY_SERVERS || '').split(',')
-	const filtered: string[] = []
-	for (const s of keyServers) {
-		const trimmed = s.trim()
-		if (trimmed) filtered.push(trimmed)
-	}
+	const keyServers = buildKeyServerConfigs(env)
+	const threshold = keyServers.length >= 3 ? 2 : Math.max(1, keyServers.length)
+	const legacyKeyServers = buildLegacyKeyServerConfigs(env)
+
 	return jsonResponse({
 		seal: {
 			packageId: env.SEAL_PACKAGE_ID || '',
-			keyServers: filtered,
+			keyServers,
 			approveTarget: env.SEAL_APPROVE_TARGET || null,
-			threshold: 2,
+			threshold,
+			network: env.SUI_NETWORK || 'mainnet',
 		},
+		...(legacyKeyServers
+			? {
+					sealLegacy: {
+						packageId: env.SEAL_TESTNET_PACKAGE_ID || '',
+						keyServers: legacyKeyServers,
+						approveTarget: env.SEAL_TESTNET_APPROVE_TARGET || null,
+						threshold: 2,
+						network: 'testnet' as const,
+					},
+				}
+			: {}),
 	})
 })
 

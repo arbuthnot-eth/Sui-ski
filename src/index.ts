@@ -5,7 +5,7 @@ import { handleAuthenticatedEvents } from './handlers/authenticated-events'
 import { generateDashboardPage } from './handlers/dashboard'
 import { agentGraceVaultRoutes } from './handlers/grace-vault-agent'
 import { apiRoutes, landingPageHTML } from './handlers/landing'
-import { generateProfilePage } from './handlers/profile'
+import { generateEmbedProfilePage, generateProfilePage } from './handlers/profile'
 import { handleRegistrationSubmission } from './handlers/register2'
 import { generateSkiPage } from './handlers/ski'
 import { generateSkiSignPage } from './handlers/ski-sign'
@@ -76,6 +76,14 @@ app.use('*', async (c, next) => {
 	let env = c.env
 	if (parsed.networkOverride) {
 		env = { ...env, SUI_NETWORK: parsed.networkOverride, SUI_RPC_URL: '' }
+		if (parsed.networkOverride === 'testnet') {
+			env = {
+				...env,
+				SEAL_PACKAGE_ID: env.SEAL_TESTNET_PACKAGE_ID || env.SEAL_PACKAGE_ID,
+				SEAL_KEY_SERVERS: env.SEAL_TESTNET_KEY_SERVERS || env.SEAL_KEY_SERVERS,
+				SEAL_APPROVE_TARGET: env.SEAL_TESTNET_APPROVE_TARGET || env.SEAL_APPROVE_TARGET,
+			}
+		}
 	}
 	c.set('env', ensureRpcEnv(env))
 	c.set('parsed', parsed)
@@ -317,6 +325,7 @@ app.all('*', async (c) => {
 		const hasSession = !!c.get('session').address
 		const wantsJson = url.pathname === '/json' || url.searchParams.has('json')
 		const wantsProfile = url.pathname === '/home' || url.searchParams.has('profile')
+		const wantsEmbed = url.searchParams.has('embed')
 
 		const canServeCached = !skipCache && !hasSession && !wantsJson && !wantsProfile
 		if (canServeCached) {
@@ -348,6 +357,13 @@ app.all('*', async (c) => {
 				cachedProfileHtml = generateProfilePage(parsed.subdomain, record, env, profileOptions)
 			}
 			return cachedProfileHtml
+		}
+
+		if (wantsEmbed) {
+			const embedHtml = generateEmbedProfilePage(parsed.subdomain, record, env, hostname)
+			return htmlResponse(embedHtml, 200, {
+				'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+			})
 		}
 
 		if (wantsJson) return jsonResponse(record)

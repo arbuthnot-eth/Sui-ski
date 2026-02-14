@@ -19,13 +19,15 @@ routes = [
 SUI_NETWORK = "mainnet"
 # SUI_RPC_URL set via `wrangler secret put SUI_RPC_URL` (Triton token URL)
 WALRUS_NETWORK = "mainnet"
-# Seal configuration for encrypted messaging (using TESTNET for open mode key servers)
-# Main app uses mainnet, but Seal uses testnet because mainnet key servers require registration
-SEAL_NETWORK = "testnet"
-SEAL_PACKAGE_ID = "0x8afa5d31dbaa0a8fb07082692940ca3d56b5e856c5126cb5a3693f0a4de63b82"
-# Testnet open mode key servers (no registration required)
-# Mysten Labs #1, Mysten Labs #2, Triton One - using 3 for threshold encryption
-SEAL_KEY_SERVERS = "0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8,0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46"
+# Seal configuration — mainnet (Phase 1: Overclock open-mode only, threshold 1)
+# After deploying move/seal-vault-mainnet, update SEAL_PACKAGE_ID and SEAL_APPROVE_TARGET
+SEAL_PACKAGE_ID = "0xfabfc63a1d67c37d9c0250bc3efeb96a3c56fb20b9a6d92e3b89dd151f54af5c"
+SEAL_KEY_SERVERS = "0x145540d931f182fef76467dd8074c9839aea126852d90d18e1556fcbbd1208b6"
+SEAL_APPROVE_TARGET = "0xfabfc63a1d67c37d9c0250bc3efeb96a3c56fb20b9a6d92e3b89dd151f54af5c::vault::seal_approve"
+# Testnet Seal fallback (for t.sui.ski + legacy data migration)
+SEAL_TESTNET_PACKAGE_ID = "0x81eb6411c2c711bad57f0f2a7c3b233254a23430003de5ff6c7d21e0230ddca4"
+SEAL_TESTNET_KEY_SERVERS = "0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8,0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46"
+SEAL_TESTNET_APPROVE_TARGET = "0x81eb6411c2c711bad57f0f2a7c3b233254a23430003de5ff6c7d21e0230ddca4::vault::seal_approve"
 # IKA dWallet package ID for cross-chain control (set when deploying IKA integration)
 # IKA_PACKAGE_ID = ""
 # Agency registry object ID (set after deploying agency registry contract)

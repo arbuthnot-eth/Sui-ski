@@ -1433,11 +1433,8 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 						useCase: 'Paid content, premium features',
 					},
 				],
-				keyServers: {
-					threshold: 2,
-					objectIds: (env.SEAL_KEY_SERVERS || '').split(',').filter(Boolean),
-					note: 'Decryption requires 2-of-n key server quorum',
-				},
+				keyServers: (env.SEAL_KEY_SERVERS || '').split(',').filter(Boolean).map((id: string) => ({ objectId: id.trim(), weight: 1 })),
+				threshold: 2,
 				approveTarget: env.SEAL_APPROVE_TARGET || null,
 				encryption: {
 					scheme: 'IBE',
