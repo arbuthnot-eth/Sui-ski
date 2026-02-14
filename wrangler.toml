@@ -62,6 +62,8 @@ DECAY_AUCTION_PACKAGE_ID = "0x10dbff33383bdb68d0bbf6aadeed5e2d3911c45b03664130eb
 # BRAVE_SEARCH_API_KEY set via `wrangler secret put BRAVE_SEARCH_API_KEY`
 # INDEXER_API_KEY set via `wrangler secret put INDEXER_API_KEY`
 # USDY_COIN_TYPE = "0x<pkg>::usdy::USDY"  # Set when USDY token is deployed and registered on MVR
+# X402_BASE_PAY_TO = "0x..."  # Base USDC recipient address
+# X402_SOL_PAY_TO = "..."     # Solana USDC recipient address
 
 # KV namespace for caching resolved names
 [[kv_namespaces]]
@@ -85,3 +87,7 @@ new_sqlite_classes = ["SuiPayAgent", "SuiMcpServer"]
 [[migrations]]
 tag = "v3"
 deleted_classes = ["SuiPayAgent", "SuiMcpServer"]
+
+[[services]]
+binding = "X402_MULTICHAIN"
+service = "x402-multichain-verifier"

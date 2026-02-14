@@ -317,9 +317,9 @@ export function generateWalletUiCss(): string {
 	border-color: rgba(100,110,135,0.32);
 	color: #c8cde0;
 	width: auto;
-	max-width: 72vw;
-	gap: 8px;
-	padding: 7px 12px;
+	max-width: 280px;
+	gap: 6px;
+	padding: 6px 10px;
 	justify-content: flex-start;
 	position: relative;
 	overflow: hidden;
@@ -372,32 +372,9 @@ export function generateWalletUiCss(): string {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	background: #050507;
-	border: 1px solid rgba(180,190,210,0.25);
-	border-radius: 8px;
-	padding: 4px 10px;
-	position: relative;
 	color: #e8ecf4;
 	font-weight: 700;
-	box-shadow: inset 0 1px 4px rgba(0,0,0,0.6), 0 0 8px rgba(140,150,180,0.08);
-}
-.wk-widget-btn.connected .wk-widget-title::after {
-	content: '';
-	position: absolute;
-	inset: -1px;
-	border-radius: 9px;
-	background: linear-gradient(90deg, transparent 0%, rgba(200,210,230,0.5) 50%, transparent 100%);
-	background-size: 200% 100%;
-	animation: wk-silver-sweep 3s ease-in-out infinite;
-	mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-	mask-composite: exclude;
-	-webkit-mask-composite: xor;
-	padding: 1px;
-	pointer-events: none;
-}
-@keyframes wk-silver-sweep {
-	0% { background-position: 200% 0; }
-	100% { background-position: -200% 0; }
+	font-size: 0.78rem;
 }
 .wk-widget-btn.connected .wk-widget-primary-name {
 	color: #c8d0e0;
@@ -424,7 +401,7 @@ export function generateWalletUiCss(): string {
 }
 @media (max-width: 640px) {
 	.wk-widget-btn.connected {
-		width: clamp(176px, 62vw, 242px);
+		max-width: 220px;
 	}
 	.wk-widget-btn.connected .wk-widget-token-row,
 	.wk-widget-btn.connected .wk-widget-usd-row {
@@ -620,6 +597,25 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       if (symbol === 'ETH' || symbol === 'WETH') return 'ETH';
       if (symbol === 'SOL' || symbol === 'WSOL') return 'SOL';
       return '';
+    }
+
+    function __wkIsStablecoin(symbol) {
+      if (!symbol) return false;
+      var s = symbol.toUpperCase();
+      return s === 'USDC' || s === 'USDT' || s === 'DAI' || s === 'AUSD' || s === 'BUCK' || s === 'FDUSD' || s === 'WUSDC' || s === 'WUSDT';
+    }
+
+    function __wkGetStablecoinTotal(portfolioData) {
+      if (!portfolioData || !Array.isArray(portfolioData.holdings)) return 0;
+      var total = 0;
+      for (var i = 0; i < portfolioData.holdings.length; i++) {
+        var holding = portfolioData.holdings[i];
+        var symbol = __wkNormalizeHoldingSymbol(holding && holding.name);
+        if (!__wkIsStablecoin(symbol)) continue;
+        var amount = Number(holding && holding.balance);
+        if (Number.isFinite(amount) && amount > 0) total += amount;
+      }
+      return total;
     }
 
     function __wkFormatTokenAmount(value) {
@@ -824,6 +820,7 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 
 	    function __wkGetConnectionWalletName(conn) {
 	      if (conn && conn.wallet && conn.wallet.name) return String(conn.wallet.name);
+	      if (SuiWalletKit.__sessionWalletName) return String(SuiWalletKit.__sessionWalletName);
 	      return __wkReadSessionWalletName();
 	    }
 
@@ -1533,16 +1530,15 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	        var balanceLine = '';
 	        if (__wkPortfolioData) {
 	          var suiSummary = __wkFormatBalance(__wkPortfolioData.totalSui);
-	          var usdSummary = __wkPortfolioData.usdcPerSui > 0
-	            ? __wkFormatUsd(__wkPortfolioData.totalSui * __wkPortfolioData.usdcPerSui)
-	            : '';
-	          if (suiSummary || usdSummary) {
+	          var stableTotal = __wkGetStablecoinTotal(__wkPortfolioData);
+	          var stableSummary = stableTotal >= 0.01 ? __wkFormatUsd(stableTotal) : '';
+	          if (suiSummary || stableSummary) {
 	            balanceLine = '<span class="wk-widget-balance-wrap">';
 	            if (suiSummary) {
 	              balanceLine += '<span class="wk-widget-token-row">' + __wkEscapeHtml(suiSummary) + __wkSuiIconSvg + '</span>';
 	            }
-	            if (usdSummary) {
-	              balanceLine += '<span class="wk-widget-usd-row">' + __wkEscapeHtml(usdSummary) + '</span>';
+	            if (stableSummary) {
+	              balanceLine += '<span class="wk-widget-usd-row">' + __wkEscapeHtml(stableSummary) + '</span>';
 	            }
 	            balanceLine += '</span>';
 	          }

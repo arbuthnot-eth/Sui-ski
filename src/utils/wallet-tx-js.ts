@@ -175,6 +175,7 @@ export function generateWalletTxJs(): string {
     function __skiResolvePreferredWalletName() {
       var conn = SuiWalletKit.$connection.value || {};
       if (conn.wallet && conn.wallet.name) return String(conn.wallet.name);
+      if (SuiWalletKit.__sessionWalletName) return String(SuiWalletKit.__sessionWalletName);
       try {
         var session = typeof getWalletSession === 'function' ? getWalletSession() : null;
         if (session && session.walletName) return String(session.walletName);
@@ -233,7 +234,19 @@ export function generateWalletTxJs(): string {
       if (typeof txInput === 'string') return txInput;
       if (txInput instanceof Uint8Array) return __wkBytesToBase64(txInput);
       if (txInput && typeof txInput.toJSON === 'function') {
-        return JSON.stringify(await txInput.toJSON());
+        try {
+          return JSON.stringify(await txInput.toJSON());
+        } catch (_e) {
+          if (txInput && typeof txInput.build === 'function') {
+            var RpcClient = window.SuiJsonRpcClient || window.SuiClient;
+            if (RpcClient) {
+              var rpcClient = new RpcClient({ url: __wkGetRpcUrl() });
+              var builtBytes = await txInput.build({ client: rpcClient });
+              return __wkBytesToBase64(builtBytes);
+            }
+          }
+          throw _e;
+        }
       }
       throw new Error('Cannot serialize transaction for sign bridge. Got: ' + typeof txInput);
     }
@@ -271,11 +284,15 @@ export function generateWalletTxJs(): string {
 	      var conn = SuiWalletKit.$connection.value || {};
 	      if (conn.wallet) return conn;
 
-	      var preferredWalletName = '';
+	      var sessionWalletName = '';
 	      try {
 	        var session = typeof getWalletSession === 'function' ? getWalletSession() : null;
-	        preferredWalletName = session && session.walletName ? String(session.walletName) : '';
+	        sessionWalletName = session && session.walletName ? String(session.walletName) : '';
 	      } catch (_e) {}
+
+	      if (window.__wkWaaPLoading) {
+	        try { await window.__wkWaaPLoading; } catch (_e) {}
+	      }
 
 	      var wallets = [];
 	      try {
@@ -287,27 +304,25 @@ export function generateWalletTxJs(): string {
 
 	      var match = null;
 	      var keyWallets = wallets.filter(function(w) { return !w.__isPasskey; });
-	      if (preferredWalletName && preferredWalletName !== 'Passkey Wallet') {
+
+	      if (sessionWalletName && sessionWalletName !== 'Passkey Wallet') {
 	        for (var i = 0; i < keyWallets.length; i++) {
-	          if (keyWallets[i] && keyWallets[i].name === preferredWalletName) {
+	          if (keyWallets[i] && keyWallets[i].name === sessionWalletName) {
 	            match = keyWallets[i];
 	            break;
 	          }
 	        }
-	      }
-	      if (!match) {
-	        for (var p = 0; p < keyWallets.length; p++) {
-	          if (String(keyWallets[p].name || '') === 'Phantom') {
-	            match = keyWallets[p];
-	            break;
+	        if (!match) {
+	          for (var j = 0; j < keyWallets.length; j++) {
+	            if (keyWallets[j] && keyWallets[j].name && keyWallets[j].name.toLowerCase().indexOf(sessionWalletName.toLowerCase()) !== -1) {
+	              match = keyWallets[j];
+	              break;
+	            }
 	          }
 	        }
 	      }
-	      if (!match && keyWallets.length > 0) {
-	        match = keyWallets[0];
-	      }
 
-	      if (!match && preferredWalletName === 'Passkey Wallet' && typeof SuiWalletKit.connectPasskey === 'function') {
+	      if (!match && sessionWalletName === 'Passkey Wallet' && typeof SuiWalletKit.connectPasskey === 'function') {
 	        try {
 	          await SuiWalletKit.connectPasskey();
 	          conn = SuiWalletKit.$connection.value || {};
@@ -315,7 +330,10 @@ export function generateWalletTxJs(): string {
 	        } catch (_e) {}
 	      }
 
-	      if (!match) match = wallets[0];
+	      if (!match && !sessionWalletName && keyWallets.length > 0) {
+	        match = keyWallets[0];
+	      }
+
 	      if (!match) return null;
 
 	      try {
@@ -341,7 +359,17 @@ export function generateWalletTxJs(): string {
       if (txRaw && typeof txRaw.serialize === 'function') {
         try {
           txBytes = await txRaw.serialize();
-        } catch (_e) {}
+        } catch (_e) {
+          if (txRaw && typeof txRaw.build === 'function') {
+            try {
+              var RpcClient = window.SuiJsonRpcClient || window.SuiClient;
+              if (RpcClient) {
+                var rpcClient = new RpcClient({ url: __wkGetRpcUrl() });
+                txBytes = await txRaw.build({ client: rpcClient });
+              }
+            } catch (_e2) {}
+          }
+        }
       }
       var wallet = conn.wallet;
       var requestedChain = options && options.chain;
@@ -764,7 +792,8 @@ export function generateWalletTxJs(): string {
 	          console.warn('Sign bridge failed:', err && err.message ? err.message : err);
 	        }
 
-	        if (mustUseBridge || __wkIsUserRejection(bridgeError)) {
+	        var isSessionConn = sessionConn && sessionConn.status === 'session' && !sessionConn.wallet;
+	        if ((mustUseBridge && !isSessionConn) || __wkIsUserRejection(bridgeError)) {
 	          throw bridgeError || new Error('Sign bridge failed. Reconnect wallet from sui.ski and retry.');
 	        }
 
@@ -815,7 +844,17 @@ export function generateWalletTxJs(): string {
       if (txRaw && typeof txRaw.serialize === 'function') {
         try {
           txBytes = await txRaw.serialize();
-        } catch (_e) {}
+        } catch (_e) {
+          if (txRaw && typeof txRaw.build === 'function') {
+            try {
+              var RpcClient = window.SuiJsonRpcClient || window.SuiClient;
+              if (RpcClient) {
+                var rpcClient = new RpcClient({ url: __wkGetRpcUrl() });
+                txBytes = await txRaw.build({ client: rpcClient });
+              }
+            } catch (_e2) {}
+          }
+        }
       }
       var txB64 = txBytes;
       if (

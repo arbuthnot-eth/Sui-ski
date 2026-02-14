@@ -6,7 +6,7 @@ import { generateDashboardPage } from './handlers/dashboard'
 import { agentGraceVaultRoutes } from './handlers/grace-vault-agent'
 import { apiRoutes, landingPageHTML } from './handlers/landing'
 import { generateEmbedProfilePage, generateProfilePage } from './handlers/profile'
-import { handleRegistrationSubmission } from './handlers/register2'
+import { handleBuildRegisterTx, handleRegistrationSubmission } from './handlers/register2'
 import { generateSkiPage } from './handlers/ski'
 import { generateSkiSignPage } from './handlers/ski-sign'
 import { solSwapRoutes } from './handlers/sol-swap'
@@ -19,6 +19,7 @@ import {
 	handleWalletConnect,
 	handleWalletDisconnect,
 } from './handlers/wallet-api'
+import { x402RegisterRoutes } from './handlers/x402-register'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
@@ -154,6 +155,10 @@ app.post('/api/wallet/disconnect', async (c) => {
 	return handleWalletDisconnect(c.req.raw, c.env)
 })
 
+app.post('/api/register/build-tx', async (c) => {
+	return handleBuildRegisterTx(c.req.raw, c.get('env'))
+})
+
 app.post('/api/register/submit', async (c) => {
 	return handleRegistrationSubmission(c.req.raw, c.get('env'))
 })
@@ -200,6 +205,11 @@ app.use('/api/agents/grace-vault/*', async (c, next) => {
 	await next()
 })
 app.route('/api/agents/grace-vault', agentGraceVaultRoutes)
+app.use('/api/agents/x402-register/*', async (c, next) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	await next()
+})
+app.route('/api/agents/x402-register', x402RegisterRoutes)
 app.all('/api/agents/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.all('/api/ika/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))

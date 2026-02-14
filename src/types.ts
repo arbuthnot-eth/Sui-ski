@@ -53,9 +53,14 @@ export interface Env {
 	SOL_SWAP_DWALLET_ID?: string
 	SOL_SWAP_SOLANA_ADDRESS?: string
 	USDY_COIN_TYPE?: string
+	AGENT_PRIVATE_KEY?: string
+	AGENT_ENCRYPTED_KEY_KV?: string
+	X402_MULTICHAIN?: Fetcher
+	X402_BASE_PAY_TO?: string
+	X402_SOL_PAY_TO?: string
 }
 
-export type X402VerifierProvider = 'cloudflare' | 'coinbase'
+export type X402VerifierProvider = 'cloudflare' | 'coinbase' | 'multichain'
 
 export interface X402VerifiedPayment {
 	digest: string
@@ -64,13 +69,13 @@ export interface X402VerifiedPayment {
 }
 
 export interface X402PaymentRequirements {
-	scheme: 'exact-sui'
+	scheme: 'exact-sui' | 'exact'
 	network: string
 	amount: string
 	asset: string
 	payTo: string
 	maxTimeoutSeconds: number
-	extra: { verificationMethod: 'pre-executed' }
+	extra?: Record<string, unknown>
 }
 
 export interface X402PaymentRequired {

@@ -1,7 +1,19 @@
+import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc'
+import type { Transaction } from '@mysten/sui/transactions'
+import { SuinsClient, SuinsTransaction } from '@mysten/suins'
 import type { Env } from '../types'
+import { getDeepBookSuiPools } from '../utils/ns-price'
 import { generateLogoSvg } from '../utils/og-image'
+import { calculateRegistrationPrice } from '../utils/pricing'
 import { jsonResponse } from '../utils/response'
+import { getDefaultRpcUrl } from '../utils/rpc'
 import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
+import {
+	buildMultiCoinRegisterTx,
+	buildSuiRegisterTx,
+	buildSwapAndRegisterTx,
+	prependGasSwapIfNeeded,
+} from '../utils/swap-transactions'
 import { relaySignedTransaction } from '../utils/transactions'
 import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
@@ -13,6 +25,15 @@ const CORS_HEADERS = {
 	'Access-Control-Allow-Methods': 'POST, OPTIONS',
 	'Access-Control-Allow-Headers': 'Content-Type',
 }
+
+const SUI_COIN_TYPE = '0x2::sui::SUI'
+const NS_COIN_TYPE = '0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS'
+const USDC_COIN_TYPE =
+	'0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
+const REGISTER_GAS_BUFFER_MIST = 80_000_000n
+const REGISTER_PAYMENT_COIN_PAGE_LIMIT = 50
+const REGISTER_PAYMENT_COIN_PAGE_MAX = 6
+const STABLE_SYMBOL_PRIORITY = ['USDC', 'USDT', 'AUSD', 'USDY', 'FDUSD', 'DAI']
 
 interface RegisterSession {
 	address: string | null
@@ -37,7 +58,8 @@ export function generateRegistrationPage(
 	const registerBucket = registerFlow === 'register2' ? 'register-v2' : 'register-v1'
 	const serializeJson = (value: unknown) =>
 		JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
-	const suiIconSvg = '<svg class="price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg>'
+	const suiIconSvg =
+		'<svg class="price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg>'
 	const registrationCardHtml = isRegisterable
 		? `<div class="nft-card">
 				<div class="nft-top">
@@ -48,10 +70,10 @@ export function generateRegistrationPage(
 				<div class="nft-body">
 					<div class="nft-qr-col">
 						<div class="nft-price-stack" id="price-value">
-							<div class="nft-price-main"><span class="price-amount">--</span></div>
+							<div class="nft-price-main payment-choice" data-payment-mode="sui" role="button" tabindex="0" aria-label="Pay with SUI"><span class="price-amount">--</span></div>
 							<div class="price-rest">
-								<span class="price-rest-top">${suiIconSvg}</span>
-								<span class="price-usd">\u2248 $--</span>
+								<span class="price-rest-top payment-choice" data-payment-mode="sui" role="button" tabindex="0" aria-label="Pay with SUI">${suiIconSvg}</span>
+								<span class="price-usd payment-choice" data-payment-mode="coin" role="button" tabindex="0" aria-label="Pay with USD coin estimate">\u2248 $--</span>
 							</div>
 						</div>
 						<span class="nft-chip"><span class="nft-dot"></span>Available</span>
@@ -76,6 +98,7 @@ export function generateRegistrationPage(
 						<input id="years" type="hidden" value="1">
 					</div>
 				</div>
+				<div class="status-note" id="payment-route-hint"></div>
 				<div class="status" id="register-status"></div>
 			</div>`
 		: `<div class="nft-card" style="aspect-ratio:1;justify-content:center;align-items:center;text-align:center;"><span style="font-size:1.6rem;font-weight:800;color:#fff;">${escapeHtml(cleanName)}<span style="color:var(--ski-green);">.sui</span></span><span style="font-size:0.85rem;color:var(--muted);margin-top:8px;">Minimum length is 3 characters.</span></div>`
@@ -470,6 +493,18 @@ export function generateRegistrationPage(
 			font-weight: 700;
 			white-space: nowrap;
 		}
+		.nft-price-stack .payment-choice {
+			border-radius: 8px;
+			cursor: pointer;
+			transition: background 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
+		}
+		.nft-price-stack .payment-choice:hover {
+			background: rgba(var(--ski-green-rgb), 0.09);
+		}
+		.nft-price-stack .payment-choice.active {
+			background: rgba(var(--ski-green-rgb), 0.17);
+			box-shadow: 0 0 0 1px rgba(var(--ski-green-rgb), 0.42) inset;
+		}
 		.reg-form {
 			max-width: 440px;
 			margin: 8px auto 0;
@@ -607,6 +642,13 @@ export function generateRegistrationPage(
 		}
 		.status.ok { background: rgba(var(--ski-green-rgb),0.15); border: 1px solid rgba(var(--ski-green-rgb),0.36); color: var(--ski-green-light); }
 		.status.err { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); color: #ffb0b0; }
+		.status-note {
+			display: block;
+			padding: 6px 4px 0;
+			font-size: 0.74rem;
+			color: rgba(184, 255, 218, 0.78);
+			min-height: 1.1em;
+		}
 			.wallet-widget {
 				position: fixed;
 				top: calc(16px + env(safe-area-inset-top));
@@ -689,7 +731,19 @@ export function generateRegistrationPage(
 			padding: 5px 16px 9px;
 		}
 		.tracker-line::-webkit-scrollbar { display: none; }
-		.tracker-price-label { color: #deffec; font-weight: 600; }
+		.tracker-price-label {
+			color: #deffec;
+			font-weight: 600;
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+		}
+		.tracker-sui-icon {
+			width: 0.8em;
+			height: 1em;
+			display: inline-block;
+			vertical-align: middle;
+		}
 		#sui-price { color: var(--ski-green-light); font-weight: 700; }
 		.tracker-sep { color: rgba(var(--ski-green-rgb), 0.4); }
 		.tracker-built-on { color: #8cae9a; }
@@ -774,7 +828,7 @@ export function generateRegistrationPage(
 			<span class="nft-brand-tagline">Lift every 0xAddr to human-readability at scale</span>
 		</div>
 		<span class="tracker-line">
-			<span class="tracker-price-label">SUI <span id="sui-price">$--</span></span>
+			<span class="tracker-price-label"><img class="tracker-sui-icon" src="/media-pack/SuiIcon.svg" alt="SUI"><span id="sui-price">$--</span></span>
 			<span class="tracker-sep">\u00b7</span>
 			<span class="tracker-built-on">
 				Built on
@@ -856,30 +910,159 @@ export function generateRegistrationPage(
 			const primaryStarEl = document.getElementById('primary-star')
 			const registerBtn = document.getElementById('register-btn')
 			const registerStatus = document.getElementById('register-status')
+			const paymentRouteHintEl = document.getElementById('payment-route-hint')
 			const priceValue = document.getElementById('price-value')
 			const suiPriceEl = document.getElementById('sui-price')
 			const walletWidget = document.getElementById('wallet-widget')
 			const walletProfileBtn = document.getElementById('wallet-profile-btn')
-		const downloadQrBtn = document.getElementById('download-qr-btn')
-		const scrubBtn = document.getElementById('scrub-btn')
-		const x402PriceEl = document.getElementById('x402-price')
-		const x402LinkEl = document.getElementById('x402-link')
-		const suggestionsGrid = document.getElementById('suggestions-grid')
-		const refreshSuggestionsBtn = document.getElementById('refresh-suggestions')
+			const downloadQrBtn = document.getElementById('download-qr-btn')
+			const scrubBtn = document.getElementById('scrub-btn')
+			const x402PriceEl = document.getElementById('x402-price')
+			const x402LinkEl = document.getElementById('x402-link')
+			const suggestionsGrid = document.getElementById('suggestions-grid')
+			const refreshSuggestionsBtn = document.getElementById('refresh-suggestions')
 
 		let pricingData = null
+		let selectedPaymentMode = 'auto'
+		let paymentModeManualOverride = false
 		const suggestionStatusCache = new Map()
 		let scrubMode = false
-		let wantsPrimaryName = false
-		let primaryStarManualOverride = null
-		let primaryStarAddress = ''
-		let primaryStarSyncNonce = 0
-		const MIN_YEARS = 1
-		const MAX_YEARS = 5
-		const RPC_URLS = {
-			mainnet: 'https://fullnode.mainnet.sui.io:443',
-			testnet: 'https://fullnode.testnet.sui.io:443',
-			devnet: 'https://fullnode.devnet.sui.io:443',
+			let wantsPrimaryName = false
+			let primaryStarManualOverride = null
+			let primaryStarAddress = ''
+			let primaryStarSyncNonce = 0
+			const MIN_YEARS = 1
+			const MAX_YEARS = 5
+			const RPC_URLS = {
+				mainnet: 'https://fullnode.mainnet.sui.io:443',
+				testnet: 'https://fullnode.testnet.sui.io:443',
+				devnet: 'https://fullnode.devnet.sui.io:443',
+			}
+
+		let cachedSuiClient = null
+		const SUI_TYPE_FULL = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI'
+		const NS_TYPE_FULL = '0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS'
+		const USDC_TYPE_FULL = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC'
+		const USD_SYMBOL_PRIORITY = ['USDC', 'USDT', 'AUSD', 'USDY', 'FDUSD', 'DAI']
+		const COIN_PAGE_LIMIT = 50
+		const COIN_PAGE_MAX = 6
+		function getSuiClient() {
+			if (!cachedSuiClient && typeof SuiJsonRpcClient === 'function') {
+				cachedSuiClient = new SuiJsonRpcClient({ url: RPC_URLS[NETWORK] || RPC_URLS.mainnet })
+			}
+			return cachedSuiClient
+		}
+
+		function parseMistToBigInt(value) {
+			if (typeof value === 'bigint') return value
+			if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.floor(value))
+			if (typeof value === 'string' && value.trim()) {
+				try { return BigInt(value) } catch {}
+			}
+			return 0n
+		}
+
+		function usdSymbolRank(name) {
+			const symbol = String(name || '').toUpperCase()
+			for (let i = 0; i < USD_SYMBOL_PRIORITY.length; i++) {
+				if (symbol === USD_SYMBOL_PRIORITY[i]) return i
+			}
+			return 999
+		}
+
+		function isUsdStableName(name) {
+			const symbol = String(name || '').toUpperCase()
+			if (!symbol) return false
+			return symbol.includes('USD') || usdSymbolRank(symbol) !== 999
+		}
+
+		function estimateTokenMistNeeded(requiredSuiMist, suiPerToken, decimals) {
+			if (!Number.isFinite(suiPerToken) || suiPerToken <= 0) return 0n
+			const suiNeeded = Number(requiredSuiMist) / 1e9
+			if (!Number.isFinite(suiNeeded) || suiNeeded <= 0) return 0n
+			const tokensNeeded = suiNeeded / suiPerToken
+			if (!Number.isFinite(tokensNeeded) || tokensNeeded <= 0) return 0n
+			const bufferedTokens = tokensNeeded * 1.12
+			const scaled = Math.ceil(bufferedTokens * Math.pow(10, Number(decimals || 0)))
+			if (!Number.isFinite(scaled) || scaled <= 0) return 0n
+			return BigInt(scaled)
+		}
+
+		async function collectCoinObjectIdsForAmountClient(owner, coinType, targetAmount) {
+			const client = getSuiClient()
+			if (!client) return { coinObjectIds: [], total: 0n }
+			const coinObjectIds = []
+			let total = 0n
+			let cursor = null
+			for (let i = 0; i < COIN_PAGE_MAX; i++) {
+				const page = await client.getCoins({
+					owner,
+					coinType,
+					cursor: cursor || undefined,
+					limit: COIN_PAGE_LIMIT,
+				})
+				const rows = Array.isArray(page && page.data) ? page.data : []
+				for (const coin of rows) {
+					if (!coin || typeof coin.coinObjectId !== 'string') continue
+					const coinBalance = parseMistToBigInt(coin.balance)
+					if (coinBalance <= 0n) continue
+					coinObjectIds.push(coin.coinObjectId)
+					total += coinBalance
+					if (total >= targetAmount) return { coinObjectIds, total }
+				}
+				if (!page || !page.hasNextPage || !page.nextCursor) break
+				cursor = page.nextCursor
+			}
+			return { coinObjectIds, total }
+		}
+
+		async function resolveRegisterUsdCoinPayment(address, years) {
+			const client = getSuiClient()
+			if (!client) throw new Error('Wallet RPC client unavailable')
+			let requiredSuiMist = parseMistToBigInt(pricingData && (pricingData.discountedSuiMist || pricingData.directSuiMist || 0))
+			if (requiredSuiMist <= 0n) {
+				const pricingRes = await fetch('/api/pricing?domain=' + encodeURIComponent(NAME) + '&years=' + years)
+				const nextPricing = await pricingRes.json().catch(() => null)
+				if (pricingRes.ok && nextPricing) pricingData = nextPricing
+				requiredSuiMist = parseMistToBigInt(nextPricing && (nextPricing.discountedSuiMist || nextPricing.directSuiMist || 0))
+			}
+			if (requiredSuiMist <= 0n) throw new Error('Unable to price registration for USD payment')
+
+			const pools = await fetch('/api/deepbook-pools').then((r) => r.json()).catch(() => [])
+			if (!Array.isArray(pools) || pools.length === 0) {
+				throw new Error('DeepBook pools unavailable')
+			}
+
+			const usdcPool = pools.find((pool) => pool && pool.coinType === USDC_TYPE_FULL)
+			let requiredUsdcMist = 0n
+			if (usdcPool) {
+				requiredUsdcMist = estimateTokenMistNeeded(
+					requiredSuiMist,
+					Number(usdcPool.suiPerToken || 0),
+					Number(usdcPool.decimals || 0),
+				)
+			}
+			if (requiredUsdcMist <= 0n) {
+				const discountedUsd = Number(pricingData?.breakdown?.discountedPriceUsd || 0)
+				if (Number.isFinite(discountedUsd) && discountedUsd > 0) {
+					requiredUsdcMist = BigInt(Math.ceil(discountedUsd * 1_000_000 * 1.12))
+				}
+			}
+			if (requiredUsdcMist <= 0n) throw new Error('Unable to estimate required USDC amount')
+
+			const usdcBalance = await client
+				.getBalance({ owner: address, coinType: USDC_TYPE_FULL })
+				.catch(() => ({ totalBalance: '0' }))
+			const totalUsdcMist = parseMistToBigInt(usdcBalance && usdcBalance.totalBalance)
+			if (totalUsdcMist < requiredUsdcMist) return null
+
+			const picked = await collectCoinObjectIdsForAmountClient(address, USDC_TYPE_FULL, requiredUsdcMist)
+			if (!picked.coinObjectIds.length || picked.total < requiredUsdcMist) return null
+
+			return {
+				sourceCoinType: USDC_TYPE_FULL,
+				coinObjectIds: picked.coinObjectIds,
+			}
 		}
 
 			function formatPrimaryPriceParts(sui) {
@@ -904,6 +1087,62 @@ export function generateRegistrationPage(
 				minimumFractionDigits: 0,
 				maximumFractionDigits: 0,
 			}).format(Math.round(usdValue))
+		}
+
+		function normalizePaymentMode(value) {
+			if (value === 'coin' || value === 'sui' || value === 'auto') return value
+			return 'auto'
+		}
+
+		function updatePaymentChoiceUi() {
+			if (!priceValue) return
+			const activeMode = normalizePaymentMode(selectedPaymentMode)
+			const choices = priceValue.querySelectorAll('[data-payment-mode]')
+			for (const choice of choices) {
+				const mode = choice.getAttribute('data-payment-mode')
+				const isActive = activeMode !== 'auto' && mode === activeMode
+				choice.classList.toggle('active', isActive)
+				choice.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+			}
+		}
+
+		function setSelectedPaymentMode(mode) {
+			selectedPaymentMode = normalizePaymentMode(mode)
+			updatePaymentChoiceUi()
+			updateRegisterButton()
+			updatePaymentRouteHint()
+		}
+
+		function getWalletRouteLabel() {
+			const walletName = getConnectedWalletName().trim()
+			if (!walletName) return 'Connected wallet'
+			return walletName === 'WaaP' ? 'WaaP wallet' : walletName + ' wallet'
+		}
+
+		function coinSymbolFromType(coinType) {
+			if (!coinType || typeof coinType !== 'string') return ''
+			const parts = coinType.split('::')
+			if (!parts.length) return ''
+			return String(parts[parts.length - 1] || '').toUpperCase()
+		}
+
+		function updatePaymentRouteHint(sourceCoinType) {
+			if (!paymentRouteHintEl) return
+			const address = getConnectedAddress()
+			if (!address) {
+				paymentRouteHintEl.textContent = 'Connect wallet to build a registration transaction.'
+				return
+			}
+			if (selectedPaymentMode === 'coin') {
+				const symbol = coinSymbolFromType(sourceCoinType || USDC_TYPE_FULL) || 'USDC'
+				paymentRouteHintEl.textContent = getWalletRouteLabel() + ': ' + symbol + ' -> SUI -> NS -> register'
+				return
+			}
+			if (selectedPaymentMode === 'sui') {
+				paymentRouteHintEl.textContent = getWalletRouteLabel() + ': SUI -> NS -> register'
+				return
+			}
+			paymentRouteHintEl.textContent = getWalletRouteLabel() + ': auto route (click SUI or USD price to lock mode)'
 		}
 
 		function updatePrimaryStarUi() {
@@ -1032,9 +1271,9 @@ export function generateRegistrationPage(
 			return normalized || null
 		}
 
-		function getRpcUrlForNetwork() {
-			return RPC_URLS[NETWORK] || RPC_URLS.mainnet
-		}
+			function getRpcUrlForNetwork() {
+				return RPC_URLS[NETWORK] || RPC_URLS.mainnet
+			}
 
 		async function fetchPrimaryNameForAddress(address) {
 			if (!address || typeof SuiJsonRpcClient !== 'function') return { resolved: false, name: null }
@@ -1147,6 +1386,12 @@ export function generateRegistrationPage(
 			if (downloadQrBtn) downloadQrBtn.style.display = ''
 			if (scrubBtn) scrubBtn.style.display = ''
 			if (stepperEl) stepperEl.style.display = ''
+			if (selectedPaymentMode === 'coin') {
+				const usd = Number(pricingData?.breakdown?.discountedPriceUsd || 0)
+				const usdText = formatUsdAmount(usd)
+				registerBtn.textContent = usdText ? 'Accept $' + usdText + ' USDC' : 'Accept via USDC'
+				return
+			}
 			if (pricingData && pricingData.discountedSuiMist) {
 				const sui = Number(pricingData.discountedSuiMist) / 1e9
 				if (Number.isFinite(sui) && sui > 0) {
@@ -1196,21 +1441,24 @@ export function generateRegistrationPage(
 						const usdColor = yearColor(years)
 						const decimalsHtml = priceParts.decimals ? '<span class="price-decimals">' + priceParts.decimals + '</span>' : ''
 						priceValue.innerHTML =
-							'<div class="nft-price-main"><span class="price-amount">' + priceParts.whole + '</span></div>' +
+							'<div class="nft-price-main payment-choice" data-payment-mode="sui" role="button" tabindex="0" aria-label="Pay with SUI"><span class="price-amount">' + priceParts.whole + '</span></div>' +
 							'<div class="price-rest">' +
-								'<span class="price-rest-top">' + decimalsHtml + suiIcon + '</span>' +
-								'<span class="price-usd" style="color:' + usdColor + '">' + usdLabel + '</span>' +
+								'<span class="price-rest-top payment-choice" data-payment-mode="sui" role="button" tabindex="0" aria-label="Pay with SUI">' + decimalsHtml + suiIcon + '</span>' +
+								'<span class="price-usd payment-choice" data-payment-mode="coin" role="button" tabindex="0" aria-label="Pay with USD coin estimate" style="color:' + usdColor + '">' + usdLabel + '</span>' +
 							'</div>'
+						updatePaymentChoiceUi()
 					}
 					updateRegisterButton()
+					checkAutoPaymentRoute()
 				} catch (error) {
 					if (priceValue) {
 						priceValue.innerHTML =
-							'<div class="nft-price-main"><span class="price-amount">--</span></div>' +
+							'<div class="nft-price-main payment-choice" data-payment-mode="sui" role="button" tabindex="0" aria-label="Pay with SUI"><span class="price-amount">--</span></div>' +
 							'<div class="price-rest">' +
-								'<span class="price-rest-top"><svg class="price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg></span>' +
-								'<span class="price-usd">\u2248 $--</span>' +
+								'<span class="price-rest-top payment-choice" data-payment-mode="sui" role="button" tabindex="0" aria-label="Pay with SUI"><svg class="price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg></span>' +
+								'<span class="price-usd payment-choice" data-payment-mode="coin" role="button" tabindex="0" aria-label="Pay with USD coin estimate">\u2248 $--</span>' +
 							'</div>'
+						updatePaymentChoiceUi()
 					}
 				}
 			}
@@ -1236,6 +1484,32 @@ export function generateRegistrationPage(
 			if (conn && conn.wallet && conn.wallet.name) return String(conn.wallet.name)
 			const session = typeof getWalletSession === 'function' ? getWalletSession() : null
 			return session && session.walletName ? String(session.walletName) : ''
+		}
+
+		async function checkAutoPaymentRoute() {
+			if (!IS_REGISTERABLE || paymentModeManualOverride) return
+			const address = getConnectedAddress()
+			if (!address) return
+			const client = getSuiClient()
+			if (!client) return
+			const requiredSuiMist = parseMistToBigInt(
+				pricingData && (pricingData.discountedSuiMist || pricingData.directSuiMist || 0)
+			)
+			if (requiredSuiMist <= 0n) return
+			try {
+				const suiBal = await client.getBalance({ owner: address, coinType: SUI_TYPE_FULL })
+				const totalSuiMist = parseMistToBigInt(suiBal && suiBal.totalBalance)
+				const overhead = (requiredSuiMist * 50n) / 100n + 80000000n
+				if (totalSuiMist >= requiredSuiMist + overhead) return
+				const usdcBal = await client.getBalance({ owner: address, coinType: USDC_TYPE_FULL })
+				const totalUsdcMist = parseMistToBigInt(usdcBal && usdcBal.totalBalance)
+				const discountedUsd = Number(pricingData?.breakdown?.discountedPriceUsd || 0)
+				if (!Number.isFinite(discountedUsd) || discountedUsd <= 0) return
+				const requiredUsdcMist = BigInt(Math.ceil(discountedUsd * 1_000_000 * 1.12))
+				if (totalUsdcMist >= requiredUsdcMist) {
+					setSelectedPaymentMode('coin')
+				}
+			} catch {}
 		}
 
 		function getConnectedWalletIcon() {
@@ -1469,73 +1743,119 @@ export function generateRegistrationPage(
 				SuiWalletKit.openModal()
 				return
 			}
-			if (!SuiJsonRpcClient || !Transaction || !SuinsClient || !SuinsTransaction) {
-				showStatus('Wallet SDK not loaded. Refresh and try again.', 'err')
-				return
-			}
 
 			registerBtn.disabled = true
 			hideStatus()
 			showStatus('Building transaction...', 'info')
 
 			try {
-				const rpcUrl = getRpcUrlForNetwork()
 				const years = getSelectedYears()
-				const domain = NAME + '.sui'
-
-				const client = new SuiJsonRpcClient({ url: rpcUrl })
-				const suinsClient = new SuinsClient({ client, network: NETWORK })
-				const coinConfig = getSuiCoinConfig(suinsClient)
-				if (!coinConfig) throw new Error('SUI coin config unavailable')
-
-				const recipient = address
-
-				let rawPrice
-				try {
-					rawPrice = await suinsClient.calculatePrice({ name: domain, years })
-				} catch {
-					rawPrice = await suinsClient.calculatePrice({ domain, years })
-				}
-				const priceMist = parsePriceMist(rawPrice)
-				if (!priceMist || priceMist <= 0n) throw new Error('Invalid registration price')
-
-				const tx = new Transaction()
-				tx.setSender(address)
-				tx.setGasBudget(90000000)
-
-				const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(priceMist)])
-				const suinsTx = new SuinsTransaction(suinsClient, tx)
-				const nft = suinsTx.register({
-					domain,
+				const buildPayload = {
+					domain: NAME,
 					years,
-					coinConfig,
-					coin: paymentCoin,
+					sender: address,
+					paymentMode: selectedPaymentMode,
+					referrer: referrerAddress || undefined,
+					waapReferral: waapReferralAddress || undefined,
+					wantsPrimary: wantsPrimaryName,
+				}
+
+if (selectedPaymentMode === 'coin') {
+					showStatus('Resolving USDC coins...', 'info')
+					const coinPayment = await resolveRegisterUsdCoinPayment(address, years)
+					if (!coinPayment || !coinPayment.sourceCoinType || !coinPayment.coinObjectIds.length) {
+						showStatus('No USDC found, switching to SUI payment...', 'info')
+						selectedPaymentMode = 'sui'
+						paymentModeManualOverride = false
+						buildPayload.paymentMode = 'sui'
+						updatePaymentChoiceUi()
+						updateRegisterButton()
+					} else {
+						buildPayload.paymentMethod = 'coin'
+						buildPayload.sourceCoinType = coinPayment.sourceCoinType
+						buildPayload.coinObjectIds = coinPayment.coinObjectIds
+					}
+				}
+
+				const buildRes = await fetch('/api/register/build-tx', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(buildPayload),
 				})
+				if (!buildRes.ok) {
+					const errBody = await buildRes.json().catch(() => ({}))
+					throw new Error(errBody.error || 'Failed to build transaction')
+				}
+				const buildBody = await buildRes.json()
+				const txBytesBase64 = buildBody?.txBytes
+				const method = typeof buildBody?.method === 'string' ? buildBody.method : ''
+				if (!txBytesBase64 || typeof txBytesBase64 !== 'string') {
+					throw new Error('Build transaction response missing tx bytes')
+				}
+				const sourceCoinType =
+					typeof buildBody?.breakdown?.sourceCoinType === 'string'
+						? buildBody.breakdown.sourceCoinType
+						: (buildPayload.sourceCoinType || '')
+				updatePaymentRouteHint(sourceCoinType)
 
-				suinsTx.setTargetAddress({
-					nft,
-					address: recipient,
-					isSubname: domain.replace(/\\.sui$/i, '').includes('.'),
+				const raw = atob(txBytesBase64)
+				const txBytes = new Uint8Array(raw.length)
+				for (let i = 0; i < raw.length; i++) txBytes[i] = raw.charCodeAt(i)
+
+				if (method === 'coin-swap') {
+					showStatus('USDC route ready. Approve in ' + getWalletRouteLabel() + '...', 'info')
+				} else {
+					showStatus('Approve in ' + getWalletRouteLabel() + '...', 'info')
+				}
+				const signingChain = NETWORK === 'testnet'
+					? 'sui:testnet'
+					: NETWORK === 'devnet'
+						? 'sui:devnet'
+						: 'sui:mainnet'
+				const connForSign = SuiWalletKit.$connection.value || {}
+				const isSessionWallet = connForSign.status === 'session' && !connForSign.wallet
+				const result = await SuiWalletKit.signAndExecute(txBytes, {
+					account: { address, chains: [signingChain] },
+					chain: signingChain,
+					txOptions: { showEffects: true, showObjectChanges: true },
+					preferTransactionBlock: true,
+					singleAttempt: true,
+					forceSignBridge: !isSessionWallet,
 				})
-
-				if (wantsPrimaryName) {
-					suinsTx.setDefault(domain)
-				}
-
-				tx.transferObjects([nft], recipient)
-
-				if (referrerAddress && referralFeeMist > 0n) {
-					const [refCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(referralFeeMist)])
-					tx.transferObjects([refCoin], referrerAddress)
-				}
-				if (waapReferralAddress && waapFeeMist > 0n) {
-					const [waapCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(waapFeeMist)])
-					tx.transferObjects([waapCoin], waapReferralAddress)
-				}
-
-				showStatus('Approve in wallet...', 'info')
-				const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } })
 				const digest = result?.digest ? String(result.digest) : ''
+
+				const effectsStatus = result?.effects?.status
+				if (effectsStatus?.status === 'failure') {
+					throw new Error(effectsStatus.error || 'Transaction failed on-chain')
+				}
+
+				let createdNft = false
+				if (result?.effects?.created) {
+					for (const c of result.effects.created) {
+						const ref = c.reference || c
+						if (ref?.objectId) { createdNft = true; break }
+					}
+				}
+				if (!createdNft && digest) {
+					showStatus('Verifying registration...', 'info')
+					try {
+						const txCheck = await client.getTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } })
+						if (txCheck?.effects?.status?.status === 'failure') {
+							throw new Error(txCheck.effects.status.error || 'Transaction failed on-chain')
+						}
+						if (txCheck?.objectChanges) {
+							for (const oc of txCheck.objectChanges) {
+								if (oc.type === 'created') { createdNft = true; break }
+							}
+						}
+					} catch (verifyErr) {
+						if (verifyErr?.message?.includes('failed on-chain')) throw verifyErr
+					}
+				}
+
+				if (!createdNft) {
+					throw new Error('Registration transaction did not create a SuiNS NFT. Check your balance and try again.')
+				}
 
 				trackEvent('sui_ski_register_success', {
 					registerFlow: REGISTER_FLOW,
@@ -1543,17 +1863,17 @@ export function generateRegistrationPage(
 					registerName: NAME,
 					registerNetwork: NETWORK,
 					txDigest: digest,
+					method: method || 'unknown',
 					referrer: referrerAddress || '',
-					referralFee: referralFeeMist > 0n ? String(referralFeeMist) : '',
-					waapFee: waapFeeMist > 0n ? String(waapFeeMist) : '',
 				})
 
+				const profileUrl = 'https://' + NAME + '.sui.ski?nocache'
 				const links = digest
 					? '<a href="https://suiscan.xyz/' + NETWORK + '/tx/' + encodeURIComponent(digest) + '" target="_blank" rel="noopener noreferrer">Suiscan</a> · ' +
 					  '<a href="https://suiexplorer.com/txblock/' + encodeURIComponent(digest) + '?network=' + NETWORK + '" target="_blank" rel="noopener noreferrer">Explorer</a>'
 					: ''
 				showStatus(
-					'<strong>Registered.</strong> <a href="https://' + NAME + '.sui.ski">Open profile</a>' +
+					'<strong>Registered!</strong> Redirecting to profile...' +
 					(digest ? ' · ' + links : ''),
 					'ok',
 					true,
@@ -1563,6 +1883,8 @@ export function generateRegistrationPage(
 				}
 				registerBtn.textContent = 'Registered'
 				registerBtn.disabled = true
+
+				setTimeout(() => { window.location.href = profileUrl }, 2000)
 			} catch (error) {
 				const msg = error && error.message ? error.message : 'Registration failed'
 				trackEvent('sui_ski_register_error', {
@@ -1581,14 +1903,19 @@ export function generateRegistrationPage(
 		window.onRegisterWalletConnected = function() {
 			updateRegisterButton()
 			updateWalletProfileButton()
+			updatePaymentRouteHint()
 			syncPrimaryStarState()
 			updateCardWalletInfo()
 			renderNftQr()
+			checkAutoPaymentRoute()
 		}
 
 		window.onRegisterWalletDisconnected = function() {
+			selectedPaymentMode = 'auto'
+			paymentModeManualOverride = false
 			updateRegisterButton()
 			updateWalletProfileButton()
+			updatePaymentRouteHint()
 			syncPrimaryStarState()
 			updateCardWalletInfo()
 			renderNftQr()
@@ -1621,7 +1948,9 @@ export function generateRegistrationPage(
 		updatePrimaryStarUi()
 		syncPrimaryStarState()
 		setSelectedYears(getSelectedYears())
+		updatePaymentChoiceUi()
 		updateRegisterButton()
+		updatePaymentRouteHint()
 		fetchPricing()
 		updateSuiPrice()
 		updateX402Listing()
@@ -1702,6 +2031,34 @@ export function generateRegistrationPage(
 			}
 		})
 		if (refreshSuggestionsBtn) refreshSuggestionsBtn.addEventListener('click', () => loadSuggestions(true))
+		function getPaymentModeFromEventTarget(target) {
+			if (!target) return ''
+			const element = typeof target.closest === 'function' ? target : target.parentElement
+			if (!element || typeof element.closest !== 'function') return ''
+			const trigger = element.closest('[data-payment-mode]')
+			if (!trigger || !priceValue || !priceValue.contains(trigger)) return ''
+			const mode = trigger.getAttribute('data-payment-mode')
+			return mode === 'coin' || mode === 'sui' ? mode : ''
+		}
+
+		if (priceValue) {
+			priceValue.addEventListener('click', function(event) {
+				const mode = getPaymentModeFromEventTarget(event.target)
+				if (mode) {
+					paymentModeManualOverride = true
+					setSelectedPaymentMode(mode)
+				}
+			})
+			priceValue.addEventListener('keydown', function(event) {
+				const key = event && event.key ? event.key : ''
+				if (key !== 'Enter' && key !== ' ') return
+				const mode = getPaymentModeFromEventTarget(event.target)
+				if (!mode) return
+				event.preventDefault()
+				paymentModeManualOverride = true
+				setSelectedPaymentMode(mode)
+			})
+		}
 		if (registerBtn) registerBtn.addEventListener('click', registerName)
 		if (scrubBtn) {
 			scrubBtn.addEventListener('click', function() {
@@ -1735,6 +2092,597 @@ export function generateRegistrationPage(
 	</script>
 </body>
 </html>`
+}
+
+function parseMistAmount(value: unknown): bigint {
+	if (typeof value === 'bigint') return value
+	if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.floor(value))
+	if (typeof value === 'string' && value.trim()) {
+		try {
+			return BigInt(value)
+		} catch {
+			return 0n
+		}
+	}
+	return 0n
+}
+
+function createRpcClient(env: Env): SuiJsonRpcClient {
+	return new SuiJsonRpcClient({
+		url: env.SUI_RPC_URL || getDefaultRpcUrl(env.SUI_NETWORK),
+		network: env.SUI_NETWORK,
+	})
+}
+
+async function getRpcClientWithFallback(env: Env, probeAddress: string): Promise<SuiJsonRpcClient> {
+	const primaryClient = createRpcClient(env)
+	try {
+		await primaryClient.getBalance({ owner: probeAddress, coinType: SUI_COIN_TYPE })
+		return primaryClient
+	} catch (primaryError) {
+		const fallbackUrl = getDefaultRpcUrl(env.SUI_NETWORK)
+		const configuredUrl = (env.SUI_RPC_URL || '').trim()
+		if (!configuredUrl || configuredUrl === fallbackUrl) throw primaryError
+		const fallbackClient = new SuiJsonRpcClient({
+			url: fallbackUrl,
+			network: env.SUI_NETWORK,
+		})
+		await fallbackClient.getBalance({ owner: probeAddress, coinType: SUI_COIN_TYPE })
+		return fallbackClient
+	}
+}
+
+async function collectCoinObjectIdsForAmount(
+	client: SuiJsonRpcClient,
+	owner: string,
+	coinType: string,
+	targetAmount: bigint,
+): Promise<{ coinObjectIds: string[]; total: bigint }> {
+	const coinObjectIds: string[] = []
+	let total = 0n
+	let cursor: string | null = null
+	for (let i = 0; i < REGISTER_PAYMENT_COIN_PAGE_MAX; i++) {
+		const page = await client.getCoins({
+			owner,
+			coinType,
+			cursor: cursor || undefined,
+			limit: REGISTER_PAYMENT_COIN_PAGE_LIMIT,
+		})
+		const rows = Array.isArray(page?.data) ? page.data : []
+		for (const coin of rows) {
+			if (!coin || typeof coin.coinObjectId !== 'string') continue
+			const coinBalance = parseMistAmount(coin.balance)
+			if (coinBalance <= 0n) continue
+			coinObjectIds.push(coin.coinObjectId)
+			total += coinBalance
+			if (total >= targetAmount) return { coinObjectIds, total }
+		}
+		if (!page?.hasNextPage || !page?.nextCursor) break
+		cursor = page.nextCursor
+	}
+	return { coinObjectIds, total }
+}
+
+function stableSymbolRank(name: string): number {
+	const symbol = String(name || '').toUpperCase()
+	for (let i = 0; i < STABLE_SYMBOL_PRIORITY.length; i++) {
+		if (symbol === STABLE_SYMBOL_PRIORITY[i]) return i
+	}
+	return 999
+}
+
+function isStableSymbol(name: string): boolean {
+	const symbol = String(name || '').toUpperCase()
+	if (!symbol) return false
+	return symbol.includes('USD') || stableSymbolRank(symbol) !== 999
+}
+
+function estimateTokenMistNeeded(
+	requiredSuiMist: bigint,
+	suiPerToken: number,
+	decimals: number,
+): bigint {
+	if (!Number.isFinite(suiPerToken) || suiPerToken <= 0) return 0n
+	const suiNeeded = Number(requiredSuiMist) / 1e9
+	if (!Number.isFinite(suiNeeded) || suiNeeded <= 0) return 0n
+	const tokensNeeded = suiNeeded / suiPerToken
+	if (!Number.isFinite(tokensNeeded) || tokensNeeded <= 0) return 0n
+	const bufferedTokens = tokensNeeded * 1.12
+	const scaled = Math.ceil(bufferedTokens * 10 ** decimals)
+	if (!Number.isFinite(scaled) || scaled <= 0) return 0n
+	return BigInt(scaled)
+}
+
+async function resolveCoinPayment(
+	env: Env,
+	sender: string,
+	domain: string,
+	years: number,
+	forceCoin = false,
+	usdcOnly = false,
+): Promise<{ sourceCoinType: string; coinObjectIds: string[] } | null> {
+	const pricing = await calculateRegistrationPrice({ domain, years, env })
+	const requiredSuiMist =
+		pricing.discountedSuiMist > 0n ? pricing.discountedSuiMist : pricing.directSuiMist
+	if (requiredSuiMist <= 0n) return null
+
+	const client = await getRpcClientWithFallback(env, sender)
+	const [suiBalance, pools] = await Promise.all([
+		client.getBalance({ owner: sender, coinType: SUI_COIN_TYPE }),
+		getDeepBookSuiPools(env),
+	])
+
+	const totalSuiMist = parseMistAmount(suiBalance?.totalBalance)
+	const swapOverheadMist = (requiredSuiMist * 50n) / 100n + REGISTER_GAS_BUFFER_MIST
+	if (!forceCoin && totalSuiMist >= requiredSuiMist + swapOverheadMist) return null
+
+	let usdcRequiredMist = 0n
+	for (const pool of pools) {
+		if (!pool || pool.coinType !== USDC_COIN_TYPE) continue
+		const estimate = estimateTokenMistNeeded(requiredSuiMist, pool.suiPerToken, pool.decimals)
+		if (estimate <= 0n) continue
+		if (usdcRequiredMist === 0n || estimate < usdcRequiredMist) {
+			usdcRequiredMist = estimate
+		}
+	}
+	if (usdcRequiredMist <= 0n) {
+		const discountedUsd = Number(pricing.breakdown?.discountedPriceUsd || 0)
+		if (Number.isFinite(discountedUsd) && discountedUsd > 0) {
+			usdcRequiredMist = BigInt(Math.ceil(discountedUsd * 1_000_000 * 1.12))
+		}
+	}
+
+	if (usdcRequiredMist > 0n) {
+		const usdcBalance = await client
+			.getBalance({ owner: sender, coinType: USDC_COIN_TYPE })
+			.catch(() => ({ totalBalance: '0' }))
+		const totalUsdcMist = parseMistAmount(usdcBalance?.totalBalance)
+		if (totalUsdcMist >= usdcRequiredMist) {
+			try {
+				const usdcCoins = await collectCoinObjectIdsForAmount(
+					client,
+					sender,
+					USDC_COIN_TYPE,
+					usdcRequiredMist,
+				)
+				if (usdcCoins.total >= usdcRequiredMist && usdcCoins.coinObjectIds.length > 0) {
+					return {
+						sourceCoinType: USDC_COIN_TYPE,
+						coinObjectIds: usdcCoins.coinObjectIds,
+					}
+				}
+			} catch {
+				// Fall through to generic pool selection.
+			}
+		}
+	}
+	if (usdcOnly) return null
+
+	const poolByCoin = new Map<string, (typeof pools)[number]>()
+	for (const pool of pools) {
+		if (!pool || !pool.coinType) continue
+		if (pool.coinType === SUI_COIN_TYPE || pool.coinType === NS_COIN_TYPE) continue
+		const existing = poolByCoin.get(pool.coinType)
+		if (!existing) {
+			poolByCoin.set(pool.coinType, pool)
+			continue
+		}
+		if (!existing.isDirect && pool.isDirect) {
+			poolByCoin.set(pool.coinType, pool)
+			continue
+		}
+		if (pool.suiPerToken > existing.suiPerToken) {
+			poolByCoin.set(pool.coinType, pool)
+		}
+	}
+
+	const uniquePools = Array.from(poolByCoin.values())
+	if (!uniquePools.length) return null
+
+	const balances = await Promise.all(
+		uniquePools.map((pool) =>
+			client
+				.getBalance({ owner: sender, coinType: pool.coinType })
+				.catch(() => ({ totalBalance: '0' })),
+		),
+	)
+
+	const candidates: Array<{
+		sourceCoinType: string
+		coinObjectIds: string[]
+		isUsdc: boolean
+		isStable: boolean
+		stableRank: number
+		isDirect: boolean
+	}> = []
+
+	for (let i = 0; i < uniquePools.length; i++) {
+		const pool = uniquePools[i]
+		const totalBalance = parseMistAmount(balances[i]?.totalBalance)
+		if (totalBalance <= 0n) continue
+
+		const requiredTokenMist = estimateTokenMistNeeded(
+			requiredSuiMist,
+			pool.suiPerToken,
+			pool.decimals,
+		)
+		if (requiredTokenMist <= 0n || totalBalance < requiredTokenMist) continue
+
+		const selected = await collectCoinObjectIdsForAmount(
+			client,
+			sender,
+			pool.coinType,
+			requiredTokenMist,
+		).catch(() => ({ coinObjectIds: [] as string[], total: 0n }))
+		if (selected.total < requiredTokenMist || selected.coinObjectIds.length === 0) continue
+
+		const rank = stableSymbolRank(pool.name)
+		candidates.push({
+			sourceCoinType: pool.coinType,
+			coinObjectIds: selected.coinObjectIds,
+			isUsdc: pool.coinType === USDC_COIN_TYPE,
+			isStable: isStableSymbol(pool.name),
+			stableRank: rank,
+			isDirect: !!pool.isDirect,
+		})
+	}
+	if (!candidates.length) return null
+
+	candidates.sort((a, b) => {
+		if (a.isUsdc && !b.isUsdc) return -1
+		if (!a.isUsdc && b.isUsdc) return 1
+		if (a.isStable && !b.isStable) return -1
+		if (!a.isStable && b.isStable) return 1
+		if (a.stableRank !== b.stableRank) return a.stableRank - b.stableRank
+		if (a.isDirect && !b.isDirect) return -1
+		if (!a.isDirect && b.isDirect) return 1
+		return 0
+	})
+
+	return {
+		sourceCoinType: candidates[0].sourceCoinType,
+		coinObjectIds: candidates[0].coinObjectIds,
+	}
+}
+
+export async function handleBuildRegisterTx(request: Request, env: Env): Promise<Response> {
+	if (request.method === 'OPTIONS') {
+		return new Response(null, { headers: CORS_HEADERS })
+	}
+	if (request.method !== 'POST') {
+		return jsonResponse({ error: 'Method not allowed' }, 405, CORS_HEADERS)
+	}
+
+	let body: {
+		domain?: string
+		years?: number
+		sender?: string
+		referrer?: string
+		waapReferral?: string
+		wantsPrimary?: boolean
+		paymentMode?: 'auto' | 'coin' | 'sui'
+		paymentMethod?: 'coin' | 'ns'
+		sourceCoinType?: string
+		coinObjectIds?: string[]
+	}
+	try {
+		body = (await request.json()) as typeof body
+	} catch {
+		return jsonResponse({ error: 'Invalid JSON body' }, 400, CORS_HEADERS)
+	}
+
+	const domain =
+		typeof body.domain === 'string'
+			? body.domain
+					.trim()
+					.toLowerCase()
+					.replace(/\.sui$/i, '')
+			: ''
+	const years =
+		typeof body.years === 'number' && Number.isFinite(body.years)
+			? Math.max(1, Math.min(5, Math.floor(body.years)))
+			: 1
+	const sender = typeof body.sender === 'string' ? body.sender.trim() : ''
+	const referrer =
+		typeof body.referrer === 'string' && /^0x[0-9a-fA-F]{64}$/.test(body.referrer)
+			? body.referrer
+			: null
+	const waapReferral =
+		typeof body.waapReferral === 'string' && /^0x[0-9a-fA-F]{64}$/.test(body.waapReferral)
+			? body.waapReferral
+			: null
+	const wantsPrimary = body.wantsPrimary === true
+	const paymentMode =
+		body.paymentMode === 'coin' || body.paymentMode === 'sui' ? body.paymentMode : 'auto'
+	const paymentMethod = body.paymentMethod === 'coin' ? 'coin' : 'ns'
+	const sourceCoinType = typeof body.sourceCoinType === 'string' ? body.sourceCoinType.trim() : ''
+	const coinObjectIds = Array.isArray(body.coinObjectIds)
+		? body.coinObjectIds.filter(
+				(id): id is string => typeof id === 'string' && /^0x[0-9a-fA-F]+$/.test(id),
+			)
+		: []
+
+	if (!domain || domain.length < 3) {
+		return jsonResponse({ error: 'Invalid domain (minimum 3 characters)' }, 400, CORS_HEADERS)
+	}
+	if (!sender || !/^0x[0-9a-fA-F]{64}$/.test(sender)) {
+		return jsonResponse({ error: 'Invalid sender address' }, 400, CORS_HEADERS)
+	}
+
+	const fullDomain = `${domain}.sui`
+
+	try {
+		let tx: Transaction | null = null
+		let method: 'ns-swap' | 'sui-direct' | 'coin-swap' | null = null
+		let breakdownInfo: Record<string, unknown> = {}
+		let selectedPaymentMethod: 'coin' | 'ns' =
+			paymentMode === 'coin' ? 'coin' : paymentMode === 'sui' ? 'ns' : paymentMethod
+		let selectedSourceCoinType = sourceCoinType
+		let selectedCoinObjectIds = coinObjectIds
+
+		let feePricing: { savingsMist: bigint } | null = null
+		let extraSuiForFeesMist = 0n
+		if (referrer || waapReferral) {
+			try {
+				feePricing = await calculateRegistrationPrice({ domain: fullDomain, years, env })
+				if (feePricing?.savingsMist > 0n) {
+					if (referrer) extraSuiForFeesMist += (feePricing.savingsMist * 10n) / 100n
+					if (waapReferral) extraSuiForFeesMist += (feePricing.savingsMist * 5n) / 100n
+				}
+			} catch {
+				// Ignore pricing errors; fees will be skipped if pricing unavailable
+			}
+		}
+
+		if (selectedPaymentMethod !== 'coin' && paymentMode === 'auto') {
+			try {
+				const coinPayment = await resolveCoinPayment(env, sender, fullDomain, years)
+				if (coinPayment) {
+					selectedPaymentMethod = 'coin'
+					selectedSourceCoinType = coinPayment.sourceCoinType
+					selectedCoinObjectIds = coinPayment.coinObjectIds
+				}
+			} catch {
+				// Fall back to NS/SUI paths when automatic coin payment resolution is unavailable.
+			}
+		}
+
+		if (selectedPaymentMethod === 'coin') {
+			if (
+				paymentMode === 'coin' &&
+				selectedSourceCoinType &&
+				selectedSourceCoinType !== USDC_COIN_TYPE
+			) {
+				return jsonResponse(
+					{
+						error:
+							'USD mode currently supports USDC only. Click the SUI price to build a SUI transaction.',
+					},
+					400,
+					CORS_HEADERS,
+				)
+			}
+			if (paymentMode === 'coin') {
+				try {
+					const freshUsdcPayment = await resolveCoinPayment(
+						env,
+						sender,
+						fullDomain,
+						years,
+						true,
+						true,
+					)
+					if (freshUsdcPayment) {
+						selectedSourceCoinType = freshUsdcPayment.sourceCoinType
+						selectedCoinObjectIds = freshUsdcPayment.coinObjectIds
+					}
+				} catch {}
+			}
+			if (!selectedSourceCoinType || selectedCoinObjectIds.length === 0) {
+				try {
+					const coinPayment = await resolveCoinPayment(
+						env,
+						sender,
+						fullDomain,
+						years,
+						true,
+						paymentMode === 'coin',
+					)
+					if (coinPayment) {
+						selectedSourceCoinType = coinPayment.sourceCoinType
+						selectedCoinObjectIds = coinPayment.coinObjectIds
+					}
+				} catch {}
+			}
+			if (!selectedSourceCoinType || selectedCoinObjectIds.length === 0) {
+				return jsonResponse(
+					{
+						error:
+							paymentMode === 'coin'
+								? 'No usable USDC balance was found for this wallet. Click the SUI price to build a SUI transaction.'
+								: 'paymentMethod "coin" requires sourceCoinType and coinObjectIds',
+					},
+					400,
+					CORS_HEADERS,
+				)
+			}
+			try {
+				const swapResult = await buildMultiCoinRegisterTx(
+					{
+						domain: fullDomain,
+						years,
+						senderAddress: sender,
+						sourceCoinType: selectedSourceCoinType,
+						coinObjectIds: selectedCoinObjectIds,
+						extraSuiForFeesMist: extraSuiForFeesMist > 0n ? extraSuiForFeesMist : undefined,
+					},
+					env,
+				)
+				tx = swapResult.tx
+				method = 'coin-swap'
+				breakdownInfo = {
+					suiInputMist: String(swapResult.breakdown.suiInputMist),
+					nsOutputEstimate: String(swapResult.breakdown.nsOutputEstimate),
+					registrationCostNsMist: String(swapResult.breakdown.registrationCostNsMist),
+					slippageBps: swapResult.breakdown.slippageBps,
+					source: swapResult.breakdown.source,
+					priceImpactBps: swapResult.breakdown.priceImpactBps,
+					sourceCoinType: swapResult.breakdown.sourceCoinType,
+					sourceTokensNeeded: swapResult.breakdown.sourceTokensNeeded,
+				}
+			} catch (coinBuildError) {
+				const message =
+					coinBuildError instanceof Error && coinBuildError.message
+						? coinBuildError.message
+						: 'Failed to build coin-swap registration transaction'
+				if (paymentMode === 'coin') {
+					return jsonResponse({ error: `USD payment build failed: ${message}` }, 400, CORS_HEADERS)
+				}
+				selectedPaymentMethod = 'ns'
+			}
+		}
+
+		if (selectedPaymentMethod !== 'coin') {
+			try {
+				const swapResult = await buildSwapAndRegisterTx(
+					{ domain: fullDomain, years, senderAddress: sender },
+					env,
+				)
+				tx = swapResult.tx
+				method = 'ns-swap'
+				breakdownInfo = {
+					suiInputMist: String(swapResult.breakdown.suiInputMist),
+					nsOutputEstimate: String(swapResult.breakdown.nsOutputEstimate),
+					registrationCostNsMist: String(swapResult.breakdown.registrationCostNsMist),
+					slippageBps: swapResult.breakdown.slippageBps,
+					source: swapResult.breakdown.source,
+				}
+			} catch {
+				const coinFallback = await resolveCoinPayment(env, sender, fullDomain, years, true).catch(
+					() => null,
+				)
+				if (coinFallback) {
+					try {
+						const coinResult = await buildMultiCoinRegisterTx(
+							{
+								domain: fullDomain,
+								years,
+								senderAddress: sender,
+								sourceCoinType: coinFallback.sourceCoinType,
+								coinObjectIds: coinFallback.coinObjectIds,
+								extraSuiForFeesMist: extraSuiForFeesMist > 0n ? extraSuiForFeesMist : undefined,
+							},
+							env,
+						)
+						tx = coinResult.tx
+						method = 'coin-swap'
+						breakdownInfo = {
+							suiInputMist: String(coinResult.breakdown.suiInputMist),
+							nsOutputEstimate: String(coinResult.breakdown.nsOutputEstimate),
+							registrationCostNsMist: String(coinResult.breakdown.registrationCostNsMist),
+							slippageBps: coinResult.breakdown.slippageBps,
+							source: coinResult.breakdown.source,
+							priceImpactBps: coinResult.breakdown.priceImpactBps,
+							sourceCoinType: coinResult.breakdown.sourceCoinType,
+							sourceTokensNeeded: coinResult.breakdown.sourceTokensNeeded,
+						}
+					} catch {
+						tx = await buildSuiRegisterTx({ domain: fullDomain, years, senderAddress: sender }, env)
+						method = 'sui-direct'
+					}
+				} else {
+					tx = await buildSuiRegisterTx({ domain: fullDomain, years, senderAddress: sender }, env)
+					method = 'sui-direct'
+				}
+			}
+		}
+
+		if (!tx || !method) {
+			throw new Error('Unable to prepare registration transaction')
+		}
+		const buildClient = await getRpcClientWithFallback(env, sender)
+
+		if (wantsPrimary) {
+			const network = env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+			const suinsClient = new SuinsClient({ client: buildClient as never, network })
+			const suinsTx = new SuinsTransaction(suinsClient, tx)
+			suinsTx.setDefault(fullDomain)
+		}
+
+		const GAS_BUDGET_MIST = 100_000_000n
+		let totalSuiNeededMist = GAS_BUDGET_MIST
+		if (feePricing && feePricing.savingsMist > 0n) {
+			if (referrer) {
+				const refFeeMist = (feePricing.savingsMist * 10n) / 100n
+				if (refFeeMist > 0n) {
+					totalSuiNeededMist += refFeeMist
+					const [refCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(refFeeMist)])
+					tx.transferObjects([refCoin], referrer)
+				}
+			}
+			if (waapReferral) {
+				const waapFeeMist = (feePricing.savingsMist * 5n) / 100n
+				if (waapFeeMist > 0n) {
+					totalSuiNeededMist += waapFeeMist
+					const [waapCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(waapFeeMist)])
+					tx.transferObjects([waapCoin], waapReferral)
+				}
+			}
+		}
+
+		let txToBuild = tx
+		if (method === 'coin-swap') {
+			const suiBal = await buildClient.getBalance({ owner: sender, coinType: SUI_COIN_TYPE })
+			const availSuiMist = parseMistAmount(suiBal?.totalBalance)
+			const MIN_COIN_SWAP_GAS_MIST = 20_000_000n
+			if (availSuiMist < GAS_BUDGET_MIST) {
+				if (availSuiMist < MIN_COIN_SWAP_GAS_MIST) {
+					throw new Error(
+						'Insufficient SUI for gas. Send at least 0.02 SUI to this wallet, or use a wallet with SUI.',
+					)
+				}
+				tx.setGasBudget(Number(availSuiMist))
+			}
+		} else {
+			txToBuild = await prependGasSwapIfNeeded(tx, buildClient, sender, totalSuiNeededMist, env)
+		}
+		const txBytes = await txToBuild.build({ client: buildClient })
+
+		const txBytesBase64 = uint8ArrayToBase64(txBytes)
+
+		return jsonResponse(
+			{
+				txBytes: txBytesBase64,
+				method,
+				breakdown: breakdownInfo,
+				payment: {
+					mode: paymentMode,
+					method: selectedPaymentMethod,
+					sourceCoinType:
+						selectedSourceCoinType ||
+						(typeof (breakdownInfo as { sourceCoinType?: unknown }).sourceCoinType === 'string'
+							? String((breakdownInfo as { sourceCoinType?: unknown }).sourceCoinType)
+							: undefined),
+				},
+			},
+			200,
+			CORS_HEADERS,
+		)
+	} catch (error) {
+		const message =
+			error instanceof Error && error.message
+				? error.message
+				: 'Failed to build registration transaction'
+		return jsonResponse({ error: message }, 400, CORS_HEADERS)
+	}
+}
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+	let binary = ''
+	for (let i = 0; i < bytes.length; i++) {
+		binary += String.fromCharCode(bytes[i])
+	}
+	return btoa(binary)
 }
 
 export async function handleRegistrationSubmission(request: Request, env: Env): Promise<Response> {

@@ -1,0 +1,21 @@
+{
+	"name": "x402-multichain-verifier",
+	"version": "0.1.0",
+	"description": "x402 multi-chain payment verifier for EVM and SVM networks",
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev",
+		"deploy": "npx wrangler deploy"
+	},
+	"dependencies": {
+		"@x402/core": "^2.3.0",
+		"@x402/evm": "latest",
+		"@x402/svm": "latest",
+		"hono": "^4.11.7"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20260116.0",
+		"typescript": "^5.9.3",
+		"wrangler": "^4.65.0"
+	}
+}

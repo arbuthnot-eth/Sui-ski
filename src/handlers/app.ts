@@ -328,7 +328,9 @@ interface SignalChannelMessage {
 const SIGNAL_CHAT_TTL = 60 * 60 * 24 * 30
 
 function normalizeSignalAddress(value: string | null | undefined): string {
-	return String(value || '').trim().toLowerCase()
+	return String(value || '')
+		.trim()
+		.toLowerCase()
 }
 
 function sanitizeSignalSlug(value: string | null | undefined): string {
@@ -523,7 +525,11 @@ async function getSignalMuteState(env: Env, serverId: string): Promise<SignalMut
 	}
 }
 
-async function setSignalMuteState(env: Env, serverId: string, state: SignalMuteState): Promise<void> {
+async function setSignalMuteState(
+	env: Env,
+	serverId: string,
+	state: SignalMuteState,
+): Promise<void> {
 	await env.CACHE.put(signalServerMutesKey(serverId), JSON.stringify(state), {
 		expirationTtl: SIGNAL_CHAT_TTL,
 	})
@@ -1059,11 +1065,11 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				serverMuted: server.isModerator ? Object.keys(muteState.server) : [],
 				channelMuted: server.isModerator
 					? Object.fromEntries(
-						Object.entries(muteState.channel).map(([channelId, muted]) => [
-							channelId,
-							Object.keys(muted),
-						]),
-					)
+							Object.entries(muteState.channel).map(([channelId, muted]) => [
+								channelId,
+								Object.keys(muted),
+							]),
+						)
 					: {},
 			},
 		})
@@ -1078,7 +1084,10 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 
 		const server = getSignalServerContext(url, sessionAddress)
 		if (!server.isModerator) {
-			return jsonResponse({ error: 'Only server moderator can add channels', code: 'FORBIDDEN' }, 403)
+			return jsonResponse(
+				{ error: 'Only server moderator can add channels', code: 'FORBIDDEN' },
+				403,
+			)
 		}
 
 		try {
@@ -1272,9 +1281,10 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 		if (mutedScope) {
 			return jsonResponse(
 				{
-					error: mutedScope === 'server'
-						? 'You are muted in this server'
-						: 'You are muted in this channel',
+					error:
+						mutedScope === 'server'
+							? 'You are muted in this server'
+							: 'You are muted in this channel',
 					code: 'MUTED',
 					scope: mutedScope,
 				},
@@ -1336,7 +1346,10 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 
 		const isSender = normalizeSignalAddress(target.sender) === sessionAddress
 		if (!server.isModerator && !isSender) {
-			return jsonResponse({ error: 'Not authorized to delete this message', code: 'FORBIDDEN' }, 403)
+			return jsonResponse(
+				{ error: 'Not authorized to delete this message', code: 'FORBIDDEN' },
+				403,
+			)
 		}
 
 		const nextMessages = messages.filter((message) => message.id !== messageId)
@@ -1433,7 +1446,10 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 						useCase: 'Paid content, premium features',
 					},
 				],
-				keyServers: (env.SEAL_KEY_SERVERS || '').split(',').filter(Boolean).map((id: string) => ({ objectId: id.trim(), weight: 1 })),
+				keyServers: (env.SEAL_KEY_SERVERS || '')
+					.split(',')
+					.filter(Boolean)
+					.map((id: string) => ({ objectId: id.trim(), weight: 1 })),
 				threshold: 2,
 				approveTarget: env.SEAL_APPROVE_TARGET || null,
 				encryption: {

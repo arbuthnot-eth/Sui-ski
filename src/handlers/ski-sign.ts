@@ -57,7 +57,28 @@ function __normalizeAddress(address) {
 function __resolveSigningAccount(conn, expectedSender) {
 	if (!conn || !conn.wallet) return null;
 	var target = __normalizeAddress(expectedSender);
-	if (!target) return conn.account || null;
+	var fallbackAddress = __normalizeAddress(
+		(conn.account && conn.account.address) || conn.address || '',
+	);
+	var fallbackChains = [];
+	if (conn.account && Array.isArray(conn.account.chains)) {
+		fallbackChains = conn.account.chains.slice();
+	} else if (Array.isArray(conn.wallet.chains)) {
+		for (var ci = 0; ci < conn.wallet.chains.length; ci++) {
+			var chain = conn.wallet.chains[ci];
+			if (typeof chain === 'string' && chain.indexOf('sui:') === 0) fallbackChains.push(chain);
+		}
+	}
+	if (!fallbackChains.length) {
+		fallbackChains = ['sui:' + (SuiWalletKit.__config.network || 'mainnet')];
+	}
+	if (!target) {
+		if (conn.account) return conn.account;
+		if (fallbackAddress) {
+			return { address: fallbackAddress, chains: fallbackChains };
+		}
+		return null;
+	}
 	var walletAccounts = [];
 	try {
 		walletAccounts = Array.isArray(conn.wallet.accounts) ? conn.wallet.accounts : [];
@@ -68,6 +89,9 @@ function __resolveSigningAccount(conn, expectedSender) {
 	}
 	if (conn.account && __normalizeAddress(conn.account.address) === target) {
 		return conn.account;
+	}
+	if (fallbackAddress && fallbackAddress === target) {
+		return { address: target, chains: fallbackChains };
 	}
 	return null;
 }
@@ -188,6 +212,19 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender) {
 	}
 
 	if (!match) {
+		var history = __readWalletHistory();
+		for (var h = 0; h < history.length && !match; h++) {
+			for (var hw = 0; hw < wallets.length; hw++) {
+				if (wallets[hw] && !wallets[hw].__isPasskey && __walletNamesMatch(wallets[hw].name, history[h].walletName)) {
+					match = wallets[hw];
+					console.log('[SignBridge] Matched wallet from history:', match.name);
+					break;
+				}
+			}
+		}
+	}
+
+	if (!match) {
 		for (var p = 0; p < wallets.length; p++) {
 			if (!wallets[p] || wallets[p].__isPasskey) continue;
 			match = wallets[p];
@@ -285,6 +322,21 @@ function __bytesToBase64(bytes) {
 		parts.push(String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK, bytes.length))));
 	}
 	return btoa(parts.join(''));
+}
+
+function __base64ToBytes(base64) {
+	if (typeof base64 !== 'string') return null;
+	var cleaned = base64.trim();
+	if (!cleaned) return null;
+	if (!/^[A-Za-z0-9+/=]+$/.test(cleaned)) return null;
+	try {
+		var raw = atob(cleaned);
+		var bytes = new Uint8Array(raw.length);
+		for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+		return bytes;
+	} catch (_e) {
+		return null;
+	}
 }
 
 function __getRpcUrl() {
@@ -563,7 +615,21 @@ window.addEventListener('message', function(e) {
 
 	(async function() {
 		try {
-			var conn = await __ensureWalletConnection(preferredWalletName, expectedSender);
+			var Tx = await __getTransactionClass();
+			var parsed = txData;
+			try { parsed = JSON.parse(txData); } catch (_e) {}
+			var tx = Tx.from(parsed);
+			var transactionSender = '';
+			try {
+				var txDataObject = typeof tx.getData === 'function' ? tx.getData() : null;
+				transactionSender = __normalizeAddress(txDataObject && txDataObject.sender);
+			} catch (_e) {}
+			var resolvedSender = __normalizeAddress(expectedSender) || transactionSender;
+			if (resolvedSender && typeof tx.setSenderIfNotSet === 'function') {
+				tx.setSenderIfNotSet(resolvedSender);
+			}
+
+			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender);
 			if (!conn || !conn.wallet) throw new Error('Wallet not connected in sign bridge');
 			if (
 				preferredWalletName
@@ -571,32 +637,29 @@ window.addEventListener('message', function(e) {
 			) {
 				console.warn('[SignBridge] Wallet name mismatch: expected', preferredWalletName, 'got', conn.wallet && conn.wallet.name);
 			}
-			var signingAccount = __resolveSigningAccount(conn, expectedSender);
-			if (expectedSender && !signingAccount) {
+			var signingAccount = __resolveSigningAccount(conn, resolvedSender);
+			if (resolvedSender && !signingAccount) {
 				throw new Error('Connected wallet account does not match transaction sender');
 			}
 
-			var Tx = await __getTransactionClass();
-			var parsed = txData;
-			try { parsed = JSON.parse(txData); } catch (_e) {}
-			var tx = Tx.from(parsed);
-			if (expectedSender && typeof tx.setSenderIfNotSet === 'function') {
-				tx.setSenderIfNotSet(expectedSender);
-			}
 			var txForWallet = tx;
+			var txBytesFromInput = __base64ToBytes(typeof txData === 'string' ? txData : '');
 			var txBytesForFallback = null;
 			try {
-				txBytesForFallback = await __buildTransactionBytes(tx, expectedSender);
+				txBytesForFallback = await __buildTransactionBytes(tx, resolvedSender);
 			} catch (preBuildErr) {
 				console.warn('[SignBridge] Pre-build to bytes failed, continuing with raw tx:', preBuildErr && preBuildErr.message);
 			}
-			var signingInputs = [txForWallet];
+			var signingInputs = [];
+			if (txBytesFromInput) signingInputs.push(txBytesFromInput);
+			signingInputs.push(txForWallet);
 			if (txBytesForFallback) signingInputs.push(txBytesForFallback);
 			var requestedChain = (
 				signingAccount
 				&& Array.isArray(signingAccount.chains)
 				&& typeof signingAccount.chains[0] === 'string'
 			) ? signingAccount.chains[0] : ('sui:' + (SuiWalletKit.__config.network || 'mainnet'));
+			var isWaaP = __walletNamesMatch(conn.wallet && conn.wallet.name, 'waap');
 
 			console.log('[SignBridge] Signing transaction...');
 			var result;
@@ -605,7 +668,7 @@ window.addEventListener('message', function(e) {
 						txOptions: execOptions,
 						chain: requestedChain,
 						singleAttempt: true,
-						preferTransactionBlock: false,
+						preferTransactionBlock: isWaaP,
 					};
 					if (signingAccount) signExecOptions.account = signingAccount;
 					var signExecError = null;
@@ -620,17 +683,18 @@ window.addEventListener('message', function(e) {
 							if (!__isSigningCompatibilityError(attemptErr)) break;
 						}
 					}
-					if (!result) {
-						throw signExecError || new Error('Wallet failed to sign and execute transaction');
-					}
-				} catch (signErr) {
-					if (!__shouldFallbackToSignOnly(signErr)) throw signErr;
-					console.warn('[SignBridge] signAndExecute failed, trying sign+execute fallback:', signErr);
-					var signOptions = {
-						chain: requestedChain,
-						singleAttempt: true,
-						preferTransactionBlock: false,
-					};
+						if (!result) {
+							throw signExecError || new Error('Wallet failed to sign and execute transaction');
+						}
+					} catch (signErr) {
+						if (isWaaP) throw signErr;
+						if (!__shouldFallbackToSignOnly(signErr)) throw signErr;
+						console.warn('[SignBridge] signAndExecute failed, trying sign+execute fallback:', signErr);
+						var signOptions = {
+							chain: requestedChain,
+							singleAttempt: true,
+							preferTransactionBlock: true,
+						};
 				if (signingAccount) signOptions.account = signingAccount;
 				var signOnlyError = null;
 				for (var sj = 0; sj < signingInputs.length; sj++) {

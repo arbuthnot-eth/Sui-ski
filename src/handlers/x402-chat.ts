@@ -105,7 +105,9 @@ function diceKey(address: string): string {
 }
 
 function normalizeAddress(value: string | null | undefined): string {
-	return String(value || '').trim().toLowerCase()
+	return String(value || '')
+		.trim()
+		.toLowerCase()
 }
 
 function sanitizeSlug(value: string | null | undefined): string {
@@ -265,9 +267,7 @@ function buildSystemPrompt(context: X402ChatContext): string {
 
 	switch (context.page) {
 		case 'profile':
-			parts.push(
-				`The user is viewing the profile page for "${context.name || 'unknown'}.sui".`,
-			)
+			parts.push(`The user is viewing the profile page for "${context.name || 'unknown'}.sui".`)
 			if (context.address) {
 				parts.push(`Target address: ${context.address}`)
 			}
@@ -303,7 +303,15 @@ function buildSystemPrompt(context: X402ChatContext): string {
 
 function detectDiceIntent(message: string): boolean {
 	const lower = message.toLowerCase()
-	const patterns = ['roll dice', 'roll a die', 'dice game', 'roll the dice', 'throw dice', 'play dice', '🎲']
+	const patterns = [
+		'roll dice',
+		'roll a die',
+		'dice game',
+		'roll the dice',
+		'throw dice',
+		'play dice',
+		'🎲',
+	]
 	for (const pattern of patterns) {
 		if (lower.includes(pattern)) return true
 	}
@@ -344,7 +352,7 @@ x402ChatRoutes.post('/chat', async (c) => {
 	const message = body.message.slice(0, MAX_MESSAGE_LENGTH)
 	const context = body.context || { page: 'landing' as const }
 
-	const tab = await getCached<X402ChatTab>(tabKey(address)) || {
+	const tab = (await getCached<X402ChatTab>(tabKey(address))) || {
 		messages: 0,
 		costMist: '0',
 		settledMist: '0',
@@ -457,12 +465,11 @@ x402ChatRoutes.post('/chat', async (c) => {
 		return c.json(response)
 	}
 
-	const history = await getCached<ChatMessage[]>(historyKey(address)) || []
+	const history = (await getCached<ChatMessage[]>(historyKey(address))) || []
 	history.push({ role: 'user', content: message })
 
-	const trimmedHistory = history.length > MAX_HISTORY
-		? history.slice(history.length - MAX_HISTORY)
-		: history
+	const trimmedHistory =
+		history.length > MAX_HISTORY ? history.slice(history.length - MAX_HISTORY) : history
 
 	const apiUrl = env.LLM_API_URL || 'https://api.anthropic.com/v1/messages'
 	const systemPrompt = buildSystemPrompt(context)
@@ -489,13 +496,10 @@ x402ChatRoutes.post('/chat', async (c) => {
 
 		if (!llmResponse.ok) {
 			const errorText = await llmResponse.text()
-			return c.json(
-				{ error: 'AI request failed', code: 'LLM_ERROR', details: errorText },
-				502,
-			)
+			return c.json({ error: 'AI request failed', code: 'LLM_ERROR', details: errorText }, 502)
 		}
 
-		const result = await llmResponse.json() as {
+		const result = (await llmResponse.json()) as {
 			content?: Array<{ type: string; text: string }>
 		}
 		aiReply = result.content?.[0]?.text || 'I had trouble generating a response. Try again?'
@@ -690,11 +694,11 @@ x402ChatRoutes.get('/channels', async (c) => {
 			serverMuted: server.isModerator ? Object.keys(muteState.server) : [],
 			channelMuted: server.isModerator
 				? Object.fromEntries(
-					Object.entries(muteState.channel).map(([channelId, muted]) => [
-						channelId,
-						Object.keys(muted),
-					]),
-				)
+						Object.entries(muteState.channel).map(([channelId, muted]) => [
+							channelId,
+							Object.keys(muted),
+						]),
+					)
 				: {},
 		},
 	})
@@ -847,7 +851,7 @@ x402ChatRoutes.get('/channels/:id/messages', async (c) => {
 	const server = getServerContext(c.req.url, session.address)
 	const channelId = c.req.param('id')
 	const key = channelKey(`${server.id}:${channelId}`)
-	const messages = await getCached<ChannelMessage[]>(key) || []
+	const messages = (await getCached<ChannelMessage[]>(key)) || []
 	const muteState = await loadMuteState(server.id)
 	const requester = normalizeAddress(session.address)
 	const mutedScope = getMuteScope(muteState, channelId, requester)
@@ -879,7 +883,7 @@ x402ChatRoutes.delete('/channels/:id/messages/:messageId', async (c) => {
 	const channelId = sanitizeSlug(c.req.param('id'))
 	const messageId = c.req.param('messageId')
 	const key = channelKey(`${server.id}:${channelId}`)
-	const messages = await getCached<ChannelMessage[]>(key) || []
+	const messages = (await getCached<ChannelMessage[]>(key)) || []
 	const targetMessage = messages.find((message) => message.id === messageId)
 	if (!targetMessage) return c.json({ error: 'Message not found', code: 'NOT_FOUND' }, 404)
 
@@ -909,9 +913,10 @@ x402ChatRoutes.post('/channels/:id/messages', async (c) => {
 	if (mutedScope) {
 		return c.json(
 			{
-				error: mutedScope === 'server'
-					? 'You are muted in this server'
-					: 'You are muted in this channel',
+				error:
+					mutedScope === 'server'
+						? 'You are muted in this server'
+						: 'You are muted in this channel',
 				code: 'MUTED',
 				scope: mutedScope,
 			},
@@ -948,12 +953,13 @@ x402ChatRoutes.post('/channels/:id/messages', async (c) => {
 	}
 
 	const key = channelKey(`${server.id}:${channelId}`)
-	const messages = await getCached<ChannelMessage[]>(key) || []
+	const messages = (await getCached<ChannelMessage[]>(key)) || []
 	messages.push(msg)
 
-	const trimmed = messages.length > MAX_CHANNEL_MESSAGES
-		? messages.slice(messages.length - MAX_CHANNEL_MESSAGES)
-		: messages
+	const trimmed =
+		messages.length > MAX_CHANNEL_MESSAGES
+			? messages.slice(messages.length - MAX_CHANNEL_MESSAGES)
+			: messages
 
 	await setCache(key, trimmed, TAB_TTL_SECONDS)
 

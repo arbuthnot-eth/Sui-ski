@@ -1,0 +1,11 @@
+name = "x402-multichain-verifier"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+account_id = "6a10ee79fe9d21b5e2c3155ce8690742"
+
+[vars]
+BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+BASE_NETWORK = "eip155:8453"
+SOL_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+SOL_NETWORK = "solana:mainnet"

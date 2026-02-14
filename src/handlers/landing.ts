@@ -2232,7 +2232,12 @@ const EXPIRING_LISTINGS_PAGE_SIZE = 200
 const EXPIRING_LISTINGS_MAX_PAGES = 25
 const MS_PER_DAY = 86_400_000
 
-async function handleExpiringListings(env: Env, offset: number, limit: number, debug = false): Promise<Response> {
+async function handleExpiringListings(
+	env: Env,
+	offset: number,
+	limit: number,
+	debug = false,
+): Promise<Response> {
 	const corsHeaders = {
 		'Access-Control-Allow-Origin': '*',
 		'Content-Type': 'application/json',
@@ -2390,7 +2395,7 @@ async function handleExpiringListings(env: Env, offset: number, limit: number, d
 
 			const daysUntilExpiry = (expirationMs - now) / MS_PER_DAY
 			const expired = expirationMs < now
-			const inGracePeriod = expired && (expirationMs + gracePeriodMs) > now
+			const inGracePeriod = expired && expirationMs + gracePeriodMs > now
 			const name = listing.name.endsWith('.sui') ? listing.name : `${listing.name}.sui`
 			const tradeportUrl = `https://www.tradeport.xyz/sui/collection/suins/${listing.tokenId}`
 
@@ -3603,6 +3608,197 @@ ${socialMeta}
 			transform: translateY(-1px);
 		}
 
+		.reg-modal-overlay {
+			position: fixed;
+			inset: 0;
+			z-index: 10100;
+			background: rgba(0, 0, 0, 0.7);
+			backdrop-filter: blur(6px);
+			-webkit-backdrop-filter: blur(6px);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			animation: regModalFadeIn 0.2s ease;
+		}
+		@keyframes regModalFadeIn {
+			from { opacity: 0; }
+			to { opacity: 1; }
+		}
+		.reg-modal {
+			width: 380px;
+			max-width: calc(100vw - 32px);
+			background: rgba(15, 15, 22, 0.98);
+			backdrop-filter: blur(24px);
+			-webkit-backdrop-filter: blur(24px);
+			border: 1px solid rgba(130, 255, 190, 0.18);
+			border-radius: 16px;
+			box-shadow: 0 18px 44px rgba(2, 6, 23, 0.62), 0 0 30px rgba(130, 255, 190, 0.06);
+			animation: regModalSlideIn 0.2s ease;
+			overflow: hidden;
+		}
+		@keyframes regModalSlideIn {
+			from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+			to { opacity: 1; transform: translateY(0) scale(1); }
+		}
+		.reg-modal-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 16px 18px 0;
+		}
+		.reg-modal-title {
+			font-size: 1.1rem;
+			font-weight: 700;
+			color: #fff;
+		}
+		.reg-modal-title .reg-modal-tld {
+			color: var(--ski-green);
+		}
+		.reg-modal-close {
+			width: 28px;
+			height: 28px;
+			border-radius: 6px;
+			border: none;
+			background: transparent;
+			color: #71717a;
+			font-size: 1.3rem;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: all 0.15s ease;
+		}
+		.reg-modal-close:hover {
+			background: rgba(255, 255, 255, 0.06);
+			color: #e4e4e7;
+		}
+		.reg-modal-body {
+			padding: 18px;
+			display: flex;
+			flex-direction: column;
+			gap: 14px;
+		}
+		.reg-modal-price-row {
+			display: flex;
+			align-items: baseline;
+			gap: 8px;
+		}
+		.reg-modal-price {
+			font-size: 1.5rem;
+			font-weight: 800;
+			color: #fff;
+		}
+		.reg-modal-price .reg-price-sui-icon {
+			width: 14px;
+			height: 18px;
+			vertical-align: -2px;
+			margin-left: 4px;
+		}
+		.reg-modal-price-usd {
+			font-size: 0.85rem;
+			color: #71717a;
+		}
+		.reg-modal-years-row {
+			display: flex;
+			align-items: center;
+			gap: 0;
+			background: rgba(255, 255, 255, 0.04);
+			border: 1px solid rgba(130, 255, 190, 0.12);
+			border-radius: 10px;
+			overflow: hidden;
+		}
+		.reg-modal-year-btn {
+			width: 44px;
+			height: 40px;
+			border: none;
+			background: transparent;
+			color: var(--ski-green);
+			font-size: 1.1rem;
+			font-weight: 700;
+			cursor: pointer;
+			transition: background 0.15s;
+		}
+		.reg-modal-year-btn:hover {
+			background: rgba(130, 255, 190, 0.08);
+		}
+		.reg-modal-year-btn:disabled {
+			opacity: 0.3;
+			cursor: default;
+		}
+		.reg-modal-year-display {
+			flex: 1;
+			text-align: center;
+			font-size: 1rem;
+			font-weight: 700;
+			color: #fff;
+		}
+		.reg-modal-year-unit {
+			color: #71717a;
+			margin-left: 3px;
+			font-weight: 500;
+		}
+		.reg-modal-primary-toggle {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 10px 14px;
+			border-radius: 10px;
+			border: 1px solid rgba(130, 255, 190, 0.1);
+			background: transparent;
+			color: #71717a;
+			font-size: 0.88rem;
+			font-weight: 500;
+			cursor: pointer;
+			transition: all 0.15s;
+		}
+		.reg-modal-primary-toggle:hover {
+			border-color: rgba(130, 255, 190, 0.25);
+			color: #a1a1aa;
+		}
+		.reg-modal-primary-toggle.active {
+			border-color: rgba(130, 255, 190, 0.35);
+			color: var(--ski-green);
+		}
+		.reg-modal-star {
+			font-size: 1.1rem;
+		}
+		.reg-modal-register-btn {
+			width: 100%;
+			padding: 12px 0;
+			border-radius: 10px;
+			border: none;
+			background: var(--ski-green);
+			color: #010201;
+			font-size: 0.95rem;
+			font-weight: 700;
+			cursor: pointer;
+			transition: all 0.15s;
+		}
+		.reg-modal-register-btn:hover {
+			filter: brightness(1.1);
+		}
+		.reg-modal-register-btn:disabled {
+			opacity: 0.5;
+			cursor: default;
+		}
+		.reg-modal-status {
+			font-size: 0.85rem;
+			line-height: 1.4;
+			min-height: 0;
+			transition: all 0.2s;
+		}
+		.reg-modal-status:empty {
+			display: none;
+		}
+		.reg-modal-status.info { color: #93c5fd; }
+		.reg-modal-status.ok { color: var(--ski-green); }
+		.reg-modal-status.err { color: #fca5a5; }
+		.reg-modal-status a {
+			color: inherit;
+			text-decoration: underline;
+			text-underline-offset: 2px;
+		}
+
 		.swap-panel {
 			position: fixed;
 			top: calc(68px + env(safe-area-inset-top));
@@ -3844,6 +4040,29 @@ ${socialMeta}
 	</div>
 	<div id="wk-modal"></div>
 
+	<div class="reg-modal-overlay" id="reg-modal-overlay" style="display:none;">
+		<div class="reg-modal">
+			<div class="reg-modal-header">
+				<span class="reg-modal-title" id="reg-modal-title"></span>
+				<button class="reg-modal-close" id="reg-modal-close" aria-label="Close">&times;</button>
+			</div>
+			<div class="reg-modal-body">
+				<div class="reg-modal-price-row">
+					<span class="reg-modal-price" id="reg-modal-price">--</span>
+					<span class="reg-modal-price-usd" id="reg-modal-price-usd"></span>
+				</div>
+				<div class="reg-modal-years-row">
+					<button type="button" class="reg-modal-year-btn" id="reg-modal-years-dec" aria-label="Decrease">&minus;</button>
+					<div class="reg-modal-year-display"><span id="reg-modal-years-value">1</span><span class="reg-modal-year-unit">yr</span></div>
+					<button type="button" class="reg-modal-year-btn" id="reg-modal-years-inc" aria-label="Increase">+</button>
+				</div>
+				<button type="button" class="reg-modal-primary-toggle" id="reg-modal-primary-toggle" aria-pressed="false" title="Set as primary name"><span class="reg-modal-star">&#9734;</span> Set as primary name</button>
+				<button class="reg-modal-register-btn" id="reg-modal-register-btn">Register</button>
+				<div class="reg-modal-status" id="reg-modal-status"></div>
+			</div>
+		</div>
+	</div>
+
 	<div class="swap-panel" id="swap-panel" style="display:none;">
 		<div class="swap-panel-header">
 			<div class="swap-panel-tabs">
@@ -3940,7 +4159,7 @@ ${socialMeta}
 	</div>
 
 		<script type="module">
-				let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, Transaction;
+				let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction;
 				{
 					const pickExport = (mod, name) => {
 						if (!mod || typeof mod !== 'object') return undefined;
@@ -3959,10 +4178,16 @@ ${socialMeta}
 						timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
 						timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
 						timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
+						timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
 					]);
 						if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
 						if (results[1].status === 'fulfilled') ({ getJsonRpcFullnodeUrl, SuiJsonRpcClient } = results[1].value);
 						if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value);
+						if (results[3].status === 'fulfilled') {
+							const suinsModule = results[3].value;
+							SuinsClient = pickExport(suinsModule, 'SuinsClient');
+							SuinsTransaction = pickExport(suinsModule, 'SuinsTransaction');
+						}
 						const failed = results.filter(r => r.status === 'rejected');
 						if (failed.length > 0) console.warn('SDK modules failed:', failed.map(r => r.reason?.message));
 					}
@@ -4081,6 +4306,248 @@ ${socialMeta}
 				var txBytes = await tx.build({ client: suiClient });
 				return SuiWalletKit.signAndExecuteFromBytes(txBytes);
 			}
+
+			const WAAP_REFERRAL_ADDRESS = '0x53f1e3d5f1e3f5aefa47fd3d5a47c9b8cc87e26a2c7bf39e26c870ded4eca7df';
+			const REG_MODAL_MIN_YEARS = 1;
+			const REG_MODAL_MAX_YEARS = 5;
+			let regModalName = '';
+			let regModalYears = 1;
+			let regModalWantsPrimary = true;
+			let regModalPricingData = null;
+			let regModalBusy = false;
+
+			function regModalShowStatus(message, type, html) {
+				var el = document.getElementById('reg-modal-status');
+				if (!el) return;
+				el.className = 'reg-modal-status ' + (type || 'info');
+				if (html) el.innerHTML = message;
+				else el.textContent = message;
+			}
+
+			function regModalHideStatus() {
+				var el = document.getElementById('reg-modal-status');
+				if (!el) return;
+				el.className = 'reg-modal-status';
+				el.textContent = '';
+			}
+
+			function regModalUpdatePrice() {
+				var priceEl = document.getElementById('reg-modal-price');
+				var usdEl = document.getElementById('reg-modal-price-usd');
+				if (!regModalPricingData) {
+					if (priceEl) priceEl.textContent = '--';
+					if (usdEl) usdEl.textContent = '';
+					return;
+				}
+				var mist = Number(regModalPricingData.discountedSuiMist || regModalPricingData.directSuiMist || 0);
+				var sui = mist / 1e9;
+				var suiIcon = '<svg class="reg-price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg>';
+				if (Number.isFinite(sui) && sui > 0) {
+					priceEl.innerHTML = sui.toFixed(1) + ' ' + suiIcon;
+				} else {
+					priceEl.textContent = '--';
+				}
+				var usd = Number(regModalPricingData.breakdown && regModalPricingData.breakdown.discountedPriceUsd || 0);
+				if (usdEl) {
+					usdEl.textContent = Number.isFinite(usd) && usd > 0 ? '\\u2248 $' + Math.round(usd) : '';
+				}
+			}
+
+			async function regModalFetchPricing() {
+				try {
+					var res = await fetch('/api/pricing?domain=' + encodeURIComponent(regModalName) + '&years=' + regModalYears);
+					if (!res.ok) return;
+					regModalPricingData = await res.json();
+					regModalUpdatePrice();
+				} catch {}
+			}
+
+			function regModalUpdateYearsUi() {
+				var valEl = document.getElementById('reg-modal-years-value');
+				var decBtn = document.getElementById('reg-modal-years-dec');
+				var incBtn = document.getElementById('reg-modal-years-inc');
+				if (valEl) valEl.textContent = String(regModalYears);
+				if (decBtn) decBtn.disabled = regModalYears <= REG_MODAL_MIN_YEARS;
+				if (incBtn) incBtn.disabled = regModalYears >= REG_MODAL_MAX_YEARS;
+			}
+
+			function regModalUpdatePrimaryUi() {
+				var toggle = document.getElementById('reg-modal-primary-toggle');
+				if (!toggle) return;
+				toggle.classList.toggle('active', regModalWantsPrimary);
+				toggle.setAttribute('aria-pressed', regModalWantsPrimary ? 'true' : 'false');
+				var star = toggle.querySelector('.reg-modal-star');
+				if (star) star.innerHTML = regModalWantsPrimary ? '\\u2605' : '\\u2606';
+			}
+
+			function openRegisterModal(name) {
+				var overlay = document.getElementById('reg-modal-overlay');
+				if (!overlay) return;
+				regModalName = name;
+				regModalYears = 1;
+				regModalWantsPrimary = true;
+				regModalPricingData = null;
+				regModalBusy = false;
+
+				var titleEl = document.getElementById('reg-modal-title');
+				if (titleEl) titleEl.innerHTML = name + '<span class="reg-modal-tld">.sui</span>';
+
+				var regBtn = document.getElementById('reg-modal-register-btn');
+				if (regBtn) { regBtn.disabled = false; regBtn.textContent = 'Register'; }
+
+				regModalHideStatus();
+				regModalUpdateYearsUi();
+				regModalUpdatePrimaryUi();
+				regModalUpdatePrice();
+				overlay.style.display = '';
+				regModalFetchPricing();
+
+				var address = getConnectedAddress();
+				if (!address) {
+					regModalShowStatus('Connect your wallet first', 'info');
+				}
+			}
+
+			function closeRegisterModal() {
+				var overlay = document.getElementById('reg-modal-overlay');
+				if (overlay) overlay.style.display = 'none';
+				regModalBusy = false;
+			}
+
+			async function registerNameInline() {
+				if (regModalBusy) return;
+				var address = getConnectedAddress();
+				if (!address) {
+					regModalShowStatus('Connect your wallet first', 'info');
+					if (typeof SuiWalletKit !== 'undefined' && typeof SuiWalletKit.openModal === 'function') {
+						SuiWalletKit.openModal();
+					}
+					return;
+				}
+				regModalBusy = true;
+				var regBtn = document.getElementById('reg-modal-register-btn');
+				if (regBtn) regBtn.disabled = true;
+				regModalHideStatus();
+				regModalShowStatus('Building transaction...', 'info');
+
+				try {
+					var buildRes = await fetch('/api/register/build-tx', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							domain: regModalName,
+							years: regModalYears,
+							sender: address,
+							waapReferral: WAAP_REFERRAL_ADDRESS,
+							wantsPrimary: regModalWantsPrimary,
+						}),
+					});
+					if (!buildRes.ok) {
+						var errBody = await buildRes.json().catch(function() { return {}; });
+						throw new Error(errBody.error || 'Failed to build transaction');
+					}
+					var buildData = await buildRes.json();
+					var txBytesBase64 = buildData.txBytes;
+
+					var raw = atob(txBytesBase64);
+					var txBytes = new Uint8Array(raw.length);
+					for (var i = 0; i < raw.length; i++) txBytes[i] = raw.charCodeAt(i);
+
+					regModalShowStatus('Approve in wallet...', 'info');
+					var result = await SuiWalletKit.signAndExecute(txBytes, { txOptions: { showEffects: true }, forceSignBridge: true });
+					var digest = result && result.digest ? String(result.digest) : '';
+
+					var effectsStatus = result && result.effects && result.effects.status ? result.effects.status : null;
+					if (effectsStatus && effectsStatus.status === 'failure') {
+						throw new Error(effectsStatus.error || 'Transaction failed on-chain');
+					}
+
+					var createdNft = false;
+					if (result && result.effects && result.effects.created) {
+						for (var ci = 0; ci < result.effects.created.length; ci++) {
+							var ref = result.effects.created[ci].reference || result.effects.created[ci];
+							if (ref && ref.objectId) { createdNft = true; break; }
+						}
+					}
+					if (!createdNft && digest && SuiJsonRpcClient) {
+						regModalShowStatus('Verifying registration...', 'info');
+						try {
+							var rpcClient = new SuiJsonRpcClient({ url: RPC_URL });
+							var txCheck = await rpcClient.getTransactionBlock({ digest: digest, options: { showEffects: true, showObjectChanges: true } });
+							var checkStatus = txCheck && txCheck.effects && txCheck.effects.status ? txCheck.effects.status : null;
+							if (checkStatus && checkStatus.status === 'failure') {
+								throw new Error(checkStatus.error || 'Transaction failed on-chain');
+							}
+							if (txCheck && txCheck.objectChanges) {
+								for (var oci = 0; oci < txCheck.objectChanges.length; oci++) {
+									if (txCheck.objectChanges[oci].type === 'created') { createdNft = true; break; }
+								}
+							}
+						} catch (verifyErr) {
+							if (verifyErr && verifyErr.message && verifyErr.message.indexOf('failed on-chain') !== -1) throw verifyErr;
+						}
+					}
+
+					if (!createdNft) {
+						throw new Error('Registration transaction did not create a SuiNS NFT. Check your balance and try again.');
+					}
+
+					var links = digest
+						? '<a href="https://suiscan.xyz/' + NETWORK + '/tx/' + encodeURIComponent(digest) + '" target="_blank" rel="noopener noreferrer">Suiscan</a> \\u00b7 ' +
+						  '<a href="https://suiexplorer.com/txblock/' + encodeURIComponent(digest) + '?network=' + NETWORK + '" target="_blank" rel="noopener noreferrer">Explorer</a>'
+						: '';
+					regModalShowStatus(
+						'<strong>Registered!</strong> <a href="https://' + regModalName + '.sui.ski">Open profile</a>' +
+						(digest ? ' \\u00b7 ' + links : ''),
+						'ok',
+						true,
+					);
+					if (regModalWantsPrimary && typeof SuiWalletKit.setPrimaryName === 'function') {
+						SuiWalletKit.setPrimaryName(regModalName);
+					}
+					if (regBtn) { regBtn.textContent = 'Registered'; regBtn.disabled = true; }
+				} catch (error) {
+					var msg = error && error.message ? error.message : 'Registration failed';
+					regModalShowStatus(msg, 'err');
+					if (regBtn) regBtn.disabled = false;
+				}
+				regModalBusy = false;
+			}
+
+			(function initRegModal() {
+				var overlay = document.getElementById('reg-modal-overlay');
+				var closeBtn = document.getElementById('reg-modal-close');
+				var decBtn = document.getElementById('reg-modal-years-dec');
+				var incBtn = document.getElementById('reg-modal-years-inc');
+				var primaryToggle = document.getElementById('reg-modal-primary-toggle');
+				var regBtn = document.getElementById('reg-modal-register-btn');
+
+				if (overlay) overlay.addEventListener('click', function(e) {
+					if (e.target === overlay && !regModalBusy) closeRegisterModal();
+				});
+				if (closeBtn) closeBtn.addEventListener('click', function() {
+					if (!regModalBusy) closeRegisterModal();
+				});
+				if (decBtn) decBtn.addEventListener('click', function() {
+					if (regModalYears > REG_MODAL_MIN_YEARS) {
+						regModalYears--;
+						regModalUpdateYearsUi();
+						regModalFetchPricing();
+					}
+				});
+				if (incBtn) incBtn.addEventListener('click', function() {
+					if (regModalYears < REG_MODAL_MAX_YEARS) {
+						regModalYears++;
+						regModalUpdateYearsUi();
+						regModalFetchPricing();
+					}
+				});
+				if (primaryToggle) primaryToggle.addEventListener('click', function() {
+					regModalWantsPrimary = !regModalWantsPrimary;
+					regModalUpdatePrimaryUi();
+				});
+				if (regBtn) regBtn.addEventListener('click', registerNameInline);
+			})();
 
 					initClients().catch(function(error) {
 						console.warn('initClients failed:', error && error.message ? error.message : error);
@@ -4522,7 +4989,7 @@ ${socialMeta}
 					if (registerBtn) {
 						registerBtn.onclick = (e) => {
 							e.stopPropagation();
-							window.location.href = 'https://' + name + '.sui.ski?register=1';
+							openRegisterModal(name);
 						};
 					}
 					fetchPricing(item, name);

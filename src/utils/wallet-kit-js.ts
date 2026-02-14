@@ -245,22 +245,112 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         return __wkWalletsApi;
       }
 
-      var __wkWaaPLoading = null;
-      function __wkInitWaaP() {
-        if (__wkWaaPLoading) return __wkWaaPLoading;
-        __wkWaaPLoading = import('https://esm.sh/@human.tech/waap-sdk@1.2.0').then(function(mod) {
-          if (typeof mod.initWaaPSui !== 'function') return;
-          var wallet = mod.initWaaPSui({
-            config: {
-              authenticationMethods: ['email', 'phone', 'social'],
-              allowedSocials: ['google', 'twitter', 'discord', 'apple', 'coinbase'],
-              styles: { darkMode: true },
-            },
-            useStaging: false,
-          });
-          __wkInitWalletsApi();
-          if (__wkWalletsApi && typeof __wkWalletsApi.register === 'function') {
-            __wkWalletsApi.register(wallet);
+	      var __wkWaaPLoading = null;
+	      function __wkPrepareWaaPIframe(useStaging) {
+	        return new Promise(function(resolve) {
+	          var origin = useStaging ? 'https://staging.waap.xyz' : 'https://waap.xyz';
+	          var targetSrc = origin + '/iframe';
+	          var containerId = 'waap-wallet-iframe-container';
+	          var wrapperId = 'waap-wallet-iframe-wrapper';
+	          var iframeId = 'waap-wallet-iframe';
+	          var container = document.getElementById(containerId);
+	          if (!container) {
+	            container = document.createElement('div');
+	            container.id = containerId;
+	            container.style.position = 'fixed';
+	            container.style.top = '0';
+	            container.style.left = '0';
+	            container.style.right = '0';
+	            container.style.bottom = '0';
+	            container.style.width = '100%';
+	            container.style.height = '100%';
+	            container.style.display = 'none';
+	            container.style.alignItems = 'center';
+	            container.style.justifyContent = 'center';
+	            container.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+	            container.style.zIndex = '9999999999';
+	            document.body.appendChild(container);
+	          }
+
+	          var wrapper = document.getElementById(wrapperId);
+	          if (!wrapper) {
+	            wrapper = document.createElement('div');
+	            wrapper.id = wrapperId;
+	            wrapper.style.position = 'relative';
+	            wrapper.style.display = 'flex';
+	            wrapper.style.alignItems = 'center';
+	            wrapper.style.justifyContent = 'center';
+	            wrapper.style.padding = '0';
+	            wrapper.style.margin = '0';
+	            wrapper.style.height = '600px';
+	            wrapper.style.width = '380px';
+	            container.appendChild(wrapper);
+	          } else if (wrapper.parentNode !== container) {
+	            container.appendChild(wrapper);
+	          }
+
+	          var frame = document.getElementById(iframeId);
+	          if (!frame) {
+	            frame = document.createElement('iframe');
+	            frame.id = iframeId;
+	            frame.style.width = '100%';
+	            frame.style.height = '100%';
+	            frame.style.border = 'none';
+	            frame.style.borderRadius = '24px';
+	            frame.style.backgroundColor = 'transparent';
+	            frame.style.background = 'transparent';
+	            frame.style.padding = '0';
+	            frame.style.margin = '0';
+	            wrapper.appendChild(frame);
+	          } else if (frame.parentNode !== wrapper) {
+	            wrapper.appendChild(frame);
+	          }
+
+	          var done = false;
+	          var timer = null;
+	          var onLoad = function() {
+	            if (done) return;
+	            done = true;
+	            if (timer) clearTimeout(timer);
+	            resolve(true);
+	          };
+
+	          frame.addEventListener('load', onLoad, { once: true });
+	          timer = setTimeout(function() {
+	            if (done) return;
+	            done = true;
+	            resolve(false);
+	          }, 2000);
+
+	          if (frame.getAttribute('src') !== targetSrc) {
+	            frame.setAttribute('src', targetSrc);
+	          } else {
+	            frame.setAttribute('src', targetSrc);
+	          }
+	        });
+	      }
+	      function __wkInitWaaP() {
+	        if (__wkWaaPLoading) return __wkWaaPLoading;
+	        __wkWaaPLoading = import('https://esm.sh/@human.tech/waap-sdk@1.2.0').then(async function(mod) {
+	          if (typeof mod.initWaaPSui !== 'function') return;
+	          var useStaging = false;
+	          var config = {
+	            authenticationMethods: ['email', 'phone', 'social'],
+	            allowedSocials: ['google', 'twitter', 'discord', 'apple', 'coinbase'],
+	            styles: { darkMode: true },
+	          };
+	          var iframeReady = false;
+	          try {
+	            iframeReady = await __wkPrepareWaaPIframe(useStaging);
+	          } catch (_e) {
+	            iframeReady = false;
+	          }
+	          var options = { useStaging: useStaging };
+	          if (iframeReady) options.config = config;
+	          var wallet = mod.initWaaPSui(options);
+	          __wkInitWalletsApi();
+	          if (__wkWalletsApi && typeof __wkWalletsApi.register === 'function') {
+	            __wkWalletsApi.register(wallet);
           } else if (typeof registerWallet === 'function') {
             registerWallet(wallet);
           } else {
@@ -1047,7 +1137,12 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
                 }
               } catch (e3) {}
               var phantomFallback = (window.phantom && window.phantom.sui) || window.sui;
-	              if (phantomFallback) {
+	              var isPhantomWallet = phantomFallback && (
+	                wallet.name === 'Phantom'
+	                || wallet._raw === phantomFallback
+	                || (phantomFallback.isPhantom && wallet._raw && wallet._raw.isPhantom)
+	              );
+	              if (phantomFallback && isPhantomWallet) {
 	                try {
 	                  var recovered = await __wkPollAccounts(
 	                    function() { return __wkFilterSuiAccounts(__wkSafeGetAccounts(phantomFallback).concat(__wkSafeGetAccounts(wallet))); },
@@ -1173,6 +1268,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 
 	      function __wkFinishConnect(wallet, accounts) {
           __wkDetachWalletEvents();
+          __wkSessionWalletName = '';
 	        var account = accounts[0];
 	        var address = __wkNormalizeAccountAddress(account);
 	        if (!address && account && typeof account.address === 'string') {
@@ -1210,9 +1306,12 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	        }
       }
 
+      var __wkSessionWalletName = '';
+
       function initFromSession(address, walletName) {
         if (!address) return;
         __wkDetachWalletEvents();
+        __wkSessionWalletName = walletName || '';
         $connection.set({
           wallet: null,
           account: null,
@@ -1224,6 +1323,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 
       function disconnect() {
         var conn = $connection.value;
+        __wkSessionWalletName = '';
         __wkDetachWalletEvents();
         if (conn.wallet) {
           var disconnectFeature = conn.wallet.features && conn.wallet.features['standard:disconnect'];
@@ -1324,11 +1424,6 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	                  if (keyWallets[i].name === session.walletName) { match = keyWallets[i]; break; }
 	                }
 	              }
-	              if (!match) {
-	                for (var p = 0; p < keyWallets.length; p++) {
-	                  if (String(keyWallets[p].name || '') === 'Phantom') { match = keyWallets[p]; break; }
-	                }
-	              }
 	              if (!match && keyWallets.length > 0) {
 	                match = keyWallets[0];
 	              }
@@ -1342,11 +1437,6 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	                    if (session.walletName && session.walletName !== __wkPasskeyWalletName) {
 	                      for (var j = 0; j < keyWallets.length; j++) {
 	                        if (keyWallets[j].name === session.walletName) { match = keyWallets[j]; break; }
-	                      }
-	                    }
-	                    if (!match) {
-	                      for (var pp = 0; pp < keyWallets.length; pp++) {
-	                        if (String(keyWallets[pp].name || '') === 'Phantom') { match = keyWallets[pp]; break; }
 	                      }
 	                    }
 	                    if (!match && keyWallets.length > 0) {
@@ -1452,6 +1542,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         switchChain: switchChain,
         requestEmail: requestEmail,
         initFromSession: initFromSession,
+        get __sessionWalletName() { return __wkSessionWalletName; },
         get __sessionReady() { return __sessionReady; },
         get __skiSignFrame() { return __skiSignFrame; },
         get __skiSignReady() { return __skiSignReady; },
