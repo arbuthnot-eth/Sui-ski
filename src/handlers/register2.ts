@@ -37,72 +37,48 @@ export function generateRegistrationPage(
 	const registerBucket = registerFlow === 'register2' ? 'register-v2' : 'register-v1'
 	const serializeJson = (value: unknown) =>
 		JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
+	const suiIconSvg = '<svg class="price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg>'
 	const registrationCardHtml = isRegisterable
-		? `<section class="card register-card">
-			<div class="header">
-				<h1 class="name-heading">
-					<span class="name-title">${escapeHtml(cleanName)}<span class="name-tld">.sui</span></span>
-					<button type="button" class="primary-star" id="primary-star" aria-label="Set ${escapeHtml(cleanName)}.sui as primary name" aria-pressed="false" title="Set as primary name">☆</button>
-				</h1>
-				<p class="subtitle">
-					<span class="availability-pill">
-						<span class="availability-dot" aria-hidden="true"></span>
-						<span class="availability-label">Available</span>
-					</span>
-				</p>
-			</div>
-
-				<div class="top-row">
-					<div>
-						<div class="price" id="price-value">-- <span class="price-unit">SUI</span> <span class="price-usd">/ $-- est.</span></div>
-						<div class="price-note" id="price-note">Loading pricing...</div>
+		? `<div class="card-with-stepper">
+			<div class="nft-card">
+				<div class="nft-top">
+					<div class="nft-name-block">
+						<div class="nft-name-line"><button type="button" class="primary-star" id="primary-star" aria-label="Set as primary" aria-pressed="false" title="Set as primary name">\u2606</button><span class="nft-name">${escapeHtml(cleanName)}<span class="nft-name-tld">.sui</span></span></div>
 					</div>
+					<div class="nft-card-wallet" id="nft-card-wallet"></div>
 				</div>
-
-				<div class="form">
-					<div class="row">
-						<div class="field">
-							<label for="years">Duration</label>
-							<div class="year-stepper" role="group" aria-label="Registration duration">
-								<button type="button" class="year-btn" id="years-decrease" aria-label="Decrease duration">-</button>
-								<div class="year-display"><span id="years-value">1</span> year</div>
-								<button type="button" class="year-btn" id="years-increase" aria-label="Increase duration">+</button>
+				<div class="nft-body">
+					<div class="nft-qr-col">
+						<div class="nft-price-stack" id="price-value">
+							<div class="nft-price-main">
+								<span class="price-amount">--</span>
+								${suiIconSvg}
 							</div>
-							<input id="years" type="hidden" value="1">
+							<span class="price-usd">\u2248 $--</span>
 						</div>
-						<div class="field">
-							<label for="target">Recipient (optional)</label>
-							<input id="target" type="text" placeholder="0x... or name.sui">
+						<span class="nft-chip"><span class="nft-dot"></span>Available</span>
+						<canvas class="nft-qr" id="nft-qr" width="140" height="140" title="${escapeHtml(cleanName)}.sui"></canvas>
+					</div>
+					<div class="nft-logo-col">
+						<div class="nft-logo-badge"><svg viewBox="0 0 512 560" fill="none" aria-hidden="true"><defs><linearGradient id="nlg" x1="0" y1="0" x2="0.5" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#b8ffda"/></linearGradient></defs><path d="M256 96L416 352H336L280 256L256 296L232 256L176 352H96Z" fill="url(#nlg)"/><path d="M128 384Q208 348 288 384Q368 420 432 384" stroke="url(#nlg)" stroke-width="24" fill="none" stroke-linecap="round"/><text x="256" y="480" font-family="Inter,system-ui,sans-serif" font-size="90" font-weight="800" fill="url(#nlg)" text-anchor="middle">sui.ski</text></svg></div>
+						<div class="nft-discount" id="price-savings"></div>
 					</div>
 				</div>
-				<button class="button" id="register-btn">Connect Wallet</button>
-				<div class="status" id="register-status"></div>
 			</div>
-		</section>`
-		: `<section class="card"><div class="header"><h1>${escapeHtml(cleanName)}<span>.sui</span></h1><p class="subtitle">Minimum length is 3 characters.</p></div></section>`
-	const discoveryColumnHtml = isRegisterable
-		? `<aside class="side-column">
-			<section class="side-card better-search-card">
-				<div class="panel-head">
-					<div class="panel-title">Better Search</div>
-					<a class="x402-link" id="x402-link" href="https://www.tradeport.xyz/sui/collection/suins?search=x402" target="_blank" rel="noopener noreferrer">View</a>
-				</div>
-				<div class="x402-row">
-					<div class="x402-name">x402.sui</div>
-					<div class="x402-price" id="x402-price">Loading...</div>
-				</div>
-			</section>
-			<section class="side-card suggestions-card">
-				<div class="suggestions-head">
-					<div class="suggestions-title">AI Suggestions</div>
-					<button type="button" class="refresh-btn" id="refresh-suggestions">Refresh</button>
-				</div>
-				<div class="suggestions-grid" id="suggestions-grid">
-					<div class="empty">Loading suggestions...</div>
-				</div>
-			</section>
-		</aside>`
-		: ''
+			<div class="year-stepper-v" role="group" aria-label="Registration duration">
+				<button type="button" class="year-btn-v" id="years-increase" aria-label="Increase">+</button>
+				<div class="year-display-v"><span id="years-value">1</span><span class="year-unit">yr</span></div>
+				<button type="button" class="year-btn-v" id="years-decrease" aria-label="Decrease">\u2212</button>
+				<input id="years" type="hidden" value="1">
+			</div>
+			</div>
+			<div class="reg-form">
+				<button class="button" id="register-btn">Connect Wallet</button>
+				<div class="wallet-balance" id="wallet-balance"></div>
+				<div class="status" id="register-status"></div>
+			</div>`
+		: `<div class="nft-card" style="aspect-ratio:1;justify-content:center;align-items:center;text-align:center;"><span style="font-size:1.6rem;font-weight:800;color:#fff;">${escapeHtml(cleanName)}<span style="color:var(--ski-green);">.sui</span></span><span style="font-size:0.85rem;color:var(--muted);margin-top:8px;">Minimum length is 3 characters.</span></div>`
+	const discoveryColumnHtml = ''
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -115,25 +91,26 @@ export function generateRegistrationPage(
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 		<style>
 			@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-				:root {
-					--bg-0: #050d0b;
-					--bg-1: #0a1512;
-					--card: rgba(10, 21, 18, 0.92);
-					--line: rgba(180, 227, 213, 0.22);
-					--text: #e8f7f2;
-					--muted: #a6c0b8;
-					--accent: #60a5fa;
-					--listing-purple: #a855f7;
-					--listing-purple-light: #d8b4fe;
-					--ski-green: #00a651;
-					--ski-green-dark: #008744;
-					--ski-green-light: #82e2b3;
-					--ski-green-soft: #bff4d8;
-					--ski-green-rgb: 0, 166, 81;
-					--ok: var(--ski-green);
-					--warn: #fbbf24;
-					--err: #f87171;
-				}
+					:root {
+						--bg-0: #010201;
+						--bg-1: #030806;
+						--card: rgba(3, 10, 8, 0.9);
+						--line: rgba(130, 255, 190, 0.24);
+						--text: #ebfff4;
+						--muted: #8fb9a3;
+						--accent: #49da91;
+						--listing-purple: #a855f7;
+						--listing-purple-light: #d8b4fe;
+						--ski-green: #49da91;
+						--ski-green-dark: #27bd74;
+						--ski-green-light: #b8ffda;
+						--ski-green-soft: #ecfff4;
+						--ski-green-rgb: 73, 218, 145;
+						--snow-rgb: 228, 255, 242;
+						--ok: var(--ski-green);
+						--warn: #fbbf24;
+						--err: #f87171;
+					}
 				* { box-sizing: border-box; margin: 0; padding: 0; }
 				html {
 					scrollbar-color: rgba(var(--ski-green-rgb), 0.82) rgba(7, 20, 16, 0.9);
@@ -153,96 +130,71 @@ export function generateRegistrationPage(
 				::-webkit-scrollbar-thumb:hover {
 					background: linear-gradient(180deg, rgba(var(--ski-green-rgb), 1), rgba(var(--ski-green-rgb), 0.88));
 				}
-				body {
-					font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-					min-height: 100vh;
-					background:
-						radial-gradient(90% 70% at 50% -10%, rgba(var(--ski-green-rgb), 0.18) 0%, transparent 50%),
-						radial-gradient(70% 60% at 100% 100%, rgba(96, 165, 250, 0.12) 0%, transparent 55%),
-						linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
-				color: var(--text);
-					padding: 20px;
-					padding-bottom: 82px;
+					body {
+						font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+						min-height: 100vh;
+						position: relative;
+						background:
+							radial-gradient(45% 35% at 50% 32%, rgba(255, 255, 255, 0.04) 0%, transparent 70%),
+							radial-gradient(80% 60% at 50% -8%, rgba(106, 255, 185, 0.16) 0%, transparent 52%),
+							radial-gradient(75% 62% at 100% 100%, rgba(47, 186, 116, 0.16) 0%, transparent 62%),
+							linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
+					color: var(--text);
+						padding: 20px;
+						padding-bottom: 82px;
+						overflow-x: hidden;
+					}
+				body::before,
+				body::after {
+					content: '';
+					position: fixed;
+					inset: -20vh 0 0 0;
+					pointer-events: none;
+					z-index: 0;
+					background-repeat: repeat;
 				}
-				.container {
-					max-width: 1180px;
-					margin: 0 auto;
-					display: flex;
-					flex-direction: column;
-					gap: 12px;
+				body::before {
+					opacity: 0.32;
+					background-image:
+						radial-gradient(circle, rgba(var(--snow-rgb), 0.86) 0 1px, transparent 1.8px),
+						radial-gradient(circle, rgba(var(--snow-rgb), 0.6) 0 1.2px, transparent 2px);
+					background-size: 190px 190px, 260px 260px;
+					background-position: 0 0, 88px 120px;
+					animation: snow-fall-a 23s linear infinite;
 				}
-				.layout-grid {
-					display: grid;
-					grid-template-columns: minmax(0, 1.55fr) minmax(310px, 1fr);
-					gap: 12px;
-					align-items: start;
+				body::after {
+					opacity: 0.2;
+					background-image:
+						radial-gradient(circle, rgba(var(--snow-rgb), 0.64) 0 0.9px, transparent 1.6px),
+						radial-gradient(circle, rgba(var(--snow-rgb), 0.5) 0 0.8px, transparent 1.4px);
+					background-size: 120px 120px, 170px 170px;
+					background-position: 20px 40px, 72px 96px;
+					animation: snow-fall-b 31s linear infinite;
 				}
-				.side-column {
-					display: grid;
-					gap: 10px;
+				@keyframes snow-fall-a {
+					from { transform: translateY(-12%); }
+					to { transform: translateY(12%); }
 				}
-				.side-card {
-					background: rgba(10, 21, 18, 0.88);
-					border: 1px solid rgba(180, 227, 213, 0.2);
-					border-radius: 14px;
-					padding: 12px;
+				@keyframes snow-fall-b {
+					from { transform: translateY(-8%); }
+					to { transform: translateY(10%); }
 				}
-			.panel-head {
-				display: flex;
-				align-items: center;
-				justify-content: space-between;
-				gap: 8px;
-			}
-			.panel-title {
-				font-size: 0.78rem;
-				font-weight: 700;
-				text-transform: uppercase;
-				letter-spacing: 0.06em;
-				color: var(--muted);
-			}
-				.x402-link {
-					display: inline-flex;
-				align-items: center;
-				justify-content: center;
-				padding: 4px 10px;
-				border-radius: 999px;
-					border: 1px solid rgba(96, 165, 250, 0.35);
-					background: rgba(96, 165, 250, 0.14);
-					color: #9ecbff;
-				font-size: 0.72rem;
-				font-weight: 700;
-				text-decoration: none;
-			}
-			.x402-row {
-				margin-top: 10px;
-				display: flex;
-				align-items: center;
-				justify-content: space-between;
-				gap: 10px;
-			}
-			.x402-name {
-				font-size: 1rem;
-				font-weight: 800;
-				color: var(--text);
-			}
-				.x402-price {
-				padding: 5px 10px;
-				border-radius: 999px;
-					border: 1px solid rgba(168, 85, 247, 0.35);
-					background: rgba(168, 85, 247, 0.12);
-				color: var(--listing-purple-light);
-				font-size: 0.74rem;
-				font-weight: 700;
-				letter-spacing: 0.02em;
-				text-transform: uppercase;
-				white-space: nowrap;
-			}
-				.x402-price.listed {
-					border-color: rgba(168, 85, 247, 0.52);
-					background: rgba(168, 85, 247, 0.18);
-					color: #ead5ff;
-				}
-		.nav {
+					.container {
+						max-width: 600px;
+						margin: 0 auto;
+						display: flex;
+						flex-direction: column;
+						gap: 12px;
+						position: relative;
+						z-index: 1;
+					}
+					.layout-grid {
+						display: grid;
+						grid-template-columns: minmax(0, 1fr);
+						gap: 12px;
+						align-items: start;
+					}
+			.nav {
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
@@ -261,350 +213,377 @@ export function generateRegistrationPage(
 			align-items: center;
 			gap: 8px;
 		}
-		.badge {
-			padding: 5px 10px;
-			border-radius: 999px;
-			font-size: 0.72rem;
-			font-weight: 700;
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
-			border: 1px solid var(--line);
-			background: rgba(255,255,255,0.04);
-			color: var(--muted);
+			.nft-card {
+			width: 100%;
+			max-width: 380px;
+			aspect-ratio: 1;
+			margin: 0 auto;
+			padding: 22px;
+			border-radius: 20px;
+			background: linear-gradient(155deg, #0a1a13 0%, #040d09 100%);
+			border: 1px solid rgba(255, 255, 255, 0.22);
+			box-shadow: 0 0 25px rgba(255, 255, 255, 0.12), 0 0 60px rgba(255, 255, 255, 0.06), 0 0 120px rgba(255, 255, 255, 0.03), 0 24px 60px rgba(0, 0, 0, 0.55);
+			display: flex;
+			flex-direction: column;
+			justify-content: space-between;
+			gap: 8px;
+			position: relative;
 		}
-			.flow-badge {
-				border-color: rgba(96, 165, 250, 0.45);
-				background: rgba(96, 165, 250, 0.14);
-				color: #9ecbff;
-			}
-				.card {
-					background: var(--card);
-					border: 1px solid var(--line);
-					border-radius: 16px;
-					padding: 18px;
-					box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
-				}
-			body[data-register-flow='register2'] .card {
-				border-color: rgba(96, 165, 250, 0.35);
-				box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(96, 165, 250, 0.12);
-			}
-			.header h1 {
-				font-size: clamp(1.8rem, 3.7vw, 2.6rem);
-				font-weight: 800;
-				overflow-wrap: anywhere;
-				letter-spacing: -0.03em;
+		.nft-card::before {
+			content: '';
+			position: absolute;
+			inset: -80px;
+			border-radius: 60px;
+			background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 40%, transparent 70%);
+			pointer-events: none;
+			z-index: -1;
 		}
-		.name-heading {
-			display: inline-flex;
+		.nft-top {
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-start;
+		}
+		.nft-card-wallet {
+			display: none;
+			flex-direction: column;
+			align-items: flex-end;
+			gap: 2px;
+			flex-shrink: 0;
+		}
+		.nft-card-wallet.show {
+			display: flex;
+		}
+		.nft-card-wallet-badge {
+			display: flex;
 			align-items: center;
-			gap: 10px;
-			flex-wrap: wrap;
+			gap: 5px;
+			font-size: 0.7rem;
+			font-weight: 700;
+			color: rgba(255, 255, 255, 0.75);
 		}
-		.name-title { color: var(--text); }
-		.name-tld { color: var(--ok); }
+		.nft-card-wallet-badge img {
+			width: 18px;
+			height: 18px;
+			border-radius: 5px;
+		}
+		.nft-card-wallet-badge .waap-blue {
+			filter: hue-rotate(-50deg) saturate(1.4) brightness(1.15);
+		}
+		.nft-card-wallet-balance {
+			font-size: 0.65rem;
+			font-weight: 600;
+			color: rgba(255, 255, 255, 0.45);
+		}
+		.nft-name-block { flex: 1; min-width: 0; }
+		.nft-name-line {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			overflow-wrap: anywhere;
+		}
+		.nft-name {
+			font-size: clamp(2.2rem, 10vw, 3.2rem);
+			font-weight: 900;
+			letter-spacing: -0.04em;
+			line-height: 1.05;
+			background: linear-gradient(180deg, #ffffff 0%, #b8ffda 40%, #49da91 70%, #27bd74 100%);
+			-webkit-background-clip: text;
+			background-clip: text;
+			-webkit-text-fill-color: transparent;
+			filter: drop-shadow(0 2px 8px rgba(var(--ski-green-rgb), 0.3));
+		}
+		.nft-name-tld {
+			background: linear-gradient(180deg, rgba(73, 218, 145, 0.45) 0%, rgba(39, 189, 116, 0.3) 100%);
+			-webkit-background-clip: text;
+			background-clip: text;
+		}
 		.primary-star {
-			width: 34px;
-			height: 34px;
+			width: 28px;
+			height: 28px;
 			border-radius: 999px;
-			border: 1px solid rgba(148, 163, 184, 0.42);
-			background: rgba(148, 163, 184, 0.09);
-			color: rgba(148, 163, 184, 0.9);
-			font-size: 1.2rem;
+			border: 1px solid rgba(148, 163, 184, 0.25);
+			background: rgba(148, 163, 184, 0.06);
+			color: rgba(148, 163, 184, 0.5);
+			font-size: 0.95rem;
 			line-height: 1;
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
 			cursor: pointer;
-			transition: transform 0.12s ease, background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+			flex-shrink: 0;
+			transition: all 0.15s ease;
+			margin-top: 4px;
 		}
-		.primary-star:hover {
-			transform: translateY(-1px);
-			background: rgba(148, 163, 184, 0.16);
-			border-color: rgba(148, 163, 184, 0.55);
-		}
+		.primary-star:hover { background: rgba(148, 163, 184, 0.14); border-color: rgba(148, 163, 184, 0.5); color: rgba(148, 163, 184, 0.7); }
 		.primary-star.active {
 			color: #ffd700;
-			background: rgba(255, 215, 0, 0.2);
-			border-color: rgba(255, 215, 0, 0.8);
-			box-shadow: 0 0 14px rgba(255, 215, 0, 0.22);
+			background: rgba(255, 215, 0, 0.18);
+			border-color: rgba(255, 215, 0, 0.7);
+			box-shadow: 0 0 12px rgba(255, 215, 0, 0.2);
 		}
-		.subtitle {
-			margin-top: 8px;
-			font-size: 0.95rem;
-			color: var(--muted);
-		}
-			.availability-pill {
-				display: inline-flex;
-				align-items: center;
-				gap: 8px;
-				padding: 4px 12px;
-				border-radius: 999px;
-				border: 1px solid rgba(var(--ski-green-rgb), 0.42);
-				background: rgba(var(--ski-green-rgb), 0.16);
-			}
-			.availability-dot {
-				width: 10px;
-				height: 10px;
-				border-radius: 50%;
-				background: radial-gradient(circle at 35% 35%, #e7faef 0%, var(--ski-green) 80%);
-				box-shadow: 0 0 10px rgba(var(--ski-green-rgb), 0.62);
-			}
-			.availability-label {
-				color: var(--ski-green-light);
-				font-size: 0.84rem;
-				font-weight: 700;
-				letter-spacing: 0.02em;
-				text-transform: uppercase;
-			}
-			.top-row {
-				display: grid;
-				grid-template-columns: 1fr;
-				gap: 14px;
-				align-items: end;
-				margin-top: 12px;
-			}
-			.price {
-				font-size: clamp(1.65rem, 3.8vw, 2.2rem);
-				font-weight: 800;
-			}
-			.price-unit {
-				color: #60a5fa;
-				font-size: 0.62em;
-				font-weight: 700;
-				letter-spacing: 0.03em;
-				margin-left: 8px;
-			}
-			.price-usd {
-				color: var(--muted);
-				font-size: 0.5em;
-				font-weight: 600;
-				letter-spacing: 0.01em;
-				margin-left: 10px;
-				white-space: nowrap;
-			}
-			.price-decimals {
-				font-size: 0.56em;
-				font-weight: 700;
-				opacity: 0.9;
-				margin-left: 2px;
-			}
-		.price-note {
-			font-size: 0.85rem;
-			color: var(--muted);
-		}
-			.price-note.discount {
-				display: inline-block;
-				margin-top: 8px;
-				padding: 4px 12px;
-				border-radius: 999px;
-				border: 1px solid rgba(var(--ski-green-rgb), 0.36);
-				background: rgba(var(--ski-green-rgb), 0.18);
-				color: var(--ski-green-light);
-				font-weight: 700;
-				letter-spacing: 0.02em;
-				text-transform: none;
-			}
-			.form {
-				margin-top: 12px;
-				display: grid;
-				gap: 8px;
-			}
-			.row {
-				display: grid;
-				grid-template-columns: 1fr 1fr;
-				gap: 8px;
-			}
-		.field {
+		.nft-qr-col {
 			display: flex;
 			flex-direction: column;
+			align-items: stretch;
 			gap: 6px;
+			width: 120px;
+			flex-shrink: 0;
 		}
-			label {
-				font-size: 0.75rem;
-				font-weight: 700;
-				text-transform: uppercase;
-				letter-spacing: 0.05em;
-				color: var(--muted);
-			}
-				input, select {
-					width: 100%;
-					padding: 9px 11px;
-					border-radius: 9px;
-					border: 1px solid rgba(255, 255, 255, 0.12);
-					background: rgba(255, 255, 255, 0.04);
-					color: var(--text);
-			}
-			.year-stepper {
-				display: grid;
-				grid-template-columns: 38px 1fr 38px;
-				align-items: center;
-				gap: 8px;
-				padding: 6px;
-				border-radius: 11px;
-				border: 1px solid rgba(var(--ski-green-rgb), 0.35);
-				background: rgba(10, 34, 22, 0.75);
-			}
-			.year-btn {
-				width: 100%;
-				height: 34px;
-				border-radius: 9px;
-				border: 1px solid rgba(var(--ski-green-rgb), 0.48);
-				background: rgba(var(--ski-green-rgb), 0.16);
-				color: var(--ski-green-light);
-				font-size: 1.08rem;
-				font-weight: 800;
-				line-height: 1;
-				cursor: pointer;
-			}
-			.year-btn:hover {
-				background: rgba(var(--ski-green-rgb), 0.24);
-			}
-			.year-btn:disabled {
-				opacity: 0.4;
-				cursor: not-allowed;
-			}
-			.year-display {
-				text-align: center;
-				font-size: 0.92rem;
-				font-weight: 700;
-				color: var(--text);
-			}
-			input::placeholder { color: #8ea6a0; }
-				.button {
-					margin-top: 4px;
-					width: 100%;
-					padding: 12px 14px;
-					border-radius: 999px;
-					border: 1px solid rgba(var(--ski-green-rgb), 0.58);
-					background: linear-gradient(135deg, rgba(14, 56, 36, 0.95), rgba(8, 42, 27, 0.96));
-					box-shadow: inset 0 1px 0 rgba(var(--ski-green-rgb), 0.24), 0 0 0 1px rgba(var(--ski-green-rgb), 0.18);
-					color: var(--ski-green-light);
-					font-weight: 800;
-					font-size: 0.94rem;
-					cursor: pointer;
-				}
-			.button:hover { background: linear-gradient(135deg, rgba(16, 67, 42, 0.96), rgba(9, 50, 31, 0.98)); }
-			.button:disabled {
-				opacity: 0.55;
-				cursor: not-allowed;
-		}
-		.status {
-			display: none;
-			margin-top: 8px;
-			padding: 10px 12px;
-			border-radius: 10px;
-			font-size: 0.84rem;
-		}
-		.status.show { display: block; }
-		.status.info { background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.3); color: #9ecbff; }
-			.status.ok { background: rgba(var(--ski-green-rgb),0.15); border: 1px solid rgba(var(--ski-green-rgb),0.36); color: var(--ski-green-light); }
-		.status.err { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); color: #ffb0b0; }
-				.suggestions-card { border-color: rgba(180, 227, 213, 0.24); }
-			.suggestions-head {
-				display: flex;
-				justify-content: space-between;
-			align-items: center;
-			gap: 8px;
-		}
-		.suggestions-title {
-			font-size: 0.8rem;
-			font-weight: 700;
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
-			color: var(--muted);
-		}
-				.refresh-btn {
-					padding: 5px 10px;
-					border-radius: 999px;
-					border: 1px solid rgba(96, 165, 250, 0.44);
-					background: rgba(16, 30, 54, 0.82);
-					color: #c8dcff;
-					font-size: 0.72rem;
-					font-weight: 700;
-				}
-			.refresh-btn:hover { background: rgba(22, 40, 72, 0.9); }
-			.suggestions-grid {
-				display: grid;
-				grid-template-columns: 1fr;
-				gap: 7px;
-				margin-top: 8px;
-			}
-				.suggestion {
-					padding: 8px;
-					border-radius: 10px;
-					border: 1px solid rgba(255,255,255,0.12);
-					background: rgba(255,255,255,0.03);
-				}
-		.suggestion-name { font-weight: 700; font-size: 0.86rem; overflow-wrap: anywhere; }
-		.suggestion-row {
+		.nft-chip {
 			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 6px;
+			padding: 4px 0;
+			border-radius: 999px;
+			background: rgba(var(--ski-green-rgb), 0.15);
+			border: 1px solid rgba(var(--ski-green-rgb), 0.35);
+			font-size: 0.68rem;
+			font-weight: 700;
+			color: #86efac;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+		}
+		.nft-dot {
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			background: #34d399;
+			box-shadow: 0 0 8px rgba(52, 211, 153, 0.8);
+		}
+		.nft-body {
+			display: flex;
+			align-items: flex-end;
 			justify-content: space-between;
+			gap: 12px;
+		}
+		.nft-qr {
+			width: 100%;
+			height: auto;
+			aspect-ratio: 1;
+			border-radius: 10px;
+		}
+		.nft-logo-col {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 0;
+			align-self: flex-end;
+			flex-shrink: 0;
+			margin-right: -22px;
+			margin-bottom: -18px;
+		}
+		.nft-logo-badge {
+			width: 130px;
+			opacity: 0.85;
+			filter: drop-shadow(0 2px 12px rgba(var(--ski-green-rgb), 0.25));
+		}
+		.nft-logo-badge svg {
+			width: 100%;
+			height: auto;
+			display: block;
+		}
+		.nft-discount {
+			display: flex;
+			flex-direction: row;
 			align-items: center;
 			gap: 8px;
-			margin-top: 5px;
-		}
-		.suggestion-state {
 			font-size: 0.72rem;
 			font-weight: 700;
-			text-transform: uppercase;
-			letter-spacing: 0.04em;
+			color: rgba(255, 255, 255, 0.9);
+			line-height: 1.3;
+			margin-top: -14px;
+			position: relative;
+			z-index: 1;
 		}
-			.suggestion-state.available { color: var(--ski-green-light); }
-		.suggestion-state.taken { color: #fbbf24; }
-		.suggestion-state.error { color: #f87171; }
-				.suggestion-link {
-					padding: 5px 8px;
-					border-radius: 999px;
-					font-size: 0.72rem;
-					font-weight: 700;
-					text-decoration: none;
-					border: 1px solid rgba(96,165,250,0.45);
-					background: rgba(16, 30, 54, 0.82);
-					color: #c7dbff;
-				}
-			.suggestion-link:hover { background: rgba(22, 40, 72, 0.9); }
-				.suggestion-link.available {
-					border-color: rgba(var(--ski-green-rgb),0.5);
-					background: rgba(12, 52, 33, 0.9);
-					color: var(--ski-green-light);
-				}
-		.empty {
-			padding: 10px;
-			font-size: 0.82rem;
+		.nft-discount .discount-sui-icon {
+			width: 0.65em;
+			height: 0.85em;
+			display: inline-block;
+			vertical-align: -0.1em;
+			margin-left: 2px;
+		}
+		.nft-price-stack {
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+			margin-bottom: -4px;
+		}
+		.nft-price-main {
+			display: flex;
+			align-items: baseline;
+			gap: 6px;
+			font-size: clamp(1.8rem, 5.5vw, 2.2rem);
+			font-weight: 800;
+		}
+		.nft-price-stack .price-amount { color: #e9fff3; }
+		.nft-price-stack .price-sui-icon {
+			width: 0.5em;
+			height: 0.65em;
+			display: inline-block;
+			vertical-align: -0.04em;
+			fill: #4DA2FF;
+		}
+		.nft-price-stack .price-usd {
 			color: var(--muted);
-			text-align: center;
-			border: 1px dashed rgba(255,255,255,0.14);
-			border-radius: 10px;
+			font-size: 0.72rem;
+			font-weight: 600;
+			white-space: nowrap;
 		}
-		.wallet-widget {
-			position: fixed;
-			top: 16px;
-			right: 16px;
-			z-index: 1000;
+		.nft-price-stack .price-decimals {
+			font-size: 0.56em;
+			font-weight: 700;
+			opacity: 0.9;
+			margin-left: 2px;
+		}
+		.reg-form {
+			max-width: 380px;
+			margin: 14px auto 0;
+			display: grid;
+			gap: 10px;
+			width: 100%;
+		}
+		.price-amount { color: #e9fff3; }
+		.price-sui-icon {
+			width: 0.6em;
+			height: 0.77em;
+			display: inline-block;
+			vertical-align: -0.05em;
+			fill: #4DA2FF;
+		}
+		.price-usd {
+			color: var(--muted);
+			font-size: 0.44em;
+			font-weight: 600;
+			white-space: nowrap;
+		}
+		.price-decimals {
+			font-size: 0.56em;
+			font-weight: 700;
+			opacity: 0.9;
+			margin-left: 2px;
+		}
+		.card-with-stepper {
+			display: flex;
+			align-items: stretch;
+			gap: 10px;
+			justify-content: center;
+		}
+		.card-with-stepper .nft-card {
+			margin: 0;
+		}
+		.year-stepper-v {
+			display: flex;
+			flex-direction: column;
+			align-items: stretch;
+			gap: 8px;
+			width: 200px;
+			padding: 10px;
+			border-radius: 20px;
+			border: 1px solid rgba(var(--ski-green-rgb), 0.28);
+			background: rgba(10, 34, 22, 0.55);
+			flex-shrink: 0;
+		}
+		.year-btn-v {
+			flex: 1;
+			min-height: 60px;
+			border-radius: 14px;
+			border: 1px solid rgba(var(--ski-green-rgb), 0.38);
+			background: rgba(var(--ski-green-rgb), 0.12);
+			color: var(--ski-green-light);
+			font-size: 1.8rem;
+			font-weight: 800;
+			line-height: 1;
+			cursor: pointer;
 			display: flex;
 			align-items: center;
-			gap: 10px;
+			justify-content: center;
 		}
-			.wallet-profile-btn {
-				width: 36px;
-				height: 36px;
-				border-radius: 10px;
-				display: inline-flex;
+		.year-btn-v:hover { background: rgba(var(--ski-green-rgb), 0.2); }
+		.year-btn-v:disabled { opacity: 0.4; cursor: not-allowed; }
+		.year-display-v {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 2px;
+			font-size: 2rem;
+			font-weight: 800;
+			color: var(--text);
+			padding: 4px 0;
+		}
+		.year-unit {
+			font-size: 0.7rem;
+			font-weight: 600;
+			color: var(--muted);
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+		}
+		.button {
+			width: 100%;
+			padding: 12px 14px;
+			border-radius: 999px;
+			border: 1px solid rgba(var(--ski-green-rgb), 0.5);
+			background: linear-gradient(135deg, rgba(14, 56, 36, 0.95), rgba(8, 42, 27, 0.96));
+			box-shadow: inset 0 1px 0 rgba(var(--ski-green-rgb), 0.2);
+			color: var(--ski-green-light);
+			font-weight: 800;
+			font-size: 0.92rem;
+			cursor: pointer;
+		}
+		.button:hover { background: linear-gradient(135deg, rgba(16, 67, 42, 0.96), rgba(9, 50, 31, 0.98)); }
+		.button:disabled { opacity: 0.55; cursor: not-allowed; }
+		.wallet-balance {
+			display: none;
+			text-align: center;
+			font-size: 0.72rem;
+			font-weight: 500;
+			color: var(--muted);
+		}
+		.wallet-balance.show { display: block; }
+		.status {
+			display: none;
+			padding: 8px 10px;
+			border-radius: 8px;
+			font-size: 0.8rem;
+		}
+		.status.show { display: block; }
+		.status.info {
+			background: rgba(var(--ski-green-rgb), 0.12);
+			border: 1px solid rgba(var(--ski-green-rgb), 0.3);
+			color: var(--ski-green-light);
+		}
+		.status.ok { background: rgba(var(--ski-green-rgb),0.15); border: 1px solid rgba(var(--ski-green-rgb),0.36); color: var(--ski-green-light); }
+		.status.err { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); color: #ffb0b0; }
+			.wallet-widget {
+				position: fixed;
+				top: calc(16px + env(safe-area-inset-top));
+				right: calc(16px + env(safe-area-inset-right));
+				z-index: 10040;
+				display: flex;
 				align-items: center;
-				justify-content: center;
-				background: rgba(96, 165, 250, 0.12);
-				border: 1px solid rgba(96, 165, 250, 0.35);
-				padding: 0;
-				cursor: pointer;
+				gap: 10px;
 			}
-			.wallet-profile-btn:hover { background: rgba(96, 165, 250, 0.2); }
+				.wallet-profile-btn {
+					width: 40px;
+					height: 40px;
+					border-radius: 10px;
+					display: none;
+					align-items: center;
+					justify-content: center;
+					background: rgba(var(--ski-green-rgb), 0.14);
+					border: 1px solid rgba(var(--ski-green-rgb), 0.35);
+					padding: 0;
+					cursor: pointer;
+				}
+				.wallet-profile-btn.visible { display: inline-flex; }
+			.wallet-profile-btn:hover { background: rgba(var(--ski-green-rgb), 0.24); }
 			.tracker-footer {
 				position: fixed;
 				left: 0;
 				right: 0;
 				bottom: 0;
 				z-index: 900;
-				background: rgba(9, 12, 22, 0.94);
+				background: rgba(2, 9, 6, 0.94);
 				backdrop-filter: blur(10px);
 				border-top: 1px solid rgba(var(--ski-green-rgb), 0.35);
 			padding: 11px 16px;
@@ -616,17 +595,17 @@ export function generateRegistrationPage(
 			align-items: center;
 			gap: 10px;
 			font-size: 0.84rem;
-			color: #a7b0d8;
+			color: #8cae9a;
 			white-space: nowrap;
 			overflow-x: auto;
 			max-width: 100%;
 			scrollbar-width: none;
 		}
 		.tracker-line::-webkit-scrollbar { display: none; }
-		.tracker-price-label { color: #dbe5ff; font-weight: 600; }
+		.tracker-price-label { color: #deffec; font-weight: 600; }
 		#sui-price { color: var(--ski-green-light); font-weight: 700; }
-		.tracker-sep { color: rgba(120, 150, 210, 0.5); }
-		.tracker-built-on { color: #96a5d8; }
+		.tracker-sep { color: rgba(var(--ski-green-rgb), 0.4); }
+		.tracker-built-on { color: #8cae9a; }
 		.tracker-built-on a {
 			color: var(--ski-green-light);
 			text-decoration: none;
@@ -635,16 +614,56 @@ export function generateRegistrationPage(
 		.tracker-built-on a:hover { color: var(--ski-green-soft); }
 			@media (max-width: 760px) {
 				body { padding: 14px; padding-top: 54px; padding-bottom: 74px; }
-				.row { grid-template-columns: 1fr; }
 				.layout-grid { grid-template-columns: 1fr; }
 				.wallet-widget { top: 12px; right: 12px; }
 				.tracker-footer { padding: 10px 8px; }
 				.tracker-line { font-size: 0.78rem; }
+				.nft-card { padding: 16px; gap: 8px; }
+				.nft-qr-col { width: 90px; }
+				.nft-logo-badge { width: 100px; }
+				.year-stepper-v { width: 80px; padding: 8px; }
+				.year-btn-v { min-height: 40px; font-size: 1.3rem; }
+				.year-display-v { font-size: 1.4rem; }
 			}
 			@media (max-width: 1020px) {
 				.layout-grid { grid-template-columns: 1fr; }
 			}
 		${generateWalletUiCss()}
+		#wk-widget .wk-widget-btn,
+		#wk-widget > div > button {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 10px 16px;
+			background: rgba(5, 13, 10, 0.94);
+			backdrop-filter: blur(16px);
+			-webkit-backdrop-filter: blur(16px);
+			border: 1px solid rgba(var(--ski-green-rgb), 0.28);
+			border-radius: 10px;
+			color: #c7f5db;
+			font-size: 0.82rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.3s ease;
+			box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42), 0 0 24px rgba(var(--ski-green-rgb), 0.14);
+		}
+		#wk-widget .wk-widget-btn:hover,
+		#wk-widget > div > button:hover {
+			border-color: rgba(var(--ski-green-rgb), 0.46);
+			color: var(--text);
+			transform: translateY(-1px);
+			box-shadow: 0 14px 32px rgba(0, 0, 0, 0.48), 0 0 30px rgba(var(--ski-green-rgb), 0.2);
+		}
+		#wk-widget .wk-widget-btn.connected,
+		#wk-widget > div > button.connected {
+			background: linear-gradient(135deg, rgba(40, 160, 103, 0.2), rgba(22, 110, 68, 0.2));
+			border-color: rgba(var(--ski-green-rgb), 0.38);
+		}
+		#wk-widget .wk-widget-btn.session-only,
+		#wk-widget > div > button.session-only {
+			border-style: dashed;
+			background: linear-gradient(135deg, rgba(21, 90, 59, 0.28), rgba(11, 46, 30, 0.3));
+		}
 	</style>
 </head>
 <body data-register-flow="${registerFlow}">
@@ -659,9 +678,7 @@ export function generateRegistrationPage(
 	<div class="container">
 			<nav class="nav">
 				<a class="nav-home" href="https://sui.ski">${generateLogoSvg(22)} sui.ski</a>
-				<div class="nav-meta">
-					${registerFlow === 'register2' ? '<span class="badge flow-badge">register2</span>' : ''}
-				</div>
+				<div class="nav-meta"></div>
 			</nav>
 
 		<div class="layout-grid">
@@ -673,20 +690,22 @@ export function generateRegistrationPage(
 	<div class="tracker-footer">
 		<span class="tracker-line">
 			<span class="tracker-price-label">SUI <span id="sui-price">$--</span></span>
-			<span class="tracker-sep">·</span>
+			<span class="tracker-sep">\u00b7</span>
 			<span class="tracker-built-on">
 				Built on
 				<a href="https://docs.sui.io" target="_blank" rel="noopener">Sui</a>
-				<span class="tracker-sep">·</span>
+				<span class="tracker-sep">\u00b7</span>
 				<a href="https://docs.suins.io" target="_blank" rel="noopener">SuiNS</a>
-				<span class="tracker-sep">·</span>
+				<span class="tracker-sep">\u00b7</span>
 				<a href="https://moveregistry.com/docs" target="_blank" rel="noopener">MVR</a>
-				<span class="tracker-sep">·</span>
+				<span class="tracker-sep">\u00b7</span>
 				<a href="https://docs.sui.io/standards/deepbook" target="_blank" rel="noopener">DeepBook</a>
-				<span class="tracker-sep">·</span>
+				<span class="tracker-sep">\u00b7</span>
 				<a href="https://docs.wal.app" target="_blank" rel="noopener">Walrus</a>
-				<span class="tracker-sep">·</span>
+				<span class="tracker-sep">\u00b7</span>
 				<a href="https://seal-docs.wal.app" target="_blank" rel="noopener">Seal</a>
+				<span class="tracker-sep">\u00b7</span>
+				<a href="https://docs.waap.xyz/category/guides-sui" target="_blank" rel="noopener">WaaP</a>
 			</span>
 		</span>
 	</div>
@@ -734,17 +753,17 @@ export function generateRegistrationPage(
 		const REGISTER_BUCKET = ${serializeJson(registerBucket)}
 		const IS_REGISTERABLE = ${isRegisterable ? 'true' : 'false'}
 
-		const yearsEl = document.getElementById('years')
-		const yearsValueEl = document.getElementById('years-value')
-		const yearsDecreaseBtn = document.getElementById('years-decrease')
-		const yearsIncreaseBtn = document.getElementById('years-increase')
-		const targetEl = document.getElementById('target')
-		const primaryStarEl = document.getElementById('primary-star')
-		const registerBtn = document.getElementById('register-btn')
-		const registerStatus = document.getElementById('register-status')
-		const priceValue = document.getElementById('price-value')
-		const priceNote = document.getElementById('price-note')
-		const suiPriceEl = document.getElementById('sui-price')
+			const yearsEl = document.getElementById('years')
+			const yearsValueEl = document.getElementById('years-value')
+			const yearsDecreaseBtn = document.getElementById('years-decrease')
+			const yearsIncreaseBtn = document.getElementById('years-increase')
+			const primaryStarEl = document.getElementById('primary-star')
+			const registerBtn = document.getElementById('register-btn')
+			const registerStatus = document.getElementById('register-status')
+			const priceValue = document.getElementById('price-value')
+			const suiPriceEl = document.getElementById('sui-price')
+			const walletProfileBtn = document.getElementById('wallet-profile-btn')
+		const walletBalanceEl = document.getElementById('wallet-balance')
 		const x402PriceEl = document.getElementById('x402-price')
 		const x402LinkEl = document.getElementById('x402-link')
 		const suggestionsGrid = document.getElementById('suggestions-grid')
@@ -764,28 +783,28 @@ export function generateRegistrationPage(
 			devnet: 'https://fullnode.devnet.sui.io:443',
 		}
 
-		function formatPrimaryPriceHtml(sui) {
-			if (!Number.isFinite(sui) || sui <= 0) return '-- <span class="price-unit">SUI</span>'
-			const whole = Math.trunc(sui)
-			const fraction = sui - whole
-			if (fraction > 0.95) {
-				return String(whole + 1) + '<span class="price-unit">SUI</span>'
+			function formatPrimaryPriceHtml(sui) {
+				if (!Number.isFinite(sui) || sui <= 0) return '--'
+				const whole = Math.trunc(sui)
+				const fraction = sui - whole
+				if (fraction > 0.95) {
+					return String(whole + 1)
+				}
+				const decimals = Math.floor(fraction * 100)
+				if (decimals < 5) {
+					return String(whole)
+				}
+				const decimalsText = String(decimals).padStart(2, '0')
+				const normalizedDecimals = decimalsText.endsWith('0') ? decimalsText.slice(0, 1) : decimalsText
+				return String(whole) + '<span class="price-decimals">.' + normalizedDecimals + '</span>'
 			}
-			const decimals = Math.floor(fraction * 100)
-			if (decimals < 5) {
-				return String(whole) + '<span class="price-unit">SUI</span>'
-			}
-			const decimalsText = String(decimals).padStart(2, '0')
-			const normalizedDecimals = decimalsText.endsWith('0') ? decimalsText.slice(0, 1) : decimalsText
-			return String(whole) + '<span class="price-decimals">.' + normalizedDecimals + '</span><span class="price-unit">SUI</span>'
-		}
 
 		function formatUsdAmount(usdValue) {
 			if (!Number.isFinite(usdValue) || usdValue <= 0) return null
 			return new Intl.NumberFormat('en-US', {
-				minimumFractionDigits: 2,
-				maximumFractionDigits: 2,
-			}).format(usdValue)
+				minimumFractionDigits: 0,
+				maximumFractionDigits: 0,
+			}).format(Math.round(usdValue))
 		}
 
 		function updatePrimaryStarUi() {
@@ -825,14 +844,14 @@ export function generateRegistrationPage(
 		function getConnectedAddress() {
 			const conn = SuiWalletKit.$connection.value
 			if (!conn) return null
-			if (conn.status !== 'connected' && conn.status !== 'session') return null
+			if (conn.status !== 'connected') return null
 			return conn.address || null
 		}
 
 		function getConnectedPrimaryName() {
 			const conn = SuiWalletKit.$connection.value
 			if (!conn) return null
-			if (conn.status !== 'connected' && conn.status !== 'session') return null
+			if (conn.status !== 'connected') return null
 			if (!conn.primaryName || typeof conn.primaryName !== 'string') return null
 			const normalized = conn.primaryName.trim().replace(/\\.sui$/i, '')
 			return normalized || null
@@ -893,10 +912,6 @@ export function generateRegistrationPage(
 			updatePrimaryStarUi()
 		}
 
-		function isLikelyAddress(value) {
-			return !!value && typeof value === 'string' && value.startsWith('0x') && value.length >= 10
-		}
-
 		function parsePriceMist(value) {
 			if (typeof value === 'bigint') return value
 			if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.floor(value))
@@ -922,26 +937,17 @@ export function generateRegistrationPage(
 			return null
 		}
 
-		async function resolveAddressOrName(raw, suinsClient) {
-			const value = String(raw || '').trim()
-			if (!value) return null
-			if (isLikelyAddress(value)) return value
-			const name = value.endsWith('.sui') ? value : value + '.sui'
-			const record = await suinsClient.getNameRecord(name)
-			const resolved = record?.targetAddress
-			if (!isLikelyAddress(resolved)) {
-				throw new Error('Could not resolve recipient name')
-			}
-			return resolved
-		}
-
 		function updateRegisterButton() {
 			if (!registerBtn) return
 			const address = getConnectedAddress()
+			if (walletProfileBtn) {
+				walletProfileBtn.classList.toggle('visible', !!address)
+			}
 			if (!address) {
-				registerBtn.textContent = 'Connect Wallet'
+				registerBtn.style.display = 'none'
 				return
 			}
+			registerBtn.style.display = ''
 			if (pricingData && pricingData.discountedSuiMist) {
 				const sui = Number(pricingData.discountedSuiMist) / 1e9
 				if (Number.isFinite(sui) && sui > 0) {
@@ -963,42 +969,39 @@ export function generateRegistrationPage(
 				const sui = mist / 1e9
 				const discountedUsdRaw = Number(pricingData?.breakdown?.discountedPriceUsd || 0)
 				const discountedUsdText = formatUsdAmount(discountedUsdRaw)
-				if (priceValue) {
-					const primaryPriceHtml = formatPrimaryPriceHtml(sui)
-					const usdHtml = discountedUsdText ? '<span class="price-usd">/ $' + discountedUsdText + ' est.</span>' : '<span class="price-usd">/ $-- est.</span>'
-					priceValue.innerHTML = primaryPriceHtml + ' ' + usdHtml
-				}
-				if (priceNote) {
-					const rawSavingsMist = Number(pricingData?.savingsMist || 0)
-					const directMist = Number(pricingData?.directSuiMist || 0)
-					const discountedMist = Number(pricingData?.discountedSuiMist || 0)
-					const savingsMist = Number.isFinite(rawSavingsMist) && rawSavingsMist > 0
-						? rawSavingsMist
-						: (Number.isFinite(directMist) && Number.isFinite(discountedMist) && directMist > discountedMist
-							? directMist - discountedMist
-							: 0)
-					const savingsSui = savingsMist / 1e9
-					const baseUsdRaw = Number(pricingData?.breakdown?.basePriceUsd || 0)
-					const premiumUsdRaw = Number(pricingData?.breakdown?.premiumUsd || 0)
-					const originalUsdText = formatUsdAmount(baseUsdRaw + premiumUsdRaw)
-					const originalUsdLabel = originalUsdText ? ' | Original $' + originalUsdText : ''
-					if (Number.isFinite(savingsSui) && savingsSui > 0) {
-						priceNote.classList.add('discount')
-						priceNote.textContent = 'SKI saved ' + savingsSui.toFixed(2) + ' SUI' + originalUsdLabel
-					} else {
-						priceNote.classList.remove('discount')
-						priceNote.textContent = (years === 1 ? '1 year registration' : years + ' year registration') + originalUsdLabel
+				const savingsMist = Number(pricingData?.savingsMist || 0)
+				const savingsSui = savingsMist / 1e9
+				const directUsd = Number(pricingData?.breakdown?.basePriceUsd || 0)
+				const savingsUsd = directUsd - discountedUsdRaw
+					if (priceValue) {
+						const primaryPriceHtml = formatPrimaryPriceHtml(sui)
+						const perYearUsd = years > 0 ? discountedUsdRaw / years : discountedUsdRaw
+						const perYearUsdText = formatUsdAmount(perYearUsd)
+						const usdLabel = perYearUsdText ? '$' + perYearUsdText + '/yr' : '$--'
+						const suiIcon = '<svg class="price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg>'
+						let savingsHtml = ''
+						const discountEl = document.getElementById('price-savings')
+						if (savingsSui > 0.5 && savingsUsd > 0.5 && discountEl) {
+							const savingsUsdText = formatUsdAmount(savingsUsd)
+							const discountSuiIcon = '<svg class="discount-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg>'
+							discountEl.innerHTML =
+								'<span>-' + Math.round(savingsSui) + discountSuiIcon + '</span>' +
+								'<span>($' + (savingsUsdText || '--') + ')</span>'
+						}
+						priceValue.innerHTML =
+							'<div class="nft-price-main"><span class="price-amount">' + primaryPriceHtml + '</span>' + suiIcon + '</div>' +
+							'<span class="price-usd">\u2248 ' + usdLabel + '</span>'
+					}
+					updateRegisterButton()
+				} catch (error) {
+					if (priceValue) {
+						priceValue.innerHTML =
+							'<div class="nft-price-main"><span class="price-amount">--</span>' +
+							'<svg class="price-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg></div>' +
+							'<span class="price-usd">\u2248 $--</span>'
 					}
 				}
-				updateRegisterButton()
-			} catch (error) {
-				if (priceValue) priceValue.innerHTML = '-- <span class="price-unit">SUI</span> <span class="price-usd">/ $-- est.</span>'
-				if (priceNote) {
-					priceNote.classList.remove('discount')
-					priceNote.textContent = 'Pricing unavailable'
-				}
 			}
-		}
 
 		async function updateSuiPrice() {
 			if (!suiPriceEl) return
@@ -1014,6 +1017,72 @@ export function generateRegistrationPage(
 			} catch {
 				suiPriceEl.textContent = '$--'
 			}
+		}
+
+		async function updateWalletBalance() {
+			if (!walletBalanceEl) return
+			const address = getConnectedAddress()
+			if (!address || typeof SuiJsonRpcClient !== 'function') {
+				walletBalanceEl.className = 'wallet-balance'
+				walletBalanceEl.textContent = ''
+				return
+			}
+			try {
+				const client = new SuiJsonRpcClient({ url: getRpcUrlForNetwork() })
+				const result = await client.getBalance({ owner: address })
+				const totalMist = Number(result?.totalBalance || 0)
+				const sui = totalMist / 1e9
+				walletBalanceEl.className = 'wallet-balance show'
+				walletBalanceEl.textContent = 'Balance: ' + sui.toFixed(2) + ' SUI'
+			} catch {
+				walletBalanceEl.className = 'wallet-balance'
+			}
+		}
+
+		function getConnectedWalletName() {
+			const conn = SuiWalletKit.$connection.value
+			if (conn && conn.wallet && conn.wallet.name) return String(conn.wallet.name)
+			const session = typeof getWalletSession === 'function' ? getWalletSession() : null
+			return session && session.walletName ? String(session.walletName) : ''
+		}
+
+		function getConnectedWalletIcon() {
+			const conn = SuiWalletKit.$connection.value
+			if (conn && conn.wallet && conn.wallet.icon) return String(conn.wallet.icon)
+			return ''
+		}
+
+		async function updateCardWalletInfo() {
+			const el = document.getElementById('nft-card-wallet')
+			if (!el) return
+			const address = getConnectedAddress()
+			if (!address) {
+				el.className = 'nft-card-wallet'
+				el.innerHTML = ''
+				return
+			}
+			const walletName = getConnectedWalletName()
+			const isWaaP = walletName.toLowerCase() === 'waap'
+			let badgeHtml = ''
+			if (isWaaP) {
+				const waapIcon = typeof __wkWaaPIcon === 'string' ? __wkWaaPIcon : ''
+				badgeHtml = (waapIcon ? '<img class="waap-blue" src="' + waapIcon + '">' : '') + ' WaaP'
+			} else if (walletName) {
+				const icon = getConnectedWalletIcon()
+				badgeHtml = (icon ? '<img src="' + icon + '">' : '') + ' ' + walletName
+			}
+			el.className = 'nft-card-wallet show'
+			el.innerHTML =
+				'<div class="nft-card-wallet-badge">' + badgeHtml + '</div>' +
+				'<div class="nft-card-wallet-balance" id="nft-card-balance"></div>'
+			try {
+				const client = new SuiJsonRpcClient({ url: getRpcUrlForNetwork() })
+				const result = await client.getBalance({ owner: address })
+				const totalMist = Number(result?.totalBalance || 0)
+				const sui = totalMist / 1e9
+				const balanceEl = document.getElementById('nft-card-balance')
+				if (balanceEl) balanceEl.textContent = sui.toFixed(2) + ' SUI'
+			} catch {}
 		}
 
 		function formatCompactSuiPrice(suiAmount) {
@@ -1199,11 +1268,7 @@ export function generateRegistrationPage(
 				const coinConfig = getSuiCoinConfig(suinsClient)
 				if (!coinConfig) throw new Error('SUI coin config unavailable')
 
-				let recipient = address
-				if (targetEl && targetEl.value.trim()) {
-					recipient = await resolveAddressOrName(targetEl.value, suinsClient)
-					if (!recipient) throw new Error('Invalid recipient')
-				}
+				const recipient = address
 
 				let rawPrice
 				try {
@@ -1232,10 +1297,6 @@ export function generateRegistrationPage(
 					address: recipient,
 					isSubname: domain.replace(/\\.sui$/i, '').includes('.'),
 				})
-
-				if (wantsPrimaryName && recipient !== address) {
-					throw new Error('Primary star applies to your connected wallet only. Clear recipient or disable the star.')
-				}
 
 				if (wantsPrimaryName) {
 					suinsTx.setDefault(domain)
@@ -1288,11 +1349,15 @@ export function generateRegistrationPage(
 		window.onRegisterWalletConnected = function() {
 			updateRegisterButton()
 			syncPrimaryStarState()
+			updateWalletBalance()
+			updateCardWalletInfo()
 		}
 
 		window.onRegisterWalletDisconnected = function() {
 			updateRegisterButton()
 			syncPrimaryStarState()
+			updateWalletBalance()
+			updateCardWalletInfo()
 		}
 
 		${generateSharedWalletMountJs({
@@ -1312,9 +1377,29 @@ export function generateRegistrationPage(
 		fetchPricing()
 		updateSuiPrice()
 		updateX402Listing()
+		updateCardWalletInfo()
 		setInterval(updateSuiPrice, 60000)
 		setInterval(updateX402Listing, 120000)
 		loadSuggestions()
+
+		;(async function renderNftQr() {
+			const canvas = document.getElementById('nft-qr')
+			if (!canvas || !canvas.getContext) return
+			try {
+				const qrMod = await import('https://esm.sh/qr-creator@1.0.0')
+				const QrCreator = qrMod.default || qrMod
+				QrCreator.render({
+					text: 'https://' + NAME + '.sui.ski',
+					radius: 0.4,
+					ecLevel: 'M',
+					fill: '#49da91',
+					background: 'transparent',
+					size: 200,
+				}, canvas)
+			} catch {
+				canvas.style.display = 'none'
+			}
+		})()
 
 		if (yearsDecreaseBtn) {
 			yearsDecreaseBtn.addEventListener('click', () => {
@@ -1335,6 +1420,18 @@ export function generateRegistrationPage(
 				updatePrimaryStarUi()
 			})
 		}
+		document.addEventListener('keydown', (e) => {
+			if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
+			if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
+				e.preventDefault()
+				setSelectedYears(getSelectedYears() + 1)
+				fetchPricing()
+			} else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+				e.preventDefault()
+				setSelectedYears(getSelectedYears() - 1)
+				fetchPricing()
+			}
+		})
 		if (refreshSuggestionsBtn) refreshSuggestionsBtn.addEventListener('click', () => loadSuggestions(true))
 		if (registerBtn) registerBtn.addEventListener('click', registerName)
 	</script>

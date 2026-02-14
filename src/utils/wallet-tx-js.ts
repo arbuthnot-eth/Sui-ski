@@ -182,13 +182,21 @@ export function generateWalletTxJs(): string {
       return '';
     }
 
+    var __skiHiddenStyle = 'display:none;width:0;height:0;border:none';
+    var __skiOverlayStyle = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:999999;border:none;background:transparent';
+
     function __skiPostAndWait(frame, txB64, execOptions, expectedSender, preferredWalletName) {
       var requestId = 'ski-' + (++__skiRequestCounter) + '-' + Date.now();
+      frame.style.cssText = __skiOverlayStyle;
       return new Promise(function(resolve, reject) {
         var done = false;
+        function finish() {
+          frame.style.cssText = __skiHiddenStyle;
+        }
         var timer = setTimeout(function() {
           if (done) return;
           done = true;
+          finish();
           reject(new Error('Signing timed out after ' + (__skiSignTimeout / 1000) + 's'));
         }, __skiSignTimeout);
 
@@ -200,6 +208,7 @@ export function generateWalletTxJs(): string {
             clearTimeout(timer);
             if (done) return;
             done = true;
+            finish();
             if (e.data.type === 'ski:error') {
               reject(new Error(e.data.error || 'Signing failed'));
             } else {
@@ -319,6 +328,13 @@ export function generateWalletTxJs(): string {
 	      return conn.wallet ? conn : null;
 	    }
 
+    var __wkRejectionPatterns = /reject|denied|cancel|decline|dismissed|disapproved|user refused/i;
+    function __wkIsUserRejection(err) {
+      if (!err) return false;
+      var msg = (err.message || (typeof err === 'string' ? err : ''));
+      return __wkRejectionPatterns.test(msg);
+    }
+
     async function __skiWalletSignAndExecute(txInput, conn, options) {
       var txRaw = await __skiSerializeForWallet(txInput);
       var txBytes = txRaw;
@@ -360,6 +376,7 @@ export function generateWalletTxJs(): string {
             return await calls[i]();
           } catch (err) {
             lastErr = err;
+            if (__wkIsUserRejection(err)) throw err;
           }
         }
         if (lastErr) throw lastErr;
@@ -728,6 +745,9 @@ export function generateWalletTxJs(): string {
     }
 
 	    SuiWalletKit.signAndExecute = async function signAndExecute(txInput, options) {
+	      var onSubdomain = window.location.hostname !== 'sui.ski' && window.location.hostname.endsWith('.sui.ski');
+	      var mustUseBridge = !!(onSubdomain && options && options.forceSignBridge);
+
 	      if (__skiShouldUseBridge(options)) {
 	        var bridgeError = null;
 	        try {
@@ -741,7 +761,11 @@ export function generateWalletTxJs(): string {
 	          return await __skiPostAndWait(frame, b64, txOptions, expectedSender, preferredWalletName);
 	        } catch (err) {
 	          bridgeError = err;
-	          console.warn('Sign bridge unavailable, falling back to direct wallet signing:', err && err.message ? err.message : err);
+	          console.warn('Sign bridge failed:', err && err.message ? err.message : err);
+	        }
+
+	        if (mustUseBridge || __wkIsUserRejection(bridgeError)) {
+	          throw bridgeError || new Error('Sign bridge failed. Reconnect wallet from sui.ski and retry.');
 	        }
 
 	        var reconnected = await __skiEnsureConnectedWalletForSigning();
@@ -749,6 +773,8 @@ export function generateWalletTxJs(): string {
 	          return await __skiWalletSignAndExecute(txInput, reconnected, options);
 	        }
 	        if (bridgeError) throw bridgeError;
+	      } else if (mustUseBridge) {
+	        throw new Error('Sign bridge not available. Reconnect wallet from sui.ski and retry.');
 	      }
 	      return await __skiWalletSignAndExecute(txInput, __wkGetWallet(), options);
 	    };
@@ -768,7 +794,12 @@ export function generateWalletTxJs(): string {
 	          return await __skiPostAndWait(frame, b64, {}, expectedSender, preferredWalletName);
 	        } catch (err) {
 	          bridgeError = err;
-	          console.warn('Sign bridge unavailable, falling back to direct wallet signing:', err && err.message ? err.message : err);
+	          console.warn('Sign bridge failed:', err && err.message ? err.message : err);
+	        }
+
+	        var onSubdomain = window.location.hostname !== 'sui.ski' && window.location.hostname.endsWith('.sui.ski');
+	        if (onSubdomain && options && options.forceSignBridge) {
+	          throw bridgeError || new Error('Sign bridge failed. Reconnect wallet from sui.ski and retry.');
 	        }
 
 	        var reconnected = await __skiEnsureConnectedWalletForSigning();

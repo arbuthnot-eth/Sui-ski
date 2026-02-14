@@ -47,6 +47,7 @@ export interface Env {
 	SOL_SWAP_POOL_ID?: string
 	SOL_SWAP_DWALLET_ID?: string
 	SOL_SWAP_SOLANA_ADDRESS?: string
+	USDY_COIN_TYPE?: string
 }
 
 export type X402VerifierProvider = 'cloudflare' | 'coinbase'
@@ -401,4 +402,52 @@ export interface ScheduledClaim {
 	lastAttemptAt?: number
 	resultDigest?: string
 	error?: string
+}
+
+export type X402ChatPage = 'profile' | 'landing' | 'register'
+
+export interface X402ChatContext {
+	page: X402ChatPage
+	name?: string
+	address?: string
+	expirationMs?: number
+	linkedNames?: number
+}
+
+export interface X402ChatTab {
+	messages: number
+	costMist: string
+	settledMist: string
+	lastActivity: number
+	context: X402ChatContext
+}
+
+export interface X402ChatRequest {
+	message: string
+	context: X402ChatContext
+}
+
+export interface X402ChatResponse {
+	reply: string
+	suggestions?: string[]
+	action?: 'dice' | 'lookup' | 'navigate'
+	actionData?: Record<string, unknown>
+	tab: {
+		costMist: string
+		thresholdMist: string
+		settleRequired: boolean
+	}
+}
+
+export interface X402DiceCommit {
+	commitHash: string
+	serverEntropy: string
+	timestamp: number
+}
+
+export interface X402DiceReveal {
+	result: number
+	serverEntropy: string
+	clientEntropy: string
+	combined: string
 }

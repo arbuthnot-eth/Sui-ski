@@ -49,9 +49,17 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         status: 'disconnected',
         primaryName: null
       });
+      var __wkWalletEventsUnsub = null;
 
       function subscribe(store, fn) {
         return store.subscribe(fn);
+      }
+
+      function __wkDetachWalletEvents() {
+        if (typeof __wkWalletEventsUnsub === 'function') {
+          try { __wkWalletEventsUnsub(); } catch (_e) {}
+        }
+        __wkWalletEventsUnsub = null;
       }
 
       function __wkSafeGetAccounts(obj) {
@@ -170,6 +178,24 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	        return __wkFilterSuiAccounts(accounts);
 	      }
 
+	      function __wkIsUserRejection(err) {
+	        if (!err) return false;
+	        if (err.code === 4001) return true;
+	        var message = '';
+	        if (typeof err === 'string') message = err;
+	        else if (err && typeof err.message === 'string') message = err.message;
+	        message = String(message || '').toLowerCase();
+	        if (!message) return false;
+	        return (
+	          message.indexOf('user rejected') !== -1
+	          || message.indexOf('user denied') !== -1
+	          || message.indexOf('user cancelled') !== -1
+	          || message.indexOf('user canceled') !== -1
+	          || message.indexOf('rejected by user') !== -1
+	          || message.indexOf('request rejected') !== -1
+	        );
+	      }
+
 	      function __wkIsPhantomAuthError(err) {
 	        if (!err) return false;
 	        var message = '';
@@ -217,6 +243,39 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
           if (typeof getWallets === 'function') __wkWalletsApi = getWallets();
         } catch (e) {}
         return __wkWalletsApi;
+      }
+
+      var __wkWaaPLoading = null;
+      function __wkInitWaaP() {
+        if (__wkWaaPLoading) return __wkWaaPLoading;
+        __wkWaaPLoading = import('https://esm.sh/@human.tech/waap-sdk@1.2.0').then(function(mod) {
+          if (typeof mod.initWaaPSui !== 'function') return;
+          var wallet = mod.initWaaPSui({
+            config: {
+              authenticationMethods: ['email', 'phone', 'social'],
+              allowedSocials: ['google', 'twitter', 'discord', 'apple', 'coinbase'],
+              styles: { darkMode: true },
+            },
+            useStaging: false,
+          });
+          __wkInitWalletsApi();
+          if (__wkWalletsApi && typeof __wkWalletsApi.register === 'function') {
+            __wkWalletsApi.register(wallet);
+          } else if (typeof registerWallet === 'function') {
+            registerWallet(wallet);
+          } else {
+            try {
+              var stdMod = window.__suiWalletStandard;
+              if (stdMod && typeof stdMod.registerWallet === 'function') {
+                stdMod.registerWallet(wallet);
+              }
+            } catch (e) {}
+          }
+        }).catch(function(e) {
+          console.log('WaaP SDK load skipped:', e.message);
+        });
+        window.__wkWaaPLoading = __wkWaaPLoading;
+        return __wkWaaPLoading;
       }
 
       var __wkPasskeySdk = null;
@@ -514,6 +573,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 
 	      var __wkWindowWallets = [
 	        { check: function() { return window.phantom && window.phantom.sui; }, name: 'Phantom', icon: ${JSON.stringify(PHANTOM_ICON)} },
+	        { check: function() { return (window.backpack && (window.backpack.sui || window.backpack)) || null; }, name: 'Backpack', icon: 'https://backpack.app/favicon.ico' },
 	        { check: function() { return (window.slush && (window.slush.sui || window.slush.wallet || window.slush)) || null; }, name: 'Slush', icon: 'https://slush.app/favicon.ico' },
 	        { check: function() { return (window.suiet && (window.suiet.sui || window.suiet.wallet || window.suiet)) || null; }, name: 'Suiet', icon: 'https://suiet.app/favicon.ico' },
 	        { check: function() { return window.martian && window.martian.sui; }, name: 'Martian', icon: 'https://martianwallet.xyz/favicon.ico' },
@@ -568,6 +628,8 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	        }
 	        var key = __wkGetWalletSeenKey(wallet);
 	        if (key && seenKeys[key]) return true;
+	        var name = wallet && wallet.name ? String(wallet.name).toLowerCase() : '';
+	        if (name && seenKeys['__name__' + name]) return true;
 	        return false;
 	      }
 
@@ -580,6 +642,8 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	        }
 	        var key = __wkGetWalletSeenKey(wallet);
 	        if (key) seenKeys[key] = true;
+	        var name = wallet && wallet.name ? String(wallet.name).toLowerCase() : '';
+	        if (name) seenKeys['__name__' + name] = true;
 	      }
 
 	      function __wkWalletPriority(wallet) {
@@ -587,8 +651,12 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	        if (wallet.__isPasskey) return 99;
 	        var name = wallet.name ? String(wallet.name).toLowerCase() : '';
 	        if (name === 'phantom') return 0;
-	        if (name === 'sui wallet' || name === 'slush' || name === 'suiet' || name === 'martian' || name === 'ethos') return 1;
-	        if (name.indexOf('okx') !== -1) return 2;
+	        if (name === 'waap') return 1;
+	        if (name === 'backpack') return 2;
+	        if (name === 'slush') return 3;
+	        if (name === 'suiet') return 4;
+	        if (name === 'sui wallet' || name === 'martian' || name === 'ethos') return 5;
+	        if (name.indexOf('okx') !== -1) return 6;
 	        return 10;
 	      }
 
@@ -712,21 +780,21 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         });
       }
 
-      function detectWallets() {
-        var immediate = getSuiWallets();
-        if (immediate.length > 0) {
-          $wallets.set(immediate);
-        }
+	      function detectWallets() {
+	        if (!__wkIsSubdomain()) __wkInitWaaP();
+	        var immediate = getSuiWallets();
+	        if (immediate.length > 0) {
+	          $wallets.set(immediate);
+	        }
 
         return new Promise(function(resolve) {
           if (immediate.length > 0) {
-            var bgCheck = function() {
+            (__wkWaaPLoading || Promise.resolve()).then(function() {
               setTimeout(function() {
                 var updated = getSuiWallets();
                 if (updated.length > immediate.length) $wallets.set(updated);
-              }, 1000);
-            };
-            bgCheck();
+              }, 300);
+            });
             resolve(immediate);
             return;
           }
@@ -912,6 +980,9 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	                  }
 	                }
 	                if (phantomLastError) {
+	                  if (__wkIsUserRejection(phantomLastError)) {
+	                    throw phantomLastError;
+	                  }
 	                  if (__wkIsPhantomAuthError(phantomLastError)) {
 	                    throw new Error('Phantom blocked Sui account authorization for this site. In Phantom, approve this site for Sui accounts and retry.');
 	                  }
@@ -958,6 +1029,14 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
               __wkFinishConnect(wallet, accounts);
               resolve(accounts[0]);
             } catch (e) {
+              if (__wkIsUserRejection(e)) {
+                $connection.set({
+                  wallet: null, account: null, address: null,
+                  status: 'disconnected', primaryName: null
+                });
+                reject(e);
+                return;
+              }
               try {
                 var fallbackAccounts = __wkFilterSuiAccounts(
                   __wkSafeGetAccounts(wallet).concat(__wkSafeGetAccounts(wallet && wallet._raw))
@@ -1005,6 +1084,62 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         return Promise.reject(new Error('Wallet does not support message signing'));
       }
 
+      function __wkExtractEventAccounts(changeEvent, wallet) {
+        if (changeEvent && Array.isArray(changeEvent.accounts)) {
+          return __wkFilterSuiAccounts(changeEvent.accounts);
+        }
+        if (changeEvent && Array.isArray(changeEvent.nextAccounts)) {
+          return __wkFilterSuiAccounts(changeEvent.nextAccounts);
+        }
+        if (changeEvent && changeEvent.wallet && Array.isArray(changeEvent.wallet.accounts)) {
+          return __wkFilterSuiAccounts(changeEvent.wallet.accounts);
+        }
+        return __wkFilterSuiAccounts(
+          __wkSafeGetAccounts(wallet).concat(__wkSafeGetAccounts(wallet && wallet._raw))
+        );
+      }
+
+      function __wkAttachWalletEvents(wallet) {
+        __wkDetachWalletEvents();
+        if (!wallet || !wallet.features) return;
+        var eventsFeature = wallet.features['standard:events'];
+        if (!eventsFeature || typeof eventsFeature.on !== 'function') return;
+        try {
+          __wkWalletEventsUnsub = eventsFeature.on('change', function(changeEvent) {
+            var current = $connection.value;
+            if (!current || current.wallet !== wallet) return;
+            var accounts = __wkExtractEventAccounts(changeEvent, wallet);
+            if (!accounts || accounts.length === 0) {
+              __wkDetachWalletEvents();
+              $connection.set({
+                wallet: null,
+                account: null,
+                address: null,
+                status: 'disconnected',
+                primaryName: null
+              });
+              return;
+            }
+            var nextAccount = accounts[0];
+            var nextAddress = __wkNormalizeAccountAddress(nextAccount);
+            if (!nextAddress) return;
+            var sameAddress = current.address === nextAddress;
+            var sameStatus = current.status === 'connected';
+            var nextPrimary = sameAddress ? current.primaryName : null;
+            if (sameAddress && sameStatus && current.account === nextAccount) return;
+            $connection.set({
+              wallet: wallet,
+              account: nextAccount,
+              address: nextAddress,
+              status: 'connected',
+              primaryName: nextPrimary
+            });
+          });
+        } catch (_e) {
+          __wkWalletEventsUnsub = null;
+        }
+      }
+
       var __sessionReady = null;
 
       function __wkIsSubdomain() {
@@ -1037,6 +1172,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
       }
 
 	      function __wkFinishConnect(wallet, accounts) {
+          __wkDetachWalletEvents();
 	        var account = accounts[0];
 	        var address = __wkNormalizeAccountAddress(account);
 	        if (!address && account && typeof account.address === 'string') {
@@ -1052,6 +1188,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         if (__wkIsSubdomain()) {
           try { __wkInitSignBridge(); } catch (_e) {}
         }
+        __wkAttachWalletEvents(wallet);
         var existingSession = typeof getWalletSession === 'function' ? getWalletSession() : null;
         var hasSessionCookie = document.cookie.indexOf('session_id=') !== -1;
         var existingWalletName = existingSession && existingSession.walletName ? String(existingSession.walletName) : '';
@@ -1075,6 +1212,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 
       function initFromSession(address, walletName) {
         if (!address) return;
+        __wkDetachWalletEvents();
         $connection.set({
           wallet: null,
           account: null,
@@ -1086,6 +1224,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 
       function disconnect() {
         var conn = $connection.value;
+        __wkDetachWalletEvents();
         if (conn.wallet) {
           var disconnectFeature = conn.wallet.features && conn.wallet.features['standard:disconnect'];
           if (disconnectFeature && disconnectFeature.disconnect) {
@@ -1168,6 +1307,13 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	              var session = typeof getWalletSession === 'function' ? getWalletSession() : null;
 	              if (!session || !session.walletName) { resolve(false); return; }
 
+	              if (__wkIsSubdomain() && session.address) {
+	                initFromSession(session.address, session.walletName);
+	                __wkInitSignBridge();
+	                resolve(true);
+	                return;
+	              }
+
 	              await new Promise(function(r) { setTimeout(r, 300); });
 
 	              var wallets = getSuiWallets();
@@ -1227,13 +1373,6 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	                } catch (_reconnectErr) {}
 	              }
 
-	              if (__wkIsSubdomain() && session.address) {
-	                initFromSession(session.address, session.walletName);
-	                __wkInitSignBridge();
-	                resolve(true);
-	                return;
-	              }
-
 	              if (session.address) {
 	                initFromSession(session.address, session.walletName);
 	                resolve(true);
@@ -1268,6 +1407,35 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         return __wkSignPersonalMessage(conn.wallet, conn.account, message);
       }
 
+      function switchChain(chain) {
+        var conn = $connection.value;
+        if (!conn || !conn.wallet) return Promise.reject(new Error('No wallet connected'));
+        var chainName = String(chain || '').trim();
+        if (!chainName) return Promise.reject(new Error('Missing chain identifier'));
+        var feature = conn.wallet.features && conn.wallet.features['sui:switchChain'];
+        if (feature && typeof feature.switchChain === 'function') {
+          return feature.switchChain({ chain: chainName });
+        }
+        var raw = conn.wallet._raw;
+        if (raw && raw.features && raw.features['sui:switchChain'] && typeof raw.features['sui:switchChain'].switchChain === 'function') {
+          return raw.features['sui:switchChain'].switchChain({ chain: chainName });
+        }
+        return Promise.reject(new Error('Wallet does not support chain switching'));
+      }
+
+      function requestEmail() {
+        var conn = $connection.value;
+        if (!conn || !conn.wallet) return Promise.reject(new Error('No wallet connected'));
+        if (typeof conn.wallet.requestEmail === 'function') {
+          return conn.wallet.requestEmail();
+        }
+        var raw = conn.wallet._raw;
+        if (raw && typeof raw.requestEmail === 'function') {
+          return raw.requestEmail();
+        }
+        return Promise.reject(new Error('Current wallet does not support requestEmail'));
+      }
+
       return {
         __config: { network: __wkNetwork },
         $wallets: $wallets,
@@ -1281,6 +1449,8 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         autoReconnect: autoReconnect,
         setPrimaryName: setPrimaryName,
         signPersonalMessage: signPersonalMessage,
+        switchChain: switchChain,
+        requestEmail: requestEmail,
         initFromSession: initFromSession,
         get __sessionReady() { return __sessionReady; },
         get __skiSignFrame() { return __skiSignFrame; },

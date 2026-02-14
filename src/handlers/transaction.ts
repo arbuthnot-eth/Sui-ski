@@ -26,6 +26,7 @@ interface TransactionData {
 		module: string
 		packageId: string
 		parsedJson: Record<string, unknown>
+		authenticated: boolean
 	}>
 	objectChanges: {
 		created: Array<{
@@ -105,6 +106,7 @@ export async function fetchTransactionData(
 					transactionModule: string
 					packageId: string
 					parsedJson: Record<string, unknown>
+					authenticated?: boolean
 				}>
 				balanceChanges?: Array<{
 					owner: { AddressOwner?: string; ObjectOwner?: string }
@@ -145,6 +147,7 @@ export async function fetchTransactionData(
 				module: ev.transactionModule,
 				packageId: ev.packageId,
 				parsedJson: ev.parsedJson,
+				authenticated: ev.authenticated ?? false,
 			})) || []
 
 		// Parse object changes
@@ -565,6 +568,70 @@ function transactionPageHTML(tx: TransactionData, network: string): string {
 			font-weight: 600;
 			word-break: break-all;
 		}
+		.event-header {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+		.auth-badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			padding: 2px 8px;
+			border-radius: 6px;
+			font-size: 0.65rem;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			flex-shrink: 0;
+		}
+		.auth-badge.verified {
+			background: var(--success-light);
+			color: var(--success);
+			border: 1px solid rgba(52, 211, 153, 0.2);
+		}
+		.auth-badge.standard {
+			background: rgba(113, 113, 122, 0.12);
+			color: var(--text-muted);
+			border: 1px solid var(--border);
+		}
+		.auth-badge svg {
+			width: 12px;
+			height: 12px;
+		}
+		.verify-btn {
+			padding: 4px 10px;
+			background: var(--accent-light);
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			color: var(--accent);
+			font-size: 0.7rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.verify-btn:hover {
+			background: rgba(96, 165, 250, 0.2);
+			border-color: var(--accent);
+		}
+		.verify-result {
+			margin-top: 8px;
+			padding: 8px 12px;
+			border-radius: 8px;
+			font-size: 0.75rem;
+			display: none;
+		}
+		.verify-result.success {
+			background: var(--success-light);
+			color: var(--success);
+			border: 1px solid rgba(52, 211, 153, 0.2);
+		}
+		.verify-result.failure {
+			background: rgba(248, 113, 113, 0.12);
+			color: #f87171;
+			border: 1px solid rgba(248, 113, 113, 0.2);
+		}
 		pre {
 			background: var(--card-bg-solid);
 			border: 1px solid var(--border);
@@ -697,15 +764,46 @@ function transactionPageHTML(tx: TransactionData, network: string): string {
 			<h3>Events (${tx.events.length})</h3>
 			${tx.events
 				.map(
-					(ev) => `
+					(ev, idx) => `
 				<div class="event">
-					<div class="event-type">${ev.type}</div>
+					<div class="event-header">
+						<div class="event-type">${ev.type}</div>
+						${
+							ev.authenticated
+								? `<span class="auth-badge verified"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>Authenticated</span>
+								<button class="verify-btn" onclick="verifyEvent('${ev.packageId}', ${idx})">Verify</button>`
+								: '<span class="auth-badge standard">Standard</span>'
+						}
+					</div>
 					<pre>${JSON.stringify(ev.parsedJson, null, 2)}</pre>
+					<div class="verify-result" id="verify-${idx}"></div>
 				</div>
 			`,
 				)
 				.join('')}
 		</div>
+		<script>
+		async function verifyEvent(packageId, idx) {
+			const el = document.getElementById('verify-' + idx);
+			el.style.display = 'block';
+			el.className = 'verify-result';
+			el.textContent = 'Verifying...';
+			try {
+				const res = await fetch('/api/events/stream/' + packageId + '/head');
+				const head = await res.json();
+				if (head.error) {
+					el.className = 'verify-result failure';
+					el.textContent = 'No EventStreamHead found for this package';
+					return;
+				}
+				el.className = 'verify-result success';
+				el.textContent = 'Stream verified: ' + head.numEvents + ' events committed at checkpoint ' + head.checkpointSeq;
+			} catch (e) {
+				el.className = 'verify-result failure';
+				el.textContent = 'Verification failed: ' + e.message;
+			}
+		}
+		</script>
 		`
 				: ''
 		}

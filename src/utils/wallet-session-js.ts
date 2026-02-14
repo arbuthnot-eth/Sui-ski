@@ -24,10 +24,21 @@ export function generateWalletSessionJs(): string {
       return match ? match.split('=')[1] : '';
     }
 
+    function __skiClearSessionCookies() {
+      var domains = ['', '; domain=.sui.ski'];
+      var names = ['session_id', 'wallet_address', 'wallet_name'];
+      for (var d = 0; d < domains.length; d++) {
+        for (var n = 0; n < names.length; n++) {
+          document.cookie = names[n] + '=' + domains[d] + '; path=/; max-age=0; secure; samesite=lax';
+        }
+      }
+    }
+
     function disconnectWalletSession() {
       var sessionId = localStorage.getItem(__SESSION_KEY) || __skiReadCookie('session_id');
       localStorage.removeItem(__SESSION_KEY);
       localStorage.removeItem(__WALLET_NAME_KEY);
+      __skiClearSessionCookies();
       fetch('/api/wallet/disconnect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

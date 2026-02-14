@@ -8,11 +8,14 @@ import {
 	DEEPBOOK_DEEP_SUI_POOL,
 	DEEPBOOK_NS_SUI_POOL,
 	DEEPBOOK_PACKAGE,
+	DEEPBOOK_SUI_USDC_POOL,
 	DEFAULT_SLIPPAGE_BPS,
+	getDeepBookSuiPools,
 	getNSSuiPrice,
 	NS_SCALE,
 	NS_TYPE_MAINNET,
 	SUI_TYPE,
+	USDC_TYPE,
 	simulateBuyNsWithSui,
 } from './ns-price'
 import { calculateRegistrationPrice, calculateRenewalPrice } from './pricing'
@@ -130,26 +133,27 @@ export async function buildSwapAndRegisterTx(
 	let priceImpactBps = 0
 
 	if (nsPrice.asks?.length) {
-		const quote = calculateSuiNeededForNs(registrationCostNsMist, nsPrice.asks, slippageBps)
+		const wideSlippage = Math.max(slippageBps, 1500)
+		const quote = calculateSuiNeededForNs(registrationCostNsMist, nsPrice.asks, wideSlippage)
 		suiForNsSwap = quote.suiNeeded
 		expectedNsOutput = quote.expectedNs
-		minNsOutput = quote.worstCaseNs
+		minNsOutput = registrationCostNsMist
 
 		const simResult = simulateBuyNsWithSui(suiForNsSwap, nsPrice.asks)
 		priceImpactBps = simResult.priceImpactBps
 
 		if (simResult.outputNs < minNsOutput) {
-			const extraBuffer = (suiForNsSwap * 20n) / 100n
+			const extraBuffer = (suiForNsSwap * 30n) / 100n
 			suiForNsSwap = suiForNsSwap + extraBuffer
 		}
 	} else {
-		const bufferBps = Math.max(slippageBps * 3, 2000)
+		const bufferBps = Math.max(slippageBps * 3, 3000)
 		const nsWithBuffer =
 			registrationCostNsMist + (registrationCostNsMist * BigInt(bufferBps)) / 10000n
 		const nsTokens = Number(nsWithBuffer) / NS_SCALE
 		suiForNsSwap = BigInt(Math.ceil(nsTokens * nsPrice.suiPerNs * 1e9))
 		expectedNsOutput = nsWithBuffer
-		minNsOutput = registrationCostNsMist - (registrationCostNsMist * BigInt(slippageBps)) / 10000n
+		minNsOutput = registrationCostNsMist
 	}
 
 	const suiForDeepSwap = (suiForNsSwap * DEEP_FEE_PERCENT) / 100n
@@ -402,25 +406,26 @@ export async function buildSwapAndRenewTx(
 	let priceImpactBps = 0
 
 	if (nsPrice.asks?.length) {
-		const quote = calculateSuiNeededForNs(renewalCostNsMist, nsPrice.asks, slippageBps)
+		const wideSlippage = Math.max(slippageBps, 1500)
+		const quote = calculateSuiNeededForNs(renewalCostNsMist, nsPrice.asks, wideSlippage)
 		suiForNsSwap = quote.suiNeeded
 		expectedNsOutput = quote.expectedNs
-		minNsOutput = quote.worstCaseNs
+		minNsOutput = renewalCostNsMist
 
 		const simResult = simulateBuyNsWithSui(suiForNsSwap, nsPrice.asks)
 		priceImpactBps = simResult.priceImpactBps
 
 		if (simResult.outputNs < minNsOutput) {
-			const extraBuffer = (suiForNsSwap * 20n) / 100n
+			const extraBuffer = (suiForNsSwap * 30n) / 100n
 			suiForNsSwap = suiForNsSwap + extraBuffer
 		}
 	} else {
-		const bufferBps = Math.max(slippageBps * 3, 2000)
+		const bufferBps = Math.max(slippageBps * 3, 3000)
 		const nsWithBuffer = renewalCostNsMist + (renewalCostNsMist * BigInt(bufferBps)) / 10000n
 		const nsTokens = Number(nsWithBuffer) / NS_SCALE
 		suiForNsSwap = BigInt(Math.ceil(nsTokens * nsPrice.suiPerNs * 1e9))
 		expectedNsOutput = nsWithBuffer
-		minNsOutput = renewalCostNsMist - (renewalCostNsMist * BigInt(slippageBps)) / 10000n
+		minNsOutput = renewalCostNsMist
 	}
 
 	const suiInputMist = suiForNsSwap
@@ -476,10 +481,7 @@ export async function buildSwapAndRenewTx(
 	)
 	const senderLower = senderAddress.toLowerCase()
 	const feeRecipientLower = feeRecipient.toLowerCase()
-	const residualRecipient =
-		feeRecipientLower === senderLower
-			? DUST_SINK_ADDRESS
-			: feeRecipient
+	const residualRecipient = feeRecipientLower === senderLower ? DUST_SINK_ADDRESS : feeRecipient
 
 	const [postRenewNsLeftover, nsSweepSui, nsSweepDeep] = tx.moveCall({
 		target: `${deepbookPackage}::pool::swap_exact_base_for_quote`,
@@ -571,4 +573,285 @@ export async function buildSuiRenewTx(
 	tx.setGasBudget(100_000_000)
 
 	return tx
+}
+
+export interface MultiCoinRenewParams {
+	domain: string
+	nftId: string
+	years: number
+	senderAddress: string
+	sourceCoinType: string
+	coinObjectIds: string[]
+	slippageBps?: number
+}
+
+export interface MultiCoinRenewResult {
+	tx: Transaction
+	breakdown: SwapBreakdown & {
+		sourceCoinType: string
+		sourceTokensNeeded: string
+	}
+}
+
+export async function buildMultiCoinRenewTx(
+	params: MultiCoinRenewParams,
+	env: Env,
+): Promise<MultiCoinRenewResult> {
+	const { domain, years, senderAddress, nftId, sourceCoinType, coinObjectIds } = params
+	const slippageBps = params.slippageBps ?? DEFAULT_SLIPPAGE_BPS
+
+	if (!coinObjectIds.length) {
+		throw new Error('At least one coin object ID is required')
+	}
+
+	const cleanDomain = `${domain.toLowerCase().replace(/\.sui$/i, '')}.sui`
+	const network = env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
+
+	const [pricing, nsPrice, pools] = await Promise.all([
+		calculateRenewalPrice({ domain: cleanDomain, years, env }),
+		getNSSuiPrice(env, true),
+		getDeepBookSuiPools(env),
+	])
+
+	const pool = pools.find((p) => p.coinType === sourceCoinType)
+	if (!pool) {
+		throw new Error(`No DeepBook pool found for coin type: ${sourceCoinType}`)
+	}
+
+	const renewalCostNsMist = pricing.nsNeededMist
+
+	const nsPoolAddress = DEEPBOOK_NS_SUI_POOL[network]
+	const deepPoolAddress = DEEPBOOK_DEEP_SUI_POOL[network]
+	const deepbookPackage = DEEPBOOK_PACKAGE[network]
+
+	if (!nsPoolAddress || !deepPoolAddress || !deepbookPackage) {
+		throw new Error(`DeepBook pools not available on ${network}`)
+	}
+
+	let suiForNsSwap: bigint
+	let minNsOutput: bigint
+	let expectedNsOutput: bigint
+	let priceImpactBps = 0
+
+	if (nsPrice.asks?.length) {
+		const wideSlippage = Math.max(slippageBps, 1500)
+		const quote = calculateSuiNeededForNs(renewalCostNsMist, nsPrice.asks, wideSlippage)
+		suiForNsSwap = quote.suiNeeded
+		expectedNsOutput = quote.expectedNs
+		minNsOutput = renewalCostNsMist
+
+		const simResult = simulateBuyNsWithSui(suiForNsSwap, nsPrice.asks)
+		priceImpactBps = simResult.priceImpactBps
+
+		if (simResult.outputNs < minNsOutput) {
+			suiForNsSwap = suiForNsSwap + (suiForNsSwap * 30n) / 100n
+		}
+	} else {
+		const bufferBps = Math.max(slippageBps * 3, 3000)
+		const nsWithBuffer = renewalCostNsMist + (renewalCostNsMist * BigInt(bufferBps)) / 10000n
+		const nsTokens = Number(nsWithBuffer) / NS_SCALE
+		suiForNsSwap = BigInt(Math.ceil(nsTokens * nsPrice.suiPerNs * 1e9))
+		expectedNsOutput = nsWithBuffer
+		minNsOutput = renewalCostNsMist
+	}
+
+	const suiForDeepSwap = (suiForNsSwap * DEEP_FEE_PERCENT) / 100n
+	const totalSuiNeeded = suiForNsSwap + suiForDeepSwap
+
+	const tokensNeededFloat = Number(totalSuiNeeded) / 1e9 / pool.suiPerToken
+	const tokenMistNeeded = BigInt(Math.ceil(tokensNeededFloat * 10 ** pool.decimals))
+	const tokenMistWithSlippage =
+		tokenMistNeeded + (tokenMistNeeded * BigInt(Math.max(slippageBps, 500))) / 10000n
+
+	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
+	const suinsClient = new SuinsClient({ client: client as never, network })
+
+	const tx = new Transaction()
+	tx.setSender(senderAddress)
+
+	let sourceCoin = tx.object(coinObjectIds[0])
+	if (coinObjectIds.length > 1) {
+		tx.mergeCoins(
+			sourceCoin,
+			coinObjectIds.slice(1).map((id) => tx.object(id)),
+		)
+	}
+
+	const [tokenToSell] = tx.splitCoins(sourceCoin, [tx.pure.u64(tokenMistWithSlippage)])
+
+	const [suiForDeep] = tx.splitCoins(tx.gas, [tx.pure.u64(suiForDeepSwap)])
+	const [zeroDeepCoin] = tx.moveCall({
+		target: '0x2::coin::zero',
+		typeArguments: [DEEP_TYPE],
+	})
+
+	const [deepFeeCoin, deepLeftoverSui, deepLeftoverDeep] = tx.moveCall({
+		target: `${deepbookPackage}::pool::swap_exact_quote_for_base`,
+		typeArguments: [DEEP_TYPE, SUI_TYPE],
+		arguments: [
+			tx.object(deepPoolAddress),
+			suiForDeep,
+			zeroDeepCoin,
+			tx.pure.u64(MIN_DEEP_OUT),
+			tx.object(CLOCK_OBJECT),
+		],
+	})
+
+	tx.transferObjects([deepLeftoverSui, deepLeftoverDeep], senderAddress)
+
+	const minSuiFromSwap = suiForNsSwap - (suiForNsSwap * BigInt(Math.max(slippageBps, 500))) / 10000n
+
+	let swappedSuiCoin: ReturnType<Transaction['moveCall']>[0]
+	if (!pool.isDirect) {
+		const suiUsdcPoolAddress = DEEPBOOK_SUI_USDC_POOL[network]
+		if (!suiUsdcPoolAddress) {
+			throw new Error('SUI/USDC pool not available for indirect swap')
+		}
+		const [tokenLeft1, usdcOut, deepLeft1] = tx.moveCall({
+			target: `${deepbookPackage}::pool::swap_exact_base_for_quote`,
+			typeArguments: [sourceCoinType, USDC_TYPE],
+			arguments: [
+				tx.object(pool.poolAddress),
+				tokenToSell,
+				deepFeeCoin,
+				tx.pure.u64(0n),
+				tx.object(CLOCK_OBJECT),
+			],
+		})
+		const [suiOut, usdcLeft, deepLeft2] = tx.moveCall({
+			target: `${deepbookPackage}::pool::swap_exact_quote_for_base`,
+			typeArguments: [SUI_TYPE, USDC_TYPE],
+			arguments: [
+				tx.object(suiUsdcPoolAddress),
+				usdcOut,
+				deepLeft1,
+				tx.pure.u64(minSuiFromSwap),
+				tx.object(CLOCK_OBJECT),
+			],
+		})
+		swappedSuiCoin = suiOut
+		tx.transferObjects([tokenLeft1, usdcLeft, deepLeft2, sourceCoin], senderAddress)
+	} else if (pool.suiIsBase) {
+		const [suiOut, tokenLeft, deepLeft2] = tx.moveCall({
+			target: `${deepbookPackage}::pool::swap_exact_quote_for_base`,
+			typeArguments: [SUI_TYPE, sourceCoinType],
+			arguments: [
+				tx.object(pool.poolAddress),
+				tokenToSell,
+				deepFeeCoin,
+				tx.pure.u64(minSuiFromSwap),
+				tx.object(CLOCK_OBJECT),
+			],
+		})
+		swappedSuiCoin = suiOut
+		tx.transferObjects([tokenLeft, deepLeft2, sourceCoin], senderAddress)
+	} else {
+		const [tokenLeft, suiOut, deepLeft2] = tx.moveCall({
+			target: `${deepbookPackage}::pool::swap_exact_base_for_quote`,
+			typeArguments: [sourceCoinType, SUI_TYPE],
+			arguments: [
+				tx.object(pool.poolAddress),
+				tokenToSell,
+				deepFeeCoin,
+				tx.pure.u64(minSuiFromSwap),
+				tx.object(CLOCK_OBJECT),
+			],
+		})
+		swappedSuiCoin = suiOut
+		tx.transferObjects([tokenLeft, deepLeft2, sourceCoin], senderAddress)
+	}
+
+	const [suiCoinForNs] = tx.splitCoins(swappedSuiCoin, [tx.pure.u64(suiForNsSwap)])
+	tx.mergeCoins(tx.gas, [swappedSuiCoin])
+
+	const [zeroDeepForNs] = tx.moveCall({
+		target: '0x2::coin::zero',
+		typeArguments: [DEEP_TYPE],
+	})
+
+	const [nsCoin, nsLeftoverSui, nsLeftoverDeep] = tx.moveCall({
+		target: `${deepbookPackage}::pool::swap_exact_quote_for_base`,
+		typeArguments: [NS_TYPE_MAINNET, SUI_TYPE],
+		arguments: [
+			tx.object(nsPoolAddress),
+			suiCoinForNs,
+			zeroDeepForNs,
+			tx.pure.u64(minNsOutput),
+			tx.object(CLOCK_OBJECT),
+		],
+	})
+
+	const suinsTx = new SuinsTransaction(suinsClient, tx)
+	const coinConfig = suinsClient.config.coins.NS
+	if (!coinConfig) {
+		throw new Error('SuiNS NS coin configuration not found')
+	}
+
+	const priceInfoObjectId = coinConfig.feed
+		? (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0]
+		: undefined
+
+	suinsTx.renew({
+		nft: tx.object(nftId),
+		years,
+		coinConfig,
+		coin: nsCoin,
+		priceInfoObjectId,
+	})
+
+	const feeRecipient = await resolveFeeRecipient(
+		client,
+		suinsClient,
+		env.DISCOUNT_RECIPIENT_NAME || 'extra.sui',
+		senderAddress,
+	)
+	const senderLower = senderAddress.toLowerCase()
+	const feeRecipientLower = feeRecipient.toLowerCase()
+	const residualRecipient = feeRecipientLower === senderLower ? DUST_SINK_ADDRESS : feeRecipient
+
+	const [postRenewNsLeftover, nsSweepSui, nsSweepDeep] = tx.moveCall({
+		target: `${deepbookPackage}::pool::swap_exact_base_for_quote`,
+		typeArguments: [NS_TYPE_MAINNET, SUI_TYPE],
+		arguments: [
+			tx.object(nsPoolAddress),
+			nsCoin,
+			nsLeftoverDeep,
+			tx.pure.u64(0),
+			tx.object(CLOCK_OBJECT),
+		],
+	})
+
+	const [postRenewNsLeftoverDust, nsSweepSuiDust, nsSweepDeepDust] = tx.moveCall({
+		target: `${deepbookPackage}::pool::swap_exact_base_for_quote`,
+		typeArguments: [NS_TYPE_MAINNET, SUI_TYPE],
+		arguments: [
+			tx.object(nsPoolAddress),
+			postRenewNsLeftover,
+			nsSweepDeep,
+			tx.pure.u64(0),
+			tx.object(CLOCK_OBJECT),
+		],
+	})
+
+	tx.mergeCoins(nsLeftoverSui, [nsSweepSui, nsSweepSuiDust])
+	tx.transferObjects([nsLeftoverSui], feeRecipient)
+	tx.transferObjects([postRenewNsLeftoverDust, nsSweepDeepDust], residualRecipient)
+	tx.setGasBudget(100_000_000)
+
+	return {
+		tx,
+		breakdown: {
+			suiInputMist: totalSuiNeeded,
+			nsOutputEstimate: expectedNsOutput,
+			registrationCostNsMist: renewalCostNsMist,
+			slippageBps,
+			nsPerSui: nsPrice.nsPerSui,
+			source: nsPrice.source,
+			priceImpactBps,
+			minNsOutput,
+			feeRecipient,
+			sourceCoinType,
+			sourceTokensNeeded: String(tokenMistWithSlippage),
+		},
+	}
 }

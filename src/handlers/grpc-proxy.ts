@@ -66,6 +66,7 @@ const GRPC_PREFERRED_OPERATIONS: Set<string> = new Set([
 	'suix_getOwnedObjects',
 	'suix_getAllCoins',
 	'suix_getDynamicFields',
+	'sui_listAuthenticatedEvents',
 ])
 
 /**
@@ -343,6 +344,100 @@ export async function handleGrpcProxyRequest(request: Request, env: Env): Promis
 		} catch (error) {
 			return errorResponse(
 				error instanceof Error ? error.message : 'Failed to query events',
+				'QUERY_ERROR',
+				500,
+			)
+		}
+	}
+
+	// Authenticated events endpoint (convenience wrapper)
+	if (path === '/authenticated-events' && request.method === 'POST') {
+		try {
+			const body = (await request.json()) as {
+				streamId: string
+				startCheckpoint?: string
+				pageSize?: number
+				pageToken?: string
+			}
+
+			if (!body.streamId) {
+				return errorResponse('streamId is required', 'INVALID_REQUEST', 400)
+			}
+
+			const rpcRequest: JsonRpcRequest = {
+				jsonrpc: '2.0',
+				id: 1,
+				method: 'sui_listAuthenticatedEvents',
+				params: [
+					body.streamId,
+					body.startCheckpoint || null,
+					body.pageSize || 50,
+					body.pageToken || null,
+				],
+			}
+
+			const response = await proxyRequest(rpcRequest, config)
+			return jsonResponse(response.result || response)
+		} catch (error) {
+			return errorResponse(
+				error instanceof Error ? error.message : 'Failed to list authenticated events',
+				'QUERY_ERROR',
+				500,
+			)
+		}
+	}
+
+	// Event stream head endpoint (convenience wrapper)
+	if (path === '/event-stream-head' && request.method === 'POST') {
+		try {
+			const body = (await request.json()) as { streamId: string }
+
+			if (!body.streamId) {
+				return errorResponse('streamId is required', 'INVALID_REQUEST', 400)
+			}
+
+			const rpcRequest: JsonRpcRequest = {
+				jsonrpc: '2.0',
+				id: 1,
+				method: 'sui_getEventStreamHead',
+				params: [body.streamId],
+			}
+
+			const response = await proxyRequest(rpcRequest, config)
+			return jsonResponse(response.result || response)
+		} catch (error) {
+			return errorResponse(
+				error instanceof Error ? error.message : 'Failed to get event stream head',
+				'QUERY_ERROR',
+				500,
+			)
+		}
+	}
+
+	// Event inclusion proof endpoint (convenience wrapper)
+	if (path === '/event-inclusion-proof' && request.method === 'POST') {
+		try {
+			const body = (await request.json()) as { objectId: string; checkpoint: string }
+
+			if (!body.objectId) {
+				return errorResponse('objectId is required', 'INVALID_REQUEST', 400)
+			}
+			if (!body.checkpoint) {
+				return errorResponse('checkpoint is required', 'INVALID_REQUEST', 400)
+			}
+
+			const rpcRequest: JsonRpcRequest = {
+				jsonrpc: '2.0',
+				id: 1,
+				method: 'sui_getObjectInclusionProof',
+				params: [body.objectId, body.checkpoint],
+			}
+
+			const response = await proxyRequest(rpcRequest, config)
+			return jsonResponse(response.result || response)
+		} catch (error) {
+			return errorResponse(
+				error instanceof Error ? error.message : 'Failed to get object inclusion proof',
 				'QUERY_ERROR',
 				500,
 			)
@@ -665,6 +760,21 @@ export function generateGrpcProxyPage(env: Env): string {
 					<span class="method post">POST</span>
 					<span class="path">/api/grpc/events</span>
 					<span class="desc">Query events</span>
+				</div>
+				<div class="endpoint">
+					<span class="method post">POST</span>
+					<span class="path">/api/grpc/authenticated-events</span>
+					<span class="desc">List authenticated events</span>
+				</div>
+				<div class="endpoint">
+					<span class="method post">POST</span>
+					<span class="path">/api/grpc/event-stream-head</span>
+					<span class="desc">Get event stream head</span>
+				</div>
+				<div class="endpoint">
+					<span class="method post">POST</span>
+					<span class="path">/api/grpc/event-inclusion-proof</span>
+					<span class="desc">Get object inclusion proof</span>
 				</div>
 				<div class="endpoint">
 					<span class="method post">POST</span>

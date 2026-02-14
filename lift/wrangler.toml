@@ -1,0 +1,48 @@
+name = "sui-ski-lift"
+main = "../src/index.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+account_id = "6a10ee79fe9d21b5e2c3155ce8690742"
+
+routes = [
+  { pattern = "lift.sui.ski/*", zone_name = "sui.ski" }
+]
+
+[vars]
+SUI_NETWORK = "mainnet"
+WALRUS_NETWORK = "mainnet"
+SEAL_NETWORK = "testnet"
+SEAL_PACKAGE_ID = "0x8afa5d31dbaa0a8fb07082692940ca3d56b5e856c5126cb5a3693f0a4de63b82"
+SEAL_KEY_SERVERS = "0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8,0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46"
+SERVICE_FEE_NAME = "brando.sui"
+DISCOUNT_RECIPIENT_NAME = "extra.sui"
+SUBNAMECAP_SUINS_PACKAGE_ID = "0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0"
+SUBNAMECAP_SUBDOMAINS_PACKAGE_ID = "0xe177697e191327901637f8d2c5ffbbde8b1aaac27ec1024c4b62d1ebd1cd7430"
+SUBNAMECAP_SUINS_OBJECT_ID = "0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871"
+JACKET_SINGLE_USE_PACKAGE_ID = "0x61248137952b4ae1657fcc5e88464eba79315633eae9b01ff4d7331fa3706d50"
+JACKET_FEE_PACKAGE_ID = "0xc91aafec24a289ffff75a1e325137b8aec8a4708d19383df821c3418b59758ef"
+JACKET_ALLOWLIST_PACKAGE_ID = "0x41fa2f2453c5416091ee5d7d704cd8bf2755f092ba8d9486a405890d4b37b288"
+JACKET_RATE_LIMIT_PACKAGE_ID = "0x82126c5ed40f5daf4f3f74a6c9ccefa73193efcc622e1019147d355bc46b532c"
+JACKET_FEE_OBJECT_ID = "0x3961518f5fd71ff6ac3d221ed20e13f8ce7159912a4b00b0d6bbbe33fb706f37"
+DECAY_AUCTION_PACKAGE_ID = "0x10dbff33383bdb68d0bbf6aadeed5e2d3911c45b03664130ebb16437954a2f40"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "c0054cf22c6a4daa99cb36347fa5229c"
+
+[[durable_objects.bindings]]
+name = "WALLET_SESSIONS"
+class_name = "WalletSession"
+script_name = "sui-ski-gateway"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WalletSession"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["SuiPayAgent", "SuiMcpServer"]
+
+[[migrations]]
+tag = "v3"
+deleted_classes = ["SuiPayAgent", "SuiMcpServer"]

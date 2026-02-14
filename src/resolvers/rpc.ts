@@ -44,6 +44,10 @@ const ALLOWED_METHODS = new Set([
 	'sui_devInspectTransactionBlock',
 	// Gas price (read-only)
 	'suix_getReferenceGasPrice',
+	// Authenticated events (read-only)
+	'sui_listAuthenticatedEvents',
+	'sui_getEventStreamHead',
+	'sui_getObjectInclusionProof',
 ])
 
 // Rate limiting - simple in-memory counter (use Durable Objects for production)

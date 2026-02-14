@@ -16,6 +16,8 @@ import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
+import { generateX402ChatCss } from '../utils/x402-chat-css'
+import { generateX402ChatJs } from '../utils/x402-chat-js'
 
 export interface LandingPageOptions {
 	canonicalUrl?: string
@@ -65,7 +67,7 @@ apiRoutes.get('/primary-name', async (c) => {
 					name: cached.name,
 				},
 				200,
-				{ 'X-Cache': 'HIT' },
+				{ 'X-Cache': 'HIT', 'Cache-Control': 'public, s-maxage=60, max-age=30' },
 			)
 		}
 
@@ -90,7 +92,7 @@ apiRoutes.get('/primary-name', async (c) => {
 				name,
 			},
 			200,
-			{ 'X-Cache': 'MISS' },
+			{ 'X-Cache': 'MISS', 'Cache-Control': 'public, s-maxage=60, max-age=30' },
 		)
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to resolve primary name'
@@ -146,7 +148,7 @@ apiRoutes.get('/usdc-price', async (c) => {
 apiRoutes.get('/deepbook-pools', async (c) => {
 	try {
 		const pools = await getDeepBookSuiPools(c.get('env'))
-		return jsonResponse(pools)
+		return jsonResponse(pools, 200, { 'Cache-Control': 'public, s-maxage=60, max-age=30' })
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch pools'
 		return jsonResponse({ error: message }, 500)
@@ -164,9 +166,92 @@ apiRoutes.get('/renewal-pricing', async (c) => {
 		const years = yearsParam ? parseInt(yearsParam, 10) : 1
 		const { calculateRenewalPrice, formatPricingResponse } = await import('../utils/pricing')
 		const pricing = await calculateRenewalPrice({ domain, years, env })
-		return jsonResponse(formatPricingResponse(pricing))
+		return jsonResponse(formatPricingResponse(pricing), 200, {
+			'Cache-Control': 'public, s-maxage=300, max-age=60',
+		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch renewal pricing'
+		return jsonResponse({ error: message }, 500)
+	}
+})
+
+apiRoutes.get('/renew-quote', async (c) => {
+	try {
+		const env = c.get('env')
+		const domain = c.req.query('domain')
+		const yearsParam = c.req.query('years')
+
+		if (!domain) return jsonResponse({ error: 'Domain parameter required' }, 400)
+
+		const years = yearsParam ? parseInt(yearsParam, 10) : 1
+		const { calculateRenewalPrice } = await import('../utils/pricing')
+
+		const [pricing, nsPrice, pools, usdcPrice] = await Promise.all([
+			calculateRenewalPrice({ domain, years, env }),
+			getNSSuiPrice(env),
+			getDeepBookSuiPools(env),
+			getUSDCSuiPrice(env),
+		])
+
+		const nsNeededMist = pricing.nsNeededMist
+		const nsTokensNeeded = Number(nsNeededMist) / 1e6
+		const suiForNsSwap = nsTokensNeeded * nsPrice.suiPerNs
+		const DEEP_FEE_OVERHEAD = 1.15
+		const suiWithDeepFee = suiForNsSwap * DEEP_FEE_OVERHEAD
+
+		const NS_COIN_TYPE =
+			'0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS'
+		const SUI_COIN_TYPE =
+			'0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI'
+
+		const paymentOptions: Array<{
+			name: string
+			coinType: string
+			tokensNeeded: number
+			decimals: number
+			suiEquivalent: number
+			usdEquivalent: number
+		}> = []
+
+		paymentOptions.push({
+			name: 'SUI',
+			coinType: SUI_COIN_TYPE,
+			tokensNeeded: suiWithDeepFee,
+			decimals: 9,
+			suiEquivalent: suiWithDeepFee,
+			usdEquivalent: suiWithDeepFee * usdcPrice.usdcPerSui,
+		})
+
+		for (const pool of pools) {
+			if (pool.coinType === NS_COIN_TYPE || pool.coinType === SUI_COIN_TYPE) continue
+			const tokensNeeded = suiWithDeepFee / pool.suiPerToken
+			paymentOptions.push({
+				name: pool.name,
+				coinType: pool.coinType,
+				tokensNeeded,
+				decimals: pool.decimals,
+				suiEquivalent: suiWithDeepFee,
+				usdEquivalent: suiWithDeepFee * usdcPrice.usdcPerSui,
+			})
+		}
+
+		return jsonResponse(
+			{
+				domain,
+				years,
+				nsNeededMist: String(nsNeededMist),
+				suiNeeded: suiWithDeepFee,
+				usdcPerSui: usdcPrice.usdcPerSui,
+				usdNeeded: suiWithDeepFee * usdcPrice.usdcPerSui,
+				nsPerSui: nsPrice.nsPerSui,
+				suiPerNs: nsPrice.suiPerNs,
+				paymentOptions,
+			},
+			200,
+			{ 'Cache-Control': 'public, s-maxage=60, max-age=30' },
+		)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to generate renewal quote'
 		return jsonResponse({ error: message }, 500)
 	}
 })
@@ -175,13 +260,16 @@ apiRoutes.post('/renew-tx', async (c) => {
 	try {
 		const env = c.get('env')
 		const body = await c.req.json()
-		const { domain, nftId, years, senderAddress, paymentMethod } = body as {
-			domain: string
-			nftId: string
-			years: number
-			senderAddress: string
-			paymentMethod?: 'ns' | 'sui'
-		}
+		const { domain, nftId, years, senderAddress, paymentMethod, sourceCoinType, coinObjectIds } =
+			body as {
+				domain: string
+				nftId: string
+				years: number
+				senderAddress: string
+				paymentMethod?: 'ns' | 'sui' | 'coin'
+				sourceCoinType?: string
+				coinObjectIds?: string[]
+			}
 
 		if (!domain || !nftId || !years || !senderAddress) {
 			return jsonResponse(
@@ -190,7 +278,9 @@ apiRoutes.post('/renew-tx', async (c) => {
 			)
 		}
 
-		const { buildSwapAndRenewTx, buildSuiRenewTx } = await import('../utils/swap-transactions')
+		const { buildSwapAndRenewTx, buildSuiRenewTx, buildMultiCoinRenewTx } = await import(
+			'../utils/swap-transactions'
+		)
 		const client = new SuiClient({
 			url: getDefaultRpcUrl(env.SUI_NETWORK),
 			network: env.SUI_NETWORK,
@@ -203,6 +293,36 @@ apiRoutes.post('/renew-tx', async (c) => {
 				txBytes: Buffer.from(txBytes).toString('base64'),
 				txEncoding: 'bcs',
 				method: 'sui',
+			})
+		}
+
+		if (paymentMethod === 'coin') {
+			if (!sourceCoinType || !coinObjectIds?.length) {
+				return jsonResponse(
+					{ error: 'paymentMethod "coin" requires sourceCoinType and coinObjectIds' },
+					400,
+				)
+			}
+			const result = await buildMultiCoinRenewTx(
+				{ domain, nftId, years, senderAddress, sourceCoinType, coinObjectIds },
+				env,
+			)
+			const txBytes = await result.tx.build({ client })
+			return jsonResponse({
+				txBytes: Buffer.from(txBytes).toString('base64'),
+				txEncoding: 'bcs',
+				breakdown: {
+					suiInputMist: String(result.breakdown.suiInputMist),
+					nsOutputEstimate: String(result.breakdown.nsOutputEstimate),
+					renewalCostNsMist: String(result.breakdown.registrationCostNsMist),
+					slippageBps: result.breakdown.slippageBps,
+					nsPerSui: result.breakdown.nsPerSui,
+					source: result.breakdown.source,
+					priceImpactBps: result.breakdown.priceImpactBps,
+					sourceCoinType: result.breakdown.sourceCoinType,
+					sourceTokensNeeded: result.breakdown.sourceTokensNeeded,
+				},
+				method: 'coin',
 			})
 		}
 
@@ -591,7 +711,9 @@ apiRoutes.get('/sui-price', async (c) => {
 	try {
 		const env = c.get('env')
 		const usdcPrice = await getUSDCSuiPrice(env)
-		return jsonResponse({ price: usdcPrice.usdcPerSui, source: usdcPrice.source })
+		return jsonResponse({ price: usdcPrice.usdcPerSui, source: usdcPrice.source }, 200, {
+			'Cache-Control': 'public, s-maxage=30, max-age=15',
+		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch SUI price'
 		console.error('SUI price API error:', message)
@@ -713,7 +835,10 @@ apiRoutes.get('/suggest-names', async (c) => {
 })
 
 apiRoutes.get('/featured-names', async (c) => {
-	return handleFeaturedNames(c.get('env'))
+	const response = await handleFeaturedNames(c.get('env'))
+	const headers = new Headers(response.headers)
+	headers.set('Cache-Control', 'public, s-maxage=300, max-age=60')
+	return new Response(response.body, { status: response.status, headers })
 })
 
 apiRoutes.get('/owned-names', async (c) => {
@@ -722,6 +847,13 @@ apiRoutes.get('/owned-names', async (c) => {
 		return jsonResponse({ error: 'Valid Sui address required (address query param)' }, 400)
 	}
 	return handleOwnedNames(address, c.get('env'))
+})
+
+apiRoutes.get('/expiring-listings', async (c) => {
+	const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10) || 0)
+	const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') || '50', 10) || 50))
+	const debug = c.req.query('debug') === 'true'
+	return handleExpiringListings(c.get('env'), offset, limit, debug)
 })
 
 /**
@@ -1098,9 +1230,12 @@ async function handleNamesByAddress(
 
 		const listedNames = allNames.filter((n) => n.isListed).length
 		const ownedNames = allNames.filter((n) => !n.isListed).length
-		console.log(`SUMMARY after indexer: ${allNames.length} total (${ownedNames} owned, ${listedNames} listed)`)
+		console.log(
+			`SUMMARY after indexer: ${allNames.length} total (${ownedNames} owned, ${listedNames} listed)`,
+		)
 
-		const SUINS_V1_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration'
+		const SUINS_V1_TYPE =
+			'0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration'
 		let rpcFallbackCount = 0
 		try {
 			let cursor: string | null | undefined = null
@@ -1211,7 +1346,7 @@ async function handleNamesByAddress(
 		const uniqueAddresses = [
 			...new Set([
 				normalizedAddress,
-				...allNames.map((n) => n.targetAddress).filter(Boolean) as string[],
+				...(allNames.map((n) => n.targetAddress).filter(Boolean) as string[]),
 			]),
 		]
 		const addressDefaultName = new Map<string, string>()
@@ -1404,6 +1539,29 @@ interface MarketplaceData {
 	sales: MarketplaceSale[]
 	floor: number | null
 	volume: number | null
+}
+
+interface ExpiringListingEntry {
+	name: string
+	tokenId: string
+	expirationMs: number
+	daysUntilExpiry: number
+	expired: boolean
+	inGracePeriod: boolean
+	price: number
+	priceSui: number
+	seller: string
+	marketName: string
+	tradeportUrl: string
+}
+
+interface ExpiringListingsResponse {
+	listings: ExpiringListingEntry[]
+	total: number
+	offset: number
+	limit: number
+	fetchedAt: number
+	windowDays: { expiringWithin: number; expiredWithin: number }
 }
 
 const INDEXER_API_URL = 'https://api.indexer.xyz/graphql'
@@ -2063,6 +2221,226 @@ async function handleAcceptBidTransaction(
 		const message =
 			error instanceof Error ? error.message : 'Failed to prepare offer acceptance transaction'
 		return jsonResponse({ error: message }, 500)
+	}
+}
+
+const EXPIRING_WINDOW_DAYS = 90
+const EXPIRED_WINDOW_DAYS = 45
+const GRACE_PERIOD_DAYS = 30
+const EXPIRING_LISTINGS_CACHE_TTL = 300
+const EXPIRING_LISTINGS_PAGE_SIZE = 200
+const EXPIRING_LISTINGS_MAX_PAGES = 25
+const MS_PER_DAY = 86_400_000
+
+async function handleExpiringListings(env: Env, offset: number, limit: number, debug = false): Promise<Response> {
+	const corsHeaders = {
+		'Access-Control-Allow-Origin': '*',
+		'Content-Type': 'application/json',
+	}
+
+	const fullCacheKey = cacheKey('expiring-listings', env.SUI_NETWORK)
+	const cached = debug ? null : await getCached<ExpiringListingEntry[]>(fullCacheKey)
+	if (cached) {
+		const slice = cached.slice(offset, offset + limit)
+		const response: ExpiringListingsResponse = {
+			listings: slice,
+			total: cached.length,
+			offset,
+			limit,
+			fetchedAt: Date.now(),
+			windowDays: { expiringWithin: EXPIRING_WINDOW_DAYS, expiredWithin: EXPIRED_WINDOW_DAYS },
+		}
+		return new Response(JSON.stringify(response), {
+			status: 200,
+			headers: { ...corsHeaders, 'X-Cache': 'HIT' },
+		})
+	}
+
+	try {
+		const now = Date.now()
+		const expiringCutoff = now + EXPIRING_WINDOW_DAYS * MS_PER_DAY
+		const expiredCutoff = now - EXPIRED_WINDOW_DAYS * MS_PER_DAY
+		const gracePeriodMs = GRACE_PERIOD_DAYS * MS_PER_DAY
+
+		const query = `query FetchExpiringListings($where: listings_bool_exp, $offset: Int, $limit: Int!) {
+			sui {
+				listings(where: $where, order_by: [{price: asc}], offset: $offset, limit: $limit) {
+					price
+					seller
+					market_name
+					nft {
+						name
+						token_id
+					}
+				}
+			}
+		}`
+
+		const where = {
+			listed: { _eq: true },
+			nft: {
+				collection: {
+					_or: [{ semantic_slug: { _eq: 'suins' } }, { slug: { _eq: 'suins' } }],
+				},
+			},
+		}
+
+		interface IndexerListing {
+			price: number
+			seller: string
+			marketName: string
+			name: string
+			tokenId: string
+		}
+
+		const allListings: IndexerListing[] = []
+
+		for (let page = 0; page < EXPIRING_LISTINGS_MAX_PAGES; page++) {
+			const pageOffset = page * EXPIRING_LISTINGS_PAGE_SIZE
+			const response = await fetch(INDEXER_API_URL, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'x-api-user': INDEXER_API_USER,
+					'x-api-key': env.INDEXER_API_KEY || '',
+				},
+				body: JSON.stringify({
+					query,
+					variables: { where, offset: pageOffset, limit: EXPIRING_LISTINGS_PAGE_SIZE },
+				}),
+			})
+
+			if (!response.ok) {
+				console.error(`Expiring listings page ${page} failed: ${response.status}`)
+				break
+			}
+
+			const result = (await response.json()) as {
+				data?: {
+					sui?: {
+						listings?: Array<{
+							price: number
+							seller: string
+							market_name?: string
+							nft?: { name?: string; token_id?: string }
+						}>
+					}
+				}
+				errors?: Array<{ message: string }>
+			}
+
+			if (result.errors) {
+				console.error('Expiring listings GraphQL error:', result.errors[0]?.message)
+				break
+			}
+
+			const listings = result.data?.sui?.listings
+			if (!listings || listings.length === 0) break
+
+			for (let i = 0; i < listings.length; i++) {
+				const l = listings[i]
+				if (!l.nft?.token_id || !l.nft.name) continue
+				allListings.push({
+					price: l.price,
+					seller: l.seller,
+					marketName: l.market_name || 'tradeport',
+					name: l.nft.name,
+					tokenId: l.nft.token_id,
+				})
+			}
+
+			if (listings.length < EXPIRING_LISTINGS_PAGE_SIZE) break
+		}
+
+		const client = new SuiClient({
+			url: getDefaultRpcUrl(env.SUI_NETWORK),
+			network: env.SUI_NETWORK,
+		})
+
+		const RPC_BATCH_SIZE = 50
+		const expirationMap = new Map<string, number>()
+
+		for (let i = 0; i < allListings.length; i += RPC_BATCH_SIZE) {
+			const batch = allListings.slice(i, i + RPC_BATCH_SIZE)
+			const ids = batch.map((l) => l.tokenId)
+			try {
+				const objects = await client.multiGetObjects({
+					ids,
+					options: { showContent: true },
+				})
+				for (let j = 0; j < objects.length; j++) {
+					const obj = objects[j]
+					const fields = (obj.data?.content as { fields?: Record<string, unknown> })?.fields
+					if (!fields) continue
+					const expMs = Number(fields.expiration_timestamp_ms ?? fields.expirationTimestampMs ?? 0)
+					if (expMs > 0) expirationMap.set(ids[j], expMs)
+				}
+			} catch (rpcErr) {
+				console.error(`RPC batch fetch failed at offset ${i}:`, rpcErr)
+			}
+		}
+
+		const allEntries: ExpiringListingEntry[] = []
+
+		for (let i = 0; i < allListings.length; i++) {
+			const listing = allListings[i]
+			const expirationMs = expirationMap.get(listing.tokenId)
+			if (!expirationMs) continue
+			if (expirationMs > expiringCutoff || expirationMs < expiredCutoff) continue
+
+			const daysUntilExpiry = (expirationMs - now) / MS_PER_DAY
+			const expired = expirationMs < now
+			const inGracePeriod = expired && (expirationMs + gracePeriodMs) > now
+			const name = listing.name.endsWith('.sui') ? listing.name : `${listing.name}.sui`
+			const tradeportUrl = `https://www.tradeport.xyz/sui/collection/suins/${listing.tokenId}`
+
+			allEntries.push({
+				name,
+				tokenId: listing.tokenId,
+				expirationMs,
+				daysUntilExpiry: Math.round(daysUntilExpiry * 10) / 10,
+				expired,
+				inGracePeriod,
+				price: listing.price,
+				priceSui: listing.price / 1e9,
+				seller: listing.seller,
+				marketName: listing.marketName,
+				tradeportUrl,
+			})
+		}
+
+		allEntries.sort((a, b) => a.expirationMs - b.expirationMs)
+
+		if (!debug) {
+			await setCache(fullCacheKey, allEntries, EXPIRING_LISTINGS_CACHE_TTL)
+		}
+
+		const slice = allEntries.slice(offset, offset + limit)
+		const responseBody: Record<string, unknown> = {
+			listings: slice,
+			total: allEntries.length,
+			offset,
+			limit,
+			fetchedAt: now,
+			windowDays: { expiringWithin: EXPIRING_WINDOW_DAYS, expiredWithin: EXPIRED_WINDOW_DAYS },
+		}
+		if (debug) {
+			responseBody.debug = {
+				totalIndexerListings: allListings.length,
+				totalWithExpiration: expirationMap.size,
+				totalMatching: allEntries.length,
+			}
+		}
+		return new Response(JSON.stringify(responseBody), {
+			status: 200,
+			headers: { ...corsHeaders, 'X-Cache': 'MISS' },
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch expiring listings'
+		return new Response(JSON.stringify({ error: message, listings: [] }), {
+			status: 200,
+			headers: corsHeaders,
+		})
 	}
 }
 
@@ -3120,7 +3498,12 @@ ${socialMeta}
 			background: rgba(10, 10, 15, 0.8);
 			backdrop-filter: blur(8px);
 			border-top: 1px solid rgba(255,255,255,0.04);
+			white-space: nowrap;
+			overflow-x: auto;
+			-webkit-overflow-scrolling: touch;
+			scrollbar-width: none;
 		}
+		.footer::-webkit-scrollbar { display: none; }
 		.footer a {
 			color: #71717a;
 			text-decoration: none;
@@ -3132,29 +3515,30 @@ ${socialMeta}
 
 		body.search-focused .footer { display: none; }
 
-		/* Wallet Widget */
-		.wallet-widget {
-			position: fixed;
-			top: 16px;
-			right: 16px;
-			z-index: 1000;
-			display: flex;
-			align-items: center;
-			gap: 10px;
-		}
-		.wallet-profile-btn {
-			width: 36px;
-			height: 36px;
-			border-radius: 10px;
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			background: rgba(96, 165, 250, 0.12);
-			border: 1px solid rgba(96, 165, 250, 0.35);
-			cursor: pointer;
-			transition: all 0.2s ease;
-			padding: 0;
-		}
+			/* Wallet Widget */
+			.wallet-widget {
+				position: fixed;
+				top: calc(16px + env(safe-area-inset-top));
+				right: calc(16px + env(safe-area-inset-right));
+				z-index: 10040;
+				display: flex;
+				align-items: center;
+				gap: 10px;
+			}
+			.wallet-profile-btn {
+				width: 40px;
+				height: 40px;
+				border-radius: 10px;
+				display: none;
+				align-items: center;
+				justify-content: center;
+				background: rgba(96, 165, 250, 0.12);
+				border: 1px solid rgba(96, 165, 250, 0.35);
+				cursor: pointer;
+				transition: all 0.2s ease;
+				padding: 0;
+			}
+			.wallet-profile-btn.visible { display: inline-flex; }
 		.wallet-profile-btn svg {
 			width: 18px;
 			height: 18px;
@@ -3170,6 +3554,248 @@ ${socialMeta}
 
 		body.search-focused .wk-dropdown { display: none !important; }
 
+		.swap-toggle-btn {
+			width: 40px;
+			height: 40px;
+			border-radius: 10px;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			background: rgba(167, 139, 250, 0.12);
+			border: 1px solid rgba(167, 139, 250, 0.35);
+			cursor: pointer;
+			transition: all 0.2s ease;
+			padding: 0;
+			color: #a78bfa;
+		}
+		.swap-toggle-btn svg {
+			width: 18px;
+			height: 18px;
+		}
+		.swap-toggle-btn:hover {
+			background: rgba(167, 139, 250, 0.2);
+			border-color: rgba(167, 139, 250, 0.55);
+			transform: translateY(-1px);
+		}
+
+		.swap-panel {
+			position: fixed;
+			top: calc(68px + env(safe-area-inset-top));
+			right: calc(16px + env(safe-area-inset-right));
+			z-index: 10050;
+			width: 380px;
+			max-height: calc(100vh - 100px);
+			overflow-y: auto;
+			background: rgba(15, 15, 22, 0.98);
+			backdrop-filter: blur(24px);
+			-webkit-backdrop-filter: blur(24px);
+			border: 1px solid rgba(96, 165, 250, 0.15);
+			border-radius: 16px;
+			box-shadow: 0 18px 44px rgba(2, 6, 23, 0.62), 0 0 30px rgba(96, 165, 250, 0.06);
+			animation: swapPanelIn 0.2s ease;
+		}
+		@keyframes swapPanelIn {
+			from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+			to { opacity: 1; transform: translateY(0) scale(1); }
+		}
+		.swap-panel-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 14px 16px 0;
+		}
+		.swap-panel-tabs {
+			display: flex;
+			gap: 4px;
+		}
+		.swap-tab {
+			padding: 6px 14px;
+			border-radius: 8px;
+			border: none;
+			background: transparent;
+			color: #71717a;
+			font-size: 0.82rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.15s ease;
+		}
+		.swap-tab:hover {
+			color: #e4e4e7;
+			background: rgba(255, 255, 255, 0.04);
+		}
+		.swap-tab.active {
+			color: #fff;
+			background: rgba(96, 165, 250, 0.12);
+		}
+		.swap-panel-close {
+			width: 28px;
+			height: 28px;
+			border-radius: 6px;
+			border: none;
+			background: transparent;
+			color: #71717a;
+			font-size: 1.2rem;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: all 0.15s ease;
+		}
+		.swap-panel-close:hover {
+			background: rgba(255, 255, 255, 0.06);
+			color: #e4e4e7;
+		}
+		.swap-tab-content {
+			padding: 12px 16px 16px;
+		}
+		#sui-coins-terminal {
+			min-height: 360px;
+		}
+		.crosschain-ui {
+			display: flex;
+			flex-direction: column;
+			gap: 14px;
+		}
+		.cc-direction {
+			font-size: 0.85rem;
+			font-weight: 700;
+			color: #a78bfa;
+			letter-spacing: 0.5px;
+		}
+		.cc-field {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+		.cc-label {
+			font-size: 0.72rem;
+			font-weight: 600;
+			color: #71717a;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+		}
+		.cc-input {
+			background: rgba(20, 20, 28, 0.9);
+			border: 1px solid rgba(255, 255, 255, 0.08);
+			border-radius: 10px;
+			padding: 10px 14px;
+			color: #e4e4e7;
+			font-size: 0.88rem;
+			outline: none;
+			transition: border-color 0.2s;
+		}
+		.cc-input:focus {
+			border-color: rgba(96, 165, 250, 0.4);
+		}
+		.cc-rate {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 0.78rem;
+			color: #71717a;
+		}
+		.cc-rate-value {
+			color: #60a5fa;
+			font-weight: 600;
+		}
+		.cc-output {
+			background: rgba(20, 20, 28, 0.9);
+			border: 1px solid rgba(255, 255, 255, 0.06);
+			border-radius: 10px;
+			padding: 10px 14px;
+			color: #60a5fa;
+			font-size: 0.88rem;
+			font-weight: 600;
+		}
+		.cc-fee {
+			font-size: 0.72rem;
+			color: #71717a;
+		}
+		.cc-btn {
+			padding: 10px 16px;
+			border-radius: 10px;
+			border: none;
+			background: linear-gradient(135deg, #3b82f6, #6366f1);
+			color: #fff;
+			font-weight: 600;
+			font-size: 0.85rem;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+		.cc-btn:hover:not(:disabled) {
+			background: linear-gradient(135deg, #2563eb, #4f46e5);
+		}
+		.cc-btn:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+		.cc-confirm-btn {
+			margin-top: 8px;
+		}
+		.cc-deposit {
+			background: rgba(96, 165, 250, 0.06);
+			border: 1px solid rgba(96, 165, 250, 0.15);
+			border-radius: 12px;
+			padding: 14px;
+		}
+		.cc-deposit-label {
+			font-size: 0.75rem;
+			color: #71717a;
+			margin-bottom: 6px;
+		}
+		.cc-deposit-addr {
+			font-size: 0.78rem;
+			color: #60a5fa;
+			word-break: break-all;
+			font-family: 'SF Mono', 'Fira Code', monospace;
+			margin-bottom: 8px;
+		}
+		.cc-copy-btn {
+			padding: 6px 14px;
+			border-radius: 8px;
+			border: 1px solid rgba(96, 165, 250, 0.3);
+			background: rgba(96, 165, 250, 0.1);
+			color: #60a5fa;
+			font-size: 0.78rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.15s;
+			margin-bottom: 10px;
+		}
+		.cc-copy-btn:hover {
+			background: rgba(96, 165, 250, 0.2);
+		}
+		.cc-confirm-section {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+			margin-top: 10px;
+			padding-top: 10px;
+			border-top: 1px solid rgba(255, 255, 255, 0.06);
+		}
+		.cc-status {
+			font-size: 0.78rem;
+			color: #71717a;
+			min-height: 20px;
+		}
+		.cc-status.success { color: #4ade80; }
+		.cc-status.error { color: #f87171; }
+
+		@media (max-width: 480px) {
+			.swap-panel {
+				position: fixed;
+				top: auto;
+				bottom: 0;
+				left: 0;
+				right: 0;
+				width: 100%;
+				max-height: 80vh;
+				border-radius: 16px 16px 0 0;
+			}
+		}
+
+		body.search-focused .swap-panel { display: none !important; }
+
 		${generateWalletUiCss()}
 
 		@media (max-width: 540px) {
@@ -3184,9 +3810,68 @@ ${socialMeta}
 		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile">
 			${generateLogoSvg(18)}
 		</button>
+		<button class="swap-toggle-btn" id="swap-toggle-btn" title="Swap tokens" style="display:none">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/>
+			</svg>
+		</button>
 		<div id="wk-widget"></div>
 	</div>
 	<div id="wk-modal"></div>
+
+	<div class="swap-panel" id="swap-panel" style="display:none;">
+		<div class="swap-panel-header">
+			<div class="swap-panel-tabs">
+				<button class="swap-tab active" data-tab="swap">Swap</button>
+				<button class="swap-tab" data-tab="crosschain">Cross-Chain</button>
+			</div>
+			<button class="swap-panel-close" id="swap-panel-close">&times;</button>
+		</div>
+		<div class="swap-tab-content" id="swap-tab-swap">
+			<div id="sui-coins-terminal"></div>
+		</div>
+		<div class="swap-tab-content" id="swap-tab-crosschain" style="display:none;">
+			<div class="crosschain-ui" id="crosschain-ui">
+				<div class="cc-direction">SOL &rarr; SUI</div>
+				<div class="cc-field">
+					<label class="cc-label">Source Asset</label>
+					<select id="cc-source" class="cc-input">
+						<option value="sol_to_sui">SOL</option>
+						<option value="usdc_to_sui">USDC</option>
+					</select>
+				</div>
+				<div class="cc-field">
+					<label class="cc-label" id="cc-amount-label">Amount (SOL)</label>
+					<input type="text" id="cc-sol-amount" class="cc-input" placeholder="0.00" inputmode="decimal" autocomplete="off">
+				</div>
+				<div class="cc-field">
+					<label class="cc-label">Recipient (Sui Address or Name)</label>
+					<input type="text" id="cc-target" class="cc-input" placeholder="0x... or name.sui" autocomplete="off">
+				</div>
+				<div class="cc-rate" id="cc-rate">
+					<span class="cc-rate-label">Rate:</span>
+					<span class="cc-rate-value" id="cc-rate-value">--</span>
+				</div>
+				<div class="cc-field">
+					<label class="cc-label">You receive</label>
+					<div class="cc-output" id="cc-output">-- SUI</div>
+				</div>
+				<div class="cc-fee" id="cc-fee"></div>
+				<button class="cc-btn" id="cc-quote-btn" disabled>Get Deposit Address</button>
+				<div class="cc-deposit" id="cc-deposit" style="display:none;">
+					<div class="cc-deposit-label">Send SOL to:</div>
+					<div class="cc-deposit-addr" id="cc-deposit-addr"></div>
+					<button class="cc-copy-btn" id="cc-copy-addr">Copy</button>
+					<div class="cc-confirm-section">
+						<label class="cc-label">Solana TX Signature</label>
+						<input type="text" id="cc-sol-tx" class="cc-input" placeholder="Paste Solana transaction signature">
+						<button class="cc-btn cc-confirm-btn" id="cc-confirm-btn" disabled>Confirm &amp; Receive SUI</button>
+					</div>
+				</div>
+				<div class="cc-status" id="cc-status"></div>
+			</div>
+		</div>
+	</div>
 
 	<div class="header">
 		<h1 class="logo">${generateLogoSvg(42)} sui.ski</h1>
@@ -3219,11 +3904,13 @@ ${socialMeta}
 
 	<div class="footer">
 		<a href="/mvr">Packages</a>
-		<span class="sep">·</span>
+		<span class="sep">\u00b7</span>
 		<a href="https://suins.io" target="_blank">SuiNS</a>
-		<span class="sep">·</span>
+		<span class="sep">\u00b7</span>
 		<a href="https://deepbook.tech" target="_blank">DeepBook</a>
-		<span class="sep">·</span>
+		<span class="sep">\u00b7</span>
+		<a href="https://docs.waap.xyz/category/guides-sui" target="_blank">WaaP</a>
+		<span class="sep">\u00b7</span>
 		<span>SUI <span class="price" id="sui-price">$--</span></span>
 	</div>
 
@@ -3319,19 +4006,28 @@ ${socialMeta}
 					suinsClient = null;
 				}
 
-			${generateWalletKitJs({ network: options.network || 'mainnet', autoConnect: true })}
-			${generateWalletTxJs()}
-			${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onLandingWalletConnected', onDisconnect: 'onLandingWalletDisconnected' })}
+				${generateWalletKitJs({ network: options.network || 'mainnet', autoConnect: true })}
+				${generateWalletTxJs()}
+				${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onLandingWalletConnected', onDisconnect: 'onLandingWalletDisconnected' })}
 
-				window.onLandingWalletConnected = function() {
-					scheduleWalletDrivenDropdownRefresh();
-					return undefined;
-				};
+					const walletProfileBtnEl = document.getElementById('wallet-profile-btn');
+					function syncWalletProfileButtonVisibility() {
+						if (!walletProfileBtnEl) return;
+						const hasWallet = !!getConnectedAddress();
+						walletProfileBtnEl.classList.toggle('visible', hasWallet);
+					}
 
-				window.onLandingWalletDisconnected = function() {
-					scheduleWalletDrivenDropdownRefresh();
-					return undefined;
-				};
+					window.onLandingWalletConnected = function() {
+						syncWalletProfileButtonVisibility();
+						scheduleWalletDrivenDropdownRefresh();
+						return undefined;
+					};
+
+					window.onLandingWalletDisconnected = function() {
+						syncWalletProfileButtonVisibility();
+						scheduleWalletDrivenDropdownRefresh();
+						return undefined;
+					};
 
 					${generateSharedWalletMountJs({
 						network: options.network || 'mainnet',
@@ -3342,22 +4038,24 @@ ${socialMeta}
 						profileFallbackHref: 'https://sui.ski',
 					})}
 
-				if (typeof SuiWalletKit.subscribe === 'function' && SuiWalletKit.$connection) {
-					SuiWalletKit.subscribe(SuiWalletKit.$connection, function() {
-						scheduleWalletDrivenDropdownRefresh();
-					});
-				}
+					if (typeof SuiWalletKit.subscribe === 'function' && SuiWalletKit.$connection) {
+						SuiWalletKit.subscribe(SuiWalletKit.$connection, function() {
+							syncWalletProfileButtonVisibility();
+							scheduleWalletDrivenDropdownRefresh();
+						});
+					}
 
 			async function executeTransaction(tx) {
 				var txBytes = await tx.build({ client: suiClient });
 				return SuiWalletKit.signAndExecuteFromBytes(txBytes);
 			}
 
-				initClients().catch(function(error) {
-					console.warn('initClients failed:', error && error.message ? error.message : error);
-					suiClient = null;
-					suinsClient = null;
-				});
+					initClients().catch(function(error) {
+						console.warn('initClients failed:', error && error.message ? error.message : error);
+						suiClient = null;
+						suinsClient = null;
+					});
+					syncWalletProfileButtonVisibility();
 
 		// ========== SEARCH FUNCTIONALITY ==========
 		const searchInput = document.getElementById('search-input');
@@ -4177,6 +4875,11 @@ ${socialMeta}
 		updatePrice();
 		setInterval(updatePrice, 60000);
 	</script>
+
+	<style>${generateX402ChatCss()}</style>
+	<div id="x402-chat-root"></div>
+	<script>${generateX402ChatJs({ page: 'landing', network: options.network || 'mainnet' })}</script>
+
 </body>
 </html>`
 }

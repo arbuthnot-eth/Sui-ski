@@ -6,6 +6,8 @@ import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
+import { generateX402ChatCss } from '../utils/x402-chat-css'
+import { generateX402ChatJs } from '../utils/x402-chat-js'
 import { generateZkSendCss, generateZkSendJs } from '../utils/zksend-js'
 import { profileStyles } from './profile.css'
 
@@ -153,12 +155,12 @@ export function generateProfilePage(
 	<link rel="preconnect" href="https://esm.sh" crossorigin>
 	<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 	<link rel="preconnect" href="https://unpkg.com" crossorigin>
-	<script type="module">
-		import('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle').catch(()=>{});
-		import('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle').catch(()=>{});
-		import('https://esm.sh/@mysten/suins@1.0.0?bundle').catch(()=>{});
-		import('https://esm.sh/@wallet-standard/app@1.1.0').catch(()=>{});
-	</script>
+		<script type="module">
+			import('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle').catch(()=>{});
+			import('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle').catch(()=>{});
+			import('https://esm.sh/@mysten/suins@1.0.0?bundle').catch(()=>{});
+			import('https://esm.sh/@wallet-standard/app@1.1.0').catch(()=>{});
+		</script>
 
 	<style>${profileStyles}
 ${generateWalletUiCss()}
@@ -172,10 +174,10 @@ ${generateZkSendCss()}</style>
 
 	<!-- Wallet Widget (Shared with landing page component) -->
 	<div class="wallet-widget" id="wallet-widget">
-		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile">
+		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile" style="display:none">
 			${generateLogoSvg(18)}
 		</button>
-		<button class="swap-toggle-btn" id="swap-toggle-btn" title="Swap tokens">
+		<button class="swap-toggle-btn" id="swap-toggle-btn" title="Swap tokens" style="display:none">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 				<path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/>
 			</svg>
@@ -199,7 +201,14 @@ ${generateZkSendCss()}</style>
 			<div class="crosschain-ui" id="crosschain-ui">
 				<div class="cc-direction">SOL &rarr; SUI</div>
 				<div class="cc-field">
-					<label class="cc-label">Amount (SOL)</label>
+					<label class="cc-label">Source Asset</label>
+					<select id="cc-source" class="cc-input">
+						<option value="sol_to_sui">SOL</option>
+						<option value="usdc_to_sui">USDC</option>
+					</select>
+				</div>
+				<div class="cc-field">
+					<label class="cc-label" id="cc-amount-label">Amount (SOL)</label>
 					<input type="text" id="cc-sol-amount" class="cc-input" placeholder="0.00" inputmode="decimal" autocomplete="off">
 				</div>
 				<div class="cc-field">
@@ -292,7 +301,9 @@ ${generateZkSendCss()}</style>
 										? `<span class="badge expiry${daysToExpire <= 0 ? ' danger' : daysToExpire <= 7 ? ' danger' : daysToExpire <= 90 ? ' warning' : daysToExpire > 730 ? ' safe' : daysToExpire > 365 ? ' royalty' : ''}">
 											<span class="expiry-badge-text">${
 												daysToExpire <= 0
-													? (options.inGracePeriod ? 'Grace' : 'Expired')
+													? options.inGracePeriod
+														? 'Grace'
+														: 'Expired'
 													: daysToExpire > 365
 														? `${Math.floor(daysToExpire / 365)}y ${daysToExpire % 365}d`
 														: `${daysToExpire}d`
@@ -325,16 +336,6 @@ ${generateZkSendCss()}</style>
 												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="2.5"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>
 											</button>
 											<span class="target-preview-value" id="target-preview-value"></span>
-											<button class="edit-btn target-self-btn target-lift-btn hidden" id="set-self-btn" title="Lift target to my wallet" aria-label="Lift target to my wallet">
-												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-													<path d="M4 20h16"></path>
-													<path d="M6 20l4-8"></path>
-													<path d="M14 20l4-8"></path>
-													<path d="M10 9h4"></path>
-													<rect x="9.5" y="5.5" width="5" height="5" rx="1.2"></rect>
-													<path d="M12 4v-2"></path>
-												</svg>
-											</button>
 											<button class="target-preview-edit-btn hidden" id="edit-address-btn" title="Edit target address" aria-label="Edit target address">
 												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
 											</button>
@@ -454,7 +455,14 @@ ${generateZkSendCss()}</style>
 							autocomplete="off"
 							spellcheck="false"
 						/>
-						<button type="button" class="linked-filter-clear" id="linked-filter-clear" aria-label="Clear linked name filter">Clear</button>
+						<div class="linked-filter-actions" id="linked-filter-actions">
+							<button type="button" class="linked-filter-clear" id="linked-filter-clear" aria-label="Clear linked name filter">Clear</button>
+							<button type="button" class="linked-sweep-btn" id="linked-sweep-btn" aria-label="Sweep all filtered listed names" style="display:none;">
+								<svg class="sweep-sui-icon" viewBox="0 0 300 384" fill="#4da2ff"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z"/></svg>
+								<span>Sweep</span>
+								<span class="sweep-price" id="linked-sweep-price"></span>
+							</button>
+						</div>
 					</div>
 						</div>
 						</div>
@@ -529,7 +537,7 @@ ${generateZkSendCss()}</style>
 							</div>
 						</div>
 						<div class="renewal-price-stack">
-							<span class="renewal-price-value renewal-middle-total" id="overview-renewal-price">-- SUI</span>
+							<span class="renewal-price-value renewal-middle-total" id="overview-renewal-price">--</span>
 							<span class="renewal-price-meta-row">
 								<span class="renewal-countdown renewal-countdown-row" id="renewal-countdown"></span>
 								<span class="renewal-price-usd renewal-price-usd-row" id="overview-renewal-price-usd"></span>
@@ -537,11 +545,11 @@ ${generateZkSendCss()}</style>
 						</div>
 					</div>
 				</div>
-				<div class="renewal-card-body">
-					<div class="renewal-controls-row">
-						<button class="renewal-btn" id="overview-renewal-btn">
-							<span class="renewal-btn-text">Connect Wallet to Renew</span>
-							<span class="renewal-btn-loading hidden">
+					<div class="renewal-card-body">
+						<div class="renewal-controls-row">
+							<button class="renewal-btn" id="overview-renewal-btn">
+								<span class="renewal-btn-text">Connect Wallet to Renew</span>
+								<span class="renewal-btn-loading hidden">
 								<span class="loading"></span>
 							</span>
 						</button>
@@ -637,11 +645,7 @@ ${generateZkSendCss()}</style>
 								<span class="marketplace-list-text">List ${escapeHtml(cleanName)}.sui</span>
 								<span class="marketplace-list-loading hidden"><span class="loading"></span></span>
 							</button>
-							<button class="marketplace-wrap-btn" id="marketplace-wrap-btn" style="display:none;" disabled>
-								<span class="marketplace-wrap-text">Authorize Grace Wrap</span>
-								<span class="marketplace-wrap-loading hidden"><span class="loading"></span></span>
-							</button>
-							<div class="marketplace-wrap-hint" id="marketplace-wrap-hint" style="display:none;"></div>
+							<div id="marketplace-wrap-hint" style="display:none;"></div>
 						</div>
 					<div class="marketplace-status" id="marketplace-status"></div>
 					<div class="marketplace-activity" id="marketplace-activity" style="display:none;">
@@ -1311,7 +1315,6 @@ ${generateZkSendCss()}</style>
 		// DOM Elements
 		const walletBar = document.getElementById('wallet-bar');
 		const editBtn = document.getElementById('edit-address-btn');
-		const setSelfBtn = document.getElementById('set-self-btn');
 		const ownerPrimaryStar = document.getElementById('owner-primary-star');
 		const copyBtn = document.getElementById('copy-address-btn');
 		const ownerAddrText = document.getElementById('addr-text');
@@ -1398,9 +1401,9 @@ ${generateZkSendCss()}</style>
 		const marketplaceListBtn = document.getElementById('marketplace-list-btn');
 		const marketplaceListText = marketplaceListBtn?.querySelector('.marketplace-list-text');
 		const marketplaceListLoading = marketplaceListBtn?.querySelector('.marketplace-list-loading');
-		const marketplaceWrapBtn = document.getElementById('marketplace-wrap-btn');
-		const marketplaceWrapText = marketplaceWrapBtn?.querySelector('.marketplace-wrap-text');
-		const marketplaceWrapLoading = marketplaceWrapBtn?.querySelector('.marketplace-wrap-loading');
+		let marketplaceWrapBtn = null;
+		let marketplaceWrapText = null;
+		let marketplaceWrapLoading = null;
 		const marketplaceWrapHint = document.getElementById('marketplace-wrap-hint');
 		const marketplaceListEstimate = document.getElementById('marketplace-list-estimate');
 		const marketplaceStatus = document.getElementById('marketplace-status');
@@ -1459,37 +1462,30 @@ ${generateZkSendCss()}</style>
 				const targetCopyBtnEl = document.getElementById('copy-target-address-btn');
 				if (!targetPreviewEl) return;
 				currentTargetAddress = address || '';
+				targetPreviewEl.style.display = '';
+				if (targetCopyBtnEl) {
+					targetCopyBtnEl.classList.remove('hidden');
+					targetCopyBtnEl.disabled = false;
+				}
 				if (address) {
-					targetPreviewEl.classList.remove('no-target');
+					targetPreviewEl.classList.remove('no-target', 'set-target-ready');
 					targetPreviewEl.title = 'Copy target address: ' + address;
 					targetPreviewEl.setAttribute('role', 'button');
 					targetPreviewEl.tabIndex = 0;
 					targetPreviewEl.setAttribute('aria-label', 'Copy target address');
 					if (targetPreviewValueEl) targetPreviewValueEl.textContent = previewAddr6(address);
-					if (targetCopyBtnEl) {
-						targetCopyBtnEl.classList.remove('hidden');
-						targetCopyBtnEl.disabled = false;
-						targetCopyBtnEl.title = 'Copy target address: ' + address;
-					targetCopyBtnEl.setAttribute('aria-label', 'Copy target address');
-				}
-				targetPreviewEl.style.display = '';
-				targetPreviewEl.classList.add('is-copyable');
-				targetPreviewEl.classList.toggle('long-renewal', IS_LONG_RENEWAL);
+					targetPreviewEl.classList.add('is-copyable');
+					targetPreviewEl.classList.toggle('long-renewal', IS_LONG_RENEWAL);
 				} else {
-					targetPreviewEl.style.display = '';
 					targetPreviewEl.classList.remove('is-copyable', 'copied', 'long-renewal');
 					targetPreviewEl.classList.add('no-target');
-					targetPreviewEl.removeAttribute('role');
-					targetPreviewEl.removeAttribute('aria-label');
-					targetPreviewEl.removeAttribute('tabindex');
-					targetPreviewEl.title = 'No target address';
-					if (targetPreviewValueEl) targetPreviewValueEl.textContent = '—';
-					if (targetCopyBtnEl) {
-						targetCopyBtnEl.classList.add('hidden');
-						targetCopyBtnEl.disabled = true;
-						targetCopyBtnEl.title = 'No target address';
+					targetPreviewEl.setAttribute('role', 'button');
+					targetPreviewEl.tabIndex = 0;
+					targetPreviewEl.title = 'No target address set';
+					targetPreviewEl.setAttribute('aria-label', 'No target address set');
+					if (targetPreviewValueEl) targetPreviewValueEl.textContent = 'None';
 				}
-			}
+				updateEditButton();
 		}
 
 		function showStatus(el, msg, type) {
@@ -1654,41 +1650,55 @@ ${generateZkSendCss()}</style>
 					return;
 				}
 
-				// Fetch NFT owner and primary name in parallel
 				const [owner, primaryName] = await Promise.all([
-					nftOwnerAddress ? Promise.resolve(nftOwnerAddress) : fetchNftOwner(),
+					fetchNftOwner(),
 					fetchPrimaryName(connectedAddress)
 				]);
 
-				if (!nftOwnerAddress && owner) {
+				if (owner) {
 					nftOwnerAddress = owner;
 				}
 				connectedPrimaryName = primaryName;
 
-				// Can edit if wallet is the NFT owner OR the current target address
 				canEdit = canConnectedWalletEditTarget();
 				updateEditButton();
-				renderWalletBar(); // Re-render to show primary name
-				updateGlobalWalletWidget(); // Update global widget with primary name
+				renderWalletBar();
+				updateGlobalWalletWidget();
+
+				const normalizedOwner = String(nftOwnerAddress || OWNER_ADDRESS || '').toLowerCase();
+				const isOwner = Boolean(connectedAddress && normalizedOwner && connectedAddress.toLowerCase() === normalizedOwner);
+				const explicitTarget = getExplicitTargetAddress();
+				if (isOwner && !isLikelySuiAddress(explicitTarget)) {
+					showOwnerInlineStatus('This name has no target address. Tap <strong>Activate</strong> to point it to your wallet.', 'info', true);
+				}
 			} finally {
 				isCheckingEditPermission = false;
 			}
 		}
 
 		// Update edit button state
-		function updateEditButton() {
-			const normalizedConnected = connectedAddress ? String(connectedAddress).toLowerCase() : '';
-			const explicitTargetAddress = getExplicitTargetAddress();
-			const normalizedTarget = String(explicitTargetAddress || '').toLowerCase();
-			const normalizedOwner = String(nftOwnerAddress || OWNER_ADDRESS || '').toLowerCase();
-			const hasExplicitTarget = isLikelySuiAddress(explicitTargetAddress);
-			const isAlreadySelf = Boolean(normalizedConnected && normalizedTarget && normalizedConnected === normalizedTarget);
-			const isOwner = Boolean(normalizedConnected && normalizedOwner && normalizedConnected === normalizedOwner);
-			const isLinkedTarget = Boolean(hasExplicitTarget && isAlreadySelf);
-			const isPrimaryForTarget = Boolean(hasExplicitTarget && isProfilePrimaryNameForOwner());
-			const hasTwoPlusYearsRemaining = Boolean(
-				Number.isFinite(EXPIRATION_MS)
-				&& Number(EXPIRATION_MS) - Date.now() >= 2 * 365.25 * 24 * 60 * 60 * 1000,
+			function updateEditButton() {
+				const normalizedConnected = connectedAddress ? String(connectedAddress).toLowerCase() : '';
+				const explicitTargetAddress = getExplicitTargetAddress();
+				const normalizedTarget = String(explicitTargetAddress || '').toLowerCase();
+				const normalizedOwner = String(nftOwnerAddress || OWNER_ADDRESS || '').toLowerCase();
+				const hasExplicitTarget = isLikelySuiAddress(explicitTargetAddress);
+				const isAlreadySelf = Boolean(normalizedConnected && normalizedTarget && normalizedConnected === normalizedTarget);
+				const isOwner = Boolean(normalizedConnected && normalizedOwner && normalizedConnected === normalizedOwner);
+				const isTradeportListingOwner = Boolean(
+					normalizedConnected
+					&& currentListing?.seller
+					&& normalizedConnected === String(currentListing.seller).toLowerCase()
+					&& (!NFT_ID
+						|| !currentListing?.tokenId
+						|| String(currentListing.tokenId).toLowerCase() === String(NFT_ID).toLowerCase()),
+				);
+				const isOwnerForTheme = Boolean(isOwner || isTradeportListingOwner);
+				const isLinkedTarget = Boolean(hasExplicitTarget && isAlreadySelf);
+				const isPrimaryForTarget = Boolean(hasExplicitTarget && isProfilePrimaryNameForOwner());
+				const hasTwoPlusYearsRemaining = Boolean(
+					Number.isFinite(EXPIRATION_MS)
+					&& Number(EXPIRATION_MS) - Date.now() >= 2 * 365.25 * 24 * 60 * 60 * 1000,
 			);
 			const isUnlisted = !currentListing;
 			const useOwnedWhiteTheme = Boolean(
@@ -1703,17 +1713,6 @@ ${generateZkSendCss()}</style>
 				&& connectedPrimaryName
 				&& connectedPrimaryName.replace(/\\.sui$/i, '') === FULL_NAME.replace(/\\.sui$/i, ''),
 			);
-
-			// Show for owners when target is missing or points elsewhere.
-			if (isOwner && (!hasExplicitTarget || !isAlreadySelf)) {
-				setSelfBtn.disabled = false;
-				setSelfBtn.title = connectedPrimaryName
-					? 'Lift target to ' + connectedPrimaryName
-					: 'Lift target to ' + truncAddr(connectedAddress);
-				setSelfBtn.classList.remove('hidden');
-			} else {
-				setSelfBtn.classList.add('hidden');
-			}
 
 			// Primary star (shown next to the profile title)
 			if (ownerPrimaryStar) {
@@ -1737,10 +1736,10 @@ ${generateZkSendCss()}</style>
 				}
 			}
 
-			if (ownerDisplayCard) {
-				ownerDisplayCard.classList.toggle('primary-view', isAlreadyPrimary);
-				ownerDisplayCard.classList.toggle('owner-view', isOwner && !isAlreadyPrimary);
-			}
+				if (ownerDisplayCard) {
+					ownerDisplayCard.classList.toggle('primary-view', isOwnerForTheme && isAlreadyPrimary);
+					ownerDisplayCard.classList.toggle('owner-view', isOwnerForTheme && !isAlreadyPrimary);
+				}
 				if (document.body) {
 					document.body.classList.toggle('profile-primary-active', isAlreadyPrimary);
 				}
@@ -1759,29 +1758,41 @@ ${generateZkSendCss()}</style>
 				editBtn.title = canShowEdit ? 'Edit target address' : '';
 			}
 				if (copyTargetBtn) {
-					const showEmptyTarget = Boolean(connectedAddress && !isOwner && !hasExplicitTarget);
-					copyTargetBtn.classList.toggle('hidden', !hasExplicitTarget && !showEmptyTarget);
+					copyTargetBtn.classList.remove('hidden');
 					copyTargetBtn.disabled = !hasExplicitTarget;
-					if (showEmptyTarget) {
-						copyTargetBtn.title = 'No target address';
-						copyTargetBtn.setAttribute('aria-label', 'No target address');
-					}
 				}
 				if (targetPreviewBtn) {
-					const showEmptyTarget = Boolean(connectedAddress && !isOwner && !hasExplicitTarget);
+					const canSetTarget = Boolean(isOwner && !hasExplicitTarget);
 					targetPreviewBtn.classList.remove('hidden');
 					targetPreviewBtn.classList.toggle('self-target', Boolean(hasExplicitTarget && isAlreadySelf));
-					targetPreviewBtn.classList.toggle('lift-ready', Boolean(isOwner && !hasExplicitTarget));
-					targetPreviewBtn.classList.toggle('empty-target', showEmptyTarget);
+					targetPreviewBtn.classList.toggle('set-target-ready', canSetTarget);
 					targetPreviewBtn.classList.toggle('target-primary-gold', Boolean(hasExplicitTarget && isPrimaryForTarget));
 					targetPreviewBtn.classList.toggle('target-owned-blue', Boolean(hasExplicitTarget && useOwnedBlueTheme));
 					targetPreviewBtn.classList.toggle('target-owned-white', Boolean(hasExplicitTarget && useOwnedWhiteTheme));
+					if (canSetTarget) {
+						targetPreviewBtn.classList.remove('no-target');
+						targetPreviewBtn.classList.add('is-copyable');
+						targetPreviewBtn.title = 'Set target to your wallet address';
+						targetPreviewBtn.setAttribute('aria-label', 'Set target to your wallet address');
+					} else if (!hasExplicitTarget && !connectedAddress) {
+						targetPreviewBtn.classList.add('no-target', 'disabled');
+						targetPreviewBtn.classList.remove('is-copyable', 'set-target-ready');
+						targetPreviewBtn.title = 'No target address set';
+						targetPreviewBtn.setAttribute('aria-label', 'No target address set');
+					} else if (!hasExplicitTarget) {
+						targetPreviewBtn.classList.add('no-target');
+						targetPreviewBtn.classList.remove('disabled', 'set-target-ready');
+						targetPreviewBtn.title = 'No target address set';
+						targetPreviewBtn.setAttribute('aria-label', 'No target address set');
+					} else {
+						targetPreviewBtn.classList.remove('no-target', 'disabled', 'set-target-ready');
+					}
 				}
 				if (targetPreviewValue) {
-					const showEmptyTarget = Boolean(connectedAddress && !isOwner && !hasExplicitTarget);
 					targetPreviewValue.classList.remove('hidden');
 					if (!hasExplicitTarget) {
-						targetPreviewValue.textContent = showEmptyTarget ? '' : '—';
+						const canSetTarget = Boolean(isOwner && !hasExplicitTarget);
+						targetPreviewValue.textContent = canSetTarget ? 'Activate' : 'None';
 					}
 				}
 
@@ -1891,7 +1902,8 @@ ${generateZkSendCss()}</style>
 				if (m.includes('rejected') || m.includes('cancelled')) {
 					showGracePeriodStatus('Cancelled', 'error');
 				} else if (m.includes('Insufficient')) {
-					showGracePeriodStatus('Need 10 SUI + gas', 'error');
+					var gpAddr = getConnectedAddress() || '';
+					showGracePeriodStatus('Need 10 SUI + gas' + (gpAddr ? '. Fund: ' + gpAddr : ''), 'error');
 				} else {
 					showGracePeriodStatus('Error: ' + m, 'error');
 				}
@@ -2116,6 +2128,11 @@ ${generateZkSendCss()}</style>
 			updateGlobalWalletWidget();
 			checkEditPermission();
 			updateEditButton();
+				var swapBtn = document.getElementById('swap-toggle-btn');
+				var profBtn = document.getElementById('wallet-profile-btn');
+				var hasWallet = !!connectedAddress;
+				if (swapBtn) swapBtn.style.display = hasWallet ? '' : 'none';
+				if (profBtn) profBtn.style.display = hasWallet ? '' : 'none';
 				if (typeof loadUserVault === 'function') loadUserVault();
 				if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
 					if (renewalUiReady && typeof updateRenewalButton === 'function') updateRenewalButton();
@@ -2350,7 +2367,7 @@ ${generateZkSendCss()}</style>
 					const availableSui = Number(totalBalanceMist) / 1e9;
 					showStatus(
 						sendStatus,
-						'Insufficient SUI. Need ~' + neededSui.toFixed(4) + ' SUI, have ' + availableSui.toFixed(4) + ' SUI',
+						'Insufficient SUI. Need ~' + neededSui.toFixed(4) + ' SUI, have ' + availableSui.toFixed(4) + '. Fund: ' + senderAddress,
 						'error',
 					);
 					return;
@@ -4054,8 +4071,11 @@ ${generateZkSendCss()}</style>
 			async function setToSelf() {
 				if (!connectedAddress) {
 					await connectWallet();
-					if (!connectedAddress || !canConnectedWalletEditTarget()) return;
+					if (!connectedAddress) return;
 				}
+
+				const freshOwner = await fetchNftOwner();
+				if (freshOwner) nftOwnerAddress = freshOwner;
 
 				if (!canConnectedWalletEditTarget()) {
 					showOwnerInlineStatus('Only the NFT owner or target address can edit.', 'error');
@@ -4073,8 +4093,6 @@ ${generateZkSendCss()}</style>
 				}
 
 				try {
-					setSelfBtn.disabled = true;
-
 				const suinsClient = await createSuinsClient(true);
 				const suiClient = getSuiClient();
 
@@ -4121,7 +4139,6 @@ ${generateZkSendCss()}</style>
 					console.error('Set self error:', errorMsg, error);
 					showOwnerInlineStatus('Failed: ' + errorMsg, 'error');
 				} finally {
-					setSelfBtn.disabled = false;
 					updateEditButton();
 				}
 			}
@@ -4519,7 +4536,6 @@ ${generateZkSendCss()}</style>
 
 		// Event listeners
 		if (editBtn) editBtn.addEventListener('click', openEditModal);
-		if (setSelfBtn) setSelfBtn.addEventListener('click', setToSelf);
 		if (ownerPrimaryStar) ownerPrimaryStar.addEventListener('click', setPrimary);
 		if (jacketBtn) jacketBtn.addEventListener('click', openJacketModal);
 		if (jacketCancelBtn) jacketCancelBtn.addEventListener('click', closeJacketModal);
@@ -4556,22 +4572,27 @@ ${generateZkSendCss()}</style>
 			}
 			if (targetPreviewBtn) {
 				targetPreviewBtn.addEventListener('click', (event) => {
-					if (!getExplicitTargetAddress()) return;
 					const rawTarget = event.target;
 					const targetEl = rawTarget instanceof Element
 						? rawTarget
 						: rawTarget instanceof Node
 							? rawTarget.parentElement
 							: null;
-					if (!targetEl) return;
-					if (targetEl.closest('button, a, input, textarea, select')) return;
-					copyTargetAddress();
+					if (targetEl && targetEl.closest('button, a, input, textarea, select')) return;
+					if (getExplicitTargetAddress()) {
+						copyTargetAddress();
+					} else if (targetPreviewBtn.classList.contains('set-target-ready')) {
+						setToSelf();
+					}
 				});
 				targetPreviewBtn.addEventListener('keydown', (event) => {
-					if (!getExplicitTargetAddress()) return;
 					if (event.key !== 'Enter' && event.key !== ' ') return;
 					event.preventDefault();
-					copyTargetAddress();
+					if (getExplicitTargetAddress()) {
+						copyTargetAddress();
+					} else if (targetPreviewBtn.classList.contains('set-target-ready')) {
+						setToSelf();
+					}
 				});
 			}
 		if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
@@ -5256,7 +5277,7 @@ ${generateZkSendCss()}</style>
 					if (!DEEPBOOK_PACKAGE) {
 						const needed = (Number(totalSuiNeeded) / 1e9).toFixed(4);
 						const have = (Number(suiAvailable) / 1e9).toFixed(4);
-						if (statusEl) statusEl.textContent = 'Need ' + needed + ' SUI (have ' + have + ')';
+						if (statusEl) statusEl.textContent = 'Need ' + needed + ' SUI (have ' + have + '). Fund: ' + connectedAddress;
 						return;
 					}
 
@@ -5266,7 +5287,7 @@ ${generateZkSendCss()}</style>
 					if (!pools.length) {
 						const needed = (Number(totalSuiNeeded) / 1e9).toFixed(4);
 						const have = (Number(suiAvailable) / 1e9).toFixed(4);
-						if (statusEl) statusEl.textContent = 'Need ' + needed + ' SUI (have ' + have + ')';
+						if (statusEl) statusEl.textContent = 'Need ' + needed + ' SUI (have ' + have + '). Fund: ' + connectedAddress;
 						return;
 					}
 
@@ -5326,7 +5347,7 @@ ${generateZkSendCss()}</style>
 					if (!swapInfo) {
 						const needed = (Number(totalSuiNeeded) / 1e9).toFixed(4);
 						const have = (Number(suiAvailable) / 1e9).toFixed(4);
-						if (statusEl) statusEl.textContent = 'Need ' + needed + ' SUI (have ' + have + ')';
+						if (statusEl) statusEl.textContent = 'Need ' + needed + ' SUI (have ' + have + '). Fund: ' + connectedAddress;
 						return;
 					}
 				}
@@ -5650,7 +5671,8 @@ ${generateZkSendCss()}</style>
 				if (error.message?.includes('rejected') || error.message?.includes('cancelled')) {
 					showMessageStatus('Transaction cancelled', 'error');
 				} else if (error.message?.includes('Insufficient')) {
-					showMessageStatus('Insufficient SUI balance for gas', 'error');
+					var msgAddr = getConnectedAddress() || '';
+					showMessageStatus('Insufficient SUI balance for gas' + (msgAddr ? '. Fund: ' + msgAddr : ''), 'error');
 				} else if (error.message?.includes('MoveAbort') || error.message?.includes('function not found')) {
 					// Contract function may not exist yet - fall back to demo mode
 					showMessageStatus('Direct messaging coming soon! Try Polymedia Chat for now.', 'info');
@@ -6387,6 +6409,7 @@ ${generateZkSendCss()}</style>
 			updateExpirationCountdown();
 			updateExpiryBadgeWithRenewal();
 			updateRenewalDisplay(ovRenewalYears, ovRenewalPrice, ovRenewalSavings, ovRenewalSavingsText);
+			if (typeof refreshPaymentSelector === 'function') refreshPaymentSelector();
 		}
 
 		if (ovRenewalYearsMinus) {
@@ -6486,7 +6509,7 @@ ${generateZkSendCss()}</style>
 			}
 		}
 		updateSUIPrice();
-		setInterval(updateSUIPrice, 60000);
+		setInterval(updateSUIPrice, 300000);
 
 		async function updateRenewalDisplay(yearsEl, priceEl, savingsRowEl, savingsTextEl) {
 			if (!yearsEl || !priceEl) return;
@@ -6501,8 +6524,8 @@ ${generateZkSendCss()}</style>
 				return;
 			}
 
-			const discountedSui = Number(pricing.discountedSuiMist) / 1e9;
-			priceEl.textContent = discountedSui.toFixed(2) + ' SUI';
+				const discountedSui = Number(pricing.discountedSuiMist) / 1e9;
+				priceEl.innerHTML = discountedSui.toFixed(2) + SUI_ICON_SVG;
 			lastRenewalSuiAmount = discountedSui;
 			updateRenewalUsdPrice();
 
@@ -6590,6 +6613,152 @@ ${generateZkSendCss()}</style>
 				expiryQuickRenewBtn.style.display = (!connectedAddress || canRenew) ? '' : 'none';
 			}
 			}
+
+			var selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'NS' };
+			var renewQuoteCache = null;
+			var walletBalancesCache = {};
+			var paySelector = document.getElementById('renewal-pay-selector');
+			var payBtn = document.getElementById('renewal-pay-btn');
+			var payLabel = document.getElementById('renewal-pay-label');
+			var payDropdown = document.getElementById('renewal-pay-dropdown');
+
+			async function fetchRenewQuote() {
+				var nameToPrice = selectedRenewalName || NAME;
+				var years = currentRenewalYears || 1;
+				try {
+					var res = await fetch(getRenewalApiUrl('/api/renew-quote?domain=' + encodeURIComponent(nameToPrice) + '&years=' + years));
+					if (!res.ok) return null;
+					return await res.json();
+				} catch (e) {
+					return null;
+				}
+			}
+
+			async function fetchWalletBalances(address) {
+				var suiClient = getSuiClient();
+				var SUI_TYPE_FULL = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
+				var suiBal = await suiClient.getBalance({ owner: address, coinType: SUI_TYPE_FULL }).catch(function() { return { totalBalance: '0' }; });
+				var balances = {};
+				balances[SUI_TYPE_FULL] = { balance: Number(BigInt(suiBal.totalBalance)) / 1e9, coins: null };
+
+				var pools = await fetch('/api/deepbook-pools').then(function(r) { return r.json(); }).catch(function() { return []; });
+				if (pools.length) {
+					var poolBalances = await Promise.all(
+						pools.map(function(p) {
+							return suiClient.getBalance({ owner: address, coinType: p.coinType }).catch(function() { return { totalBalance: '0' }; });
+						})
+					);
+					for (var i = 0; i < pools.length; i++) {
+						var bal = Number(BigInt(poolBalances[i].totalBalance));
+						if (bal > 0) {
+							balances[pools[i].coinType] = { balance: bal / Math.pow(10, pools[i].decimals), coins: null };
+						}
+					}
+				}
+				return balances;
+			}
+
+			async function fetchCoinObjects(address, coinType) {
+				var suiClient = getSuiClient();
+				var coins = await suiClient.getCoins({ owner: address, coinType: coinType });
+				return coins.data.map(function(c) { return c.coinObjectId; });
+			}
+
+			function populatePaySelector(quote, balances) {
+				if (!payDropdown || !quote || !quote.paymentOptions) return;
+				payDropdown.innerHTML = '';
+				var bestOption = null;
+				var SUI_TYPE_FULL = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
+
+				for (var i = 0; i < quote.paymentOptions.length; i++) {
+					var opt = quote.paymentOptions[i];
+					var walletBal = balances[opt.coinType] ? balances[opt.coinType].balance : 0;
+					var sufficient = walletBal >= opt.tokensNeeded;
+
+					if (!bestOption && sufficient) {
+						bestOption = opt;
+					}
+
+					var btn = document.createElement('button');
+					btn.type = 'button';
+					btn.className = 'renewal-pay-option' + (sufficient ? '' : ' insufficient');
+					var amountFmt = opt.tokensNeeded < 0.01 ? '< 0.01' : opt.tokensNeeded < 100 ? opt.tokensNeeded.toFixed(2) : opt.tokensNeeded < 10000 ? opt.tokensNeeded.toFixed(1) : Math.round(opt.tokensNeeded).toString();
+					var discountHtml = opt.discount ? '<span class="pay-opt-discount">-' + opt.discount + '%</span>' : '';
+					var statusHtml = sufficient
+						? '<span class="pay-opt-check">\\u2713</span>'
+						: '<span class="pay-opt-insufficient">\\u2717</span>';
+					btn.innerHTML = '<span><span class="pay-opt-name">' + opt.name + '</span>' + discountHtml + '<br><span class="pay-opt-amount">' + amountFmt + ' ' + opt.name + '</span></span>' + statusHtml;
+
+					(function(optCopy) {
+						btn.addEventListener('click', function() {
+							var NS_COIN_TYPE = '0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS';
+							if (optCopy.coinType === SUI_TYPE_FULL) {
+								selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'SUI' };
+							} else if (optCopy.coinType === NS_COIN_TYPE) {
+								selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'NS' };
+							} else {
+								selectedPayment = { method: 'coin', coinType: optCopy.coinType, coinObjectIds: null, label: optCopy.name };
+							}
+							if (payLabel) payLabel.textContent = selectedPayment.label;
+							payDropdown.classList.remove('open');
+							var allOpts = payDropdown.querySelectorAll('.renewal-pay-option');
+							for (var j = 0; j < allOpts.length; j++) allOpts[j].classList.remove('selected');
+							btn.classList.add('selected');
+						});
+					})(opt);
+
+					payDropdown.appendChild(btn);
+				}
+
+				if (bestOption) {
+					var NS_COIN_TYPE = '0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS';
+					if (bestOption.coinType === SUI_TYPE_FULL) {
+						selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'SUI' };
+					} else if (bestOption.coinType === NS_COIN_TYPE) {
+						selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'NS' };
+					} else {
+						selectedPayment = { method: 'coin', coinType: bestOption.coinType, coinObjectIds: null, label: bestOption.name };
+					}
+					if (payLabel) payLabel.textContent = selectedPayment.label;
+					var firstOpt = payDropdown.querySelector('.renewal-pay-option');
+					if (firstOpt) firstOpt.classList.add('selected');
+				}
+			}
+
+			async function refreshPaymentSelector() {
+				if (!connectedAddress || !paySelector) return;
+				paySelector.style.display = '';
+				var quote = await fetchRenewQuote();
+				renewQuoteCache = quote;
+				var balances = await fetchWalletBalances(connectedAddress);
+				walletBalancesCache = balances;
+				populatePaySelector(quote, balances);
+			}
+
+			if (payBtn && payDropdown) {
+				payBtn.addEventListener('click', function(e) {
+					e.stopPropagation();
+					payDropdown.classList.toggle('open');
+				});
+				document.addEventListener('click', function(e) {
+					if (payDropdown && !payDropdown.contains(e.target) && e.target !== payBtn) {
+						payDropdown.classList.remove('open');
+					}
+				});
+			}
+
+			var __lastPaySelectorAddr = null;
+			SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
+				var addr = conn && (conn.status === 'connected' || conn.status === 'session') ? conn.address : null;
+				if (addr && addr !== __lastPaySelectorAddr) {
+					__lastPaySelectorAddr = addr;
+					refreshPaymentSelector();
+				} else if (!addr) {
+					__lastPaySelectorAddr = null;
+					if (paySelector) paySelector.style.display = 'none';
+					selectedPayment = { method: 'ns', coinType: null, coinObjectIds: null, label: 'NS' };
+				}
+			});
 
 			renewalUiReady = true
 
@@ -6992,6 +7161,7 @@ ${generateZkSendCss()}</style>
 					txOptions: txOptions || {},
 					preferTransactionBlock: true,
 					singleAttempt: true,
+					forceSignBridge: true,
 				};
 
 				if (txBlockInput && typeof SuiWalletKit?.signAndExecute === 'function') {
@@ -7119,6 +7289,14 @@ ${generateZkSendCss()}</style>
 					? String(nameToExtend)
 					: String(nameToExtend) + '.sui';
 
+				if (selectedPayment.method === 'coin' && selectedPayment.coinType && !selectedPayment.coinObjectIds) {
+					if (statusEl) statusEl.textContent = 'Fetching coin objects...';
+					selectedPayment.coinObjectIds = await fetchCoinObjects(senderAddress, selectedPayment.coinType);
+					if (!selectedPayment.coinObjectIds || !selectedPayment.coinObjectIds.length) {
+						throw new Error('No ' + selectedPayment.label + ' coins found in wallet');
+					}
+				}
+
 				if (statusEl) {
 					statusEl.textContent = 'Building transaction...';
 				}
@@ -7126,13 +7304,20 @@ ${generateZkSendCss()}</style>
 				const renewTxRes = await fetch(getRenewalApiUrl('/api/renew-tx'), {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({
-						domain: renewalDomain,
-						nftId: nftIdToUse,
-						years: years,
-						senderAddress,
-						paymentMethod: 'ns',
-					}),
+					body: (function() {
+						var _body = {
+							domain: renewalDomain,
+							nftId: nftIdToUse,
+							years: years,
+							senderAddress: senderAddress,
+							paymentMethod: selectedPayment.method,
+						};
+						if (selectedPayment.method === 'coin' && selectedPayment.coinType) {
+							_body.sourceCoinType = selectedPayment.coinType;
+							_body.coinObjectIds = selectedPayment.coinObjectIds;
+						}
+						return JSON.stringify(_body);
+					})(),
 				});
 				const renewTxData = await renewTxRes.json().catch(() => null);
 				if (!renewTxRes.ok || !renewTxData?.txBytes) {
@@ -7651,6 +7836,8 @@ ${generateZkSendCss()}</style>
 		const linkedNamesFilter = document.getElementById('linked-names-filter');
 		const linkedNamesFilterInput = document.getElementById('linked-names-filter-input');
 		const linkedFilterClear = document.getElementById('linked-filter-clear');
+		const linkedSweepBtn = document.getElementById('linked-sweep-btn');
+		const linkedSweepPrice = document.getElementById('linked-sweep-price');
 		const linkedNamesHint = document.getElementById('linked-names-hint');
 		const linkedOwnerRow = document.querySelector('.linked-owner-row');
 		const linkedControlsModule = linkedOwnerRow?.querySelector('.linked-controls-module');
@@ -7753,7 +7940,7 @@ ${generateZkSendCss()}</style>
 				if (linkedNamesData.length > 0) {
 					var totalUsd = 0;
 					for (var ri = 0; ri < linkedNamesData.length; ri++) {
-						var rName = String(linkedNamesData[ri].name || '').replace(/\.sui$/i, '');
+						var rName = String(linkedNamesData[ri].name || '').replace(/.sui$/i, '');
 						var rLen = rName.length;
 						if (rLen === 3) totalUsd += 500;
 						else if (rLen === 4) totalUsd += 100;
@@ -7787,6 +7974,32 @@ ${generateZkSendCss()}</style>
 						linkedNamesHint.style.display = '';
 					}
 				}
+
+				if (linkedSweepBtn) {
+					var sweepTotal = 0;
+					var sweepCount = 0;
+					var namesToSweep = linkedFilterQuery ? linkedNamesData.filter(function(item) { return getLinkedItemMatchScore(item) > 0; }) : linkedNamesData;
+					for (var si = 0; si < namesToSweep.length; si++) {
+						var sweepItemPrice = getLinkedNameListingPriceSui(namesToSweep[si]);
+						if (Number.isFinite(sweepItemPrice) && sweepItemPrice > 0) {
+							sweepTotal += sweepItemPrice;
+							sweepCount++;
+						}
+					}
+					if (sweepCount > 0) {
+						linkedSweepBtn.style.display = 'inline-flex';
+						if (linkedSweepPrice) linkedSweepPrice.textContent = formatLinkedTagListingPriceSui(sweepTotal);
+						linkedSweepBtn.title = 'Buy ' + sweepCount + ' listed name' + (sweepCount !== 1 ? 's' : '') + ' for ~' + sweepTotal.toFixed(2) + ' SUI';
+					} else {
+						linkedSweepBtn.style.display = 'none';
+					}
+					if (linkedNamesFilterInput) {
+						requestAnimationFrame(function() {
+							var actionsEl = document.getElementById('linked-filter-actions');
+							if (actionsEl) linkedNamesFilterInput.style.paddingRight = (actionsEl.offsetWidth + 8) + 'px';
+						});
+					}
+				}
 			}
 
 		function getExpirationTag(expirationMs) {
@@ -7811,10 +8024,10 @@ ${generateZkSendCss()}</style>
 			}
 		}
 
-		function trimLinkedTagNumber(value) {
-			if (value.indexOf('.') === -1) return value;
-			return value.replace(/.0+$/, '').replace(/(.d*?[1-9])0+$/, '$1');
-		}
+			function trimLinkedTagNumber(value) {
+				if (value.indexOf('.') === -1) return value;
+				return value.replace(/[.]0+$/, '').replace(/([.][0-9]*?[1-9])0+$/, '$1');
+			}
 
 		function formatLinkedTagListingPriceSui(priceSui) {
 			if (!Number.isFinite(priceSui) || priceSui <= 0) return '0';
@@ -8872,24 +9085,85 @@ function shortAddr(addr) {
 			const bidPrimaryNameCache = new Map();
 			const linkedPrimaryNameCache = new Map();
 			let marketplaceActivityRenderNonce = 0;
-			var MARKETPLACE_MIN_SIDE_WIDTH = 233;
-			var MARKETPLACE_MAX_SIDE_WIDTH = 420;
-			var marketplaceLayoutRaf = null;
-			var MIST_PER_SUI = 1_000_000_000;
+				var MARKETPLACE_MIN_SIDE_WIDTH = 233;
+				var MARKETPLACE_MAX_SIDE_WIDTH = 420;
+				var marketplaceLayoutRaf = null;
+				var MIST_PER_SUI = 1_000_000_000;
+				var MIST_PER_SUI_BIGINT = 1_000_000_000n;
 
 			function toSuiInputPrecision(amountSui) {
 				if (!Number.isFinite(amountSui) || amountSui <= 0) return 0;
 				return Math.round(amountSui * MIST_PER_SUI) / MIST_PER_SUI;
 			}
 
-			function formatSuiInputValue(amountSui) {
-				const normalized = toSuiInputPrecision(amountSui);
-				if (!Number.isFinite(normalized) || normalized <= 0) return '';
-				return normalized
-					.toFixed(9)
-					.replace(/0+$/, '')
-					.replace(/.$/, '');
-			}
+				function formatSuiInputValue(amountSui) {
+					const normalized = toSuiInputPrecision(amountSui);
+					if (!Number.isFinite(normalized) || normalized <= 0) return '';
+					return normalized
+						.toFixed(9)
+						.replace(/0+$/, '')
+						.replace(/\.$/, '');
+				}
+
+				function toMistBigInt(value) {
+					if (value === null || value === undefined) return null;
+					if (typeof value === 'bigint') return value >= 0n ? value : null;
+					if (typeof value === 'number') {
+						if (!Number.isFinite(value) || value < 0) return null;
+						return BigInt(Math.trunc(value));
+					}
+					const text = String(value).trim();
+					if (!/^[0-9]+$/.test(text)) return null;
+					try {
+						return BigInt(text);
+					} catch {
+						return null;
+					}
+				}
+
+				function formatMistAsSuiInput(mistValue) {
+					const mist = toMistBigInt(mistValue);
+					if (mist === null || mist <= 0n) return '';
+					const whole = mist / MIST_PER_SUI_BIGINT;
+					const fraction = mist % MIST_PER_SUI_BIGINT;
+					if (fraction === 0n) return whole.toString();
+					const fractionText = fraction.toString().padStart(9, '0').replace(/0+$/, '');
+					return whole.toString() + '.' + fractionText;
+				}
+
+				function parseSuiInputToMist(value) {
+					const raw = String(value || '').trim();
+					if (!raw) return null;
+					const sanitized = raw.replace(/[^0-9.]/g, '');
+					if (!sanitized || sanitized === '.') return null;
+					const parts = sanitized.split('.');
+					if (parts.length > 2) return null;
+					const wholePart = parts[0] || '0';
+					const fractionPartRaw = parts[1] || '';
+					if (!/^\d+$/.test(wholePart)) return null;
+					if (fractionPartRaw && !/^\d+$/.test(fractionPartRaw)) return null;
+					const fractionPart = fractionPartRaw.slice(0, 9).padEnd(9, '0');
+					try {
+						const wholeMist = BigInt(wholePart) * MIST_PER_SUI_BIGINT;
+						const fractionMist = BigInt(fractionPart || '0');
+						const totalMist = wholeMist + fractionMist;
+						return totalMist > 0n ? totalMist : null;
+					} catch {
+						return null;
+					}
+				}
+
+				function toMinimumMistOrZero(minimumSuiRaw) {
+					const minimumSui = Number(minimumSuiRaw);
+					if (!Number.isFinite(minimumSui) || minimumSui <= 0) return 0n;
+					const roundedMist = Math.round(minimumSui * MIST_PER_SUI);
+					if (!Number.isFinite(roundedMist) || roundedMist <= 0) return 0n;
+					try {
+						return BigInt(roundedMist);
+					} catch {
+						return 0n;
+					}
+				}
 
 			function getListingIncrementStepSui(amountSui) {
 				const base = Number.isFinite(amountSui) && amountSui > 0 ? amountSui : 0;
@@ -8964,7 +9238,6 @@ function shortAddr(addr) {
 				);
 				const buyBtnWidth = getVisibleWidth(marketplaceBuyBtn);
 				const listBtnWidth = getVisibleWidth(marketplaceListBtn);
-				const wrapBtnWidth = getVisibleWidth(marketplaceWrapBtn);
 				const maxInnerWidth = Math.max(
 					listingRowWidth,
 					bidRowWidth,
@@ -8973,7 +9246,6 @@ function shortAddr(addr) {
 					listControlWidth,
 					buyBtnWidth,
 					listBtnWidth,
-					wrapBtnWidth,
 				);
 				const targetWidth = Math.min(
 					MARKETPLACE_MAX_SIDE_WIDTH,
@@ -9142,7 +9414,7 @@ function shortAddr(addr) {
 					const neededSui = Number(requiredMist + BASE_GAS_RESERVE) / 1e9;
 					const haveSui = Number(availableMist) / 1e9;
 					throw new Error(
-						'Need ~' + neededSui.toFixed(2) + ' SUI (have ' + haveSui.toFixed(2) + ')',
+						'Need ~' + neededSui.toFixed(2) + ' SUI (have ' + haveSui.toFixed(2) + '). Fund: ' + connectedAddress,
 					);
 				}
 
@@ -9686,8 +9958,14 @@ function shortAddr(addr) {
 								const activityActorClass = addr
 									? 'marketplace-activity-actor marketplace-activity-actor-link'
 									: 'marketplace-activity-actor';
-								const activityActorHtml =
-									'<span class="' + activityActorClass + '"' + activityActorAttr +
+								const isExpireRow = normalizeActionType(action.type) === 'expire' || normalizeActionType(action.type) === 'expired';
+								const activityActorHtml = isExpireRow
+									? '<button class="marketplace-wrap-btn marketplace-wrap-btn-inline" id="marketplace-wrap-btn" disabled style="display:none;">'
+										+ '<span class="marketplace-wrap-text">Grace Wrap</span>'
+										+ '<span class="marketplace-wrap-loading hidden"><span class="loading"></span></span>'
+										+ '</button>'
+										+ '<span class="marketplace-activity-actor" id="expire-actor-fallback">--</span>'
+									: '<span class="' + activityActorClass + '"' + activityActorAttr +
 									(addr
 										? ' role="link" tabindex="0" title="View SuiNS names on TradePort for ' + escapeHtmlJs(fallbackActor) + '"'
 										: '') +
@@ -9710,7 +9988,7 @@ function shortAddr(addr) {
 												}
 												const actionSui = Number(action.price) / 1e9;
 												return formatMarketplaceBidSuiDisplay(actionSui);
-											})()) + '</span><span class="marketplace-activity-amount-sui"> ' + SUI_ICON_SVG + '</span>'
+											})()) + '</span><span class="marketplace-activity-amount-sui">' + SUI_ICON_SVG + '</span>'
 											: '';
 								const priceDisplay = '<span class="marketplace-activity-amount">' + amountContent + '</span>';
 
@@ -9734,6 +10012,15 @@ function shortAddr(addr) {
 								);
 							})
 							.join('');
+
+						const inlineWrapBtn = marketplaceActivityList.querySelector('#marketplace-wrap-btn');
+						if (inlineWrapBtn) {
+							marketplaceWrapBtn = inlineWrapBtn;
+							marketplaceWrapText = inlineWrapBtn.querySelector('.marketplace-wrap-text');
+							marketplaceWrapLoading = inlineWrapBtn.querySelector('.marketplace-wrap-loading');
+							bindGraceWrapClickHandler();
+							updateGraceWrapControls(isConnectedProfileOwner());
+						}
 
 						const addressNodes = Array.from(
 							marketplaceActivityList.querySelectorAll('[data-activity-address]'),
@@ -9829,25 +10116,37 @@ function shortAddr(addr) {
 				return Math.ceil(amountSui);
 			}
 
-			function getListDefaultSui() {
-				const minimumSui = getListMinimumSui();
-				if (hasOwnerListingForCurrentNft() && currentListing?.price) {
-					return Math.max(
-						minimumSui,
-						roundUpToWholeSui(Number(currentListing.price) / 1e9),
-					);
+				function getListDefaultSui() {
+					const minimumSui = getListMinimumSui();
+					if (hasOwnerListingForCurrentNft() && currentListing?.price) {
+						const exactListedInput = formatMistAsSuiInput(currentListing.price);
+						const exactListedSui = Number.parseFloat(exactListedInput);
+						if (Number.isFinite(exactListedSui) && exactListedSui > 0) {
+							return Math.max(minimumSui, exactListedSui);
+						}
+					}
+					const renewalBaseSui = getProfileRenewalBaseCostSuiOrNull();
+					if (Number.isFinite(renewalBaseSui) && renewalBaseSui > 0) {
+						return Math.max(minimumSui, roundUpToWholeSui(renewalBaseSui * 2));
+					}
+					return Math.max(minimumSui, 1);
 				}
-				const renewalBaseSui = getProfileRenewalBaseCostSuiOrNull();
-				if (Number.isFinite(renewalBaseSui) && renewalBaseSui > 0) {
-					return Math.max(minimumSui, roundUpToWholeSui(renewalBaseSui * 2));
-				}
-				return Math.max(minimumSui, 1);
-			}
 
-				function getMarketplaceListLabel() {
-				const normalizedName = String(NAME || '').replace(/.sui$/i, '');
-				return 'List ' + normalizedName + '.sui';
-			}
+					function getMarketplaceListLabel(isRelist = false) {
+					const normalizedName = String(NAME || '').replace(/.sui$/i, '');
+					return (isRelist ? 'Relist ' : 'List ') + normalizedName + '.sui';
+				}
+
+				function getListDefaultInputValue() {
+					if (hasOwnerListingForCurrentNft() && currentListing?.price) {
+						const exactListedInput = formatMistAsSuiInput(currentListing.price);
+						if (exactListedInput) return exactListedInput;
+					}
+					const minimumSui = getListMinimumSui();
+					const defaultValue = getListDefaultSui();
+					if (!Number.isFinite(defaultValue) || defaultValue <= 0) return '';
+					return formatSuiInputValue(Math.max(minimumSui, toSuiInputPrecision(defaultValue)));
+				}
 
 				function getMarketplaceListingTokenId() {
 					if (currentListing?.tokenId) return String(currentListing.tokenId);
@@ -9954,36 +10253,45 @@ function shortAddr(addr) {
 
 					const trimTrailingZeros = (value) => value.replace(/[.]?0+$/, '');
 
-			function getRoundedListAmountSuiOrNull() {
-				if (!marketplaceListAmountInput) return null;
-				const amountSui = parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''));
-				if (!Number.isFinite(amountSui) || amountSui <= 0) return null;
-				return Math.max(getListMinimumSui(), toSuiInputPrecision(amountSui));
-			}
+				function getRoundedListAmountSuiOrNull() {
+					if (!marketplaceListAmountInput) return null;
+					const amountMist = parseSuiInputToMist(marketplaceListAmountInput.value);
+					if (!amountMist) return null;
+					const amountSui = Number.parseFloat(formatMistAsSuiInput(amountMist));
+					if (!Number.isFinite(amountSui) || amountSui <= 0) return null;
+					return Math.max(getListMinimumSui(), toSuiInputPrecision(amountSui));
+				}
 
-			function normalizeListAmountInput() {
-				if (!marketplaceListAmountInput) return null;
-				const minimumSui = getListMinimumSui();
-				marketplaceListAmountInput.min = String(minimumSui);
-				const roundedAmount = getRoundedListAmountSuiOrNull();
-				if (!roundedAmount) return null;
-				marketplaceListAmountInput.value = formatSuiInputValue(roundedAmount);
-				return roundedAmount;
-			}
+				function normalizeListAmountInput() {
+					if (!marketplaceListAmountInput) return null;
+					const minimumSuiRaw = getListMinimumSui();
+					const minimumSui = Number.isFinite(Number(minimumSuiRaw)) && Number(minimumSuiRaw) > 0
+						? Number(minimumSuiRaw)
+						: 0;
+					const minimumMist = toMinimumMistOrZero(minimumSui);
+					marketplaceListAmountInput.min = String(minimumSui);
+					const amountMist = parseSuiInputToMist(marketplaceListAmountInput.value);
+					if (!amountMist) return null;
+					const normalizedMist = amountMist < minimumMist ? minimumMist : amountMist;
+					marketplaceListAmountInput.value = formatMistAsSuiInput(normalizedMist);
+					const roundedAmount = Number.parseFloat(formatMistAsSuiInput(normalizedMist));
+					if (!Number.isFinite(roundedAmount) || roundedAmount <= 0) return null;
+					return roundedAmount;
+				}
 
-			function setListInputDefault(force = false) {
-				if (!marketplaceListAmountInput) return;
+				function setListInputDefault(force = false) {
+					if (!marketplaceListAmountInput) return;
 
 				const existingAmount = parseFloat(marketplaceListAmountInput.value);
 				const hasTyped = listInputTouched && Number.isFinite(existingAmount) && existingAmount > 0;
 				if (!force && hasTyped) return;
 
-				const minimumSui = getListMinimumSui();
+					const minimumSui = getListMinimumSui();
 
-				let defaultValue = getListDefaultSui();
-				const renewalBaseSui = getProfileRenewalBaseCostSuiOrNull();
-				if (!(Number.isFinite(renewalBaseSui) && renewalBaseSui > 0) && !hasOwnerListingForCurrentNft()) {
-					ensureProfileRenewalBaseCostSui()
+					const defaultInputValue = getListDefaultInputValue();
+					const renewalBaseSui = getProfileRenewalBaseCostSuiOrNull();
+					if (!(Number.isFinite(renewalBaseSui) && renewalBaseSui > 0) && !hasOwnerListingForCurrentNft()) {
+						ensureProfileRenewalBaseCostSui()
 						.then((resolvedRenewalBaseSui) => {
 							if (!marketplaceListAmountInput || listInputTouched || hasOwnerListingForCurrentNft()) return;
 							if (!Number.isFinite(resolvedRenewalBaseSui) || resolvedRenewalBaseSui <= 0) return;
@@ -9995,32 +10303,28 @@ function shortAddr(addr) {
 							marketplaceListAmountInput.value = formatSuiInputValue(hydratedDefaultSui);
 							marketplaceListAmountInput.min = String(latestMinimumSui);
 							updateListButtonState();
-						})
-						.catch(() => null);
-				}
+							})
+							.catch(() => null);
+					}
 
-				if (defaultValue < minimumSui) {
-					defaultValue = minimumSui;
-				}
-
-				if (defaultValue > 0) {
-					marketplaceListAmountInput.value = formatSuiInputValue(
-						Math.max(minimumSui, toSuiInputPrecision(defaultValue)),
-					);
-					marketplaceListAmountInput.min = String(minimumSui);
-				} else {
-					marketplaceListAmountInput.value = '';
-					marketplaceListAmountInput.min = String(minimumSui);
+					if (defaultInputValue) {
+						marketplaceListAmountInput.value = defaultInputValue;
+						marketplaceListAmountInput.min = String(minimumSui);
+					} else {
+						marketplaceListAmountInput.value = '';
+						marketplaceListAmountInput.min = String(minimumSui);
 				}
 
 				listInputTouched = false;
 			}
 
-			function getListAmountMistOrNull() {
-				const amountSui = normalizeListAmountInput();
-				if (!amountSui) return null;
-				return BigInt(Math.round(amountSui * 1e9));
-			}
+				function getListAmountMistOrNull() {
+					if (!marketplaceListAmountInput) return null;
+					const amountMist = parseSuiInputToMist(marketplaceListAmountInput.value);
+					if (!amountMist) return null;
+					marketplaceListAmountInput.value = formatMistAsSuiInput(amountMist);
+					return amountMist;
+				}
 
 			function updateListEstimateDisplay() {
 				if (!marketplaceListEstimate) return;
@@ -10056,35 +10360,36 @@ function shortAddr(addr) {
 					marketplaceListEstimate.innerHTML = estimateLines.join('');
 				}
 
-			function updateListButtonState() {
-				if (!marketplaceListBtn) return;
-				const listingTokenId = getMarketplaceListingTokenId();
-				const minimumSui = getListMinimumSui();
-				if (marketplaceListAmountInput) {
-					marketplaceListAmountInput.min = String(minimumSui);
-				}
-				const rawListAmountSui = marketplaceListAmountInput
-					? parseFloat(String(marketplaceListAmountInput.value).replace(/[^0-9.]/g, ''))
-					: 0;
-				const roundedListAmountSui =
-					Number.isFinite(rawListAmountSui) && rawListAmountSui > 0
-						? Math.max(minimumSui, toSuiInputPrecision(rawListAmountSui))
+				function updateListButtonState() {
+					if (!marketplaceListBtn) return;
+					const listingTokenId = getMarketplaceListingTokenId();
+					const minimumSuiRaw = getListMinimumSui();
+					const minimumSui = Number.isFinite(Number(minimumSuiRaw)) && Number(minimumSuiRaw) > 0
+						? Number(minimumSuiRaw)
 						: 0;
-				const meetsMinimum = roundedListAmountSui >= minimumSui;
-				const canList = Boolean(
-					isConnectedProfileOwner()
-					&& canSign()
-					&& listingTokenId
-					&& roundedListAmountSui > 0
-					&& meetsMinimum,
-				);
-				marketplaceListBtn.disabled = !canList;
+					const minimumMist = toMinimumMistOrZero(minimumSui);
+					if (marketplaceListAmountInput) {
+						marketplaceListAmountInput.min = String(minimumSui);
+					}
+					const listAmountMist = parseSuiInputToMist(marketplaceListAmountInput?.value || '');
+					const meetsMinimum = Boolean(listAmountMist !== null && listAmountMist >= minimumMist);
+					const isRelist = hasOwnerListingForCurrentNft();
+					const canList = Boolean(
+						isConnectedProfileOwner()
+						&& canSign()
+						&& listingTokenId
+						&& listAmountMist !== null
+						&& meetsMinimum,
+					);
+					marketplaceListBtn.disabled = !canList;
+					marketplaceListBtn.classList.toggle('relist', isRelist);
+					if (marketplaceListText) marketplaceListText.textContent = getMarketplaceListLabel(isRelist);
 
-				if (marketplaceStatus && roundedListAmountSui > 0 && roundedListAmountSui < minimumSui) {
-					marketplaceStatus.textContent = 'List price must be at least ' + minimumSui + ' SUI';
-					marketplaceStatus.className = 'marketplace-status error';
-				} else if (marketplaceStatus && marketplaceStatus.className === 'marketplace-status error') {
-					marketplaceStatus.textContent = '';
+					if (marketplaceStatus && listAmountMist !== null && !meetsMinimum) {
+						marketplaceStatus.textContent = 'List price must be at least ' + minimumSui + ' SUI';
+						marketplaceStatus.className = 'marketplace-status error';
+					} else if (marketplaceStatus && marketplaceStatus.className === 'marketplace-status error') {
+						marketplaceStatus.textContent = '';
 					marketplaceStatus.className = 'marketplace-status';
 				}
 
@@ -10134,10 +10439,11 @@ function shortAddr(addr) {
 			}
 
 			function updateGraceWrapControls(isOwner) {
-				if (!marketplaceWrapBtn || !marketplaceWrapHint) return;
+				if (!marketplaceWrapBtn) return;
+				const fallbackSpan = document.getElementById('expire-actor-fallback');
 				const canShowWrap = Boolean(isOwner && DECAY_AUCTION_PACKAGE_ID && NFT_ID);
-				marketplaceWrapBtn.style.display = canShowWrap ? 'flex' : 'none';
-				marketplaceWrapHint.style.display = canShowWrap ? 'block' : 'none';
+				marketplaceWrapBtn.style.display = canShowWrap ? 'inline-flex' : 'none';
+				if (fallbackSpan) fallbackSpan.style.display = canShowWrap ? 'none' : '';
 				if (!canShowWrap) return;
 
 				const wrapState = getGraceWrapState();
@@ -10156,20 +10462,20 @@ function shortAddr(addr) {
 					const listingStartMs = Number(auctionData?.startTimeMs || 0);
 					if (Number.isFinite(listingStartMs) && listingStartMs > now) {
 						const startsInLabel = formatGraceWrapTimeLeft(listingStartMs - now);
-						marketplaceWrapHint.textContent =
-							'Grace wrap is scheduled. Starts in ' + startsInLabel + '. You can cancel in the auction card.';
+						marketplaceWrapBtn.title =
+							'Scheduled. Starts in ' + startsInLabel + '. Cancel in the auction card.';
 					} else {
-						marketplaceWrapHint.textContent = 'This name already has an active decay listing.';
+						marketplaceWrapBtn.title = 'Active decay listing exists.';
 					}
 					return;
 				}
 
 				if (marketplaceWrapText) {
-					marketplaceWrapText.textContent = 'Authorize Grace Wrap';
+					marketplaceWrapText.textContent = 'Grace Wrap';
 				}
 
 				if (!wrapState.eligible) {
-					marketplaceWrapHint.textContent = wrapState.reason;
+					marketplaceWrapBtn.title = wrapState.reason;
 					return;
 				}
 
@@ -10177,22 +10483,20 @@ function shortAddr(addr) {
 				const timeLeftLabel = formatGraceWrapTimeLeft(wrapState.remainingMs);
 				if (wrapState.phase === 'pre-expiry') {
 					const startsInLabel = formatGraceWrapTimeLeft(wrapState.startsInMs);
-					marketplaceWrapHint.textContent =
-						'One signature. Activates at expiration in ' +
+					marketplaceWrapBtn.title =
+						'Activates at expiration in ' +
 						startsInLabel +
 						', starts at ~' +
 						premiumLabel +
-						' SUI, then decays to ~0 over ' +
-						timeLeftLabel +
-						'. Renewal cost applies separately.';
+						' SUI, decays to ~0 over ' +
+						timeLeftLabel;
 					return;
 				}
-				marketplaceWrapHint.textContent =
-					'One signature. Premium now ~' +
+				marketplaceWrapBtn.title =
+					'Premium now ~' +
 					premiumLabel +
 					' SUI, decays to ~0 in ' +
-					timeLeftLabel +
-					'. Renewal cost applies separately.';
+					timeLeftLabel;
 			}
 
 			function updateMarketplaceButton() {
@@ -10274,14 +10578,14 @@ function shortAddr(addr) {
 						})
 						.catch(() => null);
 				}
-				if (marketplaceListBtn) {
-						if (isOwner) {
-							marketplaceListBtn.style.display = 'flex';
-						if (marketplaceListText) marketplaceListText.textContent = getMarketplaceListLabel();
-					} else {
-						marketplaceListBtn.style.display = 'none';
+					if (marketplaceListBtn) {
+							if (isOwner) {
+								marketplaceListBtn.style.display = 'flex';
+							if (marketplaceListText) marketplaceListText.textContent = getMarketplaceListLabel(hasOwnerListingForCurrentNft());
+						} else {
+							marketplaceListBtn.style.display = 'none';
+						}
 					}
-				}
 				updateListButtonState();
 				updateGraceWrapControls(isOwner);
 
@@ -10373,7 +10677,7 @@ function shortAddr(addr) {
 					const listingAmountEl = marketplaceListingPrice.querySelector('.price-amount');
 					const listingSuiEl = marketplaceListingPrice.querySelector('.price-sui');
 					if (listingAmountEl) listingAmountEl.textContent = priceInSui;
-					if (listingSuiEl) listingSuiEl.innerHTML = ' ' + SUI_ICON_SVG;
+					if (listingSuiEl) listingSuiEl.innerHTML = SUI_ICON_SVG;
 					if (marketplaceLister) {
 						const sellerAddress = typeof data.bestListing.seller === 'string' ? data.bestListing.seller : '';
 						setMarketplaceListerLink(sellerAddress);
@@ -10431,7 +10735,7 @@ function shortAddr(addr) {
 					const bidAmountEl = marketplaceBidPrice.querySelector('.price-amount');
 					const bidSuiEl = marketplaceBidPrice.querySelector('.price-sui');
 					if (bidAmountEl) bidAmountEl.textContent = bidInSui;
-					if (bidSuiEl) bidSuiEl.innerHTML = ' ' + SUI_ICON_SVG;
+					if (bidSuiEl) bidSuiEl.innerHTML = SUI_ICON_SVG;
 					marketplaceBidRow.style.display = 'grid';
 					if (marketplaceBidder) {
 						const bidderAddress = resolvedBestBid.bidder || '';
@@ -10457,7 +10761,7 @@ function shortAddr(addr) {
 					const soldAmountEl = marketplaceSoldPrice.querySelector('.price-amount');
 					const soldSuiEl = marketplaceSoldPrice.querySelector('.price-sui');
 					if (soldAmountEl) soldAmountEl.textContent = soldInSui;
-					if (soldSuiEl) soldSuiEl.innerHTML = ' ' + SUI_ICON_SVG;
+					if (soldSuiEl) soldSuiEl.innerHTML = SUI_ICON_SVG;
 					marketplaceSoldRow.style.display = 'flex';
 					const latestSale = sales.find(s => Number(s?.price || 0) === lastSoldPriceMist);
 					if (latestSale && latestSale.receiver) {
@@ -10614,7 +10918,10 @@ function shortAddr(addr) {
 						marketplaceStatus.className = 'marketplace-status success';
 						marketplaceBuyBtn.style.display = 'none';
 						currentListing = null;
+						nftOwnerAddress = connectedAddress;
 						applyTaggedIdentityToProfile();
+						fetchAndDisplayOwnerInfo();
+						updateUIForWallet();
 						fetchMarketplaceData();
 					} else {
 						marketplaceStatus.textContent = 'Transaction submitted';
@@ -10819,7 +11126,9 @@ function shortAddr(addr) {
 			});
 		}
 
-			if (marketplaceWrapBtn) {
+			function bindGraceWrapClickHandler() {
+				if (!marketplaceWrapBtn || marketplaceWrapBtn.__wrapBound) return;
+				marketplaceWrapBtn.__wrapBound = true;
 				marketplaceWrapBtn.addEventListener('click', async () => {
 					if (!canSign()) {
 						marketplaceStatus.textContent = 'Connect wallet first';
@@ -11209,37 +11518,69 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 						marketplaceStatus.textContent = 'Resolving on-chain offer...';
 						const BID_EVENT_TYPE = '0x53134eb544c5a0b5085e99efaf7eab13b28ad123de35d61f941f8c8c40b72033::tradeport_biddings::CreateSingleBidEvent';
+						const TRADEPORT_PACKAGE = '0x53134eb544c5a0b5085e99efaf7eab13b28ad123de35d61f941f8c8c40b72033';
 						const suiClient = getSuiClient();
 						let onchainBidId = null;
-						let cursor = null;
-						for (let page = 0; page < 10 && !onchainBidId; page++) {
-							const eventsRes = await suiClient.queryEvents({
-								query: { Sender: bidderAddress },
-								cursor,
-								limit: 50,
-								order: 'descending',
-							});
-							for (const evt of eventsRes.data) {
-								if (evt.type !== BID_EVENT_TYPE) continue;
-								const pj = evt.parsedJson;
-								if (!pj) continue;
-								const evtNftId = String(pj.maybe_nft_id || '').toLowerCase();
-								const evtPrice = String(pj.price || '');
-								if (
-									evtNftId === bidTokenId.toLowerCase()
-									&& evtPrice === bidPriceMist
-								) {
-									onchainBidId = String(pj.bid_id);
-									break;
+						let eventsVerified = false;
+
+						try {
+							const headRes = await fetch('/api/events/stream/' + TRADEPORT_PACKAGE + '/head');
+							const headData = await headRes.json();
+							if (headData && !headData.error && headData.numEvents) {
+								const authRes = await fetch('/api/events/stream/' + TRADEPORT_PACKAGE + '?pageSize=200');
+								const authData = await authRes.json();
+								if (authData.events) {
+									for (const evt of authData.events) {
+										if (evt.type !== BID_EVENT_TYPE) continue;
+										const pj = evt.parsedJson;
+										if (!pj) continue;
+										const evtNftId = String(pj.maybe_nft_id || '').toLowerCase();
+										const evtPrice = String(pj.price || '');
+										if (evtNftId === bidTokenId.toLowerCase() && evtPrice === bidPriceMist) {
+											onchainBidId = String(pj.bid_id);
+											eventsVerified = true;
+											break;
+										}
+									}
 								}
 							}
-							if (!eventsRes.hasNextPage) break;
-							cursor = eventsRes.nextCursor;
+						} catch (_) {}
+
+						if (!onchainBidId) {
+							let cursor = null;
+							for (let page = 0; page < 10 && !onchainBidId; page++) {
+								const eventsRes = await suiClient.queryEvents({
+									query: { Sender: bidderAddress },
+									cursor,
+									limit: 50,
+									order: 'descending',
+								});
+								for (const evt of eventsRes.data) {
+									if (evt.type !== BID_EVENT_TYPE) continue;
+									const pj = evt.parsedJson;
+									if (!pj) continue;
+									const evtNftId = String(pj.maybe_nft_id || '').toLowerCase();
+									const evtPrice = String(pj.price || '');
+									if (
+										evtNftId === bidTokenId.toLowerCase()
+										&& evtPrice === bidPriceMist
+									) {
+										onchainBidId = String(pj.bid_id);
+										break;
+									}
+								}
+								if (!eventsRes.hasNextPage) break;
+								cursor = eventsRes.nextCursor;
+							}
 						}
 
 						if (!onchainBidId || !onchainBidId.startsWith('0x')) {
 							throw new Error('Could not resolve on-chain offer. Try accepting on TradePort directly.');
 						}
+
+						marketplaceStatus.textContent = eventsVerified
+							? 'Offer resolved via authenticated events (cryptographically verified)'
+							: 'Offer resolved via standard events';
 
 						const listingTokenId = getMarketplaceListingTokenId();
 						if (!listingTokenId || !listingTokenId.startsWith('0x')) {
@@ -11599,23 +11940,25 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 	</div>
 
 	<!-- Footer Tracker -->
-	<div id="crypto-tracker" style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(10px); border-top: 1px solid rgba(96, 165, 250, 0.2); padding: 12px 20px; display: flex; justify-content: center; gap: 16px; flex-wrap: nowrap; z-index: 1000; font-size: 0.875rem; align-items: center;">
-		<span class="tracker-line">
+	<div id="crypto-tracker" style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(10px); border-top: 1px solid rgba(96, 165, 250, 0.2); padding: 12px 20px; display: flex; justify-content: center; gap: 16px; flex-wrap: nowrap; z-index: 1000; font-size: 0.875rem; align-items: center; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
+		<span class="tracker-line" style="white-space: nowrap;">
 			<span style="color: #c7d2fe; font-weight: 500;">SUI: <span id="sui-price" style="color: #60a5fa; font-weight: 600;">$--</span></span>
 			<span class="tracker-sep">·</span>
 			<span class="tracker-built-on">
 				Built on
 				<a href="https://docs.sui.io" target="_blank" rel="noopener">Sui</a>
-				<span class="tracker-sep">·</span>
+				<span class="tracker-sep">\u00b7</span>
 				<a href="https://docs.suins.io" target="_blank" rel="noopener">SuiNS</a>
-				<span class="tracker-sep">·</span>
+				<span class="tracker-sep">\u00b7</span>
 				<a href="https://moveregistry.com/docs" target="_blank" rel="noopener">MVR</a>
-				<span class="tracker-sep">·</span>
+				<span class="tracker-sep">\u00b7</span>
 				<a href="https://docs.sui.io/standards/deepbook" target="_blank" rel="noopener">DeepBook</a>
-				<span class="tracker-sep">·</span>
+				<span class="tracker-sep">\u00b7</span>
 				<a href="https://docs.wal.app" target="_blank" rel="noopener">Walrus</a>
-				<span class="tracker-sep">·</span>
+				<span class="tracker-sep">\u00b7</span>
 				<a href="https://seal-docs.wal.app" target="_blank" rel="noopener">Seal</a>
+				<span class="tracker-sep">\u00b7</span>
+				<a href="https://docs.waap.xyz/category/guides-sui" target="_blank" rel="noopener">WaaP</a>
 			</span>
 		</span>
 	</div>
@@ -12541,7 +12884,10 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			});
 
 			const ccSolAmount = document.getElementById('cc-sol-amount');
+			const ccSource = document.getElementById('cc-source');
+			const ccAmountLabel = document.getElementById('cc-amount-label');
 			const ccTarget = document.getElementById('cc-target');
+			const ccDirectionEl = document.querySelector('.cc-direction');
 			const ccRateValue = document.getElementById('cc-rate-value');
 			const ccOutput = document.getElementById('cc-output');
 			const ccFee = document.getElementById('cc-fee');
@@ -12553,6 +12899,31 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				const ccConfirmBtn = document.getElementById('cc-confirm-btn');
 				const ccStatus = document.getElementById('cc-status');
 				let ccQuoteData = null;
+				const isUsdyProfile = String(window.NAME || '').toLowerCase() === 'usdy';
+
+				function getCCDirection() {
+					const selected = String(ccSource?.value || '').trim();
+					if (selected === 'usdc_to_sui') return 'usdc_to_sui';
+					return 'sol_to_sui';
+				}
+
+				function updateCrosschainDirectionUi() {
+					const direction = getCCDirection();
+					const isUsdc = direction === 'usdc_to_sui';
+					if (ccDirectionEl) {
+						ccDirectionEl.textContent = isUsdc ? 'USDC -> SUI' : 'SOL -> SUI';
+					}
+					if (ccAmountLabel) {
+						ccAmountLabel.textContent = isUsdc ? 'Amount (USDC)' : 'Amount (SOL)';
+					}
+					if (ccQuoteBtn) {
+						ccQuoteBtn.textContent = isUsdc ? 'USDC route coming soon' : 'Get Deposit Address';
+					}
+					if (ccDeposit) ccDeposit.style.display = 'none';
+					if (ccDepositAddr) ccDepositAddr.textContent = '';
+					if (ccSolTx) ccSolTx.value = '';
+					if (ccConfirmBtn) ccConfirmBtn.disabled = true;
+				}
 
 				function shortSuiTarget(value) {
 					const v = String(value || '').trim();
@@ -12629,6 +13000,8 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 				async function fetchCCQuote() {
 					const amount = parseFloat(ccSolAmount?.value || '');
+					const direction = getCCDirection();
+					const isUsdc = direction === 'usdc_to_sui';
 					if (!Number.isFinite(amount) || amount <= 0) {
 					if (ccRateValue) ccRateValue.textContent = '--';
 					if (ccOutput) ccOutput.textContent = '-- SUI';
@@ -12639,19 +13012,33 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					}
 
 					try {
-						const res = await fetch('/api/sol-swap/quote?direction=sol_to_sui&amount=' + amount);
+						const res = await fetch('/api/sol-swap/quote?direction=' + encodeURIComponent(direction) + '&amount=' + amount);
 						if (!res.ok) throw new Error(await parseApiError(res, 'Quote unavailable'));
 						const data = await res.json().catch(() => null);
 						if (!data || typeof data !== 'object') throw new Error('Quote unavailable');
 						if (data.error) throw new Error(data.error);
 
 						ccQuoteData = data;
-						if (ccRateValue) ccRateValue.textContent = '1 SOL = ' + data.rate.toFixed(4) + ' SUI';
+						if (ccRateValue) {
+							const inputSymbol = String(data.inputCurrency || (isUsdc ? 'USDC' : 'SOL'));
+							ccRateValue.textContent = '1 ' + inputSymbol + ' = ' + data.rate.toFixed(4) + ' SUI';
+						}
 						if (ccOutput) ccOutput.textContent = data.outputAmount.toFixed(4) + ' SUI';
 						if (ccFee) ccFee.textContent = 'Fee: ' + data.fee.toFixed(4) + ' SUI (' + (data.feeBps / 100) + '%)';
-						if (ccQuoteBtn) ccQuoteBtn.disabled = !data.solanaDepositAddress;
+						if (ccQuoteBtn) {
+							if (isUsdc) {
+								ccQuoteBtn.disabled = true;
+							} else {
+								ccQuoteBtn.disabled = !data.solanaDepositAddress;
+							}
+						}
 						if (ccStatus) {
-							if (!data.solanaDepositAddress) {
+							if (isUsdc) {
+								ccStatus.textContent = isUsdyProfile
+									? 'USDC route is quote-only right now. USDY settlement path is not live yet.'
+									: 'USDC route is quote-only right now. Deposit/request flow currently supports SOL only.';
+								ccStatus.className = 'cc-status error';
+							} else if (!data.solanaDepositAddress) {
 								ccStatus.textContent = 'Cross-chain deposit address is not configured yet.';
 								ccStatus.className = 'cc-status error';
 							} else {
@@ -12678,9 +13065,25 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					debounceTimer = setTimeout(fetchCCQuote, 400);
 				});
 			}
+			if (ccSource) {
+				ccSource.addEventListener('change', () => {
+					ccQuoteData = null;
+					updateCrosschainDirectionUi();
+					fetchCCQuote();
+				});
+			}
 
 			if (ccQuoteBtn) {
 				ccQuoteBtn.addEventListener('click', async () => {
+					if (getCCDirection() !== 'sol_to_sui') {
+						if (ccStatus) {
+							ccStatus.textContent = isUsdyProfile
+								? 'USDC -> USDY settlement is not live yet. Use wallet swap after bridging to Sui.'
+								: 'USDC request flow is not available yet.';
+							ccStatus.className = 'cc-status error';
+						}
+						return;
+					}
 					if (!ccQuoteData || !ccQuoteData.solanaDepositAddress) return;
 					const destinationTarget = getCrosschainTargetValue();
 					if (!destinationTarget) {
@@ -12777,9 +13180,14 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 
 				refreshCrosschainStatus();
 				syncCrosschainTargetFromWallet();
+				updateCrosschainDirectionUi();
 				fetchCCQuote();
 			})();
 		</script>
+
+	<style>${generateX402ChatCss()}</style>
+	<div id="x402-chat-root"></div>
+	<script>${generateX402ChatJs({ page: 'profile', name: cleanName, address: record.address, ownerAddress: record.ownerAddress, expirationMs: expiresMs, linkedNames: undefined, network: network })}</script>
 
 </body>
 </html>`

@@ -92,7 +92,7 @@ export async function resolveSuiNS(
 				}
 				const result = processRecord(surfluxRecord, suinsName)
 				if (result.found && !result.expired) {
-					suinsMemCache.set(key, { data: surfluxRecord, exp: Date.now() + 60000 })
+					suinsMemCache.set(key, { data: surfluxRecord, exp: Date.now() + 300000 })
 				}
 				return result
 			}
@@ -204,7 +204,7 @@ export async function resolveSuiNS(
 				const first = suinsMemCache.keys().next().value
 				if (first) suinsMemCache.delete(first)
 			}
-			suinsMemCache.set(key, { data: record, exp: Date.now() + 60000 })
+			suinsMemCache.set(key, { data: record, exp: Date.now() + 300000 })
 		}
 
 		return { found: true, data: record, cacheTtl: CACHE_TTL, expired, inGracePeriod }

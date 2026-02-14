@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { WalletSession } from './durable-objects/wallet-session'
 import { handleAppRequest } from './handlers/app'
+import { handleAuthenticatedEvents } from './handlers/authenticated-events'
 import { generateDashboardPage } from './handlers/dashboard'
 import { agentGraceVaultRoutes } from './handlers/grace-vault-agent'
 import { apiRoutes, landingPageHTML } from './handlers/landing'
@@ -82,7 +83,20 @@ app.use('*', async (c, next) => {
 	await next()
 })
 
-// SKI Middleware (Sui-Key-In ubiquitous authentication)
+const SESSION_ROUTES = new Set(['root', 'suins'])
+
+function routeNeedsSession(parsed: ParsedSubdomain, pathname: string): boolean {
+	if (!SESSION_ROUTES.has(parsed.type)) return false
+	if (pathname.startsWith('/api/') || pathname === '/favicon.svg') return false
+	if (
+		pathname.startsWith('/og/') ||
+		pathname.startsWith('/walrus/') ||
+		pathname.startsWith('/ipfs/')
+	)
+		return false
+	return true
+}
+
 app.use('*', async (c, next) => {
 	const cookies = c.req.header('Cookie') || ''
 	const sessionCookie = cookies.split('; ').find((row) => row.startsWith('session_id='))
@@ -100,11 +114,15 @@ app.use('*', async (c, next) => {
 	}
 
 	if (sessionId) {
-		const stub = c.env.WALLET_SESSIONS.getByName('global')
-		const info = await stub.getSessionInfo(sessionId)
-		if (info) {
-			session.address = info.address
-			session.verified = info.verified
+		const parsed = c.get('parsed')
+		const url = new URL(c.req.url)
+		if (routeNeedsSession(parsed, url.pathname)) {
+			const stub = c.env.WALLET_SESSIONS.getByName('global')
+			const info = await stub.getSessionInfo(sessionId)
+			if (info) {
+				session.address = info.address
+				session.verified = info.verified
+			}
 		}
 	}
 
@@ -162,6 +180,7 @@ app.use('*', async (c, next) => {
 	}
 })
 
+app.all('/api/events/*', async (c) => handleAuthenticatedEvents(c.req.raw, c.get('env')))
 app.all('/api/app/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.use('/api/agents/subnamecap/*', async (c, next) => {
 	if (c.get('parsed').type !== 'root') return c.notFound()
@@ -246,15 +265,31 @@ app.all('*', async (c) => {
 	const url = new URL(c.req.url)
 
 	if (parsed.type === 'root') {
+		const session = c.get('session')
+		const hasSession = !!session.address
+		if (!hasSession) {
+			const cache = caches.default
+			const landingCacheUrl = `https://cache.internal/landing:${url.hostname}${url.pathname || '/'}`
+			const cached = await cache.match(landingCacheUrl)
+			if (cached) return cached
+		}
 		const canonicalUrl = `${url.protocol}//${url.hostname}${url.pathname || '/'}`
-		return htmlResponse(
+		const response = htmlResponse(
 			landingPageHTML(env.SUI_NETWORK, {
 				canonicalUrl,
 				rpcUrl: env.SUI_RPC_URL,
 				network: env.SUI_NETWORK,
 				session: c.get('session'),
 			}),
+			200,
+			hasSession ? {} : { 'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300' },
 		)
+		if (!hasSession) {
+			const cache = caches.default
+			const landingCacheUrl = `https://cache.internal/landing:${url.hostname}${url.pathname || '/'}`
+			c.executionCtx.waitUntil(cache.put(landingCacheUrl, response.clone()))
+		}
+		return response
 	}
 
 	if (parsed.type === 'suins') {
@@ -279,6 +314,18 @@ app.all('*', async (c) => {
 		const hostname = c.get('hostname')
 		const userAgent = c.req.header('user-agent')
 		const skipCache = url.searchParams.has('nocache') || url.searchParams.has('refresh')
+		const hasSession = !!c.get('session').address
+		const wantsJson = url.pathname === '/json' || url.searchParams.has('json')
+		const wantsProfile = url.pathname === '/home' || url.searchParams.has('profile')
+
+		const canServeCached = !skipCache && !hasSession && !wantsJson && !wantsProfile
+		if (canServeCached) {
+			const cache = caches.default
+			const cacheUrl = new URL(`https://cache.internal/profile:${hostname}${url.pathname || '/'}`)
+			const cached = await cache.match(cacheUrl.toString())
+			if (cached) return cached
+		}
+
 		const result = await resolveSuiNS(parsed.subdomain, env, skipCache)
 
 		if (!result.found)
@@ -303,8 +350,8 @@ app.all('*', async (c) => {
 			return cachedProfileHtml
 		}
 
-		if (url.pathname === '/json' || url.searchParams.has('json')) return jsonResponse(record)
-		if (url.pathname === '/home' || url.searchParams.has('profile'))
+		if (wantsJson) return jsonResponse(record)
+		if (wantsProfile)
 			return htmlResponse(renderProfile(), 200, {
 				'Cache-Control': 'no-store, no-cache, must-revalidate',
 				Pragma: 'no-cache',
@@ -318,18 +365,32 @@ app.all('*', async (c) => {
 		if (record.content) {
 			const contentResponse = await resolveContent(record.content, env)
 			if (!contentResponse.ok && (url.pathname === '/' || url.pathname === '')) {
-				return htmlResponse(renderProfile(), 200, {
-					'Cache-Control': 'no-store, no-cache, must-revalidate',
-					Pragma: 'no-cache',
+				const profileResponse = htmlResponse(renderProfile(), 200, {
+					'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
 				})
+				if (canServeCached) {
+					const cache = caches.default
+					const cacheUrl = new URL(
+						`https://cache.internal/profile:${hostname}${url.pathname || '/'}`,
+					)
+					c.executionCtx.waitUntil(cache.put(cacheUrl.toString(), profileResponse.clone()))
+				}
+				return profileResponse
 			}
 			return contentResponse
 		}
 
-		return htmlResponse(renderProfile(), 200, {
-			'Cache-Control': 'no-store, no-cache, must-revalidate',
-			Pragma: 'no-cache',
+		const profileResponse = htmlResponse(renderProfile(), 200, {
+			'Cache-Control': canServeCached
+				? 'public, s-maxage=60, stale-while-revalidate=300'
+				: 'no-store, no-cache, must-revalidate',
 		})
+		if (canServeCached) {
+			const cache = caches.default
+			const cacheUrl = new URL(`https://cache.internal/profile:${hostname}${url.pathname || '/'}`)
+			c.executionCtx.waitUntil(cache.put(cacheUrl.toString(), profileResponse.clone()))
+		}
+		return profileResponse
 	}
 
 	return errorResponse('Unknown route type', 'UNKNOWN_ROUTE', 400)

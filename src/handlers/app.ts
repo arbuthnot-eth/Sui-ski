@@ -284,6 +284,288 @@ function stripSuiSuffix(name: string | null): string | null {
 	return name.replace(/\.sui$/i, '')
 }
 
+interface SignalServerContext {
+	id: string
+	name: string
+	displayName: string
+	ownerAddress: string | null
+	isModerator: boolean
+}
+
+interface SignalServerChannel {
+	id: string
+	name: string
+	description: string
+	encrypted: boolean
+	protected: boolean
+	custom: boolean
+	createdAt: number
+}
+
+interface SignalMuteInfo {
+	address: string
+	mutedAt: number
+	mutedBy: string
+}
+
+interface SignalMuteState {
+	server: Record<string, SignalMuteInfo>
+	channel: Record<string, Record<string, SignalMuteInfo>>
+}
+
+interface SignalChannelMessage {
+	id: string
+	serverId: string
+	channel: string
+	sender: string
+	senderName: string | null
+	content: string
+	encrypted: boolean
+	timestamp: number
+	replyTo?: string
+}
+
+const SIGNAL_CHAT_TTL = 60 * 60 * 24 * 30
+
+function normalizeSignalAddress(value: string | null | undefined): string {
+	return String(value || '').trim().toLowerCase()
+}
+
+function sanitizeSignalSlug(value: string | null | undefined): string {
+	const slug = String(value || '')
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9-]/g, '-')
+		.replace(/-+/g, '-')
+		.replace(/^-|-$/g, '')
+	return slug.slice(0, 48)
+}
+
+function getWalletAddressFromCookie(request: Request): string | null {
+	const cookieHeader = request.headers.get('Cookie') || ''
+	const parts = cookieHeader.split(';')
+	for (let i = 0; i < parts.length; i++) {
+		const chunk = parts[i].trim()
+		if (!chunk.startsWith('wallet_address=')) continue
+		const value = chunk.slice('wallet_address='.length)
+		if (!value) return null
+		try {
+			return normalizeSignalAddress(decodeURIComponent(value))
+		} catch {
+			return normalizeSignalAddress(value)
+		}
+	}
+	return null
+}
+
+function getSignalServerContext(url: URL, sessionAddress: string | null): SignalServerContext {
+	const rawName = url.searchParams.get('name')
+	const rawOwner = url.searchParams.get('owner')
+	const name = sanitizeSignalSlug(rawName)
+	const ownerAddress = normalizeSignalAddress(rawOwner) || null
+	const requester = normalizeSignalAddress(sessionAddress)
+
+	if (!name) {
+		return {
+			id: 'global:sui-ski',
+			name: 'sui-ski',
+			displayName: 'sui.ski',
+			ownerAddress: null,
+			isModerator: false,
+		}
+	}
+
+	const ownerPart = ownerAddress || 'unowned'
+	return {
+		id: `suins:${name}:${ownerPart}`,
+		name,
+		displayName: `${name}.sui`,
+		ownerAddress,
+		isModerator: !!ownerAddress && requester === ownerAddress,
+	}
+}
+
+function signalServerChannelsKey(serverId: string): string {
+	return `signal_server_channels_${serverId}`
+}
+
+function signalServerMutesKey(serverId: string): string {
+	return `signal_server_mutes_${serverId}`
+}
+
+function signalServerMessagesKey(serverId: string, channelId: string): string {
+	return `signal_server_messages_${serverId}_${channelId}`
+}
+
+function createSignalMessageId(): string {
+	const timestamp = Date.now().toString(36)
+	const random = Math.random().toString(36).slice(2, 10)
+	return `${timestamp}-${random}`
+}
+
+function getDefaultSignalChannels(server: SignalServerContext): SignalServerChannel[] {
+	const now = Date.now()
+	const channels: SignalServerChannel[] = [
+		{
+			id: 'general',
+			name: 'general',
+			description: 'General server chat',
+			encrypted: false,
+			protected: true,
+			custom: false,
+			createdAt: now,
+		},
+		{
+			id: 'announcements',
+			name: 'announcements',
+			description: 'Server announcements',
+			encrypted: false,
+			protected: true,
+			custom: false,
+			createdAt: now,
+		},
+		{
+			id: 'ops',
+			name: 'ops',
+			description: 'Ops and strategy',
+			encrypted: false,
+			protected: true,
+			custom: false,
+			createdAt: now,
+		},
+	]
+
+	if (server.name !== 'sui-ski') {
+		channels.push({
+			id: server.name,
+			name: server.name,
+			description: `Main room for ${server.displayName}`,
+			encrypted: false,
+			protected: true,
+			custom: false,
+			createdAt: now,
+		})
+		channels.push({
+			id: `dm-${server.name}`,
+			name: `dm-${server.name}`,
+			description: `Encrypted room for ${server.displayName}`,
+			encrypted: true,
+			protected: true,
+			custom: false,
+			createdAt: now,
+		})
+	}
+
+	return channels
+}
+
+async function getSignalChannels(
+	env: Env,
+	server: SignalServerContext,
+): Promise<SignalServerChannel[]> {
+	const defaults = getDefaultSignalChannels(server)
+	const raw = await env.CACHE.get(signalServerChannelsKey(server.id))
+	if (!raw) {
+		await env.CACHE.put(signalServerChannelsKey(server.id), JSON.stringify(defaults), {
+			expirationTtl: SIGNAL_CHAT_TTL,
+		})
+		return defaults
+	}
+
+	try {
+		const parsed = JSON.parse(raw) as SignalServerChannel[]
+		const merged = new Map<string, SignalServerChannel>()
+		for (let i = 0; i < defaults.length; i++) merged.set(defaults[i].id, defaults[i])
+		for (let i = 0; i < parsed.length; i++) {
+			const channel = parsed[i]
+			if (!channel || !channel.id) continue
+			const id = sanitizeSignalSlug(channel.id)
+			if (!id) continue
+			merged.set(id, {
+				id,
+				name: sanitizeSignalSlug(channel.name || id),
+				description: String(channel.description || '').slice(0, 120),
+				encrypted: !!channel.encrypted,
+				protected: !!channel.protected,
+				custom: !!channel.custom,
+				createdAt: Number(channel.createdAt || Date.now()),
+			})
+		}
+		const result = Array.from(merged.values())
+		await env.CACHE.put(signalServerChannelsKey(server.id), JSON.stringify(result), {
+			expirationTtl: SIGNAL_CHAT_TTL,
+		})
+		return result
+	} catch {
+		return defaults
+	}
+}
+
+async function setSignalChannels(
+	env: Env,
+	serverId: string,
+	channels: SignalServerChannel[],
+): Promise<void> {
+	await env.CACHE.put(signalServerChannelsKey(serverId), JSON.stringify(channels), {
+		expirationTtl: SIGNAL_CHAT_TTL,
+	})
+}
+
+async function getSignalMuteState(env: Env, serverId: string): Promise<SignalMuteState> {
+	const raw = await env.CACHE.get(signalServerMutesKey(serverId))
+	if (!raw) return { server: {}, channel: {} }
+	try {
+		const parsed = JSON.parse(raw) as SignalMuteState
+		if (!parsed || !parsed.server || !parsed.channel) return { server: {}, channel: {} }
+		return parsed
+	} catch {
+		return { server: {}, channel: {} }
+	}
+}
+
+async function setSignalMuteState(env: Env, serverId: string, state: SignalMuteState): Promise<void> {
+	await env.CACHE.put(signalServerMutesKey(serverId), JSON.stringify(state), {
+		expirationTtl: SIGNAL_CHAT_TTL,
+	})
+}
+
+function getSignalMuteScope(
+	state: SignalMuteState,
+	channelId: string,
+	address: string,
+): 'server' | 'channel' | null {
+	if (!address) return null
+	if (state.server[address]) return 'server'
+	if (state.channel[channelId] && state.channel[channelId][address]) return 'channel'
+	return null
+}
+
+async function getSignalChannelMessages(
+	env: Env,
+	serverId: string,
+	channelId: string,
+): Promise<SignalChannelMessage[]> {
+	const raw = await env.CACHE.get(signalServerMessagesKey(serverId, channelId))
+	if (!raw) return []
+	try {
+		const parsed = JSON.parse(raw) as SignalChannelMessage[]
+		return Array.isArray(parsed) ? parsed : []
+	} catch {
+		return []
+	}
+}
+
+async function setSignalChannelMessages(
+	env: Env,
+	serverId: string,
+	channelId: string,
+	messages: SignalChannelMessage[],
+): Promise<void> {
+	await env.CACHE.put(signalServerMessagesKey(serverId, channelId), JSON.stringify(messages), {
+		expirationTtl: SIGNAL_CHAT_TTL,
+	})
+}
+
 const CONV_STORE_TTL = 60 * 60 * 24 * 90
 
 async function getUserConvStore(env: Env, address: string): Promise<UserConversationStore> {
@@ -755,6 +1037,311 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 		} catch {
 			return jsonResponse({ unreadCount: 0, timestamp: Date.now() })
 		}
+	}
+
+	// GET /api/app/messages/server - Resolve Signal-style server + channels
+	if (path === 'messages/server' && request.method === 'GET') {
+		const sessionAddress = getWalletAddressFromCookie(request)
+		const server = getSignalServerContext(url, sessionAddress)
+		const channels = await getSignalChannels(env, server)
+		const muteState = await getSignalMuteState(env, server.id)
+
+		return jsonResponse({
+			server: {
+				id: server.id,
+				name: server.name,
+				displayName: server.displayName,
+				ownerAddress: server.ownerAddress,
+				isModerator: server.isModerator,
+			},
+			channels,
+			moderation: {
+				serverMuted: server.isModerator ? Object.keys(muteState.server) : [],
+				channelMuted: server.isModerator
+					? Object.fromEntries(
+						Object.entries(muteState.channel).map(([channelId, muted]) => [
+							channelId,
+							Object.keys(muted),
+						]),
+					)
+					: {},
+			},
+		})
+	}
+
+	// POST /api/app/messages/server/channels - Add channel (moderator only)
+	if (path === 'messages/server/channels' && request.method === 'POST') {
+		const sessionAddress = getWalletAddressFromCookie(request)
+		if (!sessionAddress) {
+			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
+		}
+
+		const server = getSignalServerContext(url, sessionAddress)
+		if (!server.isModerator) {
+			return jsonResponse({ error: 'Only server moderator can add channels', code: 'FORBIDDEN' }, 403)
+		}
+
+		try {
+			const body = (await request.json()) as {
+				name?: string
+				encrypted?: boolean
+				description?: string
+			}
+			const channelSlug = sanitizeSignalSlug(body.name)
+			if (!channelSlug) {
+				return jsonResponse({ error: 'Channel name required', code: 'MISSING_CHANNEL' }, 400)
+			}
+
+			const channels = await getSignalChannels(env, server)
+			if (channels.some((channel) => channel.id === channelSlug)) {
+				return jsonResponse({ error: 'Channel already exists', code: 'DUPLICATE_CHANNEL' }, 409)
+			}
+
+			const nextChannel: SignalServerChannel = {
+				id: channelSlug,
+				name: channelSlug,
+				description: String(body.description || '').slice(0, 120),
+				encrypted: !!body.encrypted,
+				protected: false,
+				custom: true,
+				createdAt: Date.now(),
+			}
+			channels.push(nextChannel)
+			await setSignalChannels(env, server.id, channels)
+			return jsonResponse({ channel: nextChannel, channels })
+		} catch {
+			return jsonResponse({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
+		}
+	}
+
+	// DELETE /api/app/messages/server/channels/:id - Delete channel (moderator only)
+	const serverChannelDeleteMatch = path.match(/^messages\/server\/channels\/([^/]+)$/)
+	if (serverChannelDeleteMatch && request.method === 'DELETE') {
+		const sessionAddress = getWalletAddressFromCookie(request)
+		if (!sessionAddress) {
+			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
+		}
+
+		const server = getSignalServerContext(url, sessionAddress)
+		if (!server.isModerator) {
+			return jsonResponse(
+				{ error: 'Only server moderator can delete channels', code: 'FORBIDDEN' },
+				403,
+			)
+		}
+
+		const channelId = sanitizeSignalSlug(serverChannelDeleteMatch[1])
+		if (!channelId) {
+			return jsonResponse({ error: 'Invalid channel id', code: 'INVALID_CHANNEL' }, 400)
+		}
+
+		const channels = await getSignalChannels(env, server)
+		const target = channels.find((channel) => channel.id === channelId)
+		if (!target) return jsonResponse({ error: 'Channel not found', code: 'NOT_FOUND' }, 404)
+		if (target.protected) {
+			return jsonResponse(
+				{ error: 'Protected channels cannot be deleted', code: 'PROTECTED_CHANNEL' },
+				400,
+			)
+		}
+
+		const nextChannels = channels.filter((channel) => channel.id !== channelId)
+		await setSignalChannels(env, server.id, nextChannels)
+		await setSignalChannelMessages(env, server.id, channelId, [])
+
+		const muteState = await getSignalMuteState(env, server.id)
+		if (muteState.channel[channelId]) {
+			delete muteState.channel[channelId]
+			await setSignalMuteState(env, server.id, muteState)
+		}
+
+		return jsonResponse({ deleted: true, channelId, channels: nextChannels })
+	}
+
+	// POST /api/app/messages/server/channels/:id/mute - Mute/unmute participant (moderator only)
+	const serverChannelMuteMatch = path.match(/^messages\/server\/channels\/([^/]+)\/mute$/)
+	if (serverChannelMuteMatch && request.method === 'POST') {
+		const sessionAddress = getWalletAddressFromCookie(request)
+		if (!sessionAddress) {
+			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
+		}
+
+		const server = getSignalServerContext(url, sessionAddress)
+		if (!server.isModerator) {
+			return jsonResponse({ error: 'Only server moderator can mute users', code: 'FORBIDDEN' }, 403)
+		}
+
+		try {
+			const channelId = sanitizeSignalSlug(serverChannelMuteMatch[1])
+			const body = (await request.json()) as {
+				targetAddress?: string
+				scope?: 'server' | 'channel'
+				muted?: boolean
+			}
+			const targetAddress = normalizeSignalAddress(body.targetAddress)
+			if (!targetAddress) {
+				return jsonResponse({ error: 'Target address required', code: 'MISSING_TARGET' }, 400)
+			}
+			if (server.ownerAddress && targetAddress === server.ownerAddress) {
+				return jsonResponse({ error: 'Cannot mute server moderator', code: 'INVALID_TARGET' }, 400)
+			}
+
+			const scope = body.scope === 'server' ? 'server' : 'channel'
+			const muted = body.muted !== false
+			const state = await getSignalMuteState(env, server.id)
+
+			if (scope === 'server') {
+				if (!muted) {
+					delete state.server[targetAddress]
+				} else {
+					state.server[targetAddress] = {
+						address: targetAddress,
+						mutedAt: Date.now(),
+						mutedBy: sessionAddress,
+					}
+				}
+			} else {
+				if (!state.channel[channelId]) state.channel[channelId] = {}
+				if (!muted) {
+					delete state.channel[channelId][targetAddress]
+				} else {
+					state.channel[channelId][targetAddress] = {
+						address: targetAddress,
+						mutedAt: Date.now(),
+						mutedBy: sessionAddress,
+					}
+				}
+			}
+
+			await setSignalMuteState(env, server.id, state)
+			return jsonResponse({ ok: true, scope, channelId, targetAddress, muted })
+		} catch {
+			return jsonResponse({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
+		}
+	}
+
+	// GET /api/app/messages/server/channels/:id/messages - Fetch channel messages
+	const serverChannelMessagesMatch = path.match(/^messages\/server\/channels\/([^/]+)\/messages$/)
+	if (serverChannelMessagesMatch && request.method === 'GET') {
+		const sessionAddress = getWalletAddressFromCookie(request)
+		const server = getSignalServerContext(url, sessionAddress)
+		const channelId = sanitizeSignalSlug(serverChannelMessagesMatch[1])
+		const channels = await getSignalChannels(env, server)
+		const exists = channels.some((channel) => channel.id === channelId)
+		if (!exists) return jsonResponse({ error: 'Channel not found', code: 'NOT_FOUND' }, 404)
+
+		const messages = await getSignalChannelMessages(env, server.id, channelId)
+		const muteState = await getSignalMuteState(env, server.id)
+		const mutedScope = getSignalMuteScope(
+			muteState,
+			channelId,
+			normalizeSignalAddress(sessionAddress),
+		)
+
+		return jsonResponse({
+			server: {
+				id: server.id,
+				displayName: server.displayName,
+				isModerator: server.isModerator,
+			},
+			channel: channelId,
+			messages,
+			count: messages.length,
+			muted: {
+				server: mutedScope === 'server',
+				channel: mutedScope === 'channel',
+			},
+		})
+	}
+
+	// POST /api/app/messages/server/channels/:id/messages - Send channel message
+	if (serverChannelMessagesMatch && request.method === 'POST') {
+		const sessionAddress = getWalletAddressFromCookie(request)
+		if (!sessionAddress) {
+			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
+		}
+
+		const server = getSignalServerContext(url, sessionAddress)
+		const channelId = sanitizeSignalSlug(serverChannelMessagesMatch[1])
+		const channels = await getSignalChannels(env, server)
+		const channel = channels.find((candidate) => candidate.id === channelId)
+		if (!channel) return jsonResponse({ error: 'Channel not found', code: 'NOT_FOUND' }, 404)
+
+		const muteState = await getSignalMuteState(env, server.id)
+		const mutedScope = getSignalMuteScope(muteState, channelId, sessionAddress)
+		if (mutedScope) {
+			return jsonResponse(
+				{
+					error: mutedScope === 'server'
+						? 'You are muted in this server'
+						: 'You are muted in this channel',
+					code: 'MUTED',
+					scope: mutedScope,
+				},
+				403,
+			)
+		}
+
+		try {
+			const body = (await request.json()) as {
+				content?: string
+				senderName?: string | null
+				encrypted?: boolean
+				replyTo?: string
+			}
+			const content = String(body.content || '').trim()
+			if (!content) {
+				return jsonResponse({ error: 'Message content required', code: 'MISSING_CONTENT' }, 400)
+			}
+
+			const message: SignalChannelMessage = {
+				id: createSignalMessageId(),
+				serverId: server.id,
+				channel: channelId,
+				sender: sessionAddress,
+				senderName: body.senderName || null,
+				content: content.slice(0, MAX_MESSAGE_SIZE_BYTES),
+				encrypted: !!(channel.encrypted || body.encrypted),
+				timestamp: Date.now(),
+				replyTo: body.replyTo,
+			}
+
+			const messages = await getSignalChannelMessages(env, server.id, channelId)
+			messages.push(message)
+			const trimmed = messages.length > 200 ? messages.slice(messages.length - 200) : messages
+			await setSignalChannelMessages(env, server.id, channelId, trimmed)
+
+			return jsonResponse({ message })
+		} catch {
+			return jsonResponse({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
+		}
+	}
+
+	// DELETE /api/app/messages/server/channels/:id/messages/:messageId
+	const serverChannelMessageDeleteMatch = path.match(
+		/^messages\/server\/channels\/([^/]+)\/messages\/([^/]+)$/,
+	)
+	if (serverChannelMessageDeleteMatch && request.method === 'DELETE') {
+		const sessionAddress = getWalletAddressFromCookie(request)
+		if (!sessionAddress) {
+			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
+		}
+
+		const server = getSignalServerContext(url, sessionAddress)
+		const channelId = sanitizeSignalSlug(serverChannelMessageDeleteMatch[1])
+		const messageId = serverChannelMessageDeleteMatch[2]
+		const messages = await getSignalChannelMessages(env, server.id, channelId)
+		const target = messages.find((message) => message.id === messageId)
+		if (!target) return jsonResponse({ error: 'Message not found', code: 'NOT_FOUND' }, 404)
+
+		const isSender = normalizeSignalAddress(target.sender) === sessionAddress
+		if (!server.isModerator && !isSender) {
+			return jsonResponse({ error: 'Not authorized to delete this message', code: 'FORBIDDEN' }, 403)
+		}
+
+		const nextMessages = messages.filter((message) => message.id !== messageId)
+		await setSignalChannelMessages(env, server.id, channelId, nextMessages)
+		return jsonResponse({ deleted: true, messageId, count: nextMessages.length })
 	}
 
 	// GET /api/app/channels - Browse public channels

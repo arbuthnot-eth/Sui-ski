@@ -59,6 +59,7 @@ DECAY_AUCTION_PACKAGE_ID = "0x10dbff33383bdb68d0bbf6aadeed5e2d3911c45b03664130eb
 # COINBASE_X402_API_KEY set via `wrangler secret put COINBASE_X402_API_KEY`
 # BRAVE_SEARCH_API_KEY set via `wrangler secret put BRAVE_SEARCH_API_KEY`
 # INDEXER_API_KEY set via `wrangler secret put INDEXER_API_KEY`
+# USDY_COIN_TYPE = "0x<pkg>::usdy::USDY"  # Set when USDY token is deployed and registered on MVR
 
 # KV namespace for caching resolved names
 [[kv_namespaces]]
@@ -74,3 +75,11 @@ script_name = "sui-ski-gateway"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["WalletSession"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["SuiPayAgent", "SuiMcpServer"]
+
+[[migrations]]
+tag = "v3"
+deleted_classes = ["SuiPayAgent", "SuiMcpServer"]
