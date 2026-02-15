@@ -38,6 +38,8 @@ export function generateWalletSessionJs(): string {
       var sessionId = localStorage.getItem(__SESSION_KEY) || __skiReadCookie('session_id');
       localStorage.removeItem(__SESSION_KEY);
       localStorage.removeItem(__WALLET_NAME_KEY);
+      try { localStorage.removeItem('sui_ski_last_wallet'); } catch (_e) {}
+      try { localStorage.removeItem('ski_wallet_history'); } catch (_e) {}
       __skiClearSessionCookies();
       fetch('/api/wallet/disconnect', {
         method: 'POST',

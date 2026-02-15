@@ -85,6 +85,11 @@ async function storeRequest(
 
 export const x402RegisterRoutes = new Hono<X402RegisterEnv>()
 
+x402RegisterRoutes.use('*', async (c, next) => {
+	if (!c.get('env')) c.set('env', c.env)
+	await next()
+})
+
 x402RegisterRoutes.get('/info', async (c) => {
 	const env = c.get('env')
 	const providers = resolveX402Providers(env)

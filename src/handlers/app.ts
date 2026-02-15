@@ -21,6 +21,8 @@
  * /api/llm/*     - LLM completion proxy
  */
 
+import { verifyPersonalMessageSignature } from '@mysten/sui/verify'
+
 import type {
 	ContentIntegrity,
 	Conversation,
@@ -290,6 +292,7 @@ interface SignalServerContext {
 	displayName: string
 	ownerAddress: string | null
 	isModerator: boolean
+	scope: 'global' | 'owner' | 'name'
 }
 
 interface SignalServerChannel {
@@ -323,9 +326,59 @@ interface SignalChannelMessage {
 	encrypted: boolean
 	timestamp: number
 	replyTo?: string
+	auth?: SignalChannelMessageAuth
+}
+
+interface SignalChannelJoinRequest {
+	id: string
+	serverId: string
+	channelId: string
+	requesterAddress: string
+	requesterName: string | null
+	note: string
+	status: 'pending' | 'approved' | 'cancelled'
+	createdAt: number
+	updatedAt: number
+	approvedAt: number | null
+	approvedBy: string | null
+	txDigest: string | null
 }
 
 const SIGNAL_CHAT_TTL = 60 * 60 * 24 * 30
+const SIGNAL_CHAT_AUTH_STANDARD = 'sui.ski/chat-auth@v1'
+const SIGNAL_CHAT_AUTH_VERSION = 1
+const SIGNAL_CHAT_AUTH_MAX_SKEW_MS = 10 * 60 * 1000
+const SIGNAL_JOIN_REQUEST_LIMIT = 200
+const SIGNAL_JOIN_REQUEST_MAX_NOTE_LENGTH = 240
+
+interface SignalChannelMessageAuth {
+	standard: string
+	version: number
+	payload: string
+	signature: string
+	verified: boolean
+	timestamp: number
+	nonce: string
+}
+
+interface SignalChannelMessageAuthRequest {
+	standard?: string
+	version?: number
+	payload?: string
+	signature?: string
+}
+
+interface SignalChannelMessageAuthPayload {
+	standard: string
+	version: number
+	serverId: string
+	channel: string
+	sender: string
+	senderName?: string | null
+	content: string
+	timestamp: number
+	nonce: string
+}
 
 function normalizeSignalAddress(value: string | null | undefined): string {
 	return String(value || '')
@@ -341,6 +394,94 @@ function sanitizeSignalSlug(value: string | null | undefined): string {
 		.replace(/-+/g, '-')
 		.replace(/^-|-$/g, '')
 	return slug.slice(0, 48)
+}
+
+function normalizeSignalSenderName(value: string | null | undefined): string | null {
+	if (!value) return null
+	const cleaned = String(value)
+		.trim()
+		.toLowerCase()
+		.replace(/\.sui$/i, '')
+		.replace(/\.sui\.ski$/i, '')
+	const slug = sanitizeSignalSlug(cleaned)
+	return slug || null
+}
+
+async function verifySignalChannelMessageAuth(
+	auth: SignalChannelMessageAuthRequest,
+	serverId: string,
+	channelId: string,
+	senderAddress: string,
+	content: string,
+): Promise<
+	| {
+			valid: true
+			payload: string
+			signature: string
+			timestamp: number
+			nonce: string
+			senderName: string | null
+	  }
+	| { valid: false; reason: string }
+> {
+	const payload = String(auth.payload || '')
+	const signature = String(auth.signature || '')
+	if (!payload || !signature) return { valid: false, reason: 'Missing auth payload or signature' }
+	if (payload.length > 4096) return { valid: false, reason: 'Auth payload too large' }
+	if (signature.length > 1024) return { valid: false, reason: 'Auth signature too large' }
+
+	let parsed: SignalChannelMessageAuthPayload
+	try {
+		parsed = JSON.parse(payload) as SignalChannelMessageAuthPayload
+	} catch {
+		return { valid: false, reason: 'Invalid auth payload JSON' }
+	}
+
+	if (parsed.standard !== SIGNAL_CHAT_AUTH_STANDARD || parsed.version !== SIGNAL_CHAT_AUTH_VERSION) {
+		return { valid: false, reason: 'Unsupported auth standard version' }
+	}
+	if (String(parsed.serverId || '') !== serverId) {
+		return { valid: false, reason: 'Auth payload server mismatch' }
+	}
+	if (sanitizeSignalSlug(parsed.channel) !== channelId) {
+		return { valid: false, reason: 'Auth payload channel mismatch' }
+	}
+	if (normalizeSignalAddress(parsed.sender) !== senderAddress) {
+		return { valid: false, reason: 'Auth payload sender mismatch' }
+	}
+	if (String(parsed.content || '') !== content) {
+		return { valid: false, reason: 'Auth payload content mismatch' }
+	}
+
+	const timestamp = Number(parsed.timestamp || 0)
+	if (!Number.isFinite(timestamp) || timestamp <= 0) {
+		return { valid: false, reason: 'Invalid auth timestamp' }
+	}
+	if (Math.abs(Date.now() - timestamp) > SIGNAL_CHAT_AUTH_MAX_SKEW_MS) {
+		return { valid: false, reason: 'Auth timestamp outside allowed window' }
+	}
+
+	const nonce = String(parsed.nonce || '').trim()
+	if (!nonce || nonce.length > 96) {
+		return { valid: false, reason: 'Invalid auth nonce' }
+	}
+
+	try {
+		await verifyPersonalMessageSignature(new TextEncoder().encode(payload), signature, {
+			address: senderAddress,
+		})
+	} catch {
+		return { valid: false, reason: 'Signature verification failed' }
+	}
+
+	return {
+		valid: true,
+		payload,
+		signature,
+		timestamp,
+		nonce,
+		senderName: normalizeSignalSenderName(parsed.senderName ?? null),
+	}
 }
 
 function getWalletAddressFromCookie(request: Request): string | null {
@@ -363,9 +504,11 @@ function getWalletAddressFromCookie(request: Request): string | null {
 function getSignalServerContext(url: URL, sessionAddress: string | null): SignalServerContext {
 	const rawName = url.searchParams.get('name')
 	const rawOwner = url.searchParams.get('owner')
+	const rawScope = String(url.searchParams.get('scope') || '').trim().toLowerCase()
 	const name = sanitizeSignalSlug(rawName)
 	const ownerAddress = normalizeSignalAddress(rawOwner) || null
 	const requester = normalizeSignalAddress(sessionAddress)
+	const scope = rawScope === 'name' ? 'name' : 'owner'
 
 	if (!name) {
 		return {
@@ -374,6 +517,18 @@ function getSignalServerContext(url: URL, sessionAddress: string | null): Signal
 			displayName: 'sui.ski',
 			ownerAddress: null,
 			isModerator: false,
+			scope: 'global',
+		}
+	}
+
+	if (ownerAddress && scope === 'owner') {
+		return {
+			id: `suins-owner:${ownerAddress}`,
+			name,
+			displayName: `${name}.sui`,
+			ownerAddress,
+			isModerator: requester === ownerAddress,
+			scope: 'owner',
 		}
 	}
 
@@ -384,6 +539,7 @@ function getSignalServerContext(url: URL, sessionAddress: string | null): Signal
 		displayName: `${name}.sui`,
 		ownerAddress,
 		isModerator: !!ownerAddress && requester === ownerAddress,
+		scope: 'name',
 	}
 }
 
@@ -399,10 +555,20 @@ function signalServerMessagesKey(serverId: string, channelId: string): string {
 	return `signal_server_messages_${serverId}_${channelId}`
 }
 
+function signalServerJoinRequestsKey(serverId: string, channelId: string): string {
+	return `signal_server_join_requests_${serverId}_${channelId}`
+}
+
 function createSignalMessageId(): string {
 	const timestamp = Date.now().toString(36)
 	const random = Math.random().toString(36).slice(2, 10)
 	return `${timestamp}-${random}`
+}
+
+function createSignalJoinRequestId(): string {
+	const timestamp = Date.now().toString(36)
+	const random = Math.random().toString(36).slice(2, 10)
+	return `jr_${timestamp}_${random}`
 }
 
 function getDefaultSignalChannels(server: SignalServerContext): SignalServerChannel[] {
@@ -568,6 +734,63 @@ async function setSignalChannelMessages(
 	messages: SignalChannelMessage[],
 ): Promise<void> {
 	await env.CACHE.put(signalServerMessagesKey(serverId, channelId), JSON.stringify(messages), {
+		expirationTtl: SIGNAL_CHAT_TTL,
+	})
+}
+
+async function getSignalChannelJoinRequests(
+	env: Env,
+	serverId: string,
+	channelId: string,
+): Promise<SignalChannelJoinRequest[]> {
+	const raw = await env.CACHE.get(signalServerJoinRequestsKey(serverId, channelId))
+	if (!raw) return []
+	try {
+		const parsed = JSON.parse(raw) as SignalChannelJoinRequest[]
+		if (!Array.isArray(parsed)) return []
+		const result: SignalChannelJoinRequest[] = []
+		for (let i = 0; i < parsed.length; i++) {
+			const item = parsed[i]
+			if (!item || typeof item !== 'object') continue
+			const id = String(item.id || '').trim()
+			const requesterAddress = normalizeSignalAddress(item.requesterAddress)
+			const status = item.status === 'approved' || item.status === 'cancelled' ? item.status : 'pending'
+			if (!id || !requesterAddress) continue
+			result.push({
+				id,
+				serverId,
+				channelId,
+				requesterAddress,
+				requesterName: normalizeSignalSenderName(item.requesterName ?? null),
+				note: String(item.note || '').slice(0, SIGNAL_JOIN_REQUEST_MAX_NOTE_LENGTH),
+				status,
+				createdAt: Number(item.createdAt || Date.now()),
+				updatedAt: Number(item.updatedAt || Date.now()),
+				approvedAt:
+					item.approvedAt == null || !Number.isFinite(Number(item.approvedAt))
+						? null
+						: Number(item.approvedAt),
+				approvedBy: item.approvedBy ? normalizeSignalAddress(item.approvedBy) : null,
+				txDigest: item.txDigest ? String(item.txDigest) : null,
+			})
+		}
+		result.sort((a, b) => b.createdAt - a.createdAt)
+		return result
+	} catch {
+		return []
+	}
+}
+
+async function setSignalChannelJoinRequests(
+	env: Env,
+	serverId: string,
+	channelId: string,
+	requests: SignalChannelJoinRequest[],
+): Promise<void> {
+	const trimmed = requests.length > SIGNAL_JOIN_REQUEST_LIMIT
+		? requests.slice(0, SIGNAL_JOIN_REQUEST_LIMIT)
+		: requests
+	await env.CACHE.put(signalServerJoinRequestsKey(serverId, channelId), JSON.stringify(trimmed), {
 		expirationTtl: SIGNAL_CHAT_TTL,
 	})
 }
@@ -1059,6 +1282,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				displayName: server.displayName,
 				ownerAddress: server.ownerAddress,
 				isModerator: server.isModerator,
+				scope: server.scope,
 			},
 			channels,
 			moderation: {
@@ -1229,6 +1453,195 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 		}
 	}
 
+	// GET|POST /api/app/messages/server/channels/:id/join-requests
+	const serverChannelJoinRequestsMatch = path.match(
+		/^messages\/server\/channels\/([^/]+)\/join-requests$/,
+	)
+	if (serverChannelJoinRequestsMatch && request.method === 'GET') {
+		const sessionAddress = getWalletAddressFromCookie(request)
+		if (!sessionAddress) {
+			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
+		}
+
+		const server = getSignalServerContext(url, sessionAddress)
+		const channelId = sanitizeSignalSlug(serverChannelJoinRequestsMatch[1])
+		if (!channelId) {
+			return jsonResponse({ error: 'Invalid channel id', code: 'INVALID_CHANNEL' }, 400)
+		}
+
+		const requests = await getSignalChannelJoinRequests(env, server.id, channelId)
+		const pending = requests.filter((item) => item.status === 'pending')
+		const visible = server.isModerator
+			? pending
+			: pending.filter((item) => item.requesterAddress === sessionAddress)
+		return jsonResponse({
+			server: {
+				id: server.id,
+				name: server.name,
+				displayName: server.displayName,
+				ownerAddress: server.ownerAddress,
+				isModerator: server.isModerator,
+				scope: server.scope,
+			},
+			channelId,
+			requests: visible,
+			count: visible.length,
+			pendingCount: pending.length,
+			canModerate: server.isModerator,
+		})
+	}
+
+	if (serverChannelJoinRequestsMatch && request.method === 'POST') {
+		const sessionAddress = getWalletAddressFromCookie(request)
+		if (!sessionAddress) {
+			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
+		}
+
+		const server = getSignalServerContext(url, sessionAddress)
+		const channelId = sanitizeSignalSlug(serverChannelJoinRequestsMatch[1])
+		if (!channelId) {
+			return jsonResponse({ error: 'Invalid channel id', code: 'INVALID_CHANNEL' }, 400)
+		}
+
+		try {
+			const body = (await request.json()) as {
+				requesterName?: string | null
+				note?: string | null
+			}
+			const requests = await getSignalChannelJoinRequests(env, server.id, channelId)
+			const existing = requests.find(
+				(item) =>
+					item.status === 'pending' &&
+					item.requesterAddress === sessionAddress,
+			)
+			if (existing) {
+				return jsonResponse({
+					request: existing,
+					duplicate: true,
+					pendingCount: requests.filter((item) => item.status === 'pending').length,
+				})
+			}
+
+			const note = String(body.note || '').trim().slice(0, SIGNAL_JOIN_REQUEST_MAX_NOTE_LENGTH)
+			const nextRequest: SignalChannelJoinRequest = {
+				id: createSignalJoinRequestId(),
+				serverId: server.id,
+				channelId,
+				requesterAddress: sessionAddress,
+				requesterName: normalizeSignalSenderName(body.requesterName ?? null),
+				note,
+				status: 'pending',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+				approvedAt: null,
+				approvedBy: null,
+				txDigest: null,
+			}
+			requests.unshift(nextRequest)
+			await setSignalChannelJoinRequests(env, server.id, channelId, requests)
+			return jsonResponse({
+				request: nextRequest,
+				pendingCount: requests.filter((item) => item.status === 'pending').length,
+			})
+		} catch {
+			return jsonResponse({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
+		}
+	}
+
+	// POST /api/app/messages/server/channels/:id/join-requests/:requestId/approve
+	const serverChannelJoinApproveMatch = path.match(
+		/^messages\/server\/channels\/([^/]+)\/join-requests\/([^/]+)\/approve$/,
+	)
+	if (serverChannelJoinApproveMatch && request.method === 'POST') {
+		const sessionAddress = getWalletAddressFromCookie(request)
+		if (!sessionAddress) {
+			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
+		}
+
+		const server = getSignalServerContext(url, sessionAddress)
+		if (!server.isModerator) {
+			return jsonResponse(
+				{ error: 'Only server moderator can approve requests', code: 'FORBIDDEN' },
+				403,
+			)
+		}
+
+		const channelId = sanitizeSignalSlug(serverChannelJoinApproveMatch[1])
+		const requestId = String(serverChannelJoinApproveMatch[2] || '').trim()
+		if (!channelId || !requestId) {
+			return jsonResponse({ error: 'Invalid request id', code: 'INVALID_REQUEST' }, 400)
+		}
+
+		let txDigest = ''
+		try {
+			const body = (await request.json()) as { txDigest?: string }
+			txDigest = String(body.txDigest || '').trim()
+		} catch {
+			txDigest = ''
+		}
+
+		const requests = await getSignalChannelJoinRequests(env, server.id, channelId)
+		const target = requests.find((item) => item.id === requestId)
+		if (!target) {
+			return jsonResponse({ error: 'Request not found', code: 'NOT_FOUND' }, 404)
+		}
+		const now = Date.now()
+		const next = requests.map((item) => {
+			if (item.id === requestId) {
+				if (item.status !== 'pending') return item
+				return {
+					...item,
+					status: 'approved' as const,
+					updatedAt: now,
+					approvedAt: now,
+					approvedBy: sessionAddress,
+					txDigest: txDigest || item.txDigest || null,
+				}
+			}
+			if (item.status === 'pending' && item.requesterAddress === target.requesterAddress) {
+				return {
+					...item,
+					status: 'cancelled' as const,
+					updatedAt: now,
+					approvedBy: sessionAddress,
+				}
+			}
+			return item
+		})
+		const approvedRequest = next.find((item) => item.id === requestId) || target
+		await setSignalChannelJoinRequests(env, server.id, channelId, next)
+		return jsonResponse({ request: approvedRequest })
+	}
+
+	// DELETE /api/app/messages/server/channels/:id/join-requests/:requestId
+	const serverChannelJoinDeleteMatch = path.match(
+		/^messages\/server\/channels\/([^/]+)\/join-requests\/([^/]+)$/,
+	)
+	if (serverChannelJoinDeleteMatch && request.method === 'DELETE') {
+		const sessionAddress = getWalletAddressFromCookie(request)
+		if (!sessionAddress) {
+			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
+		}
+
+		const server = getSignalServerContext(url, sessionAddress)
+		const channelId = sanitizeSignalSlug(serverChannelJoinDeleteMatch[1])
+		const requestId = String(serverChannelJoinDeleteMatch[2] || '').trim()
+		if (!channelId || !requestId) {
+			return jsonResponse({ error: 'Invalid request id', code: 'INVALID_REQUEST' }, 400)
+		}
+
+		const requests = await getSignalChannelJoinRequests(env, server.id, channelId)
+		const existing = requests.find((item) => item.id === requestId)
+		if (!existing) return jsonResponse({ error: 'Request not found', code: 'NOT_FOUND' }, 404)
+		if (!server.isModerator && existing.requesterAddress !== sessionAddress) {
+			return jsonResponse({ error: 'Not authorized to cancel this request', code: 'FORBIDDEN' }, 403)
+		}
+
+		const next = requests.filter((item) => item.id !== requestId)
+		await setSignalChannelJoinRequests(env, server.id, channelId, next)
+		return jsonResponse({ deleted: true, requestId })
+	}
+
 	// GET /api/app/messages/server/channels/:id/messages - Fetch channel messages
 	const serverChannelMessagesMatch = path.match(/^messages\/server\/channels\/([^/]+)\/messages$/)
 	if (serverChannelMessagesMatch && request.method === 'GET') {
@@ -1252,6 +1665,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				id: server.id,
 				displayName: server.displayName,
 				isModerator: server.isModerator,
+				scope: server.scope,
 			},
 			channel: channelId,
 			messages,
@@ -1298,10 +1712,37 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				senderName?: string | null
 				encrypted?: boolean
 				replyTo?: string
+				auth?: SignalChannelMessageAuthRequest
 			}
 			const content = String(body.content || '').trim()
 			if (!content) {
 				return jsonResponse({ error: 'Message content required', code: 'MISSING_CONTENT' }, 400)
+			}
+			const canonicalContent = content.slice(0, MAX_MESSAGE_SIZE_BYTES)
+
+			let authenticated: {
+				payload: string
+				signature: string
+				timestamp: number
+				nonce: string
+				senderName: string | null
+			} | null = null
+
+			if (body.auth && (body.auth.payload || body.auth.signature)) {
+				const verified = await verifySignalChannelMessageAuth(
+					body.auth,
+					server.id,
+					channelId,
+					sessionAddress,
+					canonicalContent,
+				)
+				if (!verified.valid) {
+					return jsonResponse(
+						{ error: verified.reason, code: 'INVALID_MESSAGE_AUTH' },
+						401,
+					)
+				}
+				authenticated = verified
 			}
 
 			const message: SignalChannelMessage = {
@@ -1309,11 +1750,22 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				serverId: server.id,
 				channel: channelId,
 				sender: sessionAddress,
-				senderName: body.senderName || null,
-				content: content.slice(0, MAX_MESSAGE_SIZE_BYTES),
+				senderName: authenticated?.senderName || normalizeSignalSenderName(body.senderName || null),
+				content: canonicalContent,
 				encrypted: !!(channel.encrypted || body.encrypted),
 				timestamp: Date.now(),
 				replyTo: body.replyTo,
+				auth: authenticated
+					? {
+							standard: SIGNAL_CHAT_AUTH_STANDARD,
+							version: SIGNAL_CHAT_AUTH_VERSION,
+							payload: authenticated.payload,
+							signature: authenticated.signature,
+							verified: true,
+							timestamp: authenticated.timestamp,
+							nonce: authenticated.nonce,
+						}
+					: undefined,
 			}
 
 			const messages = await getSignalChannelMessages(env, server.id, channelId)
@@ -1384,7 +1836,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				action: 'create_channel',
 				params: body,
 				note: 'Build and sign transaction client-side using @mysten/messaging SDK',
-				sdk: 'https://unpkg.com/@mysten/messaging',
+				sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
 			})
 		} catch {
 			return jsonResponse({ error: 'Invalid request body' }, 400)
@@ -1408,12 +1860,49 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 
 	// GET /api/app/subscriptions/config - Get Seal/Walrus config for subscriptions
 	if (path === 'subscriptions/config' && request.method === 'GET') {
+		const network = env.SUI_NETWORK || 'mainnet'
+		const rpcUrl =
+			env.SUI_RPC_URL ||
+			(network === 'testnet'
+				? 'https://fullnode.testnet.sui.io:443'
+				: network === 'devnet'
+				? 'https://fullnode.devnet.sui.io:443'
+				: 'https://fullnode.mainnet.sui.io:443')
+		const defaultSealKeyServers =
+			network === 'mainnet'
+				? ['0x145540d931f182fef76467dd8074c9839aea126852d90d18e1556fcbbd1208b6']
+				: [
+					'0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75',
+					'0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8',
+					'0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46',
+				]
+		const sealKeyServers = (env.SEAL_KEY_SERVERS || defaultSealKeyServers.join(','))
+			.split(',')
+			.map((id: string) => id.trim())
+			.filter(Boolean)
+		const walrusNetwork =
+			network === 'mainnet' && env.WALRUS_NETWORK !== 'testnet' ? 'mainnet' : env.WALRUS_NETWORK || 'testnet'
+		const walrusPublisherDefault =
+			walrusNetwork === 'mainnet'
+				? 'https://publisher.walrus.space'
+				: 'https://publisher.walrus-testnet.walrus.space'
+		const walrusAggregatorDefault =
+			walrusNetwork === 'mainnet'
+				? 'https://aggregator.walrus.space'
+				: 'https://aggregator.walrus-testnet.walrus.space'
+		const messagingPackageId =
+			network === 'mainnet'
+				? '0xbcdf77f551f12be0fa61d1eb7bb2ff4169c1587aaa86fab84d95213cc75139f9'
+				: '0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d'
+		const messagingPackageConfig = { packageId: messagingPackageId }
+
 		return jsonResponse({
 			seal: {
 				packageId:
 					env.SEAL_PACKAGE_ID ||
 					'0x7f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d4f4f8d',
-				network: env.SUI_NETWORK || 'mainnet',
+				network,
+				rpcUrl,
 				supportedPolicies: [
 					{
 						type: 'address',
@@ -1446,10 +1935,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 						useCase: 'Paid content, premium features',
 					},
 				],
-				keyServers: (env.SEAL_KEY_SERVERS || '')
-					.split(',')
-					.filter(Boolean)
-					.map((id: string) => ({ objectId: id.trim(), weight: 1 })),
+				keyServers: sealKeyServers.map((id: string) => ({ objectId: id, weight: 1 })),
 				threshold: 2,
 				approveTarget: env.SEAL_APPROVE_TARGET || null,
 				encryption: {
@@ -1459,17 +1945,18 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				},
 			},
 			walrus: {
-				publisherUrl: env.WALRUS_PUBLISHER_URL || 'https://publisher.walrus-testnet.walrus.space',
-				aggregatorUrl:
-					env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space',
-				network: env.WALRUS_NETWORK || 'testnet',
+				publisherUrl: env.WALRUS_PUBLISHER_URL || walrusPublisherDefault,
+				aggregatorUrl: env.WALRUS_AGGREGATOR_URL || walrusAggregatorDefault,
+				network: walrusNetwork,
 				encoding: 'Red Stuff 2D',
 				replication: '4-5x',
 			},
 			sdk: {
-				messagingSdk: 'https://unpkg.com/@mysten/messaging',
-				sealSdk: 'https://unpkg.com/@mysten/seal',
-				suiSdk: 'https://unpkg.com/@mysten/sui',
+				messagingSdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+				sealSdk: 'https://cdn.jsdelivr.net/npm/@mysten/seal@0.9.6/+esm',
+				suiSdk: 'https://cdn.jsdelivr.net/npm/@mysten/sui@1.45.2/+esm',
+				messagingVersion: '0.3.0',
+				messagingPackageConfig,
 			},
 			security: {
 				signatureSchemes: ['ed25519', 'secp256k1', 'secp256r1'],

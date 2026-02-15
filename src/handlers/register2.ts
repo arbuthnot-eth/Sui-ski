@@ -41,7 +41,7 @@ interface RegisterSession {
 	verified: boolean
 }
 
-export interface RegistrationPageOptions {
+interface RegistrationPageOptions {
 	flow?: 'register' | 'register2'
 }
 
@@ -1892,7 +1892,7 @@ export function generateRegistrationPage(
 				const normalizedMsg = String(msg).toLowerCase()
 				if (normalizedMsg.includes('no usable usdc balance was found for this wallet')) {
 					showStatus(
-						'No usable USDC balance was found for this wallet. <a href="https://me.sui.ski?tab=swap" style="color:#b8ffda;text-decoration:underline;">Swap USDC -> SUI on .ski</a> and try again.',
+						'No usable USDC balance was found for this wallet. <a href="https://sui.ski" style="color:#b8ffda;text-decoration:underline;">Open .ski</a> and swap to SUI, then try again.',
 						'err',
 						true,
 					)

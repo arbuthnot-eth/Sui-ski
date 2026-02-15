@@ -10,9 +10,13 @@ export function generateWalletUiCss(): string {
 	display: none;
 	position: fixed;
 	inset: 0;
-	background: rgba(0,0,0,0.75);
-	backdrop-filter: blur(10px);
-	-webkit-backdrop-filter: blur(10px);
+	background:
+		radial-gradient(circle at 20% 18%, rgba(140,180,220,0.06), transparent 38%),
+		radial-gradient(circle at 78% 12%, rgba(160,200,240,0.05), transparent 34%),
+		radial-gradient(circle at 52% 74%, rgba(140,180,220,0.04), transparent 44%),
+		rgba(4,8,16,0.82);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
 	z-index: 13000;
 	align-items: center;
 	justify-content: center;
@@ -20,14 +24,100 @@ export function generateWalletUiCss(): string {
 }
 .wk-modal-overlay.open { display: flex; }
 .wk-modal {
-	background: linear-gradient(180deg, #1a1b23 0%, #13141a 100%);
-	border: 1px solid rgba(255,255,255,0.07);
+	background: linear-gradient(180deg, #141820 0%, #0e1118 50%, #101520 100%);
+	border: 1px solid rgba(160,200,240,0.12);
 	border-radius: 24px;
 	max-width: 400px;
 	width: 100%;
 	overflow: hidden;
-	box-shadow: 0 32px 80px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.04);
+	position: relative;
+	box-shadow: 0 28px 84px rgba(2,6,23,0.82), 0 0 38px rgba(180,210,240,0.1), inset 0 1px 0 rgba(200,220,255,0.06);
 	animation: wk-modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.wk-modal::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 0;
+	background:
+		radial-gradient(circle at 22% 12%, rgba(180,210,240,0.14), transparent 36%),
+		radial-gradient(circle at 82% 4%, rgba(200,220,245,0.1), transparent 32%),
+		radial-gradient(circle at 52% 118%, rgba(160,200,235,0.08), transparent 42%);
+}
+.wk-modal::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 0;
+	opacity: 0.3;
+	background-image:
+		radial-gradient(circle at 8% 18%, rgba(200,220,255,0.9) 0 1px, transparent 1.4px),
+		radial-gradient(circle at 22% 8%, rgba(200,220,255,0.7) 0 0.8px, transparent 1.2px),
+		radial-gradient(circle at 42% 28%, rgba(200,220,255,0.6) 0 0.6px, transparent 1px),
+		radial-gradient(circle at 58% 14%, rgba(210,225,255,0.8) 0 1px, transparent 1.4px),
+		radial-gradient(circle at 72% 22%, rgba(200,220,255,0.5) 0 0.7px, transparent 1.1px),
+		radial-gradient(circle at 88% 10%, rgba(200,220,255,0.7) 0 0.8px, transparent 1.2px),
+		radial-gradient(circle at 15% 42%, rgba(200,220,255,0.4) 0 0.6px, transparent 1px),
+		radial-gradient(circle at 35% 52%, rgba(200,220,255,0.5) 0 0.7px, transparent 1.1px),
+		radial-gradient(circle at 65% 38%, rgba(210,225,255,0.6) 0 0.8px, transparent 1.2px),
+		radial-gradient(circle at 82% 48%, rgba(200,220,255,0.4) 0 0.6px, transparent 1px),
+		radial-gradient(circle at 48% 62%, rgba(200,220,255,0.3) 0 0.5px, transparent 0.9px),
+		radial-gradient(circle at 92% 56%, rgba(200,220,255,0.35) 0 0.6px, transparent 1px);
+	animation: wk-snow-drift 8s ease-in-out infinite alternate;
+}
+@keyframes wk-snow-drift {
+	0% { opacity: 0.3; transform: translateY(0); }
+	50% { opacity: 0.2; }
+	100% { opacity: 0.35; transform: translateY(3px); }
+}
+.wk-snow-layer {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 0;
+	overflow: hidden;
+}
+.wk-snow-layer::before, .wk-snow-layer::after {
+	content: '';
+	position: absolute;
+	top: -20%;
+	left: 0;
+	right: 0;
+	height: 140%;
+	pointer-events: none;
+}
+.wk-snow-layer::before {
+	background-image:
+		radial-gradient(circle, rgba(255,255,255,0.7) 0 1px, transparent 1.2px),
+		radial-gradient(circle, rgba(220,235,255,0.6) 0 0.8px, transparent 1px),
+		radial-gradient(circle, rgba(255,255,255,0.5) 0 1.2px, transparent 1.5px),
+		radial-gradient(circle, rgba(220,235,255,0.4) 0 0.6px, transparent 0.9px),
+		radial-gradient(circle, rgba(255,255,255,0.6) 0 0.7px, transparent 1px),
+		radial-gradient(circle, rgba(220,235,255,0.5) 0 0.9px, transparent 1.2px);
+	background-size: 140px 180px, 120px 160px, 160px 200px, 100px 140px, 130px 170px, 150px 190px;
+	background-position: 10px 0, 60px 30px, 30px 60px, 90px 20px, 50px 80px, 110px 50px;
+	animation: wk-snowfall 12s linear infinite;
+}
+.wk-snow-layer::after {
+	background-image:
+		radial-gradient(circle, rgba(255,255,255,0.4) 0 0.5px, transparent 0.8px),
+		radial-gradient(circle, rgba(220,235,255,0.35) 0 0.6px, transparent 0.9px),
+		radial-gradient(circle, rgba(255,255,255,0.3) 0 0.7px, transparent 1px),
+		radial-gradient(circle, rgba(220,235,255,0.25) 0 0.5px, transparent 0.8px);
+	background-size: 180px 220px, 160px 200px, 200px 240px, 140px 180px;
+	background-position: 20px 10px, 80px 40px, 40px 70px, 100px 30px;
+	animation: wk-snowfall 18s linear infinite;
+	opacity: 0.6;
+}
+@keyframes wk-snowfall {
+	from { transform: translateY(-30%); }
+	to { transform: translateY(30%); }
+}
+.wk-modal > * {
+	position: relative;
+	z-index: 1;
 }
 @keyframes wk-modal-in {
 	from { opacity: 0; transform: scale(0.95) translateY(10px); }
@@ -47,20 +137,42 @@ export function generateWalletUiCss(): string {
 .wk-modal-logo svg {
 	display: block;
 }
+.wk-modal-logo {
+	width: 44px;
+	height: 44px;
+	border-radius: 11px;
+	overflow: hidden;
+	border: 1px solid rgba(200,220,240,0.2);
+	background: rgba(180,200,220,0.08);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 0 18px rgba(180,210,240,0.12);
+}
+.wk-modal-logo-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	object-position: center;
+	display: block;
+	filter: brightness(1.1) contrast(1.05);
+}
 .wk-modal-header h3 {
 	font-size: 1.1rem;
-	font-weight: 700;
+	font-weight: 800;
 	margin: 0;
-	color: #ededf5;
+	color: #ffffff;
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 	letter-spacing: -0.02em;
 }
 .wk-modal-subtitle {
 	padding: 5px 24px 18px;
-	color: #4e4e64;
+	color: #ffffff;
 	font-size: 0.76rem;
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+	font-weight: 600;
 	letter-spacing: 0.01em;
+	text-shadow: 0 0 14px rgba(226,232,240,0.28);
 }
 .wk-modal-close {
 	background: rgba(255,255,255,0.05);
@@ -122,23 +234,88 @@ export function generateWalletUiCss(): string {
 	height: 24px;
 	flex-shrink: 0;
 }
+.wk-social-btn.wk-sep-left {
+	border-left: 1px solid rgba(255,255,255,0.06);
+	margin-left: 2px;
+	padding-left: 8px;
+}
 .wk-powered-by {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding: 14px 0 6px;
+}
+.wk-qr-wrap {
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	position: relative;
+}
+.wk-qr-wrap a {
+	display: block;
+	width: 96px;
+	height: 96px;
+	padding: 6px;
+	background: rgba(255,255,255,0.92);
+	border-radius: 10px;
+	box-shadow: 0 2px 12px rgba(0,0,0,0.2), 0 0 20px rgba(180,210,240,0.08);
+	transition: transform 0.18s, box-shadow 0.18s;
+}
+.wk-qr-wrap a:hover {
+	transform: scale(1.04);
+	box-shadow: 0 4px 18px rgba(0,0,0,0.3), 0 0 24px rgba(180,210,240,0.12);
+}
+.wk-qr-wrap svg {
+	width: 100%;
+	height: 100%;
+	display: block;
+	color: #1a1b23;
+}
+.wk-qr-logo {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	width: 22px;
+	height: 22px;
+	border-radius: 4px;
+	background: #fff;
+	padding: 2px;
+	box-shadow: 0 0 4px rgba(0,0,0,0.15);
+}
+.wk-qr-logo img {
+	width: 100%;
+	height: 100%;
+	border-radius: 3px;
+	display: block;
+}
+.wk-powered-by .wk-powered-pill {
+	display: inline-flex;
+	align-items: center;
 	gap: 5px;
-	padding: 12px 0 4px;
-	color: #33334a;
-	font-size: 0.65rem;
+	padding: 4px 12px;
+	background: rgba(255,255,255,0.08);
+	border: 1px solid rgba(255,255,255,0.12);
+	border-radius: 20px;
+	color: rgba(255,255,255,0.8);
+	font-size: 0.62rem;
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
+	text-decoration: none;
+	transition: all 0.18s;
 }
-.wk-powered-by img {
-	width: 13px;
-	height: 13px;
+.wk-powered-by .wk-powered-pill:hover {
+	background: rgba(255,255,255,0.14);
+	border-color: rgba(255,255,255,0.2);
+	color: #fff;
+}
+.wk-powered-by .wk-powered-pill img {
+	width: 14px;
+	height: 14px;
 	border-radius: 3px;
-	opacity: 0.5;
+	opacity: 0.9;
 }
 .wk-divider {
 	display: flex;
@@ -150,10 +327,10 @@ export function generateWalletUiCss(): string {
 	content: '';
 	flex: 1;
 	height: 1px;
-	background: rgba(255,255,255,0.05);
+	background: rgba(200,220,240,0.1);
 }
 .wk-divider span {
-	color: #3e3e56;
+	color: rgba(255,255,255,0.7);
 	font-size: 0.68rem;
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 	white-space: nowrap;
@@ -801,7 +978,9 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       coinbase: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none"><circle cx="12" cy="12" r="11" stroke="#8e8ea4" stroke-width="1.5"/><path d="M14.5 10.5h-5v3h5v-3z" fill="#8e8ea4" rx="0.5"/></svg>'
     };
 
-    var __wkLogoSvg = '<svg viewBox="0 0 512 512" width="28" height="28" fill="none"><defs><linearGradient id="wk-lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient></defs><path d="M256 96L416 352H336L280 256L256 296L232 256L176 352H96Z" fill="url(#wk-lg)"/><path d="M128 384Q208 348 288 384Q368 420 432 384" stroke="url(#wk-lg)" stroke-width="24" fill="none" stroke-linecap="round"/></svg>';
+    var __wkLogoSvg = '<img class="wk-modal-logo-img" src="data:image/webp;base64,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" alt=".SKI">';
+
+    var __wkQrSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><path d="M0,0h7v1h-7zM9,0h3v1h-3zM15,0h1v1h-1zM18,0h2v1h-2zM22,0h7v1h-7zM0,1h1v1h-1zM6,1h1v1h-1zM8,1h2v1h-2zM11,1h3v1h-3zM15,1h1v1h-1zM17,1h2v1h-2zM22,1h1v1h-1zM28,1h1v1h-1zM0,2h1v1h-1zM2,2h3v1h-3zM6,2h1v1h-1zM8,2h1v1h-1zM10,2h3v1h-3zM15,2h3v1h-3zM19,2h1v1h-1zM22,2h1v1h-1zM24,2h3v1h-3zM28,2h1v1h-1zM0,3h1v1h-1zM2,3h3v1h-3zM6,3h1v1h-1zM9,3h1v1h-1zM11,3h1v1h-1zM14,3h3v1h-3zM18,3h3v1h-3zM22,3h1v1h-1zM24,3h3v1h-3zM28,3h1v1h-1zM0,4h1v1h-1zM2,4h3v1h-3zM6,4h1v1h-1zM8,4h2v1h-2zM11,4h1v1h-1zM13,4h4v1h-4zM18,4h1v1h-1zM22,4h1v1h-1zM24,4h3v1h-3zM28,4h1v1h-1zM0,5h1v1h-1zM6,5h1v1h-1zM8,5h1v1h-1zM10,5h1v1h-1zM14,5h2v1h-2zM17,5h3v1h-3zM22,5h1v1h-1zM28,5h1v1h-1zM0,6h7v1h-7zM8,6h1v1h-1zM10,6h1v1h-1zM12,6h1v1h-1zM14,6h1v1h-1zM16,6h1v1h-1zM18,6h1v1h-1zM20,6h1v1h-1zM22,6h7v1h-7zM8,7h1v1h-1zM10,7h3v1h-3zM14,7h1v1h-1zM17,7h1v1h-1zM19,7h2v1h-2zM0,8h2v1h-2zM3,8h1v1h-1zM6,8h2v1h-2zM11,8h3v1h-3zM16,8h1v1h-1zM18,8h3v1h-3zM22,8h3v1h-3zM26,8h2v1h-2zM1,9h1v1h-1zM3,9h1v1h-1zM5,9h1v1h-1zM8,9h2v1h-2zM12,9h1v1h-1zM14,9h1v1h-1zM18,9h1v1h-1zM21,9h3v1h-3zM25,9h1v1h-1zM28,9h1v1h-1zM0,10h1v1h-1zM3,10h1v1h-1zM5,10h2v1h-2zM13,10h1v1h-1zM19,10h1v1h-1zM21,10h2v1h-2zM24,10h4v1h-4zM4,11h2v1h-2zM7,11h7v1h-7zM16,11h1v1h-1zM18,11h5v1h-5zM26,11h2v1h-2zM0,12h4v1h-4zM5,12h2v1h-2zM10,12h4v1h-4zM15,12h3v1h-3zM19,12h5v1h-5zM25,12h1v1h-1zM27,12h2v1h-2zM1,13h3v1h-3zM5,13h1v1h-1zM8,13h2v1h-2zM12,13h1v1h-1zM14,13h1v1h-1zM17,13h4v1h-4zM0,14h3v1h-3zM4,14h5v1h-5zM10,14h2v1h-2zM13,14h2v1h-2zM18,14h1v1h-1zM20,14h1v1h-1zM22,14h1v1h-1zM24,14h5v1h-5zM2,15h1v1h-1zM4,15h2v1h-2zM7,15h1v1h-1zM9,15h1v1h-1zM11,15h5v1h-5zM17,15h2v1h-2zM22,15h2v1h-2zM25,15h1v1h-1zM27,15h1v1h-1zM2,16h2v1h-2zM5,16h4v1h-4zM10,16h3v1h-3zM15,16h1v1h-1zM17,16h1v1h-1zM20,16h2v1h-2zM27,16h1v1h-1zM1,17h2v1h-2zM7,17h2v1h-2zM10,17h5v1h-5zM16,17h2v1h-2zM22,17h2v1h-2zM25,17h1v1h-1zM28,17h1v1h-1zM0,18h1v1h-1zM3,18h1v1h-1zM6,18h3v1h-3zM10,18h1v1h-1zM14,18h1v1h-1zM17,18h2v1h-2zM21,18h4v1h-4zM27,18h2v1h-2zM5,19h1v1h-1zM10,19h3v1h-3zM14,19h6v1h-6zM22,19h2v1h-2zM27,19h2v1h-2zM0,20h1v1h-1zM2,20h1v1h-1zM4,20h3v1h-3zM8,20h3v1h-3zM12,20h4v1h-4zM20,20h5v1h-5zM26,20h1v1h-1zM8,21h3v1h-3zM16,21h1v1h-1zM20,21h1v1h-1zM24,21h1v1h-1zM26,21h3v1h-3zM0,22h7v1h-7zM8,22h1v1h-1zM12,22h2v1h-2zM16,22h1v1h-1zM18,22h1v1h-1zM20,22h1v1h-1zM22,22h1v1h-1zM24,22h1v1h-1zM27,22h1v1h-1zM0,23h1v1h-1zM6,23h1v1h-1zM10,23h1v1h-1zM12,23h5v1h-5zM18,23h1v1h-1zM20,23h1v1h-1zM24,23h3v1h-3zM28,23h1v1h-1zM0,24h1v1h-1zM2,24h3v1h-3zM6,24h1v1h-1zM9,24h1v1h-1zM13,24h1v1h-1zM16,24h3v1h-3zM20,24h5v1h-5zM28,24h1v1h-1zM0,25h1v1h-1zM2,25h3v1h-3zM6,25h1v1h-1zM8,25h1v1h-1zM12,25h2v1h-2zM20,25h1v1h-1zM22,25h5v1h-5zM0,26h1v1h-1zM2,26h3v1h-3zM6,26h1v1h-1zM11,26h1v1h-1zM14,26h1v1h-1zM17,26h1v1h-1zM19,26h2v1h-2zM24,26h3v1h-3zM28,26h1v1h-1zM0,27h1v1h-1zM6,27h1v1h-1zM8,27h6v1h-6zM17,27h6v1h-6zM24,27h1v1h-1zM27,27h1v1h-1zM0,28h7v1h-7zM8,28h1v1h-1zM12,28h1v1h-1zM15,28h1v1h-1zM17,28h1v1h-1zM19,28h3v1h-3zM23,28h2v1h-2zM27,28h1v1h-1z" fill="currentColor"/></svg>';
 
     function __wkGetLastWallet() {
       try { return localStorage.getItem(__wkLastWalletKey) || ''; } catch (_e) { return ''; }
@@ -809,6 +988,17 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 
 	    function __wkSetLastWallet(name) {
 	      try { localStorage.setItem(__wkLastWalletKey, name); } catch (_e) {}
+	    }
+
+	    function __wkWalletNameKey(name) {
+	      var normalized = String(name || '').trim().toLowerCase();
+	      if (!normalized) return '';
+	      normalized = normalized.replace(/[^a-z0-9]+/g, ' ').trim();
+	      if (!normalized) return '';
+	      if (normalized.slice(-7) === ' wallet') {
+	        normalized = normalized.slice(0, -7).trim();
+	      }
+	      return normalized.replace(/\s+/g, '');
 	    }
 
 	    var __wkWaaPMethodByAddressKey = 'sui_ski_waap_method_by_address_v1';
@@ -1119,19 +1309,19 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       if (!grid) return;
 
       var socialOptions = [
-        { key: 'x', label: 'X' },
-        { key: 'phone', label: 'Phone' },
-        { key: 'email', label: 'Email' },
-        { key: 'google', label: 'Google' },
-        { key: 'coinbase', label: 'Coinbase' },
-        { key: 'discord', label: 'Discord' }
+        { key: 'x', label: 'X', sep: false },
+        { key: 'google', label: 'Google', sep: false },
+        { key: 'email', label: 'Email', sep: true },
+        { key: 'discord', label: 'Discord', sep: false },
+        { key: 'coinbase', label: 'Coinbase', sep: false },
+        { key: 'phone', label: 'Phone', sep: true }
       ];
 
       grid.innerHTML = '';
       for (var s = 0; s < socialOptions.length; s++) {
         (function(opt) {
           var btn = document.createElement('button');
-          btn.className = 'wk-social-btn';
+          btn.className = 'wk-social-btn' + (opt.sep ? ' wk-sep-left' : '');
           btn.innerHTML = (__wkSocialIcons[opt.key] || '') + '<span>' + opt.label + '</span>';
           btn.addEventListener('click', function() {
             var waapLoading = typeof __wkWaaPLoading !== 'undefined' ? __wkWaaPLoading : (window.__wkWaaPLoading || null);
@@ -1156,12 +1346,12 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
     }
 
     function __wkSortWithRecent(wallets) {
-      var lastWalletName = __wkGetLastWallet().toLowerCase();
+      var lastWalletName = __wkWalletNameKey(__wkGetLastWallet());
       if (!lastWalletName) return wallets;
       var recent = [];
       var rest = [];
       for (var i = 0; i < wallets.length; i++) {
-        var wName = wallets[i].name ? String(wallets[i].name).toLowerCase() : '';
+        var wName = __wkWalletNameKey(wallets[i].name);
         if (wName === lastWalletName) {
           recent.push(wallets[i]);
         } else {
@@ -1222,7 +1412,7 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
         listEl.innerHTML = __wkInstallLinksHtml();
         return;
       }
-      var lastWalletName = __wkGetLastWallet().toLowerCase();
+      var lastWalletName = __wkWalletNameKey(__wkGetLastWallet());
       var sorted = __wkSortWithRecent(wallets);
       var isSubdomain = __wkIsSubdomain();
       listEl.innerHTML = '';
@@ -1232,14 +1422,19 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
           item.className = 'wk-wallet-item';
           var name = wallet.name || 'Unknown';
           var iconSrc = wallet.icon || __wkDefaultIcon();
-          var isRecent = lastWalletName && name.toLowerCase() === lastWalletName;
+          var isRecent = lastWalletName && __wkWalletNameKey(name) === lastWalletName;
           item.innerHTML = '<img src="' + iconSrc + '" alt="" onerror="this.style.display=\\'none\\'">'
             + '<span class="wk-wallet-name">' + name + '</span>'
             + (isRecent ? '<span class="wk-recent-badge">Recent</span>' : '');
 	          item.addEventListener('click', function() {
 	            listEl.innerHTML = '<div class="wk-detecting"><div class="wk-spinner"></div> Connecting...</div>';
 	            if (isSubdomain) {
-	              __wkConnectViaBridge(name, listEl);
+	              SuiWalletKit.connect(wallet).then(function() {
+	                __wkSetLastWallet(name);
+	              }).catch(function(err) {
+	                console.warn('Direct subdomain wallet connect failed, trying sign bridge:', err && err.message ? err.message : err);
+	                __wkConnectViaBridge(name, listEl);
+	              });
 	            } else {
 	              SuiWalletKit.connect(wallet).then(function() {
 	                __wkSetLastWallet(name);
@@ -1303,6 +1498,7 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 
       container.innerHTML = '<div class="wk-modal-overlay" id="__wk-overlay">'
         + '<div class="wk-modal">'
+        + '<div class="wk-snow-layer"></div>'
         + '<div class="wk-modal-header">'
         + '<div class="wk-modal-header-left">'
         + '<span class="wk-modal-logo">' + __wkLogoSvg + '</span>'
@@ -1310,12 +1506,17 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
         + '</div>'
         + '<button class="wk-modal-close" id="__wk-close">\\u00D7</button>'
         + '</div>'
-        + '<div class="wk-modal-subtitle">sign once, access all *.sui.ski</div>'
+        + '<div class="wk-modal-subtitle">.SKI once, everywhere</div>'
         + '<div class="wk-social-section" style="display:none">'
         + '<div class="wk-social-grid"></div>'
-        + '<div class="wk-powered-by"><img src="' + __wkWaaPIcon + '" alt=""> powered by WaaP</div>'
+        + '<div class="wk-powered-by">'
+        + '<div class="wk-qr-wrap"><a href="https://waap.sui.ski?ref=ski-keyin&src=wallet-modal" target="_blank" rel="noopener">' + __wkQrSvg + '</a>'
+        + '<div class="wk-qr-logo"><img src="/media-pack/dotSKI.png" alt="WaaP"></div>'
         + '</div>'
-        + '<div class="wk-divider" style="display:none"><span>or connect wallet</span></div>'
+        + '<a class="wk-powered-pill" href="https://waap.sui.ski" target="_blank" rel="noopener"><img src="/media-pack/dotSKI.png" alt=".SKI"> powered by WaaP</a>'
+        + '</div>'
+        + '</div>'
+        + '<div class="wk-divider" style="display:none"><span>Trad Wallet</span></div>'
         + '<div class="wk-wallet-list"></div>'
         + '</div>'
         + '</div>';
@@ -1433,15 +1634,10 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 
       var profileHref = primaryName
         ? 'https://' + encodeURIComponent(primaryName) + '.sui.ski'
-        : 'https://me.sui.ski';
+        : 'https://sui.ski';
       html += '<a class="wk-dropdown-item" href="' + profileHref + '">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>'
         + 'My Profile</a>';
-
-      var swapHref = 'https://me.sui.ski?tab=swap';
-      html += '<a class="wk-dropdown-item" href="' + swapHref + '">'
-        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M20.49 15A9 9 0 0 1 5 7l2-2"/><path d="M3.51 9A9 9 0 0 1 19 17l-2 2"/></svg>'
-        + 'Swap USDC -> SUI</a>';
 
       html += '<button class="wk-dropdown-item" id="__wk-dd-switch">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>'

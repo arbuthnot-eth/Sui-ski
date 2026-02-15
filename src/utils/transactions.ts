@@ -1,6 +1,6 @@
 import type { Env } from '../types'
 
-export interface RelayResult {
+interface RelayResult {
 	ok: boolean
 	status: number
 	response?: unknown

@@ -166,9 +166,11 @@ function __walletHasAddress(wallet, targetAddress) {
 	return false;
 }
 
-async function __ensureWalletConnection(preferredWalletName, expectedSender) {
+async function __ensureWalletConnection(preferredWalletName, expectedSender, allowHistoryFallback) {
 	var normalizedSender = __normalizeAddress(expectedSender);
+	var allowHistory = allowHistoryFallback !== false;
 	var conn = SuiWalletKit.$connection.value || null;
+	var targetWalletName = preferredWalletName || '';
 	if (conn && conn.wallet) {
 		if (!preferredWalletName || __walletNamesMatch(conn.wallet.name, preferredWalletName)) {
 			return conn;
@@ -189,7 +191,9 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender) {
 	console.log('[SignBridge] Detected wallets:', wallets.map(function(w) { return w && w.name; }));
 
 	var session = __readSessionWallet();
-	var targetWalletName = preferredWalletName || (session && session.walletName ? session.walletName : '');
+	if (!targetWalletName) {
+		targetWalletName = session && session.walletName ? session.walletName : '';
+	}
 	var match = null;
 
 	if (targetWalletName) {
@@ -211,7 +215,12 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender) {
 		}
 	}
 
-	if (!match) {
+	if (!allowHistory && !targetWalletName && !normalizedSender) {
+		console.warn('[SignBridge] No wallet hint for signing; refusing history-based auto-selection');
+		return conn;
+	}
+
+	if (!match && allowHistory && !targetWalletName) {
 		var history = __readWalletHistory();
 		for (var h = 0; h < history.length && !match; h++) {
 			for (var hw = 0; hw < wallets.length; hw++) {
@@ -222,6 +231,11 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender) {
 				}
 			}
 		}
+	}
+
+	if (!match && preferredWalletName) {
+		console.warn('[SignBridge] Preferred wallet not available:', preferredWalletName);
+		return null;
 	}
 
 	if (!match) {
@@ -239,12 +253,17 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender) {
 	try {
 		await SuiWalletKit.connect(match);
 	} catch (_e) {
+		if (preferredWalletName) return null;
 		return SuiWalletKit.$connection.value || conn;
 	}
 
 	conn = SuiWalletKit.$connection.value || conn;
 
 	if (normalizedSender && conn && conn.wallet && !__walletHasAddress(conn.wallet, normalizedSender)) {
+		if (preferredWalletName) {
+			console.warn('[SignBridge] Preferred wallet connected but sender mismatch:', conn.wallet && conn.wallet.name);
+			return null;
+		}
 		console.warn('[SignBridge] Connected wallet does not have expected address, trying others...');
 		for (var r = 0; r < wallets.length; r++) {
 			if (wallets[r] === match || !wallets[r] || wallets[r].__isPasskey) continue;
@@ -328,6 +347,11 @@ function __base64ToBytes(base64) {
 	if (typeof base64 !== 'string') return null;
 	var cleaned = base64.trim();
 	if (!cleaned) return null;
+	cleaned = cleaned.replace(/-/g, '+').replace(/_/g, '/');
+	var mod = cleaned.length % 4;
+	if (mod === 1) return null;
+	if (mod === 2) cleaned += '==';
+	else if (mod === 3) cleaned += '=';
 	if (!/^[A-Za-z0-9+/=]+$/.test(cleaned)) return null;
 	try {
 		var raw = atob(cleaned);
@@ -337,6 +361,269 @@ function __base64ToBytes(base64) {
 	} catch (_e) {
 		return null;
 	}
+}
+
+function __extractBridgeTxPayload(value, depth) {
+	if (!value || depth > 6) return null;
+	if (typeof value === 'string') return value.trim();
+	var bytes = __toExactArrayBuffer(value);
+	if (bytes) return new Uint8Array(bytes);
+	if (typeof value !== 'object') return null;
+
+	var byteKeys = [
+		'txBytes',
+		'transactionBytes',
+		'bytes',
+		'rawBytes',
+		'rawTransaction',
+		'signedTransaction',
+		'serializedTransaction',
+		'transactionBlockBytes',
+		'bcsBytes',
+		'bcs',
+	];
+	for (var bi = 0; bi < byteKeys.length; bi++) {
+		var nextBytes = __extractBridgeTxPayload(value[byteKeys[bi]], depth + 1);
+		if (nextBytes) return nextBytes;
+	}
+
+	var txKeys = ['transaction', 'transactionBlock', 'tx', 'payload', 'data'];
+	for (var ti = 0; ti < txKeys.length; ti++) {
+		var nextTx = __extractBridgeTxPayload(value[txKeys[ti]], depth + 1);
+		if (nextTx) return nextTx;
+	}
+
+	return null;
+}
+
+async function __fetchTransactionBlockByDigest(digest) {
+	if (!digest || typeof digest !== 'string') return null;
+	var rpcRes = await fetch(__getRpcUrl(), {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({
+			jsonrpc: '2.0',
+			id: 1,
+			method: 'sui_getTransactionBlock',
+			params: [digest, {
+				showInput: false,
+				showRawInput: false,
+				showEffects: true,
+				showEvents: false,
+				showObjectChanges: true,
+				showBalanceChanges: false,
+				showRawEffects: true,
+			}],
+		}),
+	});
+	var rpcJson = await rpcRes.json().catch(function() { return null; });
+	if (!rpcRes.ok || !rpcJson || rpcJson.error || !rpcJson.result) return null;
+	return rpcJson.result;
+}
+
+function __mergeSignResult(baseResult, txBlock) {
+	if (!txBlock || typeof txBlock !== 'object') return baseResult;
+	var merged = {};
+	var key = '';
+	for (key in baseResult) merged[key] = baseResult[key];
+	if (!merged.digest && txBlock.digest) merged.digest = txBlock.digest;
+	if (!merged.effects && txBlock.effects) merged.effects = txBlock.effects;
+	if ((!merged.objectChanges || !merged.objectChanges.length) && txBlock.objectChanges) {
+		merged.objectChanges = txBlock.objectChanges;
+	}
+	if (!merged.rawEffects && txBlock.rawEffects) merged.rawEffects = txBlock.rawEffects;
+	return merged;
+}
+
+async function __hydrateSignResult(result) {
+	if (!result || typeof result !== 'object') return result;
+	var digest = result.digest && typeof result.digest === 'string' ? result.digest : '';
+	if (!digest) return result;
+	var hasEffects = !!(result.effects && typeof result.effects === 'object');
+	var hasObjectChanges = !!(result.objectChanges && result.objectChanges.length);
+	var hasRawEffects = !!result.rawEffects;
+	if (hasEffects && (hasObjectChanges || hasRawEffects)) return result;
+	try {
+		var txBlock = await __fetchTransactionBlockByDigest(digest);
+		if (!txBlock) return result;
+		return __mergeSignResult(result, txBlock);
+	} catch (_e) {
+		return result;
+	}
+}
+
+function __toExactArrayBuffer(value) {
+	if (!value) return null;
+	if (value instanceof ArrayBuffer) return value;
+	if (value instanceof Uint8Array) {
+		if (value.byteOffset === 0 && value.byteLength === value.buffer.byteLength) return value.buffer;
+		return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+	}
+	if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(value)) {
+		var view = new Uint8Array(value.buffer, value.byteOffset || 0, value.byteLength || 0);
+		if (view.byteOffset === 0 && view.byteLength === view.buffer.byteLength) return view.buffer;
+		return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+	}
+	if (Array.isArray(value)) {
+		var bytes = Uint8Array.from(value);
+		return bytes.buffer;
+	}
+	return null;
+}
+
+function __extractMessageSigningResult(signResult, fallbackBytesB64) {
+	var first = Array.isArray(signResult) ? signResult[0] : signResult;
+	if (!first) {
+		return {
+			signature: '',
+			bytes: String(fallbackBytesB64 || ''),
+		};
+	}
+	if (typeof first === 'string') {
+		return {
+			signature: first,
+			bytes: String(fallbackBytesB64 || ''),
+		};
+	}
+	var resolvedSignature = '';
+	var resolvedBytes = '';
+	if (typeof first.signature === 'string') resolvedSignature = first.signature;
+	if (first.signature && typeof first.signature === 'object' && typeof first.signature.signature === 'string') {
+		resolvedSignature = first.signature.signature;
+	}
+	if (!resolvedSignature && first.signature && (first.signature instanceof Uint8Array || Array.isArray(first.signature))) {
+		try {
+			resolvedSignature = __bytesToBase64(first.signature);
+		} catch (_e) {}
+	}
+	if (!resolvedSignature && typeof first.serializedSignature === 'string') {
+		resolvedSignature = first.serializedSignature;
+	}
+	if (typeof first.bytes === 'string' && first.bytes) resolvedBytes = first.bytes;
+	if (!resolvedBytes && typeof first.messageBytes === 'string' && first.messageBytes) resolvedBytes = first.messageBytes;
+	if (!resolvedBytes && first.bytes && (first.bytes instanceof Uint8Array || Array.isArray(first.bytes))) {
+		try {
+			resolvedBytes = __bytesToBase64(first.bytes);
+		} catch (_e2) {}
+	}
+	if (!resolvedBytes) resolvedBytes = String(fallbackBytesB64 || '');
+	return {
+		signature: resolvedSignature,
+		bytes: resolvedBytes,
+	};
+}
+
+async function __signPersonalMessageBridge(messageBytes, conn, signingAccount) {
+	var wallet = conn && conn.wallet ? conn.wallet : null;
+	if (!wallet) throw new Error('Wallet not connected in sign bridge');
+	var raw = wallet._raw || null;
+	var messageBuffer = __toExactArrayBuffer(messageBytes);
+	var messageBase64 = __bytesToBase64(messageBytes);
+	var calls = [];
+	var walletName = String((wallet && wallet.name) || '').toLowerCase();
+	var phantomProvider = __getPhantomProvider();
+	var isPhantomWallet = !!(
+		(walletName && walletName.indexOf('phantom') !== -1)
+		|| (wallet && wallet.isPhantom)
+		|| (raw && raw.isPhantom)
+		|| (
+			phantomProvider && (
+				wallet === phantomProvider
+				|| raw === phantomProvider
+			)
+		)
+	);
+	function addCall(label, fn) {
+		calls.push({ label: label, fn: fn });
+	}
+
+	var signFeature = wallet.features && wallet.features['sui:signPersonalMessage'];
+	if (signFeature && typeof signFeature.signPersonalMessage === 'function') {
+		addCall('feature(account, bytes)', function() {
+			return signFeature.signPersonalMessage({
+				account: signingAccount || conn.account || null,
+				message: messageBytes,
+			});
+		});
+		addCall('feature(account, number[])', function() {
+			return signFeature.signPersonalMessage({
+				account: signingAccount || conn.account || null,
+				message: Array.from(messageBytes),
+			});
+		});
+		addCall('feature(account, base64)', function() {
+			return signFeature.signPersonalMessage({
+				account: signingAccount || conn.account || null,
+				message: messageBase64,
+			});
+		});
+		if (messageBuffer) {
+			addCall('feature(account, arrayBuffer)', function() {
+				return signFeature.signPersonalMessage({
+					account: signingAccount || conn.account || null,
+					message: messageBuffer,
+				});
+			});
+			addCall('feature(arrayBuffer)', function() {
+				return signFeature.signPersonalMessage({
+					message: messageBuffer,
+				});
+			});
+		}
+		addCall('feature(bytes)', function() {
+			return signFeature.signPersonalMessage({
+				message: messageBytes,
+			});
+		});
+		addCall('feature(number[])', function() {
+			return signFeature.signPersonalMessage({
+				message: Array.from(messageBytes),
+			});
+		});
+		addCall('feature(base64)', function() {
+			return signFeature.signPersonalMessage({
+				message: messageBase64,
+			});
+		});
+	}
+	if (raw && typeof raw.signPersonalMessage === 'function') {
+		if (messageBuffer) {
+			addCall('raw.signPersonalMessage({arrayBuffer})', function() { return raw.signPersonalMessage({ message: messageBuffer }); });
+			addCall('raw.signPersonalMessage(arrayBuffer)', function() { return raw.signPersonalMessage(messageBuffer); });
+		}
+		addCall('raw.signPersonalMessage({bytes})', function() { return raw.signPersonalMessage({ message: messageBytes }); });
+		addCall('raw.signPersonalMessage(bytes)', function() { return raw.signPersonalMessage(messageBytes); });
+		if (!isPhantomWallet) {
+			addCall('raw.signPersonalMessage({number[]})', function() { return raw.signPersonalMessage({ message: Array.from(messageBytes) }); });
+		}
+		addCall('raw.signPersonalMessage({base64})', function() { return raw.signPersonalMessage({ message: messageBase64 }); });
+	}
+	if (raw && typeof raw.signMessage === 'function') {
+		if (messageBuffer) {
+			addCall('raw.signMessage({arrayBuffer})', function() { return raw.signMessage({ message: messageBuffer }); });
+			addCall('raw.signMessage(arrayBuffer)', function() { return raw.signMessage(messageBuffer); });
+		}
+		addCall('raw.signMessage({bytes})', function() { return raw.signMessage({ message: messageBytes }); });
+		addCall('raw.signMessage(bytes)', function() { return raw.signMessage(messageBytes); });
+		if (!isPhantomWallet) {
+			addCall('raw.signMessage({number[]})', function() { return raw.signMessage({ message: Array.from(messageBytes) }); });
+		}
+		addCall('raw.signMessage({base64})', function() { return raw.signMessage({ message: messageBase64 }); });
+	}
+	if (!calls.length) throw new Error('Wallet does not support personal message signing');
+	var lastErr = null;
+	for (var i = 0; i < calls.length; i++) {
+		var attempt = calls[i];
+		try {
+			var result = await attempt.fn();
+			console.log('[SignBridge] Message signing attempt succeeded:', attempt.label);
+			return result;
+		} catch (err) {
+			lastErr = err;
+			console.warn('[SignBridge] Message signing attempt failed:', attempt.label, (err && err.message) ? err.message : err);
+		}
+	}
+	throw lastErr || new Error('Wallet personal message signing failed');
 }
 
 function __getRpcUrl() {
@@ -597,9 +884,21 @@ async function __executeSignedTransaction(signed, tx, execOptions) {
 
 async function __getTransactionClass() {
 	if (__TransactionClass) return __TransactionClass;
-	var mod = await import('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle');
-	__TransactionClass = mod.Transaction;
-	return __TransactionClass;
+	var candidates = [
+		'https://cdn.jsdelivr.net/npm/@mysten/sui@1.45.2/transactions/+esm',
+		'https://esm.sh/@mysten/sui@1.45.2/transactions?bundle',
+		'https://esm.sh/@mysten/sui@2.2.0/transactions?bundle',
+	];
+	for (var i = 0; i < candidates.length; i++) {
+		try {
+			var mod = await import(candidates[i]);
+			if (mod && mod.Transaction) {
+				__TransactionClass = mod.Transaction;
+				return __TransactionClass;
+			}
+		} catch (_e) {}
+	}
+	throw new Error('Failed to load Sui Transaction class');
 }
 
 window.addEventListener('message', function(e) {
@@ -617,19 +916,49 @@ window.addEventListener('message', function(e) {
 		try {
 			var Tx = await __getTransactionClass();
 			var parsed = txData;
-			try { parsed = JSON.parse(txData); } catch (_e) {}
-			var tx = Tx.from(parsed);
+			var rawSerializedTx = (typeof txData === 'string') ? txData.trim() : '';
+			if (typeof txData === 'string') {
+				try { parsed = JSON.parse(txData); } catch (_e) {}
+			}
+			var extractedPayload = __extractBridgeTxPayload(parsed, 0);
+			if (!extractedPayload && typeof txData === 'string') extractedPayload = txData;
+			var txBytesFromInput = null;
+			if (typeof extractedPayload === 'string') {
+				txBytesFromInput = __base64ToBytes(extractedPayload);
+			} else {
+				txBytesFromInput = __toExactArrayBuffer(extractedPayload);
+				txBytesFromInput = txBytesFromInput ? new Uint8Array(txBytesFromInput) : null;
+			}
+			var tx = null;
+			if (txBytesFromInput && txBytesFromInput.length) {
+				try {
+					tx = Tx.from(txBytesFromInput);
+				} catch (_fromBytesErr) {}
+			}
+			if (!tx && rawSerializedTx) {
+				try {
+					tx = Tx.from(rawSerializedTx);
+				} catch (_fromRawStringErr) {}
+			}
+			if (!tx) {
+				try {
+					tx = Tx.from(parsed && typeof parsed === 'object' ? parsed : extractedPayload);
+				} catch (_fromParsedErr) {}
+			}
+			if (!tx && !txBytesFromInput) {
+				throw new Error('Invalid transaction payload for sign bridge');
+			}
 			var transactionSender = '';
 			try {
-				var txDataObject = typeof tx.getData === 'function' ? tx.getData() : null;
+				var txDataObject = tx && typeof tx.getData === 'function' ? tx.getData() : null;
 				transactionSender = __normalizeAddress(txDataObject && txDataObject.sender);
 			} catch (_e) {}
 			var resolvedSender = __normalizeAddress(expectedSender) || transactionSender;
-			if (resolvedSender && typeof tx.setSenderIfNotSet === 'function') {
+			if (tx && resolvedSender && typeof tx.setSenderIfNotSet === 'function') {
 				tx.setSenderIfNotSet(resolvedSender);
 			}
 
-			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender);
+			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false);
 			if (!conn || !conn.wallet) throw new Error('Wallet not connected in sign bridge');
 			if (
 				preferredWalletName
@@ -643,16 +972,17 @@ window.addEventListener('message', function(e) {
 			}
 
 			var txForWallet = tx;
-			var txBytesFromInput = __base64ToBytes(typeof txData === 'string' ? txData : '');
 			var txBytesForFallback = null;
-			try {
-				txBytesForFallback = await __buildTransactionBytes(tx, resolvedSender);
-			} catch (preBuildErr) {
-				console.warn('[SignBridge] Pre-build to bytes failed, continuing with raw tx:', preBuildErr && preBuildErr.message);
+			if (txForWallet) {
+				try {
+					txBytesForFallback = await __buildTransactionBytes(txForWallet, resolvedSender);
+				} catch (preBuildErr) {
+					console.warn('[SignBridge] Pre-build to bytes failed, continuing with raw tx:', preBuildErr && preBuildErr.message);
+				}
 			}
 			var signingInputs = [];
 			if (txBytesFromInput) signingInputs.push(txBytesFromInput);
-			signingInputs.push(txForWallet);
+			if (txForWallet) signingInputs.push(txForWallet);
 			if (txBytesForFallback) signingInputs.push(txBytesForFallback);
 			var requestedChain = (
 				signingAccount
@@ -714,6 +1044,7 @@ window.addEventListener('message', function(e) {
 				}
 			}
 
+			result = await __hydrateSignResult(result);
 			console.log('[SignBridge] result:', result);
 
 			var response = { type: 'ski:signed', requestId: requestId };
@@ -730,6 +1061,59 @@ window.addEventListener('message', function(e) {
 			e.source.postMessage(response, e.origin);
 		} catch (err) {
 			var message = (err && err.message) ? err.message : 'Signing failed';
+			e.source.postMessage({
+				type: 'ski:error',
+				error: message,
+				requestId: requestId,
+			}, e.origin);
+		}
+	})();
+});
+
+window.addEventListener('message', function(e) {
+	if (!__isAllowedOrigin(e.origin)) return;
+	if (!e.data || e.data.type !== 'ski:sign-message') return;
+
+	var messageB64 = typeof e.data.message === 'string' ? e.data.message : '';
+	var requestId = e.data.requestId;
+	var expectedSender = e.data.sender || '';
+	var preferredWalletName = e.data.walletName || '';
+	if (!messageB64 || !requestId) return;
+
+	(async function() {
+		try {
+			var messageBytes = __base64ToBytes(messageB64);
+			if (!messageBytes || !messageBytes.length) throw new Error('Invalid message payload');
+			console.log('[SignBridge] sign-message: bytes=' + messageBytes.length + ', sender=' + expectedSender + ', wallet=' + preferredWalletName);
+			var resolvedSender = __normalizeAddress(expectedSender);
+			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false);
+			if (!conn || !conn.wallet) throw new Error('Wallet not connected in sign bridge');
+			console.log('[SignBridge] sign-message conn: wallet=' + (conn.wallet && conn.wallet.name) + ', status=' + conn.status + ', accounts=' + (conn.wallet && conn.wallet.accounts ? conn.wallet.accounts.length : 'N/A'));
+			if (
+				preferredWalletName
+				&& !__walletNamesMatch(conn.wallet && conn.wallet.name, preferredWalletName)
+			) {
+				console.warn('[SignBridge] Wallet name mismatch for message signing: expected', preferredWalletName, 'got', conn.wallet && conn.wallet.name);
+			}
+			var signingAccount = __resolveSigningAccount(conn, resolvedSender);
+			console.log('[SignBridge] sign-message account:', signingAccount ? ('addr=' + (signingAccount.address || 'none') + ' chains=' + JSON.stringify(signingAccount.chains || []) + ' hasPubKey=' + !!(signingAccount.publicKey)) : 'null');
+			if (resolvedSender && !signingAccount) {
+				throw new Error('Connected wallet account does not match message signer');
+			}
+
+			var signed = await __signPersonalMessageBridge(messageBytes, conn, signingAccount);
+			var signedMessage = __extractMessageSigningResult(signed, messageB64);
+			if (!signedMessage.signature) throw new Error('Wallet returned no personal message signature');
+			console.log('[SignBridge] Message signing completed');
+
+			e.source.postMessage({
+				type: 'ski:signed-message',
+				requestId: requestId,
+				signature: signedMessage.signature,
+				bytes: signedMessage.bytes || messageB64,
+			}, e.origin);
+		} catch (err) {
+			var message = (err && err.message) ? err.message : 'Message signing failed';
 			e.source.postMessage({
 				type: 'ski:error',
 				error: message,
@@ -810,7 +1194,7 @@ window.addEventListener('message', function(e) {
 					return;
 				}
 			}
-			var conn = await __ensureWalletConnection(preferredWallet, '');
+			var conn = await __ensureWalletConnection(preferredWallet, '', true);
 			if (conn && conn.wallet && conn.address) {
 				__saveWalletToHistory(conn.wallet.name || '', conn.address);
 				e.source.postMessage({
@@ -834,8 +1218,9 @@ window.addEventListener('message', function(e) {
 						break;
 					}
 				}
+				if (!target) throw new Error('Selected wallet not available: ' + preferredWallet);
 			}
-			if (!target) {
+			if (!target && !preferredWallet) {
 				var history = __readWalletHistory();
 				for (var h = 0; h < history.length && !target; h++) {
 					for (var w = 0; w < wallets.length; w++) {
@@ -846,16 +1231,20 @@ window.addEventListener('message', function(e) {
 					}
 				}
 			}
-			if (!target) {
+			if (!target && !preferredWallet) {
 				for (var k = 0; k < wallets.length; k++) {
 					if (!wallets[k].__isPasskey) { target = wallets[k]; break; }
 				}
 			}
-			if (!target) target = wallets[0];
+			if (!target && !preferredWallet) target = wallets[0];
+			if (!target) throw new Error('Failed to connect selected wallet: ' + preferredWallet);
 			await SuiWalletKit.connect(target);
 			conn = SuiWalletKit.$connection.value;
 			if (!conn || !conn.address) throw new Error('Wallet connection failed');
 			var connectedName = (conn.wallet && conn.wallet.name) || target.name || '';
+			if (preferredWallet && !__walletNamesMatch(connectedName, preferredWallet)) {
+				throw new Error('Connected wallet does not match selected wallet: ' + preferredWallet);
+			}
 			__saveWalletToHistory(connectedName, conn.address);
 			e.source.postMessage({
 				type: 'ski:connected',
@@ -899,6 +1288,7 @@ window.addEventListener('message', function(e) {
 	try { localStorage.removeItem('sui_session_id'); } catch (_e) {}
 	try { localStorage.removeItem('sui_wallet_name'); } catch (_e) {}
 	try { localStorage.removeItem('sui_ski_last_wallet'); } catch (_e) {}
+	try { localStorage.removeItem(__WALLET_HISTORY_KEY); } catch (_e) {}
 });
 
 ${generateWalletUiJs({ onConnect: '__onBridgeModalConnect', onDisconnect: '' })}

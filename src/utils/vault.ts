@@ -1,18 +1,18 @@
-export interface VaultPriceSnapshot {
+interface VaultPriceSnapshot {
 	listingMist: number | null
 	bestBidMist: number | null
 	floorMist: number | null
 	capturedAt: number
 }
 
-export interface VaultCategory {
+interface VaultCategory {
 	id: string
 	label: string
 	color: string
 	createdAt: number
 }
 
-export interface VaultBookmark {
+interface VaultBookmark {
 	name: string
 	address: string
 	addedAt: number
@@ -22,7 +22,7 @@ export interface VaultBookmark {
 	lastActivityAt: number
 }
 
-export interface VaultData {
+interface VaultData {
 	bookmarks: VaultBookmark[]
 	categories: VaultCategory[]
 	ownerAddress: string

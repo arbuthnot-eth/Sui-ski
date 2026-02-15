@@ -12,7 +12,7 @@ const PRICING_CACHE_TTL = 300
 const NS_DISCOUNT_PERCENT = 25
 const SWAP_SLIPPAGE_BPS = 100
 
-export interface PricingResult {
+interface PricingResult {
 	directSuiMist: bigint
 	discountedSuiMist: bigint
 	nsNeededMist: bigint
@@ -34,7 +34,7 @@ export interface PricingResult {
 	}
 }
 
-export interface CalculatePriceParams {
+interface CalculatePriceParams {
 	domain: string
 	years: number
 	expirationMs?: number

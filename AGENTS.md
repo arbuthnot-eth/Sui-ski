@@ -2,6 +2,26 @@
 
 This file contains instructions for AI agents working on this Cloudflare Workers project serving the Sui ecosystem.
 
+## Progress Log
+
+### 2026-02-14
+- Started messaging-only branding cleanup for the profile/landing chat widget.
+- Added new `generateMessagingChatCss` and `generateMessagingChatJs` exports while keeping backward-compatible `generateX402ChatCss` and `generateX402ChatJs` aliases.
+- Migrated page mounts from `x402-chat-root` to `messaging-chat-root` on landing and profile pages, with JS fallback support for legacy root IDs.
+- Preserved existing moderation, channel controls, and owner-scoped server context behavior from prior fixes.
+- Added `/cloudflare` searchable grace-radar page for SuiNS listings, backed by `/api/expiring-listings`.
+- Extended expiring listings API with query filters (`q`, `mode`) and grace-window metrics (`daysSinceExpiry`, `daysUntilGraceEnds`, `graceEndsMs`).
+- Tightened expired window handling to prioritize names still inside 30-day grace period.
+- Added adjustable ranking weights (`graceWeight`, `priceWeight`) so grace mode can prioritize urgency vs cheaper listings.
+- Exposed weighting controls in `/cloudflare` UI and added per-row priority score output.
+- Added one-click ranking presets in `/cloudflare` (`Prime Targets`, `Balanced`, `Incoming Expiry`) with shareable URL state via `preset` query param.
+- Added `/grace` route alias and configured default hard filter `minExpirationMs=1716660606618` for both TradePort listing activity and SuiNS expiration cutoff.
+- Added `/grace` empty-state fallback: when no grace matches exist, UI auto-displays expiring-soon results with a visible notice.
+- Switched TradePort time gating for grace ingestion to `expires_at` (SDK-aligned), with query-level and runtime filtering against `minExpirationMs`.
+- Added freshness safeguards for `/api/expiring-listings` (`Cache-Control: no-store` + client cache-busting query param) to avoid stale empty responses from edge cache.
+- Added resilient query fallback: if `expires_at` GraphQL selection fails/unavailable, the pipeline auto-falls back to `block_time` and reports source mode in debug.
+- Added RPC-backed search augmentation for `/api/expiring-listings`: direct name searches (e.g., `usd.sui.ski`) now resolve via SuiNS and are included even when not listed on TradePort.
+
 ## CRITICAL: Always Deploy With Wrangler
 - **After every change, run `npx wrangler deploy` first.**
 - **Do not substitute this with other deploy commands in final verification steps.**
@@ -152,3 +172,21 @@ Use helper functions from `src/utils/response.ts`:
 
 ## TypeScript Version
 Target: ES2022, strict mode enabled
+
+## Progress Log (2026-02-15)
+- Replaced `/grace` UI with a plain expiring-names feed (search, status filter, pagination only).
+- `/grace` now reads `/api/grace-feed` (registrations feed), not `/api/expiring-listings` (listings feed).
+- Extended `/api/grace-feed` response with `expired`, `inGracePeriod`, `daysSinceExpiry`, and `daysUntilGraceEnds`.
+- Added `status` query support to `/api/grace-feed`: `all`, `expiring`, `grace`.
+- Increased default feed horizon to `windowDays=3650` so non-imminent expirations are still tracked.
+- Added cache-backed registration snapshot keys (`grace-feed-source-v2`, `grace-feed-snapshot-v2`) for rolling tracking.
+- Added direct SuiNS resolve fallback for explicit name searches (e.g. `usd.sui.ski`) when missing from indexer scan.
+- Fixed duplicate constant collision by renaming NFT activity cache constant to `NFT_ACTIVITY_CACHE_TTL`.
+- Upgraded the profile/landing chat widget to initialize the official Sui Stack Messaging SDK client (`@mysten/messaging@0.3.0`) with Seal + Walrus config from `/api/app/subscriptions/config`.
+- Added on-chain channel ingestion to the widget (`getChannelMemberships`, `getChannelMessages`, `executeSendMessageTransaction`) with safe fallback to existing `/api/app/messages/server/*` transport.
+- Extended `/api/app/subscriptions/config` with explicit SDK/runtime fields (`seal.rpcUrl`, `sdk.messagingVersion`, `sdk.messagingPackageConfig`) and network-aware Walrus defaults.
+- Fixed chat header control visibility by hiding `#wallet-widget` while the chat panel is open (`body.x402-chat-open`), and switched chat/badge visuals to square style.
+- Mounted `x402ChatRoutes` at `/api/x402-chat/*` with root-domain guard so x402 chat APIs are now live.
+- Added `/api/x402-chat/integrations` to publish Sui Stack Messaging SDK config, WebMCP proxy info, agent endpoint map, and x402 payment hints.
+- Added `/api/x402-chat/webmcp` (+ wildcard) as a WebMCP proxy bridge that forwards payment headers and surfaces x402 response headers.
+- Added `/api/x402-chat/agents/dispatch` and `/api/x402-chat/agents/webmcp/tool` for allowlisted agent dispatch + MCP tool calls with x402/webMCP header passthrough.

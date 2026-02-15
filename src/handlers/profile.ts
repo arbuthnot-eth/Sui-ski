@@ -6,12 +6,12 @@ import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
-import { generateX402ChatCss } from '../utils/x402-chat-css'
-import { generateX402ChatJs } from '../utils/x402-chat-js'
+import { generateMessagingChatCss } from '../utils/x402-chat-css'
+import { generateMessagingChatJs } from '../utils/x402-chat-js'
 import { generateZkSendCss, generateZkSendJs } from '../utils/zksend-js'
 import { profileStyles } from './profile.css'
 
-export interface ProfilePageOptions {
+interface ProfilePageOptions {
 	canonicalUrl?: string
 	hostname?: string
 	description?: string
@@ -174,71 +174,12 @@ ${generateZkSendCss()}</style>
 
 	<!-- Wallet Widget (Shared with landing page component) -->
 	<div class="wallet-widget" id="wallet-widget">
-		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile" style="display:none">
-			${generateLogoSvg(18)}
-		</button>
-		<button class="swap-toggle-btn" id="swap-toggle-btn" title="Swap tokens" style="display:none">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/>
-			</svg>
-		</button>
 		<div id="wk-widget"></div>
+		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile" style="display:none">
+			<span class="ski-logo-text">.SKI</span>
+		</button>
 	</div>
 
-	<!-- Swap Panel -->
-	<div class="swap-panel" id="swap-panel" style="display:none;">
-		<div class="swap-panel-header">
-			<div class="swap-panel-tabs">
-				<button class="swap-tab active" data-tab="swap">Swap</button>
-				<button class="swap-tab" data-tab="crosschain">Cross-Chain</button>
-			</div>
-			<button class="swap-panel-close" id="swap-panel-close">&times;</button>
-		</div>
-		<div class="swap-tab-content" id="swap-tab-swap">
-			<div id="sui-coins-terminal"></div>
-		</div>
-		<div class="swap-tab-content" id="swap-tab-crosschain" style="display:none;">
-			<div class="crosschain-ui" id="crosschain-ui">
-				<div class="cc-direction">SOL &rarr; SUI</div>
-				<div class="cc-field">
-					<label class="cc-label">Source Asset</label>
-					<select id="cc-source" class="cc-input">
-						<option value="sol_to_sui">SOL</option>
-						<option value="usdc_to_sui">USDC</option>
-					</select>
-				</div>
-				<div class="cc-field">
-					<label class="cc-label" id="cc-amount-label">Amount (SOL)</label>
-					<input type="text" id="cc-sol-amount" class="cc-input" placeholder="0.00" inputmode="decimal" autocomplete="off">
-				</div>
-				<div class="cc-field">
-					<label class="cc-label">Recipient (Sui Address or Name)</label>
-					<input type="text" id="cc-target" class="cc-input" placeholder="0x... or name.sui" autocomplete="off">
-				</div>
-				<div class="cc-rate" id="cc-rate">
-					<span class="cc-rate-label">Rate:</span>
-					<span class="cc-rate-value" id="cc-rate-value">--</span>
-				</div>
-				<div class="cc-field">
-					<label class="cc-label">You receive</label>
-					<div class="cc-output" id="cc-output">-- SUI</div>
-				</div>
-				<div class="cc-fee" id="cc-fee"></div>
-				<button class="cc-btn" id="cc-quote-btn" disabled>Get Deposit Address</button>
-				<div class="cc-deposit" id="cc-deposit" style="display:none;">
-					<div class="cc-deposit-label">Send SOL to:</div>
-					<div class="cc-deposit-addr" id="cc-deposit-addr"></div>
-					<button class="cc-copy-btn" id="cc-copy-addr">Copy</button>
-					<div class="cc-confirm-section">
-						<label class="cc-label">Solana TX Signature</label>
-						<input type="text" id="cc-sol-tx" class="cc-input" placeholder="Paste Solana transaction signature">
-						<button class="cc-btn cc-confirm-btn" id="cc-confirm-btn" disabled>Confirm &amp; Receive SUI</button>
-					</div>
-				</div>
-				<div class="cc-status" id="cc-status"></div>
-			</div>
-		</div>
-	</div>
 
 		<div class="container">
 			<div class="page-layout">
@@ -354,15 +295,19 @@ ${generateZkSendCss()}</style>
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
 									<a href="https://${escapeHtml(cleanName)}.sui.ski" target="_blank">${escapeHtml(cleanName)}.sui.ski</a>
 								</div>
-								${record.nftId ? `<a href="${escapeHtml(nftExplorerUrl)}" target="_blank" class="header-meta-item" style="color:var(--accent);text-decoration:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>View NFT</a>` : ''}
-								<a href="${escapeHtml(tradeportPortfolioUrl)}" target="_blank" id="view-portfolio-link" class="header-meta-item" style="color:var(--accent);text-decoration:none;" title="View all SuiNS names on TradePort">
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"></path></svg>
-									View Portfolio
-								</a>
+								</div>
 							</div>
-						</div>
 
 						<div class="overview-module linked-owner-row">
+						<div class="header-action-grid owner-link-strip">
+							${record.nftId
+								? `<a href="${escapeHtml(nftExplorerUrl)}" target="_blank" class="header-action-btn" title="View NFT object"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg><span>NFT</span></a>`
+								: '<span class="header-action-btn disabled" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg><span>NFT</span></span>'
+							}
+							<a href="/json" class="header-action-btn" title="View JSON record"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg><span>JSON</span></a>
+							<a href="${escapeHtml(explorerUrl)}" target="_blank" class="header-action-btn" title="View owner on explorer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg><span>Explorer</span></a>
+							<a href="${escapeHtml(tradeportPortfolioUrl)}" target="_blank" id="view-portfolio-link" class="header-action-btn" title="View all SuiNS names on TradePort"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"></path></svg><span>Portfolio</span></a>
+						</div>
 						<div class="owner-display linked-owner-card">
 							<div class="owner-info" id="owner-info">
 								<span class="owner-label">Owner:</span>
@@ -635,7 +580,7 @@ ${generateZkSendCss()}</style>
 									<button type="button" class="marketplace-list-stepper-btn" id="marketplace-list-price-up" aria-label="Increase list price amount">+</button>
 								</div>
 							</div>
-							<button class="marketplace-list-btn" id="marketplace-list-btn" style="display:none;" disabled>
+							<button class="marketplace-list-btn" id="marketplace-list-btn" style="display:none;">
 								<span class="marketplace-list-text">List ${escapeHtml(cleanName)}.sui</span>
 								<span class="marketplace-list-loading hidden"><span class="loading"></span></span>
 							</button>
@@ -695,27 +640,9 @@ ${generateZkSendCss()}</style>
 					</div><!-- end overview-secondary-grid -->
 				</div><!-- end profile-hero -->
 
-				<div class="links">
-			<a href="${escapeHtml(explorerUrl)}" target="_blank">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-				View on Explorer
-			</a>
-			<a href="/json">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-				View JSON
-			</a>
-			<a href="https://suins.io/name/${escapeHtml(cleanName)}" target="_blank">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-				Manage on SuiNS
-			</a>
-			<button class="subscribe-btn" id="subscribe-btn" data-name="${escapeHtml(cleanName)}" data-address="${escapeHtml(record.address)}">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-				<span class="subscribe-text">Subscribe</span>
-			</button>
-				</div>
-			</div><!-- end main-content -->
-		</div><!-- end page-layout -->
-	</div>
+				</div><!-- end main-content -->
+			</div><!-- end page-layout -->
+		</div>
 
 	<!-- Quick Search Overlay -->
 	<div class="search-overlay" id="search-overlay">
@@ -1240,6 +1167,7 @@ ${generateZkSendCss()}</style>
 		let currentTargetAddress = TARGET_ADDRESS || '';
 			let currentListing = null;
 			let currentBestBid = null;
+			let resolvedNftId = '';
 			let currentSales = [];
 			let lastSoldPriceMist = null;
 			let lastSaleEventMs = 0;
@@ -2171,16 +2099,12 @@ ${generateZkSendCss()}</style>
 			window.connectedAccount = connectedAccount;
 			window.connectedPrimaryName = connectedPrimaryName;
 			window.updateEditButton = updateEditButton;
-			if (typeof syncCrosschainTargetFromWallet === 'function') syncCrosschainTargetFromWallet();
-
 			renderWalletBar();
 			updateGlobalWalletWidget();
 			checkEditPermission();
 			updateEditButton();
-				var swapBtn = document.getElementById('swap-toggle-btn');
 				var profBtn = document.getElementById('wallet-profile-btn');
 				var hasWallet = !!connectedAddress;
-				if (swapBtn) swapBtn.style.display = hasWallet ? '' : 'none';
 				if (profBtn) profBtn.style.display = hasWallet ? '' : 'none';
 				if (typeof loadUserVault === 'function') loadUserVault();
 				if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
@@ -4837,11 +4761,15 @@ ${generateZkSendCss()}</style>
 			ownerAddrText.setAttribute('role', 'button');
 			ownerAddrText.tabIndex = 0;
 			ownerAddrText.addEventListener('click', function(e) {
+				if (ownerAddrText.dataset.copyDisabled === 'true') return;
+				const clickTarget = e.target;
+				if (clickTarget instanceof Element && clickTarget.closest('a')) return;
 				e.preventDefault();
 				e.stopPropagation();
 				copyAddress();
 			});
 			ownerAddrText.addEventListener('keydown', function(e) {
+				if (ownerAddrText.dataset.copyDisabled === 'true') return;
 				if (e.key === 'Enter' || e.key === ' ') {
 					e.preventDefault();
 					e.stopPropagation();
@@ -5042,6 +4970,17 @@ ${generateZkSendCss()}</style>
 			const ownerInfo = document.getElementById('owner-info');
 			const visitArrow = ownerInfo?.querySelector('.visit-arrow');
 
+			if (ownerInfo && !ownerInfo.dataset.visitBound) {
+				ownerInfo.addEventListener('click', (event) => {
+					const target = event.target
+					if (target instanceof Element && (target.closest('button') || target.closest('a'))) return
+					const visitUrl = String(ownerInfo.dataset.visitUrl || '').trim()
+					if (!visitUrl) return
+					window.location.href = visitUrl
+				})
+				ownerInfo.dataset.visitBound = 'true'
+			}
+
 			let displayAddress = CURRENT_ADDRESS;
 			let displayName = null;
 			let labelOverridden = false;
@@ -5080,15 +5019,23 @@ ${generateZkSendCss()}</style>
 				ownerDisplayAddress = displayAddress || '';
 				updatePortfolioLink(ownerDisplayAddress);
 
-			if (ownerAddrEl && displayAddress) {
-				ownerAddrEl.textContent = truncAddr(displayAddress);
-				ownerAddrEl.title = displayAddress;
+			if (ownerAddrEl) {
+				if (displayAddress) {
+					ownerAddrEl.textContent = truncAddr(displayAddress);
+					ownerAddrEl.title = displayAddress;
+					ownerAddrEl.dataset.copyDisabled = 'false';
+					ownerAddrEl.classList.add('copyable');
+					ownerAddrEl.setAttribute('title', 'Copy owner address');
+					ownerAddrEl.setAttribute('aria-label', 'Copy owner address');
+					ownerAddrEl.setAttribute('role', 'button');
+					ownerAddrEl.tabIndex = 0;
+				} else {
+					ownerAddrEl.textContent = 'Unknown';
+					ownerAddrEl.title = 'Unknown owner';
+				}
 				ownerAddrEl.style.removeProperty('font-size');
 				ownerAddrEl.style.removeProperty('font-weight');
 				ownerAddrEl.style.removeProperty('color');
-			} else if (ownerAddrEl) {
-				ownerAddrEl.textContent = 'Unknown';
-				ownerAddrEl.title = 'Unknown owner';
 			}
 
 			renderTargetPreview(TARGET_ADDRESS);
@@ -5124,27 +5071,49 @@ ${generateZkSendCss()}</style>
 					ownerInfo.classList.add('owner-info-link');
 					ownerInfo.style.cursor = 'pointer';
 					ownerInfo.title = \`Visit \${displayName} profile\`;
+					ownerInfo.dataset.visitUrl = ownerProfileUrl;
 
 					if (visitArrow) {
 						visitArrow.style.display = 'block';
 					}
-
-					if (!ownerInfo.dataset.visitBound) {
-						ownerInfo.addEventListener('click', (e) => {
-							if (e.target.closest('button')) return;
-							window.location.href = ownerProfileUrl;
-						});
-						ownerInfo.dataset.visitBound = 'true';
-					}
 				}
 			} else {
-					if (ownerNameEl) {
-						ownerNameEl.style.display = 'none';
-					}
+				if (ownerInfo) {
+					ownerInfo.classList.remove('owner-info-link');
+					ownerInfo.style.cursor = '';
+					ownerInfo.title = '';
+					ownerInfo.dataset.visitUrl = '';
+				}
+				if (visitArrow) {
+					visitArrow.style.display = 'none';
+				}
+				if (ownerNameEl) {
+					ownerNameEl.classList.remove('owner-name-copy', 'copied');
+					ownerNameEl.dataset.copyName = '';
+					ownerNameEl.style.display = '';
+					ownerNameEl.textContent = displayAddress ? truncAddr(displayAddress) : 'Unknown';
+					ownerNameEl.title = displayAddress || 'Unknown owner';
+				}
 				if (ownerAddrEl) {
-					ownerAddrEl.style.fontSize = '0.95rem';
-					ownerAddrEl.style.fontWeight = '600';
-					ownerAddrEl.style.color = 'var(--text)';
+					ownerAddrEl.classList.remove('copyable', 'copied');
+					ownerAddrEl.dataset.copyDisabled = 'true';
+					ownerAddrEl.removeAttribute('role');
+					ownerAddrEl.removeAttribute('aria-label');
+					ownerAddrEl.tabIndex = -1;
+					ownerAddrEl.textContent = '';
+					ownerAddrEl.title = 'View owner listings on TradePort';
+					if (displayAddress) {
+						const ownerTradeportHref = getTradeportPortfolioHref(displayAddress);
+						const tradeportLink = document.createElement('a');
+						tradeportLink.href = ownerTradeportHref;
+						tradeportLink.target = '_blank';
+						tradeportLink.rel = 'noopener noreferrer';
+						tradeportLink.className = 'owner-tradeport-link';
+						tradeportLink.textContent = 'TradePort listings';
+						ownerAddrEl.appendChild(tradeportLink);
+					} else {
+						ownerAddrEl.textContent = 'TradePort listings unavailable';
+					}
 				}
 			}
 				if (rawIdentityNftImage) {
@@ -5336,13 +5305,13 @@ ${generateZkSendCss()}</style>
 				});
 			}
 
-			async function fetchSuggestions(query) {
-				if (suggestionCache.has(query)) return suggestionCache.get(query);
-				try {
-					const res = await fetch('/api/suggest-names?q=' + encodeURIComponent(query));
-					if (res.ok) {
-						const data = await res.json();
-						const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [query];
+				async function fetchSuggestions(query) {
+					if (suggestionCache.has(query)) return suggestionCache.get(query);
+					try {
+						const res = await fetch('/api/suggest-names?q=' + encodeURIComponent(query) + '&mode=related');
+						if (res.ok) {
+							const data = await res.json();
+							const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [query];
 						suggestionCache.set(query, suggestions);
 						return suggestions;
 					}
@@ -7314,6 +7283,29 @@ ${generateZkSendCss()}</style>
 			return '';
 		}
 
+		function normalizeWalletNameForReconnect(name) {
+			const raw = String(name || '').trim().toLowerCase();
+			if (!raw) return '';
+			const stripped = raw.replace(/[^a-z0-9]+/g, ' ').trim();
+			if (!stripped) return '';
+			const withoutWallet = stripped.endsWith(' wallet')
+				? stripped.slice(0, -7).trim()
+				: stripped;
+			return withoutWallet.replace(/\s+/g, '');
+		}
+
+		function walletNamesMatchForReconnect(left, right) {
+			const leftRaw = String(left || '').trim().toLowerCase();
+			const rightRaw = String(right || '').trim().toLowerCase();
+			if (!leftRaw || !rightRaw) return false;
+			if (leftRaw === rightRaw) return true;
+			const leftKey = normalizeWalletNameForReconnect(leftRaw);
+			const rightKey = normalizeWalletNameForReconnect(rightRaw);
+			if (!leftKey || !rightKey) return false;
+			if (leftKey === rightKey) return true;
+			return leftKey.indexOf(rightKey) !== -1 || rightKey.indexOf(leftKey) !== -1;
+		}
+
 		async function reconnectWalletForRenewal() {
 			let conn = SuiWalletKit?.$connection?.value || {};
 			if (conn.wallet) return conn;
@@ -7337,7 +7329,7 @@ ${generateZkSendCss()}</style>
 			let walletMatch = null;
 			if (preferredWalletName) {
 				walletMatch = wallets.find(function(wallet) {
-					return String(wallet?.name || '') === preferredWalletName;
+					return walletNamesMatchForReconnect(wallet?.name || '', preferredWalletName);
 				}) || null;
 			}
 			if (!walletMatch) {
@@ -9204,36 +9196,11 @@ function shortAddr(addr) {
 				if (!hasPrimary) {
 					var ownerNameEl = document.querySelector('.owner-name');
 					var ownerPrimary = ownerNameEl ? normalizeLinkedNameKey(ownerNameEl.textContent) : '';
-					if (!ownerPrimary && connectedPrimaryName) {
-						ownerPrimary = normalizeLinkedNameKey(connectedPrimaryName);
-					}
 					if (ownerPrimary) {
-						var found = false;
 						for (var fi = 0; fi < names.length; fi++) {
 							if (normalizeLinkedNameKey(names[fi].name) === ownerPrimary) {
 								names[fi].isPrimary = true;
-								found = true;
 								break;
-							}
-						}
-						if (!found) {
-							var injected = {
-								name: ownerPrimary,
-								nftId: 'primary-injected-' + ownerPrimary,
-								expirationMs: null,
-								targetAddress: TARGET_ADDRESS || OWNER_ADDRESS || null,
-								isPrimary: true,
-								isListed: false,
-								__sourceOwner: normalizeLinkedGroupAddress(OWNER_ADDRESS || TARGET_ADDRESS || ''),
-							};
-							names.unshift(injected);
-							var injectKey = normalizeLinkedGroupAddress(injected.targetAddress || injected.__sourceOwner);
-							if (injectKey && grouped[injectKey]) {
-								grouped[injectKey].unshift(injected);
-							} else if (grouped.__misc) {
-								grouped.__misc.unshift(injected);
-							} else {
-								grouped.__misc = [injected];
 							}
 						}
 					}
@@ -10413,7 +10380,38 @@ function shortAddr(addr) {
 					if (currentListing?.tokenId) return String(currentListing.tokenId);
 					if (currentBestBid?.tokenId) return String(currentBestBid.tokenId);
 					if (NFT_ID) return NFT_ID;
+					if (resolvedNftId) return resolvedNftId;
 					return '';
+				}
+
+				let resolvingNftIdForMarketplace = false;
+				async function ensureMarketplaceNftId() {
+					if (NFT_ID || resolvedNftId || resolvingNftIdForMarketplace) return;
+					resolvingNftIdForMarketplace = true;
+					try {
+						const suinsClient = await createSuinsClient(true);
+						const nameRecord = await suinsClient.getNameRecord(FULL_NAME);
+						const nftId = nameRecord?.nftId || '';
+						if (nftId) {
+							resolvedNftId = nftId;
+							if (!nftOwnerAddress) {
+								const suiClient = getSuiClient();
+								const obj = await suiClient.getObject({ id: nftId, options: { showOwner: true } });
+								const owner = obj?.data?.owner;
+								if (owner) {
+									if (typeof owner === 'string') nftOwnerAddress = owner;
+									else if ('AddressOwner' in owner) nftOwnerAddress = owner.AddressOwner;
+									else if ('ObjectOwner' in owner) nftOwnerAddress = owner.ObjectOwner;
+								}
+							}
+							updateListButtonState();
+							updateMarketplaceButton();
+						}
+					} catch (e) {
+						console.log('Failed to resolve NFT ID for marketplace:', e?.message);
+					} finally {
+						resolvingNftIdForMarketplace = false;
+					}
 				}
 
 				const TRADEPORT_DISPLAY_COMMISSION_BPS = 300;
@@ -10580,10 +10578,13 @@ function shortAddr(addr) {
 			}
 
 				function getListAmountMistOrNull() {
-					if (!marketplaceListAmountInput) return null;
-					const amountMist = parseSuiInputToMist(marketplaceListAmountInput.value);
-					if (!amountMist) return null;
-					marketplaceListAmountInput.value = formatMistAsSuiInput(amountMist);
+					const inputEl = marketplaceListAmountInput || document.getElementById('marketplace-list-amount');
+					if (!inputEl) return null;
+					const rawValue = String(inputEl.value || '').trim();
+					if (!rawValue) return null;
+					const amountMist = parseSuiInputToMist(rawValue);
+					if (amountMist === null || amountMist <= 0n) return null;
+					inputEl.value = formatMistAsSuiInput(amountMist);
 					return amountMist;
 				}
 
@@ -10623,36 +10624,17 @@ function shortAddr(addr) {
 
 				function updateListButtonState() {
 					if (!marketplaceListBtn) return;
-					const listingTokenId = getMarketplaceListingTokenId();
 					const minimumSuiRaw = getListMinimumSui();
 					const minimumSui = Number.isFinite(Number(minimumSuiRaw)) && Number(minimumSuiRaw) > 0
 						? Number(minimumSuiRaw)
 						: 0;
-					const minimumMist = toMinimumMistOrZero(minimumSui);
 					if (marketplaceListAmountInput) {
 						marketplaceListAmountInput.min = String(minimumSui);
 					}
-					const listAmountMist = parseSuiInputToMist(marketplaceListAmountInput?.value || '');
-					const meetsMinimum = Boolean(listAmountMist !== null && listAmountMist >= minimumMist);
 					const isRelist = hasOwnerListingForCurrentNft();
-					const canList = Boolean(
-						isConnectedProfileOwner()
-						&& canSign()
-						&& listingTokenId
-						&& listAmountMist !== null
-						&& meetsMinimum,
-					);
-					marketplaceListBtn.disabled = !canList;
+					marketplaceListBtn.disabled = false;
 					marketplaceListBtn.classList.toggle('relist', isRelist);
 					if (marketplaceListText) marketplaceListText.textContent = getMarketplaceListLabel(isRelist);
-
-					if (marketplaceStatus && listAmountMist !== null && !meetsMinimum) {
-						marketplaceStatus.textContent = 'List price must be at least ' + minimumSui + ' SUI';
-						marketplaceStatus.className = 'marketplace-status error';
-					} else if (marketplaceStatus && marketplaceStatus.className === 'marketplace-status error') {
-						marketplaceStatus.textContent = '';
-					marketplaceStatus.className = 'marketplace-status';
-				}
 
 				updateListEstimateDisplay();
 				updateMarketplaceStepperLabels();
@@ -10772,6 +10754,10 @@ function shortAddr(addr) {
 							resolvingNftOwnerForMarketplace = false;
 							updateMarketplaceButton();
 						});
+				}
+
+				if (connectedAddress && !getMarketplaceListingTokenId()) {
+					ensureMarketplaceNftId();
 				}
 
 					const isOwner = isConnectedProfileOwner();
@@ -11208,25 +11194,69 @@ function shortAddr(addr) {
 			if (marketplaceListBtn) {
 				marketplaceListBtn.addEventListener('click', async () => {
 				if (!canSign()) {
-					marketplaceStatus.textContent = 'Connect wallet first';
-					marketplaceStatus.className = 'marketplace-status error';
-					return;
+					if (!connectedAddress) {
+						await window.connectWallet();
+						if (!canSign()) return;
+					} else {
+						marketplaceStatus.textContent = 'Connect wallet first';
+						marketplaceStatus.className = 'marketplace-status error';
+						return;
+					}
 				}
-				if (!isConnectedProfileOwner()) {
-					marketplaceStatus.textContent = 'Only the NFT owner can list this name';
-					marketplaceStatus.className = 'marketplace-status error';
-					return;
-				}
-					const listingTokenId = getMarketplaceListingTokenId();
+					let listingTokenId = getMarketplaceListingTokenId();
+					if (!listingTokenId) {
+						try {
+							marketplaceStatus.textContent = 'Resolving NFT...';
+							marketplaceStatus.className = 'marketplace-status';
+							const suinsClient = await createSuinsClient(true);
+							const nameRecord = await suinsClient.getNameRecord(FULL_NAME);
+							listingTokenId = nameRecord?.nftId || '';
+							if (listingTokenId) {
+								resolvedNftId = listingTokenId;
+								if (!nftOwnerAddress) {
+									const suiClient = getSuiClient();
+									const obj = await suiClient.getObject({ id: listingTokenId, options: { showOwner: true } });
+									const owner = obj?.data?.owner;
+									if (owner) {
+										if (typeof owner === 'string') nftOwnerAddress = owner;
+										else if ('AddressOwner' in owner) nftOwnerAddress = owner.AddressOwner;
+										else if ('ObjectOwner' in owner) nftOwnerAddress = owner.ObjectOwner;
+									}
+								}
+							}
+						} catch (_) {}
+					}
 					if (!listingTokenId) {
 						marketplaceStatus.textContent = 'No NFT found for this name';
 						marketplaceStatus.className = 'marketplace-status error';
 						return;
 					}
+				if (!isConnectedProfileOwner()) {
+					marketplaceStatus.textContent = 'Only the NFT owner can list this name';
+					marketplaceStatus.className = 'marketplace-status error';
+					return;
+				}
 
-				const listAmountMist = getListAmountMistOrNull();
+				let listAmountMist = getListAmountMistOrNull();
 				if (!listAmountMist) {
-					marketplaceStatus.textContent = 'Enter a valid listing amount';
+					const fallbackEl = document.getElementById('marketplace-list-amount');
+					const fallbackRaw = fallbackEl ? String(fallbackEl.value || '').trim() : '';
+					console.log('List amount parse failed. Input ref:', !!marketplaceListAmountInput, 'fallback ref:', !!fallbackEl, 'raw:', fallbackRaw);
+					if (fallbackRaw) {
+						try {
+							const cleaned = fallbackRaw.replace(/[^0-9.]/g, '');
+							const sui = parseFloat(cleaned);
+							if (Number.isFinite(sui) && sui > 0) {
+								listAmountMist = BigInt(Math.ceil(sui)) * 1_000_000_000n;
+								console.log('Fallback parse succeeded:', listAmountMist.toString());
+							}
+						} catch (e) {
+							console.log('Fallback parse error:', e);
+						}
+					}
+				}
+				if (!listAmountMist) {
+					marketplaceStatus.textContent = 'Enter a listing amount in SUI';
 					marketplaceStatus.className = 'marketplace-status error';
 					return;
 				}
@@ -13367,407 +13397,9 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		document.getElementById('pools-refresh-btn')?.addEventListener('click', loadVortexPools);
 	</script>
 
-	<script>
-		(function() {
-			const swapPanel = document.getElementById('swap-panel');
-			const swapToggleBtn = document.getElementById('swap-toggle-btn');
-			const swapCloseBtn = document.getElementById('swap-panel-close');
-			const tabs = swapPanel ? swapPanel.querySelectorAll('.swap-tab') : [];
-			const tabSwap = document.getElementById('swap-tab-swap');
-			const tabCrosschain = document.getElementById('swap-tab-crosschain');
-			const shouldAutoOpenSwap = (() => {
-				const tabParam = String(new URLSearchParams(window.location.search).get('tab') || '').toLowerCase();
-				const hashParam = String(window.location.hash || '').toLowerCase();
-				return tabParam === 'swap' || hashParam === '#swap';
-			})();
-			let terminalLoaded = false;
-
-			function openSwapPanel() {
-				if (!swapPanel) return;
-				swapPanel.style.display = 'block';
-				if (!terminalLoaded) {
-					loadTerminal();
-				}
-			}
-
-			function toggleSwapPanel() {
-				if (!swapPanel) return;
-				const isOpen = swapPanel.style.display !== 'none';
-				if (isOpen) {
-					swapPanel.style.display = 'none';
-					return;
-				}
-				openSwapPanel();
-			}
-
-			function loadTerminal() {
-				if (terminalLoaded) return;
-				terminalLoaded = true;
-				const container = document.getElementById('sui-coins-terminal');
-				if (container) container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);"><span class="loading"></span> Loading swap terminal...</div>';
-				const script = document.createElement('script');
-				script.src = 'https://cdn.jsdelivr.net/npm/@interest-protocol/sui-coins-terminal-vanilla@1.1.1/dist/index.umd.js';
-				script.onload = function() {
-					if (typeof window.SuiCoinsTerminal === 'function') {
-						if (container) container.innerHTML = '';
-						window.SuiCoinsTerminal({
-							container: container,
-							projectAddress: '0xf7c22e1d2bcc6b8a9afb98730fdd2bec3af417ee1a8fbb27755ba0e64e96f0e1',
-							slippage: 1,
-							aggregator: 'Aftermath'
-						});
-					}
-				};
-				script.onerror = function() {
-					if (container) container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">Failed to load swap terminal</div>';
-				};
-				document.body.appendChild(script);
-			}
-
-			if (swapToggleBtn) {
-				swapToggleBtn.addEventListener('click', (e) => {
-					e.stopPropagation();
-					toggleSwapPanel();
-				});
-			}
-
-			if (swapCloseBtn) {
-				swapCloseBtn.addEventListener('click', () => {
-					if (swapPanel) swapPanel.style.display = 'none';
-				});
-			}
-
-				tabs.forEach(tab => {
-					tab.addEventListener('click', () => {
-						tabs.forEach(t => t.classList.remove('active'));
-						tab.classList.add('active');
-						const target = tab.dataset.tab;
-						if (tabSwap) tabSwap.style.display = target === 'swap' ? 'block' : 'none';
-						if (tabCrosschain) tabCrosschain.style.display = target === 'crosschain' ? 'block' : 'none';
-						if (target === 'crosschain') {
-							syncCrosschainTargetFromWallet();
-							refreshCrosschainStatus();
-							fetchCCQuote();
-						}
-					});
-				});
-
-			if (shouldAutoOpenSwap) {
-				openSwapPanel();
-			}
-
-			document.addEventListener('click', (e) => {
-				if (!swapPanel || swapPanel.style.display === 'none') return;
-				if (swapPanel.contains(e.target)) return;
-				if (swapToggleBtn && swapToggleBtn.contains(e.target)) return;
-				swapPanel.style.display = 'none';
-			});
-
-			const ccSolAmount = document.getElementById('cc-sol-amount');
-			const ccSource = document.getElementById('cc-source');
-			const ccAmountLabel = document.getElementById('cc-amount-label');
-			const ccTarget = document.getElementById('cc-target');
-			const ccDirectionEl = document.querySelector('.cc-direction');
-			const ccRateValue = document.getElementById('cc-rate-value');
-			const ccOutput = document.getElementById('cc-output');
-			const ccFee = document.getElementById('cc-fee');
-			const ccQuoteBtn = document.getElementById('cc-quote-btn');
-			const ccDeposit = document.getElementById('cc-deposit');
-			const ccDepositAddr = document.getElementById('cc-deposit-addr');
-			const ccCopyAddr = document.getElementById('cc-copy-addr');
-				const ccSolTx = document.getElementById('cc-sol-tx');
-				const ccConfirmBtn = document.getElementById('cc-confirm-btn');
-				const ccStatus = document.getElementById('cc-status');
-				let ccQuoteData = null;
-				const isUsdyProfile = String(window.NAME || '').toLowerCase() === 'usdy';
-
-				function getCCDirection() {
-					const selected = String(ccSource?.value || '').trim();
-					if (selected === 'usdc_to_sui') return 'usdc_to_sui';
-					return 'sol_to_sui';
-				}
-
-				function updateCrosschainDirectionUi() {
-					const direction = getCCDirection();
-					const isUsdc = direction === 'usdc_to_sui';
-					if (ccDirectionEl) {
-						ccDirectionEl.textContent = isUsdc ? 'USDC -> SUI' : 'SOL -> SUI';
-					}
-					if (ccAmountLabel) {
-						ccAmountLabel.textContent = isUsdc ? 'Amount (USDC)' : 'Amount (SOL)';
-					}
-					if (ccQuoteBtn) {
-						ccQuoteBtn.textContent = isUsdc ? 'USDC route coming soon' : 'Get Deposit Address';
-					}
-					if (ccDeposit) ccDeposit.style.display = 'none';
-					if (ccDepositAddr) ccDepositAddr.textContent = '';
-					if (ccSolTx) ccSolTx.value = '';
-					if (ccConfirmBtn) ccConfirmBtn.disabled = true;
-				}
-
-				function shortSuiTarget(value) {
-					const v = String(value || '').trim();
-					if (!v) return '';
-					if (v.startsWith('0x') && v.length > 16) {
-						return v.slice(0, 6) + '...' + v.slice(-4);
-					}
-					return v;
-				}
-
-				function syncCrosschainTargetFromWallet() {
-					if (!ccTarget) return;
-					const currentValue = String(ccTarget.value || '').trim();
-					if (currentValue) return;
-					const preferred = String(window.connectedPrimaryName || '').trim();
-					const connected = String(window.connectedAddress || '').trim();
-					if (preferred) {
-						ccTarget.value = preferred;
-						return;
-					}
-					if (connected) {
-						ccTarget.value = connected;
-					}
-				}
-
-				function getCrosschainTargetValue() {
-					const inputValue = String(ccTarget?.value || '').trim();
-					if (inputValue) return inputValue;
-					const preferred = String(window.connectedPrimaryName || '').trim();
-					if (preferred) return preferred;
-					return String(window.connectedAddress || '').trim();
-				}
-
-				async function parseApiError(res, fallback) {
-					try {
-						const payload = await res.json();
-						if (payload && typeof payload.error === 'string' && payload.error) {
-							return payload.error;
-						}
-					} catch {}
-					return fallback + ' (' + res.status + ')';
-				}
-
-				async function refreshCrosschainStatus() {
-					try {
-						const res = await fetch('/api/sol-swap/status');
-						const data = await res.json().catch(() => null);
-						if (!res.ok) {
-							if (ccStatus) {
-								ccStatus.textContent = 'Cross-chain status unavailable right now.';
-								ccStatus.className = 'cc-status error';
-							}
-							return;
-						}
-						if (data?.active) {
-							if (ccStatus && !ccQuoteData) {
-								ccStatus.textContent = '';
-								ccStatus.className = 'cc-status';
-							}
-							return;
-						}
-						if (ccStatus) {
-							ccStatus.textContent = 'Cross-chain swap is not configured yet.';
-							ccStatus.className = 'cc-status error';
-						}
-						if (ccQuoteBtn) ccQuoteBtn.disabled = true;
-					} catch {
-						if (ccStatus) {
-							ccStatus.textContent = 'Cross-chain status unavailable right now.';
-							ccStatus.className = 'cc-status error';
-						}
-					}
-				}
-
-				async function fetchCCQuote() {
-					const amount = parseFloat(ccSolAmount?.value || '');
-					const direction = getCCDirection();
-					const isUsdc = direction === 'usdc_to_sui';
-					if (!Number.isFinite(amount) || amount <= 0) {
-					if (ccRateValue) ccRateValue.textContent = '--';
-					if (ccOutput) ccOutput.textContent = '-- SUI';
-					if (ccFee) ccFee.textContent = '';
-					if (ccQuoteBtn) ccQuoteBtn.disabled = true;
-					ccQuoteData = null;
-					return;
-					}
-
-					try {
-						const res = await fetch('/api/sol-swap/quote?direction=' + encodeURIComponent(direction) + '&amount=' + amount);
-						if (!res.ok) throw new Error(await parseApiError(res, 'Quote unavailable'));
-						const data = await res.json().catch(() => null);
-						if (!data || typeof data !== 'object') throw new Error('Quote unavailable');
-						if (data.error) throw new Error(data.error);
-
-						ccQuoteData = data;
-						if (ccRateValue) {
-							const inputSymbol = String(data.inputCurrency || (isUsdc ? 'USDC' : 'SOL'));
-							ccRateValue.textContent = '1 ' + inputSymbol + ' = ' + data.rate.toFixed(4) + ' SUI';
-						}
-						if (ccOutput) ccOutput.textContent = data.outputAmount.toFixed(4) + ' SUI';
-						if (ccFee) ccFee.textContent = 'Fee: ' + data.fee.toFixed(4) + ' SUI (' + (data.feeBps / 100) + '%)';
-						if (ccQuoteBtn) {
-							if (isUsdc) {
-								ccQuoteBtn.disabled = true;
-							} else {
-								ccQuoteBtn.disabled = !data.solanaDepositAddress;
-							}
-						}
-						if (ccStatus) {
-							if (isUsdc) {
-								ccStatus.textContent = isUsdyProfile
-									? 'USDC route is quote-only right now. USDY settlement path is not live yet.'
-									: 'USDC route is quote-only right now. Deposit/request flow currently supports SOL only.';
-								ccStatus.className = 'cc-status error';
-							} else if (!data.solanaDepositAddress) {
-								ccStatus.textContent = 'Cross-chain deposit address is not configured yet.';
-								ccStatus.className = 'cc-status error';
-							} else {
-								ccStatus.textContent = '';
-								ccStatus.className = 'cc-status';
-							}
-						}
-					} catch (err) {
-						if (ccRateValue) ccRateValue.textContent = 'Unavailable';
-						if (ccOutput) ccOutput.textContent = '-- SUI';
-						if (ccQuoteBtn) ccQuoteBtn.disabled = true;
-						if (ccStatus) {
-							ccStatus.textContent = err?.message || 'Quote unavailable right now.';
-							ccStatus.className = 'cc-status error';
-						}
-						ccQuoteData = null;
-					}
-				}
-
-			if (ccSolAmount) {
-				let debounceTimer = null;
-				ccSolAmount.addEventListener('input', () => {
-					if (debounceTimer) clearTimeout(debounceTimer);
-					debounceTimer = setTimeout(fetchCCQuote, 400);
-				});
-			}
-			if (ccSource) {
-				ccSource.addEventListener('change', () => {
-					ccQuoteData = null;
-					updateCrosschainDirectionUi();
-					fetchCCQuote();
-				});
-			}
-
-			if (ccQuoteBtn) {
-				ccQuoteBtn.addEventListener('click', async () => {
-					if (getCCDirection() !== 'sol_to_sui') {
-						if (ccStatus) {
-							ccStatus.textContent = isUsdyProfile
-								? 'USDC -> USDY settlement is not live yet. Use wallet swap after bridging to Sui.'
-								: 'USDC request flow is not available yet.';
-							ccStatus.className = 'cc-status error';
-						}
-						return;
-					}
-					if (!ccQuoteData || !ccQuoteData.solanaDepositAddress) return;
-					const destinationTarget = getCrosschainTargetValue();
-					if (!destinationTarget) {
-						if (ccStatus) { ccStatus.textContent = 'Enter a Sui address or name'; ccStatus.className = 'cc-status error'; }
-						return;
-					}
-
-					try {
-						ccQuoteBtn.disabled = true;
-						ccQuoteBtn.textContent = 'Requesting...';
-
-							const res = await fetch('/api/sol-swap/request', {
-								method: 'POST',
-								headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({
-								solAmount: ccQuoteData.inputAmount,
-									suiTarget: destinationTarget,
-									suiAddress: window.connectedAddress || undefined,
-								}),
-							});
-							if (!res.ok) throw new Error(await parseApiError(res, 'Request failed'));
-							const data = await res.json().catch(() => null);
-							if (!data || typeof data !== 'object') throw new Error('Request failed');
-							if (data.error) throw new Error(data.error);
-						if (ccQuoteData) ccQuoteData.requestId = data.requestId || null;
-
-						if (ccDepositAddr) ccDepositAddr.textContent = data.depositAddress;
-						if (ccDeposit) ccDeposit.style.display = 'flex';
-						if (ccStatus) {
-							const destinationSummary = data.suiTarget
-								? data.suiTarget + ' (' + shortSuiTarget(data.suiAddress) + ')'
-								: shortSuiTarget(data.suiAddress);
-							ccStatus.textContent = 'Send ' + data.solAmount + ' SOL to the address below. Destination: ' + destinationSummary;
-							ccStatus.className = 'cc-status';
-						}
-					} catch (err) {
-						if (ccStatus) { ccStatus.textContent = err.message || 'Request failed'; ccStatus.className = 'cc-status error'; }
-					} finally {
-						ccQuoteBtn.textContent = 'Get Deposit Address';
-						ccQuoteBtn.disabled = false;
-					}
-				});
-			}
-
-			if (ccCopyAddr) {
-				ccCopyAddr.addEventListener('click', async () => {
-					const addr = ccDepositAddr?.textContent;
-					if (addr) {
-						await navigator.clipboard.writeText(addr).catch(() => {});
-						ccCopyAddr.textContent = 'Copied!';
-						setTimeout(() => { ccCopyAddr.textContent = 'Copy'; }, 1500);
-					}
-				});
-			}
-
-			if (ccSolTx) {
-				ccSolTx.addEventListener('input', () => {
-					if (ccConfirmBtn) ccConfirmBtn.disabled = !ccSolTx.value.trim();
-				});
-			}
-
-			if (ccConfirmBtn) {
-				ccConfirmBtn.addEventListener('click', async () => {
-					const sig = ccSolTx?.value?.trim();
-					if (!sig) return;
-
-					ccConfirmBtn.disabled = true;
-					ccConfirmBtn.textContent = 'Verifying...';
-					if (ccStatus) { ccStatus.textContent = 'Verifying Solana transaction...'; ccStatus.className = 'cc-status'; }
-
-					try {
-							const res = await fetch('/api/sol-swap/confirm', {
-								method: 'POST',
-								headers: { 'Content-Type': 'application/json' },
-								body: JSON.stringify({ requestId: ccQuoteData?.requestId || 'unknown', solTxSignature: sig }),
-							});
-							if (!res.ok) throw new Error(await parseApiError(res, 'Confirmation failed'));
-							const data = await res.json().catch(() => null);
-							if (!data || typeof data !== 'object') throw new Error('Confirmation failed');
-							if (data.error) throw new Error(data.error);
-
-						if (ccStatus) {
-							ccStatus.textContent = 'Verification submitted. SUI will be sent to your wallet shortly.';
-							ccStatus.className = 'cc-status success';
-						}
-					} catch (err) {
-						if (ccStatus) { ccStatus.textContent = err.message || 'Confirmation failed'; ccStatus.className = 'cc-status error'; }
-					} finally {
-						ccConfirmBtn.textContent = 'Confirm & Receive SUI';
-						ccConfirmBtn.disabled = false;
-					}
-					});
-				}
-
-				refreshCrosschainStatus();
-				syncCrosschainTargetFromWallet();
-				updateCrosschainDirectionUi();
-				fetchCCQuote();
-			})();
-		</script>
-
-	<style>${generateX402ChatCss()}</style>
-	<div id="x402-chat-root"></div>
-	<script>${generateX402ChatJs({ page: 'profile', name: cleanName, address: record.address, ownerAddress: record.ownerAddress, expirationMs: expiresMs, linkedNames: undefined, network: network })}</script>
+	<style>${generateMessagingChatCss()}</style>
+	<div id="messaging-chat-root"></div>
+	<script>${generateMessagingChatJs({ page: 'profile', name: cleanName, address: record.address, ownerAddress: record.ownerAddress, expirationMs: expiresMs, linkedNames: undefined, serverScope: 'owner', network: network })}</script>
 
 </body>
 </html>`

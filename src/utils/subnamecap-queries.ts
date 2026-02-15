@@ -1,7 +1,7 @@
 import type { Env } from '../types'
 import { getDefaultRpcUrl } from './rpc'
 
-export interface SubnameCapInfo {
+interface SubnameCapInfo {
 	capId: string
 	parentDomain: string
 	parentNftId: string
@@ -16,7 +16,7 @@ export interface SubnameCapInfo {
 	owner: string
 }
 
-export interface CapEntryInfo {
+interface CapEntryInfo {
 	capId: string
 	createdAtMs: number
 	allowLeaf: boolean
@@ -26,7 +26,7 @@ export interface CapEntryInfo {
 	capExpirationMs: number | null
 }
 
-export interface SubnameInfo {
+interface SubnameInfo {
 	name: string
 	targetAddress: string
 	expirationTimestampMs: number
@@ -257,7 +257,7 @@ export async function relaySignedTransaction(
 	return result
 }
 
-export interface FeeJacketInfo {
+interface FeeJacketInfo {
 	jacketId: string
 	leafFee: string
 	nodeFee: string
@@ -281,7 +281,7 @@ export async function getFeeJacketById(jacketId: string, env: Env): Promise<FeeJ
 	}
 }
 
-export interface AllowlistJacketInfo {
+interface AllowlistJacketInfo {
 	jacketId: string
 	paused: boolean
 }
@@ -302,7 +302,7 @@ export async function getAllowlistJacketById(
 	}
 }
 
-export interface RateLimitJacketInfo {
+interface RateLimitJacketInfo {
 	jacketId: string
 	maxPerWindow: string
 	windowDurationMs: string

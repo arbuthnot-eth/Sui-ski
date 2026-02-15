@@ -4,12 +4,12 @@ import { handleAppRequest } from './handlers/app'
 import { handleAuthenticatedEvents } from './handlers/authenticated-events'
 import { generateDashboardPage } from './handlers/dashboard'
 import { agentGraceVaultRoutes } from './handlers/grace-vault-agent'
-import { apiRoutes, landingPageHTML } from './handlers/landing'
+import { apiRoutes, cloudflareGracePageHTML, landingPageHTML } from './handlers/landing'
 import { generateEmbedProfilePage, generateProfilePage } from './handlers/profile'
+import { createSuiMcpHandler } from './handlers/mcp'
 import { handleBuildRegisterTx, handleRegistrationSubmission } from './handlers/register2'
 import { generateSkiPage } from './handlers/ski'
 import { generateSkiSignPage } from './handlers/ski-sign'
-import { solSwapRoutes } from './handlers/sol-swap'
 import { agentSubnameCapRoutes, subnameCapRoutes } from './handlers/subnamecap'
 import { generateSubnameCapPage } from './handlers/subnamecap-ui'
 import { vaultRoutes } from './handlers/vault'
@@ -19,6 +19,7 @@ import {
 	handleWalletConnect,
 	handleWalletDisconnect,
 } from './handlers/wallet-api'
+import { x402ChatRoutes } from './handlers/x402-chat'
 import { x402RegisterRoutes } from './handlers/x402-register'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { handleRPCRequest } from './resolvers/rpc'
@@ -30,6 +31,7 @@ import {
 	generateFaviconSvg,
 	generateProfileOgSvg,
 } from './utils/og-image'
+import { generateDotSkiPngBytes, generateSuiIconSvg } from './utils/media-pack'
 import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils/response'
 import { ensureRpcEnv } from './utils/rpc'
 import { isTwitterPreviewBot } from './utils/social'
@@ -210,11 +212,19 @@ app.use('/api/agents/x402-register/*', async (c, next) => {
 	await next()
 })
 app.route('/api/agents/x402-register', x402RegisterRoutes)
+app.use('/api/x402-chat', async (c, next) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	await next()
+})
+app.use('/api/x402-chat/*', async (c, next) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	await next()
+})
+app.route('/api/x402-chat', x402ChatRoutes)
 app.all('/api/agents/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.all('/api/ika/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 
-app.route('/api/sol-swap', solSwapRoutes)
 app.route('/api/subnamecap', subnameCapRoutes)
 app.route('/api/vault', vaultRoutes)
 app.route('/api', apiRoutes)
@@ -225,7 +235,18 @@ app.get('/favicon.svg', () => new Response(generateFaviconSvg(), { headers: SVG_
 
 app.get('/og-image.svg', () => new Response(generateBrandOgSvg(), { headers: SVG_HEADERS }))
 
+app.get('/media-pack/SuiIcon.svg', () => new Response(generateSuiIconSvg(), { headers: SVG_HEADERS }))
+
 const PNG_HEADERS = { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800' }
+
+app.get('/media-pack/dotSKI.png', () =>
+	new Response(generateDotSkiPngBytes(), {
+		headers: {
+			'Content-Type': 'image/webp',
+			'Cache-Control': 'public, max-age=604800',
+		},
+	}),
+)
 
 app.get('/og-image.png', () => new Response(generateBrandOgPng(), { headers: PNG_HEADERS }))
 
@@ -267,6 +288,16 @@ app.get('/subnamecap', async (c) => {
 	return htmlResponse(generateSubnameCapPage(c.get('env')))
 })
 
+app.get('/cloudflare', async (c) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	return htmlResponse(cloudflareGracePageHTML(c.get('env').SUI_NETWORK))
+})
+
+app.get('/grace', async (c) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	return htmlResponse(cloudflareGracePageHTML(c.get('env').SUI_NETWORK))
+})
+
 app.all('/app', async (c) => {
 	if (c.get('parsed').type !== 'root') return c.notFound()
 	return handleAppRequest(c.req.raw, c.get('env'), c.get('session'))
@@ -275,6 +306,12 @@ app.all('/app', async (c) => {
 app.all('/app/*', async (c) => {
 	if (c.get('parsed').type !== 'root') return c.notFound()
 	return handleAppRequest(c.req.raw, c.get('env'), c.get('session'))
+})
+
+app.all('/mcp', async (c) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	const handler = createSuiMcpHandler(c.get('env'))
+	return handler(c.req.raw, c.env, c.executionCtx)
 })
 
 app.all('*', async (c) => {

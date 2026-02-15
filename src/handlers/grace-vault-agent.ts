@@ -68,6 +68,11 @@ async function storeAgentRequest(
 
 export const agentGraceVaultRoutes = new Hono<GraceVaultAgentEnv>()
 
+agentGraceVaultRoutes.use('*', async (c, next) => {
+	if (!c.get('env')) c.set('env', c.env)
+	await next()
+})
+
 agentGraceVaultRoutes.get('/info', async (c) => {
 	const env = c.get('env')
 	const providers = resolveX402Providers(env)

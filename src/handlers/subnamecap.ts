@@ -914,6 +914,11 @@ function generateAgentRequestId(): string {
 
 export const agentSubnameCapRoutes = new Hono<SubnameCapEnv>()
 
+agentSubnameCapRoutes.use('*', async (c, next) => {
+	if (!c.get('env')) c.set('env', c.env)
+	await next()
+})
+
 agentSubnameCapRoutes.get('/info', async (c) => {
 	const env = c.get('env')
 	const [relayAddress, x402Address] = await Promise.all([

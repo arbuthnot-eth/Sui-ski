@@ -8,7 +8,12 @@ import type {
 	X402DiceCommit,
 	X402DiceReveal,
 } from '../types'
+import { agentGraceVaultRoutes } from './grace-vault-agent'
+import { createSuiMcpHandler } from './mcp'
+import { agentSubnameCapRoutes } from './subnamecap'
+import { x402RegisterRoutes } from './x402-register'
 import { cacheKey, getCached, setCache } from '../utils/cache'
+import { fetchMultichainPaymentRequirements, resolveX402Providers } from '../utils/x402-middleware'
 import { resolveX402Recipient } from '../utils/x402-sui'
 
 const TAB_THRESHOLD_MIST = '100000000'
@@ -19,6 +24,13 @@ const MAX_MESSAGE_LENGTH = 2000
 const MAX_CHANNEL_MESSAGES = 200
 const DICE_COMMIT_TTL_SECONDS = 300
 const DICE_EMOJI = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
+const OFFICIAL_MESSAGING_SDK_VERSION = '0.3.0'
+const OFFICIAL_MESSAGING_SDK_URL = `https://cdn.jsdelivr.net/npm/@mysten/messaging@${OFFICIAL_MESSAGING_SDK_VERSION}/+esm`
+const AGENT_DISPATCH_ALLOWLIST: Record<string, Set<string>> = {
+	'x402-register': new Set(['info', 'quote', 'register', 'status', 'sweep']),
+	subnamecap: new Set(['info', 'register', 'status']),
+	'grace-vault': new Set(['info', 'build-create', 'build-execute', 'status']),
+}
 
 interface ChatMessage {
 	role: 'user' | 'assistant'
@@ -64,6 +76,7 @@ interface ServerContext {
 	displayName: string
 	ownerAddress: string | null
 	isModerator: boolean
+	scope: 'global' | 'owner' | 'name'
 }
 
 type X402Env = {
@@ -124,9 +137,11 @@ function getServerContext(requestUrl: string, sessionAddress: string | null): Se
 	const url = new URL(requestUrl)
 	const rawName = url.searchParams.get('name')
 	const rawOwner = url.searchParams.get('owner')
+	const rawScope = String(url.searchParams.get('scope') || '').trim().toLowerCase()
 	const name = sanitizeSlug(rawName)
 	const ownerAddress = normalizeAddress(rawOwner) || null
 	const requester = normalizeAddress(sessionAddress)
+	const scope = rawScope === 'name' ? 'name' : 'owner'
 
 	if (!name) {
 		return {
@@ -135,6 +150,18 @@ function getServerContext(requestUrl: string, sessionAddress: string | null): Se
 			displayName: 'sui.ski',
 			ownerAddress: null,
 			isModerator: false,
+			scope: 'global',
+		}
+	}
+
+	if (ownerAddress && scope === 'owner') {
+		return {
+			id: `suins-owner:${ownerAddress}`,
+			name,
+			displayName: `${name}.sui`,
+			ownerAddress,
+			isModerator: requester === ownerAddress,
+			scope: 'owner',
 		}
 	}
 
@@ -145,6 +172,7 @@ function getServerContext(requestUrl: string, sessionAddress: string | null): Se
 		displayName: `${name}.sui`,
 		ownerAddress,
 		isModerator: !!ownerAddress && requester === ownerAddress,
+		scope: 'name',
 	}
 }
 
@@ -324,6 +352,359 @@ function formatSuiAmount(mist: string): string {
 	if (value < 1) return `${value.toFixed(4)} SUI`
 	return `${value.toFixed(2)} SUI`
 }
+
+function sanitizeDispatchPath(path: string | undefined): string {
+	const raw = String(path || '')
+		.trim()
+		.replace(/^\/+/, '')
+		.replace(/\/+/g, '/')
+	if (!raw) return ''
+	const clean = raw
+		.split('/')
+		.filter((part) => part !== '.' && part !== '..')
+		.join('/')
+	return clean.slice(0, 120)
+}
+
+function toMcpToolName(value: string): string {
+	return String(value || '')
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9-]/g, '-')
+		.slice(0, 64)
+}
+
+function createForwardHeaders(request: Request): Headers {
+	const headers = new Headers()
+	const passThrough = [
+		'content-type',
+		'accept',
+		'payment-signature',
+		'x-payment',
+		'x-x402-provider',
+	]
+	for (let i = 0; i < passThrough.length; i++) {
+		const key = passThrough[i]
+		const value = request.headers.get(key)
+		if (!value) continue
+		headers.set(key, value)
+	}
+	return headers
+}
+
+async function createX402Hints(env: Env, amountMist: string) {
+	const recipientAddress = await resolveX402Recipient(env)
+	const providers = resolveX402Providers(env)
+	const accepts: Array<Record<string, unknown>> = []
+
+	if (recipientAddress) {
+		accepts.push({
+			scheme: 'exact-sui',
+			network: `sui:${env.SUI_NETWORK}`,
+			amount: amountMist,
+			asset: '0x2::sui::SUI',
+			payTo: recipientAddress,
+			maxTimeoutSeconds: 120,
+		})
+	}
+
+	const multichainAccepts = await fetchMultichainPaymentRequirements(env, amountMist)
+	for (let i = 0; i < multichainAccepts.length; i++) accepts.push(multichainAccepts[i])
+
+	return {
+		recipientAddress,
+		providers,
+		amountMist,
+		accepts,
+	}
+}
+
+x402ChatRoutes.get('/integrations', async (c) => {
+	const env = c.get('env')
+	const x402 = await createX402Hints(env, env.X402_AGENT_FEE_MIST || TAB_THRESHOLD_MIST)
+
+	return c.json({
+		chat: {
+			apiBase: '/api/x402-chat',
+			mode: 'sui-stack-messaging-first',
+			tabThresholdMist: TAB_THRESHOLD_MIST,
+			costPerExchangeMist: COST_PER_EXCHANGE_MIST,
+		},
+		messaging: {
+			sdk: {
+				package: '@mysten/messaging',
+				version: OFFICIAL_MESSAGING_SDK_VERSION,
+				url: OFFICIAL_MESSAGING_SDK_URL,
+			},
+			endpoints: {
+				config: '/api/app/subscriptions/config',
+				server: '/api/app/messages/server',
+				channelMessages: '/api/app/messages/server/channels/:id/messages',
+			},
+		},
+		webMcp: {
+			proxyEndpoint: '/api/x402-chat/webmcp',
+			directEndpoint: '/mcp',
+			transport: 'streamable-http',
+			notes: [
+				'Use this proxy to call WebMCP from chat agents',
+				'Forward x402 headers (PAYMENT-SIGNATURE or X-PAYMENT) when required',
+			],
+		},
+		agents: {
+			dispatchEndpoint: '/api/x402-chat/agents/dispatch',
+			available: Object.entries(AGENT_DISPATCH_ALLOWLIST).map(([agent, paths]) => ({
+				agent,
+				paths: Array.from(paths),
+				base: `/api/agents/${agent}`,
+			})),
+		},
+		x402,
+	})
+})
+
+x402ChatRoutes.all('/webmcp', async (c) => {
+	const env = c.get('env')
+	const req = c.req.raw
+	const reqUrl = new URL(req.url)
+	const target = new URL('/mcp', reqUrl.origin)
+	target.search = reqUrl.search
+
+	const proxyReq = new Request(target.toString(), {
+		method: req.method,
+		headers: createForwardHeaders(req),
+		body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.arrayBuffer(),
+	})
+	const handler = createSuiMcpHandler(env)
+	const proxied = await handler(proxyReq, c.env, c.executionCtx)
+	const headers = new Headers(proxied.headers)
+	headers.set('X-X402-Chat-Bridge', 'webmcp')
+	if (!headers.get('Access-Control-Expose-Headers')) {
+		headers.set('Access-Control-Expose-Headers', 'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-X402-PROVIDER')
+	}
+	return new Response(proxied.body, {
+		status: proxied.status,
+		statusText: proxied.statusText,
+		headers,
+	})
+})
+
+x402ChatRoutes.all('/webmcp/*', async (c) => {
+	const env = c.get('env')
+	const req = c.req.raw
+	const reqUrl = new URL(req.url)
+	const suffix = reqUrl.pathname.replace('/api/x402-chat/webmcp', '') || ''
+	const targetPath = suffix.startsWith('/') ? `/mcp${suffix}` : `/mcp/${suffix}`
+	const target = new URL(targetPath, reqUrl.origin)
+	target.search = reqUrl.search
+
+	const proxyReq = new Request(target.toString(), {
+		method: req.method,
+		headers: createForwardHeaders(req),
+		body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.arrayBuffer(),
+	})
+	const handler = createSuiMcpHandler(env)
+	const proxied = await handler(proxyReq, c.env, c.executionCtx)
+	const headers = new Headers(proxied.headers)
+	headers.set('X-X402-Chat-Bridge', 'webmcp')
+	if (!headers.get('Access-Control-Expose-Headers')) {
+		headers.set('Access-Control-Expose-Headers', 'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-X402-PROVIDER')
+	}
+	return new Response(proxied.body, {
+		status: proxied.status,
+		statusText: proxied.statusText,
+		headers,
+	})
+})
+
+x402ChatRoutes.post('/agents/dispatch', async (c) => {
+	const req = c.req.raw
+	let body: {
+		agent?: string
+		path?: string
+		method?: string
+		payload?: unknown
+		query?: Record<string, string | number | boolean>
+	}
+	try {
+		body = await c.req.json()
+	} catch {
+		return c.json({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
+	}
+
+	const agent = String(body.agent || '').trim().toLowerCase()
+	const allowlist = AGENT_DISPATCH_ALLOWLIST[agent]
+	if (!allowlist) {
+		return c.json(
+			{ error: 'Unsupported agent target', code: 'INVALID_AGENT', supported: Object.keys(AGENT_DISPATCH_ALLOWLIST) },
+			400,
+		)
+	}
+
+	const cleanPath = sanitizeDispatchPath(body.path)
+	if (!cleanPath) {
+		return c.json({ error: 'Path is required', code: 'MISSING_PATH' }, 400)
+	}
+	const rootPath = cleanPath.split('/')[0]
+	if (!allowlist.has(rootPath)) {
+		return c.json(
+			{ error: 'Path is not allowed for this agent', code: 'PATH_NOT_ALLOWED', allowed: Array.from(allowlist) },
+			403,
+		)
+	}
+
+	const method = String(body.method || 'POST').trim().toUpperCase()
+	const requestMethod = ['GET', 'POST', 'PUT', 'DELETE'].includes(method) ? method : 'POST'
+	const target = new URL(`https://internal/${cleanPath}`)
+	const query = body.query || {}
+	for (const [key, value] of Object.entries(query)) {
+		target.searchParams.set(key, String(value))
+	}
+
+	const headers = createForwardHeaders(req)
+	let payloadBody: string | undefined
+	if (requestMethod !== 'GET' && requestMethod !== 'HEAD') {
+		payloadBody = JSON.stringify(body.payload || {})
+		headers.set('Content-Type', 'application/json')
+	}
+
+	const forwardReq = new Request(target.toString(), {
+		method: requestMethod,
+		headers,
+		body: payloadBody,
+	})
+	let forwarded: Response
+	if (agent === 'x402-register') {
+		forwarded = await x402RegisterRoutes.fetch(forwardReq, c.env, c.executionCtx)
+	} else if (agent === 'subnamecap') {
+		forwarded = await agentSubnameCapRoutes.fetch(forwardReq, c.env, c.executionCtx)
+	} else {
+		forwarded = await agentGraceVaultRoutes.fetch(forwardReq, c.env, c.executionCtx)
+	}
+
+	const responseHeaders = new Headers(forwarded.headers)
+	responseHeaders.set('X-X402-Chat-Bridge', 'agents')
+	if (!responseHeaders.get('Access-Control-Expose-Headers')) {
+		responseHeaders.set('Access-Control-Expose-Headers', 'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-X402-PROVIDER')
+	}
+
+	const contentType = forwarded.headers.get('Content-Type') || ''
+	if (contentType.includes('application/json')) {
+		const json = await forwarded.json().catch(() => null)
+		return new Response(
+			JSON.stringify({
+				ok: forwarded.ok,
+				agent,
+				path: cleanPath,
+				method: requestMethod,
+				status: forwarded.status,
+				result: json,
+			}),
+			{
+				status: forwarded.status,
+				headers: {
+					...Object.fromEntries(responseHeaders.entries()),
+					'Content-Type': 'application/json',
+				},
+			},
+		)
+	}
+
+	const text = await forwarded.text()
+	return new Response(
+		JSON.stringify({
+			ok: forwarded.ok,
+			agent,
+			path: cleanPath,
+			method: requestMethod,
+			status: forwarded.status,
+			result: text,
+		}),
+		{
+			status: forwarded.status,
+			headers: {
+				...Object.fromEntries(responseHeaders.entries()),
+				'Content-Type': 'application/json',
+			},
+		},
+	)
+})
+
+x402ChatRoutes.post('/agents/webmcp/tool', async (c) => {
+	const env = c.get('env')
+	const req = c.req.raw
+	const reqUrl = new URL(req.url)
+	let body: {
+		tool?: string
+		arguments?: Record<string, unknown>
+	}
+	try {
+		body = await c.req.json()
+	} catch {
+		return c.json({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
+	}
+
+	const toolName = toMcpToolName(body.tool || '')
+	if (!toolName) {
+		return c.json({ error: 'Tool is required', code: 'MISSING_TOOL' }, 400)
+	}
+
+	const target = new URL('/mcp', reqUrl.origin)
+	const headers = createForwardHeaders(req)
+	headers.set('Content-Type', 'application/json')
+	headers.set('Accept', 'application/json, text/event-stream')
+
+	const mcpRequest = {
+		jsonrpc: '2.0',
+		id: `x402-chat-${Date.now()}`,
+		method: 'tools/call',
+		params: {
+			name: toolName,
+			arguments: body.arguments || {},
+		},
+	}
+
+	const mcpReq = new Request(target.toString(), {
+		method: 'POST',
+		headers,
+		body: JSON.stringify(mcpRequest),
+	})
+	const handler = createSuiMcpHandler(env)
+	const response = await handler(mcpReq, c.env, c.executionCtx)
+
+	const responseHeaders = new Headers(response.headers)
+	responseHeaders.set('X-X402-Chat-Bridge', 'webmcp-tool')
+	const raw = await response.text()
+	let parsed: unknown = null
+	try {
+		const streamDataLines = raw
+			.split('\n')
+			.filter((line) => line.startsWith('data: '))
+			.map((line) => line.slice(6).trim())
+		if (streamDataLines.length > 0) {
+			parsed = JSON.parse(streamDataLines[streamDataLines.length - 1])
+		} else {
+			parsed = JSON.parse(raw)
+		}
+	} catch {
+		parsed = { raw }
+	}
+	return new Response(
+		JSON.stringify({
+			ok: response.ok,
+			tool: toolName,
+			status: response.status,
+			mcp: parsed,
+		}),
+		{
+			status: response.status,
+			headers: {
+				...Object.fromEntries(responseHeaders.entries()),
+				'Content-Type': 'application/json',
+			},
+		},
+	)
+})
 
 x402ChatRoutes.post('/chat', async (c) => {
 	const env = c.get('env')
@@ -688,6 +1069,7 @@ x402ChatRoutes.get('/channels', async (c) => {
 			displayName: server.displayName,
 			ownerAddress: server.ownerAddress,
 			isModerator: server.isModerator,
+			scope: server.scope,
 		},
 		channels,
 		moderation: {
@@ -861,6 +1243,7 @@ x402ChatRoutes.get('/channels/:id/messages', async (c) => {
 			id: server.id,
 			displayName: server.displayName,
 			isModerator: server.isModerator,
+			scope: server.scope,
 		},
 		channel: channelId,
 		messages,

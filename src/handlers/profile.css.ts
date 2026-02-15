@@ -138,39 +138,61 @@ export const profileStyles = `
 			gap: 10px;
 		}
 		.wallet-profile-btn {
-			width: 40px;
-			height: 40px;
-			border-radius: 10px;
+			height: 44px;
+			border-radius: 14px;
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
-			background: rgba(96, 165, 250, 0.12);
-			border: 1px solid rgba(96, 165, 250, 0.35);
+			background: linear-gradient(135deg, rgba(20, 30, 54, 0.9), rgba(26, 44, 78, 0.88));
+			border: 1.5px solid rgba(147, 197, 253, 0.58);
 			cursor: pointer;
 			transition: all 0.2s ease;
-			padding: 0;
+			padding: 0 14px;
+			box-shadow:
+				0 0 0 1px rgba(148, 163, 184, 0.14) inset,
+				0 8px 22px rgba(2, 6, 23, 0.52),
+				0 0 18px rgba(96, 165, 250, 0.18);
 		}
-		.wallet-profile-btn svg {
-			width: 18px;
-			height: 18px;
+		.ski-logo-text {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+			font-size: 15px;
+			font-weight: 800;
+			letter-spacing: 0.5px;
+			background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
 		}
 		.wallet-profile-btn:hover {
-			background: rgba(96, 165, 250, 0.2);
-			border-color: rgba(96, 165, 250, 0.55);
-			transform: translateY(-1px);
+			background: linear-gradient(135deg, rgba(30, 45, 74, 0.94), rgba(34, 56, 94, 0.92));
+			border-color: rgba(186, 230, 253, 0.85);
+			transform: translateY(-1px) scale(1.02);
+			box-shadow:
+				0 0 0 1px rgba(191, 219, 254, 0.24) inset,
+				0 12px 26px rgba(2, 6, 23, 0.58),
+				0 0 24px rgba(96, 165, 250, 0.26);
 		}
 		.wallet-widget.has-black-diamond .wallet-profile-btn {
-			background: linear-gradient(135deg, rgba(10, 10, 18, 0.6), rgba(18, 18, 28, 0.7));
-			border-color: rgba(120, 130, 155, 0.42);
-			box-shadow: 0 0 24px rgba(0, 0, 0, 0.4);
+			background: linear-gradient(135deg, rgba(8, 8, 16, 0.95), rgba(16, 16, 30, 0.94));
+			border-color: rgba(198, 170, 98, 0.62);
+			box-shadow:
+				0 0 0 1px rgba(160, 120, 56, 0.24) inset,
+				0 10px 24px rgba(0, 0, 0, 0.58),
+				0 0 18px rgba(194, 145, 72, 0.26);
+		}
+		.wallet-widget.has-black-diamond .wallet-profile-btn .ski-logo-text {
+			background: linear-gradient(135deg, #c6aa62 0%, #eacea0 100%);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
 		}
 		.wallet-widget.has-black-diamond .wallet-profile-btn:hover {
-			background: linear-gradient(135deg, rgba(16, 16, 26, 0.7), rgba(24, 24, 36, 0.8));
-			border-color: rgba(140, 150, 175, 0.62);
-			box-shadow: 0 0 28px rgba(0, 0, 0, 0.5);
-		}
-		.wallet-widget.has-black-diamond .wallet-profile-btn svg {
-			filter: brightness(0.7) contrast(1.2) saturate(0.4);
+			background: linear-gradient(135deg, rgba(14, 14, 24, 0.97), rgba(26, 22, 34, 0.95));
+			border-color: rgba(234, 206, 128, 0.88);
+			box-shadow:
+				0 0 0 1px rgba(196, 154, 76, 0.34) inset,
+				0 12px 28px rgba(0, 0, 0, 0.62),
+				0 0 24px rgba(234, 179, 8, 0.28);
 		}
 		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
 		.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
@@ -2043,13 +2065,75 @@ export const profileStyles = `
 		.header-meta-item a {
 			color: var(--text-muted);
 		}
-		.header-meta-item a:hover {
-			color: var(--accent);
-		}
-		.target-meta-item {
-			gap: 5px;
-			max-width: 100%;
-		}
+			.header-meta-item a:hover {
+				color: var(--accent);
+			}
+			.header-action-grid {
+				display: grid;
+				gap: 8px;
+				width: min(260px, 100%);
+			}
+			.header-action-grid.owner-link-strip {
+				grid-template-columns: repeat(4, minmax(0, 1fr));
+				gap: 4px;
+				width: 100%;
+				max-width: 740px;
+				margin-top: 0;
+			}
+			.header-action-btn {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 5px;
+				padding: 6px 8px;
+				border: 1px solid rgba(96, 165, 250, 0.45);
+				border-radius: 9px;
+				background: linear-gradient(135deg, rgba(56, 189, 248, 0.16), rgba(59, 130, 246, 0.24));
+				color: #dbeafe;
+				font-size: 0.64rem;
+				font-weight: 700;
+				letter-spacing: 0.02em;
+				text-transform: uppercase;
+				text-decoration: none;
+				transition: all 0.2s ease;
+			}
+			.header-action-grid.owner-link-strip .header-action-btn {
+				gap: 3px;
+				padding: 4px 5px;
+				min-height: 24px;
+				font-size: 0.56rem;
+				letter-spacing: 0.01em;
+				border-radius: 7px;
+				white-space: nowrap;
+			}
+			.header-action-btn svg {
+				width: 11px;
+				height: 11px;
+				opacity: 0.95;
+				flex-shrink: 0;
+			}
+			.header-action-grid.owner-link-strip .header-action-btn svg {
+				width: 9px;
+				height: 9px;
+			}
+			.header-action-btn:hover {
+				border-color: rgba(147, 197, 253, 0.85);
+				background: linear-gradient(135deg, rgba(56, 189, 248, 0.24), rgba(37, 99, 235, 0.32));
+				color: #eff6ff;
+				transform: translateY(-1px);
+				box-shadow: 0 8px 18px rgba(37, 99, 235, 0.28);
+			}
+			.header-action-btn.disabled {
+				color: rgba(191, 219, 254, 0.55);
+				background: linear-gradient(135deg, rgba(30, 41, 59, 0.42), rgba(51, 65, 85, 0.36));
+				border-color: rgba(96, 165, 250, 0.22);
+				opacity: 0.72;
+				pointer-events: none;
+			}
+			.target-meta-item {
+				gap: 5px;
+				max-width: 100%;
+			}
 
 		.owner-display {
 			background: var(--card-bg);
@@ -2202,6 +2286,17 @@ export const profileStyles = `
 			overflow: hidden;
 			text-overflow: ellipsis;
 			max-width: 100%;
+		}
+		.owner-tradeport-link {
+			font-family: inherit;
+			color: var(--accent);
+			font-size: 0.68rem;
+			font-weight: 600;
+			text-decoration: none;
+		}
+		.owner-tradeport-link:hover {
+			color: var(--accent-hover);
+			text-decoration: underline;
 		}
 		.owner-addr.copyable {
 			cursor: pointer;
@@ -5351,271 +5446,6 @@ export const profileStyles = `
 		}
 		.auction-status.success { color: var(--success); }
 		.auction-status.error { color: var(--danger); }
-
-		/* Swap Toggle Button */
-		.swap-toggle-btn {
-			width: 40px;
-			height: 40px;
-			border-radius: 10px;
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			background: rgba(167, 139, 250, 0.12);
-			border: 1px solid rgba(167, 139, 250, 0.35);
-			cursor: pointer;
-			transition: all 0.2s ease;
-			padding: 0;
-			color: var(--purple);
-		}
-		.swap-toggle-btn svg {
-			width: 18px;
-			height: 18px;
-		}
-		.swap-toggle-btn:hover {
-			background: rgba(167, 139, 250, 0.2);
-			border-color: rgba(167, 139, 250, 0.55);
-			transform: translateY(-1px);
-		}
-
-		/* Swap Panel */
-		.swap-panel {
-			position: fixed;
-			top: calc(68px + env(safe-area-inset-top));
-			right: calc(16px + env(safe-area-inset-right));
-			z-index: 10050;
-			width: 380px;
-			max-height: calc(100vh - 100px);
-			overflow-y: auto;
-			background: var(--card-bg-elevated);
-			backdrop-filter: blur(24px);
-			-webkit-backdrop-filter: blur(24px);
-			border: 1px solid var(--glass-border);
-			border-radius: 16px;
-			box-shadow: var(--shadow-lg), var(--shadow-glow);
-			animation: swapPanelIn 0.2s ease;
-		}
-		@keyframes swapPanelIn {
-			from { opacity: 0; transform: translateY(-8px) scale(0.97); }
-			to { opacity: 1; transform: translateY(0) scale(1); }
-		}
-		.swap-panel-header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			padding: 14px 16px 0;
-		}
-		.swap-panel-tabs {
-			display: flex;
-			gap: 4px;
-		}
-		.swap-tab {
-			padding: 6px 14px;
-			border-radius: 8px;
-			border: none;
-			background: transparent;
-			color: var(--text-muted);
-			font-size: 0.82rem;
-			font-weight: 600;
-			cursor: pointer;
-			transition: all 0.15s ease;
-		}
-		.swap-tab:hover {
-			color: var(--text);
-			background: rgba(255, 255, 255, 0.04);
-		}
-		.swap-tab.active {
-			color: var(--text-bright);
-			background: rgba(96, 165, 250, 0.12);
-		}
-		.swap-panel-close {
-			width: 28px;
-			height: 28px;
-			border-radius: 6px;
-			border: none;
-			background: transparent;
-			color: var(--text-muted);
-			font-size: 1.2rem;
-			cursor: pointer;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			transition: all 0.15s ease;
-		}
-		.swap-panel-close:hover {
-			background: rgba(255, 255, 255, 0.06);
-			color: var(--text);
-		}
-		.swap-tab-content {
-			padding: 12px 16px 16px;
-		}
-		#sui-coins-terminal {
-			min-height: 360px;
-		}
-		.crosschain-ui {
-			display: flex;
-			flex-direction: column;
-			gap: 14px;
-		}
-		.cc-direction {
-			font-size: 0.85rem;
-			font-weight: 700;
-			color: var(--purple);
-			letter-spacing: 0.5px;
-		}
-		.cc-field {
-			display: flex;
-			flex-direction: column;
-			gap: 6px;
-		}
-		.cc-label {
-			font-size: 0.72rem;
-			font-weight: 600;
-			color: var(--text-muted);
-			text-transform: uppercase;
-			letter-spacing: 0.5px;
-		}
-		.cc-input {
-			background: var(--bg-subtle);
-			border: 1px solid var(--border);
-			border-radius: 8px;
-			padding: 10px 12px;
-			color: var(--text);
-			font-size: 0.9rem;
-			font-family: var(--font-mono, monospace);
-			transition: border-color 0.15s ease;
-			width: 100%;
-		}
-		.cc-input:focus {
-			outline: none;
-			border-color: var(--purple);
-		}
-		.cc-input::placeholder {
-			color: var(--text-dim);
-		}
-		.cc-rate {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			font-size: 0.75rem;
-		}
-		.cc-rate-label {
-			color: var(--text-muted);
-			font-weight: 600;
-		}
-		.cc-rate-value {
-			color: var(--text);
-			font-family: var(--font-mono, monospace);
-		}
-		.cc-output {
-			background: rgba(167, 139, 250, 0.08);
-			border: 1px solid rgba(167, 139, 250, 0.25);
-			border-radius: 8px;
-			padding: 10px 12px;
-			color: var(--purple);
-			font-size: 0.9rem;
-			font-weight: 600;
-			font-family: var(--font-mono, monospace);
-		}
-		.cc-fee {
-			font-size: 0.72rem;
-			color: var(--text-dim);
-		}
-		.cc-btn {
-			width: 100%;
-			background: linear-gradient(135deg, var(--purple), var(--accent));
-			color: var(--text-bright);
-			border: none;
-			border-radius: 10px;
-			padding: 11px 20px;
-			font-size: 0.85rem;
-			font-weight: 600;
-			cursor: pointer;
-			transition: opacity 0.15s ease, transform 0.15s ease;
-		}
-		.cc-btn:hover:not(:disabled) {
-			opacity: 0.9;
-			transform: translateY(-1px);
-		}
-		.cc-btn:disabled {
-			opacity: 0.45;
-			cursor: not-allowed;
-		}
-		.cc-deposit {
-			background: rgba(167, 139, 250, 0.06);
-			border: 1px solid rgba(167, 139, 250, 0.15);
-			border-radius: 10px;
-			padding: 14px;
-			display: flex;
-			flex-direction: column;
-			gap: 10px;
-		}
-		.cc-deposit-label {
-			font-size: 0.75rem;
-			font-weight: 600;
-			color: var(--text-muted);
-		}
-		.cc-deposit-addr {
-			font-family: var(--font-mono, monospace);
-			font-size: 0.78rem;
-			color: var(--text);
-			word-break: break-all;
-			background: var(--bg-subtle);
-			padding: 8px 10px;
-			border-radius: 6px;
-			border: 1px solid var(--border);
-		}
-		.cc-copy-btn {
-			align-self: flex-start;
-			padding: 4px 12px;
-			border-radius: 6px;
-			border: 1px solid var(--border);
-			background: transparent;
-			color: var(--accent);
-			font-size: 0.72rem;
-			font-weight: 600;
-			cursor: pointer;
-			transition: all 0.15s ease;
-		}
-		.cc-copy-btn:hover {
-			background: rgba(96, 165, 250, 0.1);
-			border-color: var(--accent);
-		}
-		.cc-confirm-section {
-			display: flex;
-			flex-direction: column;
-			gap: 8px;
-			margin-top: 6px;
-			padding-top: 10px;
-			border-top: 1px solid var(--border);
-		}
-		.cc-confirm-btn {
-			background: linear-gradient(135deg, var(--success), #22c55e) !important;
-		}
-		.cc-status {
-			min-height: 16px;
-			font-size: 0.8rem;
-			color: var(--text-muted);
-		}
-		.cc-status.success { color: var(--success); }
-		.cc-status.error { color: var(--error); }
-
-		@media (max-width: 480px) {
-			.swap-panel {
-				position: fixed;
-				top: auto;
-				bottom: 0;
-				left: 0;
-				right: 0;
-				width: 100%;
-				max-height: 80vh;
-				border-radius: 20px 20px 0 0;
-				animation: swapPanelSlideUp 0.25s ease;
-			}
-			@keyframes swapPanelSlideUp {
-				from { opacity: 0; transform: translateY(100%); }
-				to { opacity: 1; transform: translateY(0); }
-			}
-		}
 
 		/* Renewal Card (Overview Tab) */
 		.renewal-card {
@@ -11225,12 +11055,34 @@ export const profileStyles = `
 			h1 { font-size: 1.35rem; }
 			.badge { font-size: 0.6rem; padding: 4px 10px; }
 			.header-top-expiry-date { font-size: 0.62rem; padding: 4px 8px; }
-			.header-meta {
-				gap: 8px;
-				font-size: 0.75rem;
-			}
-			.header-meta-item { gap: 6px; }
-			.header-meta-item svg { width: 14px; height: 14px; }
+				.header-meta {
+					gap: 8px;
+					font-size: 0.75rem;
+				}
+				.header-meta-item { gap: 6px; }
+				.header-meta-item svg { width: 14px; height: 14px; }
+				.header-action-grid {
+					width: 100%;
+					max-width: none;
+				}
+				.header-action-grid.owner-link-strip {
+					grid-template-columns: repeat(4, minmax(0, 1fr));
+					gap: 4px;
+				}
+				.header-action-btn {
+					gap: 4px;
+					padding: 6px 8px;
+					font-size: 0.62rem;
+				}
+				.header-action-grid.owner-link-strip .header-action-btn {
+					padding: 3px 4px;
+					min-height: 22px;
+					font-size: 0.5rem;
+				}
+				.header-action-btn svg {
+					width: 10px;
+					height: 10px;
+				}
 
 			.linked-owner-row,
 			.linked-controls-module {

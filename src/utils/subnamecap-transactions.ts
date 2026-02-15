@@ -22,12 +22,12 @@ function getSubnameCapEnv(env: Env): SubnameCapEnv {
 	return { suinsPackageId, subdomainsPackageId, suinsObjectId }
 }
 
-export interface TransactionResult {
+interface TransactionResult {
 	txBytes: string
 	estimatedGas: number
 }
 
-export interface CapLimitArgs {
+interface CapLimitArgs {
 	defaultNodeAllowCreation?: boolean
 	defaultNodeAllowExtension?: boolean
 	maxUses?: number | null
@@ -35,7 +35,7 @@ export interface CapLimitArgs {
 	capExpirationMs?: number | null
 }
 
-export interface CreateSubnameCapArgs extends CapLimitArgs {
+interface CreateSubnameCapArgs extends CapLimitArgs {
 	parentNftId: string
 	allowLeafCreation: boolean
 	allowNodeCreation: boolean
@@ -73,7 +73,7 @@ export function buildCreateSubnameCapTx(args: CreateSubnameCapArgs, env: Env): T
 	return tx
 }
 
-export interface RevokeSubnameCapArgs {
+interface RevokeSubnameCapArgs {
 	parentNftId: string
 	capId: string
 	senderAddress: string
@@ -97,7 +97,7 @@ export function buildRevokeSubnameCapTx(args: RevokeSubnameCapArgs, env: Env): T
 	return tx
 }
 
-export interface SurrenderSubnameCapArgs {
+interface SurrenderSubnameCapArgs {
 	capObjectId: string
 	senderAddress: string
 }
@@ -115,7 +115,7 @@ export function buildSurrenderSubnameCapTx(args: SurrenderSubnameCapArgs, env: E
 	return tx
 }
 
-export interface ClearActiveCapsArgs {
+interface ClearActiveCapsArgs {
 	parentNftId: string
 	senderAddress: string
 }
@@ -133,7 +133,7 @@ export function buildClearActiveCapsTx(args: ClearActiveCapsArgs, env: Env): Tra
 	return tx
 }
 
-export interface NewLeafWithCapArgs {
+interface NewLeafWithCapArgs {
 	capObjectId: string
 	subdomainName: string
 	targetAddress: string
@@ -159,7 +159,7 @@ export function buildNewLeafWithCapTx(args: NewLeafWithCapArgs, env: Env): Trans
 	return tx
 }
 
-export interface NewNodeWithCapArgs {
+interface NewNodeWithCapArgs {
 	capObjectId: string
 	subdomainName: string
 	expirationTimestampMs: number
@@ -186,7 +186,7 @@ export function buildNewNodeWithCapTx(args: NewNodeWithCapArgs, env: Env): Trans
 	return tx
 }
 
-export interface NewLeafWithFeeArgs {
+interface NewLeafWithFeeArgs {
 	jacketObjectId: string
 	feeMist: number
 	subdomainName: string
@@ -221,7 +221,7 @@ export function buildNewLeafWithFeeTx(args: NewLeafWithFeeArgs, env: Env): Trans
 	return tx
 }
 
-export interface NewLeafAllowedArgs {
+interface NewLeafAllowedArgs {
 	jacketObjectId: string
 	subdomainName: string
 	targetAddress: string
@@ -252,7 +252,7 @@ export function buildNewLeafAllowedTx(args: NewLeafAllowedArgs, env: Env): Trans
 	return tx
 }
 
-export interface NewLeafRateLimitedArgs {
+interface NewLeafRateLimitedArgs {
 	jacketObjectId: string
 	subdomainName: string
 	targetAddress: string
@@ -283,7 +283,7 @@ export function buildNewLeafRateLimitedTx(args: NewLeafRateLimitedArgs, env: Env
 	return tx
 }
 
-export interface CreateFeeJacketArgs extends CapLimitArgs {
+interface CreateFeeJacketArgs extends CapLimitArgs {
 	parentNftId: string
 	leafFee: number
 	nodeFee: number
@@ -327,7 +327,7 @@ export function buildCreateFeeJacketTx(args: CreateFeeJacketArgs, env: Env): Tra
 	return tx
 }
 
-export interface CreateAllowlistJacketArgs extends CapLimitArgs {
+interface CreateAllowlistJacketArgs extends CapLimitArgs {
 	parentNftId: string
 	initialAddresses?: string[]
 	senderAddress: string
@@ -367,7 +367,7 @@ export function buildCreateAllowlistJacketTx(
 	return tx
 }
 
-export interface CreateRateLimitJacketArgs extends CapLimitArgs {
+interface CreateRateLimitJacketArgs extends CapLimitArgs {
 	parentNftId: string
 	maxPerWindow: number
 	windowDurationMs: number
@@ -408,7 +408,7 @@ export function buildCreateRateLimitJacketTx(
 	return tx
 }
 
-export interface UpdateFeesArgs {
+interface UpdateFeesArgs {
 	adminCapId: string
 	jacketObjectId: string
 	leafFee: number
@@ -438,7 +438,7 @@ export function buildUpdateFeesTx(args: UpdateFeesArgs, env: Env): Transaction {
 	return tx
 }
 
-export interface AddToAllowlistArgs {
+interface AddToAllowlistArgs {
 	adminCapId: string
 	jacketObjectId: string
 	addresses: string[]
@@ -466,7 +466,7 @@ export function buildAddToAllowlistTx(args: AddToAllowlistArgs, env: Env): Trans
 	return tx
 }
 
-export interface UpdateRateLimitArgs {
+interface UpdateRateLimitArgs {
 	adminCapId: string
 	jacketObjectId: string
 	maxPerWindow: number
@@ -496,7 +496,7 @@ export function buildUpdateRateLimitTx(args: UpdateRateLimitArgs, env: Env): Tra
 	return tx
 }
 
-export interface CreateSingleUseJacketArgs extends CapLimitArgs {
+interface CreateSingleUseJacketArgs extends CapLimitArgs {
 	parentNftId: string
 	recipientAddress: string
 	allowNodeCreation?: boolean
@@ -537,7 +537,7 @@ export function buildCreateSingleUseJacketTx(
 	return tx
 }
 
-export interface UseSingleUseJacketLeafArgs {
+interface UseSingleUseJacketLeafArgs {
 	jacketObjectId: string
 	subdomainName: string
 	targetAddress: string
@@ -571,7 +571,7 @@ export function buildUseSingleUseJacketLeafTx(
 	return tx
 }
 
-export interface UseSingleUseJacketNodeArgs {
+interface UseSingleUseJacketNodeArgs {
 	jacketObjectId: string
 	subdomainName: string
 	expirationTimestampMs: number

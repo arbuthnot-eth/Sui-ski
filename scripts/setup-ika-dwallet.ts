@@ -13,10 +13,14 @@ import {
 	createRandomSessionIdentifier,
 	publicKeyFromDWalletOutput,
 } from '@ika.xyz/sdk'
+import { ripemd160 } from '@noble/hashes/ripemd160.js'
+import { sha256 } from '@noble/hashes/sha256.js'
 import { keccak_256 } from '@noble/hashes/sha3.js'
-import { base58 } from '@scure/base'
+import { base58, bech32 } from '@scure/base'
 
-const IKA_COIN_TYPE = '0x2::coin::Coin<0x7262fb2f7a3a14c888c438a3cd9b912469a58cf60f367352c46584262e8299aa::ika::IKA>'
+type IkaNetwork = 'mainnet' | 'testnet'
+
+const NETWORK: IkaNetwork = (process.env.IKA_NETWORK as IkaNetwork) || 'testnet'
 const SUI_COIN_TYPE = '0x2::coin::Coin<0x2::sui::SUI>'
 const DWALLET_POLL_TIMEOUT_MS = 120_000
 const DWALLET_POLL_INTERVAL_MS = 2_000
@@ -57,6 +61,25 @@ function solanaAddressFromEd25519PublicKey(pubKey: Uint8Array): string {
 	return base58.encode(pubKey.slice(0, 32))
 }
 
+function compressSecp256k1PublicKey(uncompressed: Uint8Array): Uint8Array {
+	const raw = uncompressed[0] === 0x04 ? uncompressed.slice(1) : uncompressed
+	const x = raw.slice(0, 32)
+	const yLastByte = raw[63]
+	const prefix = (yLastByte & 1) === 0 ? 0x02 : 0x03
+	const compressed = new Uint8Array(33)
+	compressed[0] = prefix
+	compressed.set(x, 1)
+	return compressed
+}
+
+function btcP2wpkhFromSecp256k1PublicKey(uncompressedPubKey: Uint8Array): string {
+	const compressed = compressSecp256k1PublicKey(uncompressedPubKey)
+	const hash160 = ripemd160(sha256(compressed))
+	const words = bech32.toWords(hash160)
+	words.unshift(0)
+	return bech32.encode('bc', words)
+}
+
 async function findCoin(
 	suiClient: SuiJsonRpcClient,
 	owner: string,
@@ -72,6 +95,7 @@ async function createImportedKeyDWallet(
 	keypair: Ed25519Keypair,
 	curve: typeof Curve.SECP256K1 | typeof Curve.ED25519,
 	label: string,
+	ikaCoinType: string,
 ): Promise<{ dwalletId: string; dwalletCapId: string; publicKey: Uint8Array }> {
 	const address = keypair.toSuiAddress()
 	console.log(`\n--- Creating ${label} dWallet (curve: ${curve}) ---`)
@@ -105,7 +129,7 @@ async function createImportedKeyDWallet(
 
 	const sessionIdentifier = ikaTx.registerSessionIdentifier(sessionBytes)
 
-	const ikaCoinId = await findCoin(suiClient, address, IKA_COIN_TYPE)
+	const ikaCoinId = await findCoin(suiClient, address, ikaCoinType)
 	const suiCoinId = await findCoin(suiClient, address, SUI_COIN_TYPE)
 
 	if (!ikaCoinId) {
@@ -195,17 +219,20 @@ async function createImportedKeyDWallet(
 }
 
 async function main() {
-	console.log('=== IKA dWallet Setup Script ===\n')
+	console.log(`=== IKA dWallet Setup Script (${NETWORK}) ===\n`)
 
 	const keypair = loadKeypair()
 	const address = keypair.toSuiAddress()
 	console.log(`Agent Sui address: ${address}`)
+	console.log(`Network: ${NETWORK}`)
 
-	const suiClient = new SuiJsonRpcClient({ url: getJsonRpcFullnodeUrl('mainnet') })
-	const ikaConfig = getNetworkConfig('mainnet')
+	const suiClient = new SuiJsonRpcClient({ url: getJsonRpcFullnodeUrl(NETWORK) })
+	const ikaConfig = getNetworkConfig(NETWORK)
+	const ikaCoinType = `0x2::coin::Coin<${ikaConfig.packages.ikaPackage}::ika::IKA>`
 
 	console.log('IKA package:', ikaConfig.packages.ikaPackage)
 	console.log('Coordinator:', ikaConfig.objects.ikaDWalletCoordinator.objectID)
+	console.log('IKA coin type:', ikaCoinType)
 
 	const ikaClient = new IkaClient({
 		suiClient,
@@ -232,6 +259,7 @@ async function main() {
 	const skipSolana = process.env.SKIP_SOLANA === 'true'
 
 	let evmAddress: string | undefined
+	let btcAddress: string | undefined
 	let evmDwalletId: string | undefined
 	let solanaAddress: string | undefined
 	let solanaDwalletId: string | undefined
@@ -243,10 +271,13 @@ async function main() {
 			keypair,
 			Curve.SECP256K1,
 			'EVM (Base)',
+			ikaCoinType,
 		)
 		evmAddress = evmAddressFromSecp256k1PublicKey(evm.publicKey)
+		btcAddress = btcP2wpkhFromSecp256k1PublicKey(evm.publicKey)
 		evmDwalletId = evm.dwalletId
 		console.log(`\n  EVM Address: ${evmAddress}`)
+		console.log(`  BTC Address: ${btcAddress}`)
 	}
 
 	if (!skipSolana) {
@@ -256,6 +287,7 @@ async function main() {
 			keypair,
 			Curve.ED25519,
 			'Solana',
+			ikaCoinType,
 		)
 		solanaAddress = solanaAddressFromEd25519PublicKey(solana.publicKey)
 		solanaDwalletId = solana.dwalletId
@@ -270,6 +302,9 @@ async function main() {
 	}
 	if (solanaAddress) {
 		console.log(`X402_SOL_PAY_TO = "${solanaAddress}"`)
+	}
+	if (btcAddress) {
+		console.log(`X402_BTC_PAY_TO = "${btcAddress}"`)
 	}
 	console.log(`IKA_PACKAGE_ID = "${ikaConfig.packages.ikaPackage}"`)
 	console.log('')

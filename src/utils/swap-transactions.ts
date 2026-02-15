@@ -74,7 +74,7 @@ async function resolveFeeRecipient(
 	return fallback
 }
 
-export interface SwapRegisterParams {
+interface SwapRegisterParams {
 	domain: string
 	years: number
 	senderAddress: string
@@ -82,7 +82,7 @@ export interface SwapRegisterParams {
 	expirationMs?: number
 }
 
-export interface SwapBreakdown {
+interface SwapBreakdown {
 	suiInputMist: bigint
 	nsOutputEstimate: bigint
 	registrationCostNsMist: bigint
@@ -94,12 +94,12 @@ export interface SwapBreakdown {
 	feeRecipient?: string
 }
 
-export interface SwapRegisterResult {
+interface SwapRegisterResult {
 	tx: Transaction
 	breakdown: SwapBreakdown
 }
 
-export interface MultiCoinRegisterParams {
+interface MultiCoinRegisterParams {
 	domain: string
 	years: number
 	senderAddress: string
@@ -110,7 +110,7 @@ export interface MultiCoinRegisterParams {
 	extraSuiForFeesMist?: bigint
 }
 
-export interface MultiCoinRegisterResult {
+interface MultiCoinRegisterResult {
 	tx: Transaction
 	breakdown: SwapBreakdown & {
 		sourceCoinType: string
@@ -487,61 +487,6 @@ export async function buildMultiCoinRegisterTx(
 	}
 }
 
-export async function buildDirectNsRegisterTx(
-	params: Omit<SwapRegisterParams, 'slippageBps'> & { nsCoinObjectId: string },
-	env: Env,
-): Promise<Transaction> {
-	const { domain, years, senderAddress, nsCoinObjectId, expirationMs } = params
-	const cleanDomain = `${domain.toLowerCase().replace(/\.sui$/i, '')}.sui`
-	const network = env.SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet'
-
-	const client = new SuiClient({ url: getDefaultRpcUrl(env.SUI_NETWORK), network: env.SUI_NETWORK })
-	const suinsClient = new SuinsClient({ client: client as never, network })
-
-	const pricing = await calculateRegistrationPrice({
-		domain: cleanDomain,
-		years,
-		expirationMs,
-		env,
-	})
-
-	const tx = new Transaction()
-	tx.setSender(senderAddress)
-
-	const suinsTx = new SuinsTransaction(suinsClient, tx)
-	const coinConfig = suinsClient.config.coins.NS
-	if (!coinConfig) {
-		throw new Error('SuiNS NS coin configuration not found')
-	}
-
-	const priceInfoObjectId = coinConfig.feed
-		? (await suinsClient.getPriceInfoObject(tx, coinConfig.feed))[0]
-		: undefined
-
-	const [paymentCoin] = tx.splitCoins(tx.object(nsCoinObjectId), [
-		tx.pure.u64(pricing.nsNeededMist),
-	])
-
-	const nft = suinsTx.register({
-		domain: cleanDomain,
-		years,
-		coinConfig,
-		coin: paymentCoin,
-		priceInfoObjectId,
-	})
-
-	suinsTx.setTargetAddress({
-		nft,
-		address: senderAddress,
-		isSubname: cleanDomain.replace(/\.sui$/i, '').includes('.'),
-	})
-
-	tx.transferObjects([nft], senderAddress)
-	tx.setGasBudget(100_000_000)
-
-	return tx
-}
-
 export async function buildSuiRegisterTx(
 	params: Omit<SwapRegisterParams, 'slippageBps'>,
 	env: Env,
@@ -597,7 +542,7 @@ export async function buildSuiRegisterTx(
 	return tx
 }
 
-export interface SwapRenewParams {
+interface SwapRenewParams {
 	domain: string
 	nftId: string
 	years: number
@@ -605,7 +550,7 @@ export interface SwapRenewParams {
 	slippageBps?: number
 }
 
-export interface SwapRenewResult {
+interface SwapRenewResult {
 	tx: Transaction
 	breakdown: SwapBreakdown
 }
@@ -809,7 +754,7 @@ export async function buildSuiRenewTx(
 	return tx
 }
 
-export interface MultiCoinRenewParams {
+interface MultiCoinRenewParams {
 	domain: string
 	nftId: string
 	years: number
@@ -819,7 +764,7 @@ export interface MultiCoinRenewParams {
 	slippageBps?: number
 }
 
-export interface MultiCoinRenewResult {
+interface MultiCoinRenewResult {
 	tx: Transaction
 	breakdown: SwapBreakdown & {
 		sourceCoinType: string
@@ -1080,7 +1025,7 @@ export async function buildMultiCoinRenewTx(
 	}
 }
 
-export interface GasSwapInfo {
+interface GasSwapInfo {
 	pool: import('./ns-price').SwappablePool
 	coinObjectIds: string[]
 	amountToSell: bigint

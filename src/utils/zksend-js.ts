@@ -76,7 +76,7 @@ export function generateZkSendJs(): string {
   `
 }
 
-export interface ZkSendUiConfig {
+interface ZkSendUiConfig {
 	getClientFn?: string
 }
 

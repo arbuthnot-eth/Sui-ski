@@ -2,6 +2,35 @@
 
 Instructions for AI assistants working on this codebase.
 
+## Progress Notes
+
+### 2026-02-14
+- Began migration of the profile/landing chat widget toward messaging-first naming.
+- Introduced `generateMessagingChatCss` / `generateMessagingChatJs` as primary exports and retained legacy aliases for compatibility.
+- Updated chat mount points in page handlers to `messaging-chat-root`, with runtime fallback to the legacy root ID.
+- Current state keeps all existing moderation and channel management behavior while reducing x402-specific naming on the page integration path.
+- Implemented `/cloudflare` as a dedicated searchable grace-period radar UI for SuiNS listings.
+- Upgraded `/api/expiring-listings` to support server-side search/filter mode (`grace`, `expiring`, `all`) and added grace-specific timing fields for queryable ranking.
+- Updated expiration filtering to exclude listings beyond the 30-day grace boundary.
+- Added weighted ranking controls for grace mode (`graceWeight`, `priceWeight`) and surfaced a priority score per result row.
+- Added quick preset actions to `/cloudflare` for common strategies and persisted preset selection in URL parameters.
+- Added `/grace` endpoint and default timestamp cutoff (`1716660606618`) to constrain results to newer TradePort activity and matching SuiNS expirations.
+- Added UX fallback for zero-grace states: `/grace` now auto-shows expiring-soon names with a notice when no current grace entries are found.
+- Updated TradePort ingestion filtering to use `expires_at` for listing-time qualification (instead of `block_time`) to match SDK semantics.
+- Added anti-stale handling for grace data fetches by setting `no-store` API cache headers and adding a client cache-busting request parameter.
+- Added automatic fallback to `block_time` when `expires_at` GraphQL projection is unavailable, and exposed `queryVariant` + GraphQL error summary in debug output.
+- Added RPC provider augmentation for targeted search terms so names can appear in grace queries even when TradePort listing data does not contain them.
+
+### 2026-02-15
+- Wired the chat widget to initialize the official Sui Stack Messaging SDK client (`@mysten/messaging@0.3.0`) with live Seal/Walrus config from `/api/app/subscriptions/config`.
+- Added hybrid channel transport in the widget: on-chain channels use official SDK read/send methods, while existing server-backed channels keep moderation and channel-control behavior.
+- Extended `/api/app/subscriptions/config` with SDK bootstrap details (`seal.rpcUrl`, `sdk.messagingVersion`, `sdk.messagingPackageConfig`) and network-aware Walrus defaults for mainnet/testnet.
+- Fixed widget ergonomics by hiding the page wallet widget while chat is open and switching chat visual markers to square styling for consistency.
+- Activated x402 chat API surface by mounting `/api/x402-chat/*` in the worker router.
+- Added x402 chat integration manifest endpoint (`/api/x402-chat/integrations`) for messaging SDK + WebMCP + x402-aware agent routing metadata.
+- Added WebMCP proxy bridge endpoints (`/api/x402-chat/webmcp` and `/api/x402-chat/webmcp/*`) with payment-header passthrough.
+- Added x402 chat agent bridge endpoints for allowlisted dispatch + MCP tool execution (`/api/x402-chat/agents/dispatch`, `/api/x402-chat/agents/webmcp/tool`).
+
 ---
 
 ## Project Overview
@@ -970,3 +999,20 @@ For a comprehensive visual reference of the complete Sui ecosystem architecture,
 - Network topology and SDK reference
 - Performance benchmarks (Mysticeti v2)
 - 2026 roadmap highlights (Remora horizontal scaling, protocol-level privacy)
+
+---
+
+## Progress Notes (2026-02-15)
+
+- Simplified `/grace` into a plain table-first experience focused on expiring SuiNS registrations.
+- Removed weighted ranking/dashboard controls from `/grace` and switched data source to `/api/grace-feed`.
+- Updated `/api/grace-feed` to support `status=all|expiring|grace`.
+- Added grace-lifecycle fields in API output:
+  - `expired`
+  - `inGracePeriod`
+  - `daysSinceExpiry`
+  - `daysUntilGraceEnds`
+- Increased default grace feed window from `90` days to `3650` days.
+- Added cache snapshotting for tracked registrations so new/known names persist between refresh windows.
+- Added SuiNS RPC lookup fallback for direct searched names (e.g. `usd.sui.ski`) when indexer rows are missing.
+- Deployed after each change with `npx wrangler deploy` per project instructions.

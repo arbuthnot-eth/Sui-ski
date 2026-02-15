@@ -4,7 +4,7 @@ const LEAF_PREFIX = new Uint8Array([0x00])
 const NODE_PREFIX = new Uint8Array([0x01])
 const HASH_LENGTH = 32
 
-export interface MmrPeak {
+interface MmrPeak {
 	height: number
 	position: number
 	hash: Uint8Array
@@ -16,7 +16,7 @@ export interface MmrState {
 	size: number
 }
 
-export interface MmrProof {
+interface MmrProof {
 	leafHash: Uint8Array
 	siblings: Uint8Array[]
 	leafIndex: number

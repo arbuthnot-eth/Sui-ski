@@ -26,7 +26,7 @@ const DEFAULT_GAS_BUDGET = 150_000_000
 
 type SupportedPaymentAsset = 'sui' | 'usdc' | 'ns'
 
-export interface CreateGraceVaultParams {
+interface CreateGraceVaultParams {
 	packageId?: string
 	senderAddress: string
 	domain: string
@@ -44,7 +44,7 @@ export interface CreateGraceVaultParams {
 	expirationMs?: number
 }
 
-export interface CreateGraceVaultBreakdown {
+interface CreateGraceVaultBreakdown {
 	paymentAsset: SupportedPaymentAsset
 	inputUsedMist: bigint
 	registrationBudgetNsMist: bigint
@@ -53,12 +53,12 @@ export interface CreateGraceVaultBreakdown {
 	totalRequiredNsMist: bigint
 }
 
-export interface CreateGraceVaultResult {
+interface CreateGraceVaultResult {
 	tx: Transaction
 	breakdown: CreateGraceVaultBreakdown
 }
 
-export interface ExecuteGraceVaultParams {
+interface ExecuteGraceVaultParams {
 	packageId?: string
 	senderAddress: string
 	vaultObjectId: string

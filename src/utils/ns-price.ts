@@ -1,7 +1,7 @@
 import type { Env } from '../types'
 import { cacheKey, getCached, setCache } from './cache'
 
-export interface NSPriceResult {
+interface NSPriceResult {
 	nsPerSui: number
 	suiPerNs: number
 	source: 'deepbook' | 'fallback'
@@ -13,18 +13,13 @@ export interface NSPriceResult {
 	bids?: [string, string][]
 }
 
-export interface SwapQuoteResult {
+interface SwapQuoteResult {
 	inputSui: bigint
 	outputNs: bigint
 	effectivePrice: number
 	priceImpactBps: number
 	levelsConsumed: number
 }
-
-export const NS_TOKEN = {
-	mainnet: '0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178',
-	testnet: null,
-} as const
 
 export const SUI_TYPE =
 	'0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI'
@@ -246,7 +241,7 @@ function createFallbackResult(): NSPriceResult {
 	}
 }
 
-export interface USDCPriceResult {
+interface USDCPriceResult {
 	suiPerUsdc: number
 	usdcPerSui: number
 	source: 'deepbook' | 'fallback'

@@ -34,10 +34,6 @@ export function htmlResponse(html: string, status = 200, headers: Record<string,
 	})
 }
 
-export function redirectResponse(url: string, permanent = false) {
-	return Response.redirect(url, permanent ? 301 : 302)
-}
-
 export function proxyResponse(response: Response) {
 	// Clone response and add CORS headers
 	const newHeaders = new Headers(response.headers)

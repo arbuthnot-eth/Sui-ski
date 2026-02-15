@@ -58,6 +58,7 @@ export interface Env {
 	X402_MULTICHAIN?: Fetcher
 	X402_BASE_PAY_TO?: string
 	X402_SOL_PAY_TO?: string
+	X402_BTC_PAY_TO?: string
 }
 
 export type X402VerifierProvider = 'cloudflare' | 'coinbase' | 'multichain'

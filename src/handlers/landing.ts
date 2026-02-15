@@ -2,7 +2,7 @@ import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import { Transaction } from '@mysten/sui/transactions'
 import { SuinsClient } from '@mysten/suins'
 import { Hono } from 'hono'
-import type { Env } from '../types'
+import type { Env, SuiNSRecord } from '../types'
 import { cacheKey, getCached, setCache } from '../utils/cache'
 import { getDeepBookSuiPools, getNSSuiPrice, getUSDCSuiPrice } from '../utils/ns-price'
 import { generateLogoSvg, getDefaultOgImageUrl } from '../utils/og-image'
@@ -16,10 +16,10 @@ import { generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
-import { generateX402ChatCss } from '../utils/x402-chat-css'
-import { generateX402ChatJs } from '../utils/x402-chat-js'
+import { generateMessagingChatCss } from '../utils/x402-chat-css'
+import { generateMessagingChatJs } from '../utils/x402-chat-js'
 
-export interface LandingPageOptions {
+interface LandingPageOptions {
 	canonicalUrl?: string
 	rpcUrl?: string
 	network?: string
@@ -852,8 +852,81 @@ apiRoutes.get('/owned-names', async (c) => {
 apiRoutes.get('/expiring-listings', async (c) => {
 	const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10) || 0)
 	const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') || '50', 10) || 50))
+	const q = String(c.req.query('q') || '')
+	const modeRaw = String(c.req.query('mode') || '').toLowerCase()
+	const mode: 'all' | 'grace' | 'expiring' =
+		modeRaw === 'all' || modeRaw === 'expiring' ? modeRaw : 'grace'
+	const graceWeight = Math.min(
+		100,
+		Math.max(0, parseInt(c.req.query('graceWeight') || '70', 10) || 70),
+	)
+	const priceWeight = Math.min(
+		100,
+		Math.max(0, parseInt(c.req.query('priceWeight') || '30', 10) || 30),
+	)
+	const minExpirationMs = Math.max(
+		0,
+		parseInt(c.req.query('minExpirationMs') || String(DEFAULT_MIN_EXPIRATION_MS), 10) ||
+			DEFAULT_MIN_EXPIRATION_MS,
+	)
 	const debug = c.req.query('debug') === 'true'
-	return handleExpiringListings(c.get('env'), offset, limit, debug)
+	return handleExpiringListings(c.get('env'), {
+		offset,
+		limit,
+		q,
+		mode,
+		graceWeight,
+		priceWeight,
+		minExpirationMs,
+		debug,
+	})
+})
+
+apiRoutes.get('/grace-feed', async (c) => {
+	const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10) || 0)
+	const limit = Math.min(200, Math.max(1, parseInt(c.req.query('limit') || '50', 10) || 50))
+	const q = String(c.req.query('q') || '')
+	const statusRaw = String(c.req.query('status') || '').toLowerCase()
+	const status: 'all' | 'grace' | 'expiring' =
+		statusRaw === 'grace' || statusRaw === 'expiring' ? statusRaw : 'all'
+	const minExpirationMs = Math.max(
+		0,
+		parseInt(c.req.query('minExpirationMs') || String(DEFAULT_MIN_EXPIRATION_MS), 10) ||
+			DEFAULT_MIN_EXPIRATION_MS,
+	)
+	const windowDays = Math.min(
+		3650,
+		Math.max(30, parseInt(c.req.query('windowDays') || '3650', 10) || 3650),
+	)
+	const debug = c.req.query('debug') === 'true'
+	return handleGraceFeed(c.get('env'), {
+		offset,
+		limit,
+		q,
+		status,
+		minExpirationMs,
+		windowDays,
+		debug,
+	})
+})
+
+apiRoutes.get('/grace-activity', async (c) => {
+	const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10) || 0)
+	const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') || '50', 10) || 50))
+	const q = String(c.req.query('q') || '')
+	const type = String(c.req.query('type') || '')
+	const minBlockTimeMs = Math.max(
+		0,
+		parseInt(c.req.query('minBlockTimeMs') || String(DEFAULT_MIN_EXPIRATION_MS), 10) ||
+			DEFAULT_MIN_EXPIRATION_MS,
+	)
+	return handleGraceActivity(c.get('env'), {
+		offset,
+		limit,
+		q,
+		type,
+		minBlockTimeMs,
+	})
 })
 
 /**
@@ -1546,6 +1619,10 @@ interface ExpiringListingEntry {
 	tokenId: string
 	expirationMs: number
 	daysUntilExpiry: number
+	daysSinceExpiry: number
+	daysUntilGraceEnds: number
+	graceEndsMs: number
+	priorityScore: number | null
 	expired: boolean
 	inGracePeriod: boolean
 	price: number
@@ -1553,15 +1630,52 @@ interface ExpiringListingEntry {
 	seller: string
 	marketName: string
 	tradeportUrl: string
+	dataSource?: 'tradeport' | 'rpc'
 }
 
 interface ExpiringListingsResponse {
 	listings: ExpiringListingEntry[]
 	total: number
+	totalUnfiltered: number
 	offset: number
 	limit: number
 	fetchedAt: number
 	windowDays: { expiringWithin: number; expiredWithin: number }
+	query: {
+		q: string
+		mode: 'all' | 'grace' | 'expiring'
+		graceWeight: number
+		priceWeight: number
+		minExpirationMs: number
+	}
+}
+
+interface GraceFeedEntry {
+	name: string
+	tokenId: string
+	expirationMs: number
+	daysUntilExpiry: number
+	daysSinceExpiry: number
+	daysUntilGraceEnds: number
+	expired: boolean
+	inGracePeriod: boolean
+	status: 'expiring' | 'grace'
+	owner: string
+	dataSource: 'chain_state' | 'rpc'
+}
+
+interface GraceFeedResponse {
+	names: GraceFeedEntry[]
+	total: number
+	offset: number
+	limit: number
+	fetchedAt: number
+	query: {
+		q: string
+		status: 'all' | 'grace' | 'expiring'
+		minExpirationMs: number
+		windowDays: number
+	}
 }
 
 const INDEXER_API_URL = 'https://api.indexer.xyz/graphql'
@@ -1862,7 +1976,7 @@ interface NftActivityAction {
 	listingNonce: string | null
 }
 
-const ACTIVITY_CACHE_TTL = 60
+const NFT_ACTIVITY_CACHE_TTL = 60
 
 async function handleNftActivity(nftId: string, _env: Env): Promise<Response> {
 	const corsHeaders = {
@@ -1973,7 +2087,7 @@ async function handleNftActivity(nftId: string, _env: Env): Promise<Response> {
 		}))
 
 		const activityData = { actions: formattedActions }
-		await setCache(activityCacheKey, activityData, ACTIVITY_CACHE_TTL)
+		await setCache(activityCacheKey, activityData, NFT_ACTIVITY_CACHE_TTL)
 
 		return new Response(JSON.stringify(activityData), {
 			status: 200,
@@ -2112,7 +2226,7 @@ async function handleNftActivityByTokenId(tokenId: string, _env: Env): Promise<R
 		}))
 
 		const activityData = { actions: formattedActions }
-		await setCache(activityCacheKey, activityData, ACTIVITY_CACHE_TTL)
+		await setCache(activityCacheKey, activityData, NFT_ACTIVITY_CACHE_TTL)
 
 		return new Response(JSON.stringify(activityData), {
 			status: 200,
@@ -2225,39 +2339,670 @@ async function handleAcceptBidTransaction(
 }
 
 const EXPIRING_WINDOW_DAYS = 90
-const EXPIRED_WINDOW_DAYS = 45
+const EXPIRED_WINDOW_DAYS = 30
 const GRACE_PERIOD_DAYS = 30
+const DEFAULT_MIN_EXPIRATION_MS = 1716660606618
 const EXPIRING_LISTINGS_CACHE_TTL = 300
 const EXPIRING_LISTINGS_PAGE_SIZE = 200
 const EXPIRING_LISTINGS_MAX_PAGES = 25
 const MS_PER_DAY = 86_400_000
+const DEFAULT_GRACE_WEIGHT = 70
+const DEFAULT_PRICE_WEIGHT = 30
+
+const ACTIVITY_CACHE_TTL = 180
+const ACTIVITY_PAGE_SIZE = 100
+const ACTIVITY_MAX_PAGES = 10
+
+interface GraceActivityEntry {
+	actionId: string
+	type: string
+	price: number
+	priceSui: number
+	usdPrice: number | null
+	priceCoin: string | null
+	sender: string
+	receiver: string
+	txId: string
+	blockTimeMs: number
+	marketName: string
+	nftTokenId: string
+	nftName: string
+	nftOwner: string
+	tradeportUrl: string
+}
+
+interface GraceActivityOptions {
+	offset: number
+	limit: number
+	q: string
+	type: string
+	minBlockTimeMs: number
+}
+
+interface GraceActivityResponse {
+	actions: GraceActivityEntry[]
+	total: number
+	totalUnfiltered: number
+	offset: number
+	limit: number
+	fetchedAt: number
+	query: { q: string; type: string; minBlockTimeMs: number }
+}
+
+interface ExpiringListingsOptions {
+	offset: number
+	limit: number
+	q: string
+	mode: 'all' | 'grace' | 'expiring'
+	graceWeight: number
+	priceWeight: number
+	minExpirationMs: number
+	debug: boolean
+}
+
+interface GraceFeedOptions {
+	offset: number
+	limit: number
+	q: string
+	status: 'all' | 'grace' | 'expiring'
+	minExpirationMs: number
+	windowDays: number
+	debug: boolean
+}
+
+const GRACE_FEED_CACHE_TTL = 600
+const GRACE_FEED_SNAPSHOT_TTL = 21600
+const GRACE_FEED_PAGE_SIZE = 300
+const GRACE_FEED_MAX_PAGES = 40
+
+function parseTimestampMs(rawValue: unknown): number | null {
+	if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+		if (rawValue <= 0) return null
+		if (rawValue < 1e12 && rawValue > 1e9) return Math.round(rawValue * 1000)
+		return Math.round(rawValue)
+	}
+	if (typeof rawValue === 'string') {
+		const parsed = Number(rawValue)
+		if (Number.isFinite(parsed) && parsed > 0) {
+			if (parsed < 1e12 && parsed > 1e9) return Math.round(parsed * 1000)
+			return Math.round(parsed)
+		}
+		const asDate = Date.parse(rawValue)
+		if (Number.isFinite(asDate) && asDate > 0) return asDate
+	}
+	return null
+}
+
+function extractExpirationMsFromChainState(chainState: unknown): number | null {
+	const queue: unknown[] = [chainState]
+	const visited = new Set<object>()
+	let traversed = 0
+	while (queue.length > 0 && traversed < 2000) {
+		const current = queue.shift()
+		traversed++
+		if (!current) continue
+		if (typeof current === 'string') {
+			const trimmed = current.trim()
+			if (
+				(trimmed.startsWith('{') || trimmed.startsWith('[')) &&
+				trimmed.length > 1 &&
+				trimmed.length < 200_000
+			) {
+				try {
+					queue.push(JSON.parse(trimmed))
+				} catch {
+					// non-json string payload
+				}
+			}
+			continue
+		}
+		if (Array.isArray(current)) {
+			for (let i = 0; i < current.length; i++) queue.push(current[i])
+			continue
+		}
+		if (typeof current === 'object') {
+			if (visited.has(current as object)) continue
+			visited.add(current as object)
+			const record = current as Record<string, unknown>
+			for (const [key, value] of Object.entries(record)) {
+				const keyLower = key.toLowerCase()
+				if (
+					keyLower === 'expiration_timestamp_ms' ||
+					keyLower === 'expirationtimestampms' ||
+					keyLower === 'expiration_ms' ||
+					keyLower === 'expires_at'
+				) {
+					const parsed = parseTimestampMs(value)
+					if (parsed) return parsed
+				}
+				queue.push(value)
+			}
+		}
+	}
+	return null
+}
+
+function hydrateGraceFeedEntries(entries: GraceFeedEntry[], now: number): GraceFeedEntry[] {
+	const gracePeriodMs = GRACE_PERIOD_DAYS * MS_PER_DAY
+	const hydrated: GraceFeedEntry[] = []
+	for (let i = 0; i < entries.length; i++) {
+		const entry = entries[i]
+		const expirationMs = Number(entry.expirationMs || 0)
+		if (!Number.isFinite(expirationMs) || expirationMs <= 0) continue
+		if (expirationMs < now - gracePeriodMs) continue
+		const expired = expirationMs < now
+		const graceEndsMs = expirationMs + gracePeriodMs
+		const inGracePeriod = expired && graceEndsMs > now
+		const daysUntilExpiry = Math.round(((expirationMs - now) / MS_PER_DAY) * 10) / 10
+		const daysSinceExpiry = expired ? Math.round(((now - expirationMs) / MS_PER_DAY) * 10) / 10 : 0
+		const daysUntilGraceEnds = inGracePeriod
+			? Math.round(((graceEndsMs - now) / MS_PER_DAY) * 10) / 10
+			: GRACE_PERIOD_DAYS
+		hydrated.push({
+			...entry,
+			daysUntilExpiry,
+			daysSinceExpiry,
+			daysUntilGraceEnds,
+			expired,
+			inGracePeriod,
+			status: inGracePeriod ? 'grace' : 'expiring',
+		})
+	}
+	hydrated.sort((a, b) => a.expirationMs - b.expirationMs)
+	return hydrated
+}
+
+function filterGraceFeed(
+	entries: GraceFeedEntry[],
+	q: string,
+	status: 'all' | 'grace' | 'expiring',
+	windowDays: number,
+	now: number,
+): GraceFeedEntry[] {
+	const query = q.trim().toLowerCase()
+	const windowEndMs = now + windowDays * MS_PER_DAY
+	const normalizedQueryName = normalizeSearchName(query)
+	const filtered: GraceFeedEntry[] = []
+	for (let i = 0; i < entries.length; i++) {
+		const entry = entries[i]
+		if (entry.expirationMs > windowEndMs) continue
+		if (status === 'grace' && !entry.inGracePeriod) continue
+		if (status === 'expiring' && entry.expired) continue
+		if (!query) {
+			filtered.push(entry)
+			continue
+		}
+		const name = entry.name.toLowerCase()
+		const tokenId = entry.tokenId.toLowerCase()
+		const owner = entry.owner.toLowerCase()
+		const normalizedMatches = normalizedQueryName
+			? name.includes(normalizedQueryName) || name.includes(`${normalizedQueryName}.sui`)
+			: false
+		if (
+			!name.includes(query) &&
+			!tokenId.includes(query) &&
+			!owner.includes(query) &&
+			!normalizedMatches
+		)
+			continue
+		filtered.push(entry)
+	}
+	return filtered
+}
+
+async function handleGraceFeed(env: Env, options: GraceFeedOptions): Promise<Response> {
+	const { offset, limit, q, status, minExpirationMs, windowDays, debug } = options
+	const corsHeaders = {
+		'Access-Control-Allow-Origin': '*',
+		'Content-Type': 'application/json',
+		'Cache-Control': 'no-store, max-age=0',
+	}
+	const now = Date.now()
+	const gracePeriodMs = GRACE_PERIOD_DAYS * MS_PER_DAY
+	const sourceCacheKey = cacheKey('grace-feed-source-v2', env.SUI_NETWORK, String(minExpirationMs))
+	const snapshotCacheKey = cacheKey('grace-feed-snapshot-v2', env.SUI_NETWORK)
+	const cached = debug ? null : await getCached<GraceFeedEntry[]>(sourceCacheKey)
+	if (cached) {
+		const hydrated = hydrateGraceFeedEntries(cached, now)
+		let filtered = filterGraceFeed(hydrated, q, status, windowDays, now)
+		if (q && filtered.length === 0) {
+			const fallback = await resolveGraceFeedSearchEntry(q, env, now, minExpirationMs)
+			if (fallback) {
+				const fallbackHydrated = hydrateGraceFeedEntries([fallback], now)
+				const fallbackFiltered = filterGraceFeed(fallbackHydrated, q, status, windowDays, now)
+				if (fallbackFiltered.length > 0) {
+					filtered = fallbackFiltered
+				}
+			}
+		}
+		const payload: GraceFeedResponse = {
+			names: filtered.slice(offset, offset + limit),
+			total: filtered.length,
+			offset,
+			limit,
+			fetchedAt: now,
+			query: { q, status, minExpirationMs, windowDays },
+		}
+		return new Response(JSON.stringify(payload), {
+			status: 200,
+			headers: { ...corsHeaders, 'X-Cache': 'HIT' },
+		})
+	}
+
+	try {
+		type IndexerNft = {
+			tokenId: string
+			name: string
+			owner: string
+			chainState: unknown
+		}
+		const nfts: IndexerNft[] = []
+		const gqlErrors: string[] = []
+		const queryRegistrations = `query FetchSuinsRegistrations($where: nfts_bool_exp, $offset: Int, $limit: Int!) {
+			sui {
+				nfts(where: $where, order_by: [{token_id: asc}], offset: $offset, limit: $limit) {
+					token_id
+					name
+					owner
+					chain_state
+				}
+			}
+		}`
+		const where = {
+			collection_id: { _eq: SUINS_COLLECTION_ID },
+		}
+
+		for (let page = 0; page < GRACE_FEED_MAX_PAGES; page++) {
+			const pageOffset = page * GRACE_FEED_PAGE_SIZE
+			const response = await fetch(INDEXER_API_URL, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'x-api-user': INDEXER_API_USER,
+					'x-api-key': env.INDEXER_API_KEY || '',
+				},
+				body: JSON.stringify({
+					query: queryRegistrations,
+					variables: { where, offset: pageOffset, limit: GRACE_FEED_PAGE_SIZE },
+				}),
+			})
+			if (!response.ok) break
+			const result = (await response.json()) as {
+				data?: {
+					sui?: {
+						nfts?: Array<{
+							token_id?: string
+							name?: string
+							owner?: string
+							chain_state?: unknown
+						}>
+					}
+				}
+				errors?: Array<{ message?: string }>
+			}
+			if (result.errors && result.errors.length > 0) {
+				gqlErrors.push(result.errors[0]?.message || 'Unknown GraphQL error')
+				break
+			}
+			const pageNfts = result.data?.sui?.nfts || []
+			if (pageNfts.length === 0) break
+			for (let i = 0; i < pageNfts.length; i++) {
+				const nft = pageNfts[i]
+				if (!nft.token_id || !nft.name) continue
+				nfts.push({
+					tokenId: nft.token_id,
+					name: nft.name.endsWith('.sui') ? nft.name : `${nft.name}.sui`,
+					owner: String(nft.owner || ''),
+					chainState: nft.chain_state,
+				})
+			}
+			if (pageNfts.length < GRACE_FEED_PAGE_SIZE) break
+		}
+
+		const expirationMap = new Map<string, { expirationMs: number; source: 'chain_state' | 'rpc' }>()
+		const missingIds: string[] = []
+		for (let i = 0; i < nfts.length; i++) {
+			const parsed = extractExpirationMsFromChainState(nfts[i].chainState)
+			if (parsed && parsed > 0) {
+				expirationMap.set(nfts[i].tokenId, { expirationMs: parsed, source: 'chain_state' })
+			} else {
+				missingIds.push(nfts[i].tokenId)
+			}
+		}
+
+		if (missingIds.length > 0) {
+			const client = new SuiClient({
+				url: getDefaultRpcUrl(env.SUI_NETWORK),
+				network: env.SUI_NETWORK,
+			})
+			const RPC_BATCH_SIZE = 50
+			for (let i = 0; i < missingIds.length; i += RPC_BATCH_SIZE) {
+				const ids = missingIds.slice(i, i + RPC_BATCH_SIZE)
+				try {
+					const objects = await client.multiGetObjects({
+						ids,
+						options: { showContent: true },
+					})
+					for (let j = 0; j < objects.length; j++) {
+						const obj = objects[j]
+						const fields = (obj.data?.content as { fields?: Record<string, unknown> })?.fields
+						if (!fields) continue
+						const expMs = Number(fields.expiration_timestamp_ms ?? fields.expirationTimestampMs ?? 0)
+						if (expMs > 0) {
+							expirationMap.set(ids[j], { expirationMs: expMs, source: 'rpc' })
+						}
+					}
+				} catch {
+					// continue
+				}
+			}
+		}
+
+		const entries: GraceFeedEntry[] = []
+		let chainStateCount = 0
+		let rpcCount = 0
+		for (let i = 0; i < nfts.length; i++) {
+			const nft = nfts[i]
+			const resolved = expirationMap.get(nft.tokenId)
+			if (!resolved) continue
+			const expirationMs = resolved.expirationMs
+			if (expirationMs < minExpirationMs) continue
+			if (expirationMs < now - gracePeriodMs) continue
+			if (resolved.source === 'chain_state') chainStateCount++
+			else rpcCount++
+			entries.push({
+				name: nft.name,
+				tokenId: nft.tokenId,
+				expirationMs,
+				daysUntilExpiry: 0,
+				daysSinceExpiry: 0,
+				daysUntilGraceEnds: GRACE_PERIOD_DAYS,
+				expired: false,
+				inGracePeriod: false,
+				status: 'expiring',
+				owner: nft.owner,
+				dataSource: resolved.source,
+			})
+		}
+
+		const snapshotCached = debug ? null : await getCached<GraceFeedEntry[]>(snapshotCacheKey)
+		const mergedByTokenId = new Map<string, GraceFeedEntry>()
+		if (snapshotCached) {
+			for (let i = 0; i < snapshotCached.length; i++) {
+				const snap = snapshotCached[i]
+				if (!snap?.tokenId || !snap?.expirationMs) continue
+				if (snap.expirationMs < minExpirationMs) continue
+				if (snap.expirationMs < now - gracePeriodMs) continue
+				mergedByTokenId.set(snap.tokenId, snap)
+			}
+		}
+		for (let i = 0; i < entries.length; i++) {
+			mergedByTokenId.set(entries[i].tokenId, entries[i])
+		}
+		const mergedEntries = Array.from(mergedByTokenId.values())
+		mergedEntries.sort((a, b) => a.expirationMs - b.expirationMs)
+		const hydratedEntries = hydrateGraceFeedEntries(mergedEntries, now)
+		if (!debug) {
+			await Promise.all([
+				setCache(sourceCacheKey, hydratedEntries, GRACE_FEED_CACHE_TTL),
+				setCache(snapshotCacheKey, hydratedEntries, GRACE_FEED_SNAPSHOT_TTL),
+			])
+		}
+		let filtered = filterGraceFeed(hydratedEntries, q, status, windowDays, now)
+		if (q && filtered.length === 0) {
+			const fallback = await resolveGraceFeedSearchEntry(q, env, now, minExpirationMs)
+			if (fallback) {
+				const fallbackHydrated = hydrateGraceFeedEntries([fallback], now)
+				const fallbackFiltered = filterGraceFeed(fallbackHydrated, q, status, windowDays, now)
+				if (fallbackFiltered.length > 0) {
+					filtered = fallbackFiltered
+				}
+			}
+		}
+		const responseBody: Record<string, unknown> = {
+			names: filtered.slice(offset, offset + limit),
+			total: filtered.length,
+			offset,
+			limit,
+			fetchedAt: now,
+			query: { q, status, minExpirationMs, windowDays },
+		}
+		if (debug) {
+			responseBody.debug = {
+				totalRegistrationsScanned: nfts.length,
+				snapshotSize: snapshotCached?.length || 0,
+				trackedTotal: hydratedEntries.length,
+				chainStateCount,
+				rpcCount,
+				gqlErrors: gqlErrors.slice(0, 3),
+			}
+		}
+		return new Response(JSON.stringify(responseBody), {
+			status: 200,
+			headers: { ...corsHeaders, 'X-Cache': 'MISS' },
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to build grace feed'
+		return new Response(JSON.stringify({ error: message, names: [] }), {
+			status: 200,
+			headers: corsHeaders,
+		})
+	}
+}
+
+function filterExpiringListings(
+	entries: ExpiringListingEntry[],
+	q: string,
+	mode: 'all' | 'grace' | 'expiring',
+	graceWeightPct: number,
+	priceWeightPct: number,
+): ExpiringListingEntry[] {
+	const query = q.trim().toLowerCase()
+	const normalizedQueryName = normalizeSearchName(query)
+	const filtered: ExpiringListingEntry[] = []
+	for (let i = 0; i < entries.length; i++) {
+		const entry = entries[i]
+		if (mode === 'grace' && !entry.inGracePeriod) continue
+		if (mode === 'expiring' && entry.expired) continue
+		if (query.length > 0) {
+			const name = entry.name.toLowerCase()
+			const tokenId = entry.tokenId.toLowerCase()
+			const seller = entry.seller.toLowerCase()
+			const normalizedMatches = normalizedQueryName
+				? name.includes(normalizedQueryName) || name.includes(`${normalizedQueryName}.sui`)
+				: false
+			if (
+				!name.includes(query) &&
+				!tokenId.includes(query) &&
+				!seller.includes(query) &&
+				!normalizedMatches
+			)
+				continue
+		}
+		filtered.push(entry)
+	}
+
+	if (mode === 'grace') {
+		let minPrice = Number.POSITIVE_INFINITY
+		let maxPrice = 0
+		for (let i = 0; i < filtered.length; i++) {
+			const price = Number(filtered[i].price || 0)
+			if (price < minPrice) minPrice = price
+			if (price > maxPrice) maxPrice = price
+		}
+		if (!Number.isFinite(minPrice)) minPrice = 0
+		const priceSpread = maxPrice - minPrice
+		let graceWeight = Math.min(100, Math.max(0, graceWeightPct)) / 100
+		let priceWeight = Math.min(100, Math.max(0, priceWeightPct)) / 100
+		const weightSum = graceWeight + priceWeight
+		if (weightSum <= 0) {
+			graceWeight = DEFAULT_GRACE_WEIGHT / 100
+			priceWeight = DEFAULT_PRICE_WEIGHT / 100
+		} else {
+			graceWeight /= weightSum
+			priceWeight /= weightSum
+		}
+
+		const ranked: ExpiringListingEntry[] = []
+		for (let i = 0; i < filtered.length; i++) {
+			const entry = filtered[i]
+			const graceRatioRaw = 1 - entry.daysUntilGraceEnds / GRACE_PERIOD_DAYS
+			const graceUrgency = Math.max(0, Math.min(1, graceRatioRaw))
+			const priceValue =
+				priceSpread > 0
+					? Math.max(0, Math.min(1, (maxPrice - entry.price) / priceSpread))
+					: 1
+			const score = graceUrgency * graceWeight + priceValue * priceWeight
+			ranked.push({
+				...entry,
+				priorityScore: Math.round(score * 1000) / 1000,
+			})
+		}
+
+		ranked.sort(
+			(a, b) =>
+				(b.priorityScore || 0) - (a.priorityScore || 0) ||
+				a.daysUntilGraceEnds - b.daysUntilGraceEnds ||
+				a.price - b.price,
+		)
+		return ranked
+	}
+	if (mode === 'expiring') {
+		filtered.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry || a.price - b.price)
+		return filtered
+	}
+	return filtered
+}
+
+function normalizeSearchName(rawValue: string): string | null {
+	let value = String(rawValue || '').trim().toLowerCase()
+	if (!value) return null
+	value = value.replace(/^https?:\/\//, '')
+	value = value.replace(/\/.*$/, '')
+	if (value.endsWith('.sui.ski')) value = value.slice(0, -8)
+	if (value.endsWith('.sui')) value = value.slice(0, -4)
+	if (value.includes('.')) value = value.split('.')[0]
+	value = value
+		.replace(/[^a-z0-9-]/g, '-')
+		.replace(/-+/g, '-')
+		.replace(/^-|-$/g, '')
+		.slice(0, 48)
+	return value || null
+}
+
+async function resolveGraceFeedSearchEntry(
+	q: string,
+	env: Env,
+	now: number,
+	minExpirationMs: number,
+): Promise<GraceFeedEntry | null> {
+	const name = normalizeSearchName(q)
+	if (!name) return null
+	try {
+		const { resolveSuiNS } = await import('../resolvers/suins')
+		const resolved = await resolveSuiNS(name, env)
+		if (!resolved.found || !resolved.data) return null
+		const record = resolved.data as SuiNSRecord & { expirationTimestampMs?: string }
+		const expirationMs = Number(record.expirationTimestampMs || 0)
+		if (!Number.isFinite(expirationMs) || expirationMs <= 0) return null
+		if (expirationMs < minExpirationMs) return null
+		if (expirationMs < now - GRACE_PERIOD_DAYS * MS_PER_DAY) return null
+		const cleanName = name.endsWith('.sui') ? name : `${name}.sui`
+		return {
+			name: cleanName,
+			tokenId: record.nftId || cleanName,
+			expirationMs,
+			daysUntilExpiry: 0,
+			daysSinceExpiry: 0,
+			daysUntilGraceEnds: GRACE_PERIOD_DAYS,
+			expired: false,
+			inGracePeriod: false,
+			status: 'expiring',
+			owner: record.ownerAddress || record.address || '',
+			dataSource: 'rpc',
+		}
+	} catch {
+		return null
+	}
+}
+
+async function resolveRpcSearchEntry(
+	q: string,
+	env: Env,
+	now: number,
+	minExpirationMs: number,
+	gracePeriodMs: number,
+): Promise<ExpiringListingEntry | null> {
+	const name = normalizeSearchName(q)
+	if (!name) return null
+	try {
+		const { resolveSuiNS } = await import('../resolvers/suins')
+		const resolved = await resolveSuiNS(name, env)
+		if (!resolved.found || !resolved.data) return null
+		const record = resolved.data as SuiNSRecord & { expirationTimestampMs?: string }
+		const expirationMs = Number(record.expirationTimestampMs || 0)
+		if (!Number.isFinite(expirationMs) || expirationMs <= 0) return null
+		if (expirationMs < minExpirationMs) return null
+
+		const graceEndsMs = expirationMs + gracePeriodMs
+		const expired = expirationMs < now
+		const inGracePeriod = expired && graceEndsMs > now
+		if (expired && graceEndsMs <= now) return null
+		const daysUntilExpiry = (expirationMs - now) / MS_PER_DAY
+		const cleanName = name.endsWith('.sui') ? name : `${name}.sui`
+		return {
+			name: cleanName,
+			tokenId: record.nftId || cleanName,
+			expirationMs,
+			daysUntilExpiry: Math.round(daysUntilExpiry * 10) / 10,
+			daysSinceExpiry: expired ? Math.round(((now - expirationMs) / MS_PER_DAY) * 10) / 10 : 0,
+			daysUntilGraceEnds: expired
+				? Math.round(((graceEndsMs - now) / MS_PER_DAY) * 10) / 10
+				: GRACE_PERIOD_DAYS,
+			graceEndsMs,
+			priorityScore: null,
+			expired,
+			inGracePeriod,
+			price: 0,
+			priceSui: 0,
+			seller: record.ownerAddress || record.address || '',
+			marketName: 'rpc',
+			tradeportUrl: `https://www.tradeport.xyz/sui/collection/suins?search=${encodeURIComponent(cleanName.replace(/\.sui$/i, ''))}`,
+			dataSource: 'rpc',
+		}
+	} catch {
+		return null
+	}
+}
 
 async function handleExpiringListings(
 	env: Env,
-	offset: number,
-	limit: number,
-	debug = false,
+	options: ExpiringListingsOptions,
 ): Promise<Response> {
+	const { offset, limit, q, mode, graceWeight, priceWeight, minExpirationMs, debug } = options
 	const corsHeaders = {
 		'Access-Control-Allow-Origin': '*',
 		'Content-Type': 'application/json',
 	}
 
-	const fullCacheKey = cacheKey('expiring-listings', env.SUI_NETWORK)
+	const fullCacheKey = cacheKey('expiring-listings', env.SUI_NETWORK, String(minExpirationMs))
 	const cached = debug ? null : await getCached<ExpiringListingEntry[]>(fullCacheKey)
 	if (cached) {
-		const slice = cached.slice(offset, offset + limit)
+		const filtered = filterExpiringListings(cached, q, mode, graceWeight, priceWeight)
+		const slice = filtered.slice(offset, offset + limit)
 		const response: ExpiringListingsResponse = {
 			listings: slice,
-			total: cached.length,
+			total: filtered.length,
+			totalUnfiltered: cached.length,
 			offset,
 			limit,
 			fetchedAt: Date.now(),
 			windowDays: { expiringWithin: EXPIRING_WINDOW_DAYS, expiredWithin: EXPIRED_WINDOW_DAYS },
+			query: { q, mode, graceWeight, priceWeight, minExpirationMs },
 		}
 		return new Response(JSON.stringify(response), {
 			status: 200,
-			headers: { ...corsHeaders, 'X-Cache': 'HIT' },
+			headers: { ...corsHeaders, 'X-Cache': 'HIT', 'Cache-Control': 'no-store, max-age=0' },
 		})
 	}
 
@@ -2267,12 +3012,28 @@ async function handleExpiringListings(
 		const expiredCutoff = now - EXPIRED_WINDOW_DAYS * MS_PER_DAY
 		const gracePeriodMs = GRACE_PERIOD_DAYS * MS_PER_DAY
 
-		const query = `query FetchExpiringListings($where: listings_bool_exp, $offset: Int, $limit: Int!) {
+		const queryWithExpiresAt = `query FetchExpiringListings($where: listings_bool_exp, $offset: Int, $limit: Int!) {
 			sui {
 				listings(where: $where, order_by: [{price: asc}], offset: $offset, limit: $limit) {
 					price
 					seller
 					market_name
+					expires_at
+					block_time
+					nft {
+						name
+						token_id
+					}
+				}
+			}
+		}`
+		const queryWithBlockTimeOnly = `query FetchExpiringListings($where: listings_bool_exp, $offset: Int, $limit: Int!) {
+			sui {
+				listings(where: $where, order_by: [{price: asc}], offset: $offset, limit: $limit) {
+					price
+					seller
+					market_name
+					block_time
 					nft {
 						name
 						token_id
@@ -2294,15 +3055,19 @@ async function handleExpiringListings(
 			price: number
 			seller: string
 			marketName: string
+			expiresAtMs: number
+			timeSource: 'expires_at' | 'block_time'
 			name: string
 			tokenId: string
 		}
 
 		const allListings: IndexerListing[] = []
+		let queryVariant: 'expires_at' | 'block_time' = 'expires_at'
+		const graphqlErrors: string[] = []
 
 		for (let page = 0; page < EXPIRING_LISTINGS_MAX_PAGES; page++) {
 			const pageOffset = page * EXPIRING_LISTINGS_PAGE_SIZE
-			const response = await fetch(INDEXER_API_URL, {
+			let response = await fetch(INDEXER_API_URL, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -2310,7 +3075,7 @@ async function handleExpiringListings(
 					'x-api-key': env.INDEXER_API_KEY || '',
 				},
 				body: JSON.stringify({
-					query,
+					query: queryVariant === 'expires_at' ? queryWithExpiresAt : queryWithBlockTimeOnly,
 					variables: { where, offset: pageOffset, limit: EXPIRING_LISTINGS_PAGE_SIZE },
 				}),
 			})
@@ -2320,13 +3085,15 @@ async function handleExpiringListings(
 				break
 			}
 
-			const result = (await response.json()) as {
+			let result = (await response.json()) as {
 				data?: {
 					sui?: {
 						listings?: Array<{
 							price: number
 							seller: string
 							market_name?: string
+							expires_at?: string
+							block_time?: string
 							nft?: { name?: string; token_id?: string }
 						}>
 					}
@@ -2334,9 +3101,31 @@ async function handleExpiringListings(
 				errors?: Array<{ message: string }>
 			}
 
-			if (result.errors) {
-				console.error('Expiring listings GraphQL error:', result.errors[0]?.message)
-				break
+			if (result.errors && result.errors.length > 0) {
+				graphqlErrors.push(result.errors[0]?.message || 'Unknown GraphQL error')
+				if (queryVariant === 'expires_at') {
+					queryVariant = 'block_time'
+					response = await fetch(INDEXER_API_URL, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'x-api-user': INDEXER_API_USER,
+							'x-api-key': env.INDEXER_API_KEY || '',
+						},
+						body: JSON.stringify({
+							query: queryWithBlockTimeOnly,
+							variables: { where, offset: pageOffset, limit: EXPIRING_LISTINGS_PAGE_SIZE },
+						}),
+					})
+					if (!response.ok) break
+					result = (await response.json()) as typeof result
+					if (result.errors && result.errors.length > 0) {
+						graphqlErrors.push(result.errors[0]?.message || 'Unknown GraphQL error')
+						break
+					}
+				} else {
+					break
+				}
 			}
 
 			const listings = result.data?.sui?.listings
@@ -2345,10 +3134,19 @@ async function handleExpiringListings(
 			for (let i = 0; i < listings.length; i++) {
 				const l = listings[i]
 				if (!l.nft?.token_id || !l.nft.name) continue
+				const expiresAtMs = l.expires_at ? Date.parse(l.expires_at) : NaN
+				const blockTimeMs = l.block_time ? Date.parse(l.block_time) : NaN
+				const hasExpiresAt = Number.isFinite(expiresAtMs)
+				const hasBlockTime = Number.isFinite(blockTimeMs)
+				if (!hasExpiresAt && !hasBlockTime) continue
+				const effectiveMs = hasExpiresAt ? expiresAtMs : blockTimeMs
+				if (effectiveMs < minExpirationMs) continue
 				allListings.push({
 					price: l.price,
 					seller: l.seller,
 					marketName: l.market_name || 'tradeport',
+					expiresAtMs: effectiveMs,
+					timeSource: hasExpiresAt ? 'expires_at' : 'block_time',
 					name: l.nft.name,
 					tokenId: l.nft.token_id,
 				})
@@ -2386,16 +3184,26 @@ async function handleExpiringListings(
 		}
 
 		const allEntries: ExpiringListingEntry[] = []
+		let sourceExpiresAtCount = 0
+		let sourceBlockTimeFallbackCount = 0
+		let rpcSearchIncluded = false
+		let rpcSearchName: string | null = null
 
 		for (let i = 0; i < allListings.length; i++) {
 			const listing = allListings[i]
+			if (listing.timeSource === 'expires_at') sourceExpiresAtCount++
+			else sourceBlockTimeFallbackCount++
 			const expirationMs = expirationMap.get(listing.tokenId)
 			if (!expirationMs) continue
+			if (expirationMs < minExpirationMs) continue
 			if (expirationMs > expiringCutoff || expirationMs < expiredCutoff) continue
 
 			const daysUntilExpiry = (expirationMs - now) / MS_PER_DAY
 			const expired = expirationMs < now
-			const inGracePeriod = expired && expirationMs + gracePeriodMs > now
+			const graceEndsMs = expirationMs + gracePeriodMs
+			const inGracePeriod = expired && graceEndsMs > now
+			const expiredBeyondGrace = expired && graceEndsMs <= now
+			if (expiredBeyondGrace) continue
 			const name = listing.name.endsWith('.sui') ? listing.name : `${listing.name}.sui`
 			const tradeportUrl = `https://www.tradeport.xyz/sui/collection/suins/${listing.tokenId}`
 
@@ -2404,6 +3212,12 @@ async function handleExpiringListings(
 				tokenId: listing.tokenId,
 				expirationMs,
 				daysUntilExpiry: Math.round(daysUntilExpiry * 10) / 10,
+				daysSinceExpiry: expired ? Math.round(((now - expirationMs) / MS_PER_DAY) * 10) / 10 : 0,
+				daysUntilGraceEnds: expired
+					? Math.round(((graceEndsMs - now) / MS_PER_DAY) * 10) / 10
+					: GRACE_PERIOD_DAYS,
+				graceEndsMs,
+				priorityScore: null,
 				expired,
 				inGracePeriod,
 				price: listing.price,
@@ -2411,7 +3225,22 @@ async function handleExpiringListings(
 				seller: listing.seller,
 				marketName: listing.marketName,
 				tradeportUrl,
+				dataSource: 'tradeport',
 			})
+		}
+
+		if (q.trim().length > 0) {
+			const rpcEntry = await resolveRpcSearchEntry(q, env, now, minExpirationMs, gracePeriodMs)
+			if (rpcEntry) {
+				rpcSearchName = rpcEntry.name
+				const alreadyExists = allEntries.some(
+					(entry) => entry.tokenId === rpcEntry.tokenId || entry.name === rpcEntry.name,
+				)
+				if (!alreadyExists) {
+					allEntries.push(rpcEntry)
+					rpcSearchIncluded = true
+				}
+			}
 		}
 
 		allEntries.sort((a, b) => a.expirationMs - b.expirationMs)
@@ -2420,33 +3249,233 @@ async function handleExpiringListings(
 			await setCache(fullCacheKey, allEntries, EXPIRING_LISTINGS_CACHE_TTL)
 		}
 
-		const slice = allEntries.slice(offset, offset + limit)
+		const filtered = filterExpiringListings(allEntries, q, mode, graceWeight, priceWeight)
+		const slice = filtered.slice(offset, offset + limit)
 		const responseBody: Record<string, unknown> = {
 			listings: slice,
-			total: allEntries.length,
+			total: filtered.length,
+			totalUnfiltered: allEntries.length,
 			offset,
 			limit,
 			fetchedAt: now,
 			windowDays: { expiringWithin: EXPIRING_WINDOW_DAYS, expiredWithin: EXPIRED_WINDOW_DAYS },
+			query: { q, mode, graceWeight, priceWeight, minExpirationMs },
 		}
 		if (debug) {
 			responseBody.debug = {
+				queryVariant,
+				graphqlErrors: graphqlErrors.slice(0, 3),
 				totalIndexerListings: allListings.length,
+				sourceExpiresAtCount,
+				sourceBlockTimeFallbackCount,
+				rpcSearchName,
+				rpcSearchIncluded,
 				totalWithExpiration: expirationMap.size,
 				totalMatching: allEntries.length,
 			}
 		}
 		return new Response(JSON.stringify(responseBody), {
 			status: 200,
-			headers: { ...corsHeaders, 'X-Cache': 'MISS' },
+			headers: { ...corsHeaders, 'X-Cache': 'MISS', 'Cache-Control': 'no-store, max-age=0' },
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch expiring listings'
 		return new Response(JSON.stringify({ error: message, listings: [] }), {
 			status: 200,
-			headers: corsHeaders,
+			headers: { ...corsHeaders, 'Cache-Control': 'no-store, max-age=0' },
 		})
 	}
+}
+
+async function handleGraceActivity(
+	env: Env,
+	options: GraceActivityOptions,
+): Promise<Response> {
+	const { offset, limit, q, type: activityType, minBlockTimeMs } = options
+	const corsHeaders = {
+		'Access-Control-Allow-Origin': '*',
+		'Content-Type': 'application/json',
+	}
+
+	const fullCacheKey = cacheKey('grace-activity', env.SUI_NETWORK, String(minBlockTimeMs))
+	const cached = await getCached<GraceActivityEntry[]>(fullCacheKey)
+	if (cached) {
+		const filtered = filterGraceActivity(cached, q, activityType)
+		const slice = filtered.slice(offset, offset + limit)
+		const response: GraceActivityResponse = {
+			actions: slice,
+			total: filtered.length,
+			totalUnfiltered: cached.length,
+			offset,
+			limit,
+			fetchedAt: Date.now(),
+			query: { q, type: activityType, minBlockTimeMs },
+		}
+		return new Response(JSON.stringify(response), {
+			status: 200,
+			headers: { ...corsHeaders, 'X-Cache': 'HIT', 'Cache-Control': 'no-store, max-age=0' },
+		})
+	}
+
+	try {
+		const minBlockTimeIso = new Date(minBlockTimeMs).toISOString()
+		const activityQuery = `query FetchCollectionActivity($where: recent_actions_bool_exp, $offset: Int, $limit: Int!) {
+			sui {
+				recent_actions(where: $where, order_by: [{block_time: desc}], offset: $offset, limit: $limit) {
+					action_id
+					action_type
+					price
+					usd_price
+					price_coin
+					seller
+					buyer
+					tx_id
+					block_time
+					market_name
+					nft {
+						name
+						token_id
+						owner
+					}
+				}
+			}
+		}`
+
+		const where = {
+			nft: {
+				collection: {
+					_or: [{ semantic_slug: { _eq: 'suins' } }, { slug: { _eq: 'suins' } }],
+				},
+			},
+			block_time: { _gte: minBlockTimeIso },
+		}
+
+		const allActions: GraceActivityEntry[] = []
+
+		for (let page = 0; page < ACTIVITY_MAX_PAGES; page++) {
+			const pageOffset = page * ACTIVITY_PAGE_SIZE
+			const response = await fetch(INDEXER_API_URL, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'x-api-user': INDEXER_API_USER,
+					'x-api-key': env.INDEXER_API_KEY || '',
+				},
+				body: JSON.stringify({
+					query: activityQuery,
+					variables: { where, offset: pageOffset, limit: ACTIVITY_PAGE_SIZE },
+				}),
+			})
+
+			if (!response.ok) break
+
+			const result = (await response.json()) as {
+				data?: {
+					sui?: {
+						recent_actions?: Array<{
+							action_id?: string
+							action_type?: string
+							price?: number
+							usd_price?: number
+							price_coin?: string
+							seller?: string
+							buyer?: string
+							tx_id?: string
+							block_time?: string
+							market_name?: string
+							nft?: { name?: string; token_id?: string; owner?: string }
+						}>
+					}
+				}
+				errors?: Array<{ message: string }>
+			}
+
+			if (result.errors && result.errors.length > 0) break
+
+			const actions = result.data?.sui?.recent_actions
+			if (!actions || actions.length === 0) break
+
+			for (let i = 0; i < actions.length; i++) {
+				const a = actions[i]
+				if (!a.nft?.token_id) continue
+				const blockTimeMs = a.block_time ? Date.parse(a.block_time) : 0
+				const price = Number(a.price || 0)
+				const nftName = a.nft.name || a.nft.token_id
+				allActions.push({
+					actionId: a.action_id || `${a.tx_id || ''}-${i}`,
+					type: (a.action_type || 'unknown').toLowerCase(),
+					price,
+					priceSui: price / 1e9,
+					usdPrice: a.usd_price ?? null,
+					priceCoin: a.price_coin ?? null,
+					sender: a.seller || '',
+					receiver: a.buyer || '',
+					txId: a.tx_id || '',
+					blockTimeMs,
+					marketName: a.market_name || 'unknown',
+					nftTokenId: a.nft.token_id,
+					nftName,
+					nftOwner: a.nft.owner || '',
+					tradeportUrl: `https://www.tradeport.xyz/sui/collection/suins/${a.nft.token_id}`,
+				})
+			}
+
+			if (actions.length < ACTIVITY_PAGE_SIZE) break
+		}
+
+		await setCache(fullCacheKey, allActions, ACTIVITY_CACHE_TTL)
+
+		const filtered = filterGraceActivity(allActions, q, activityType)
+		const slice = filtered.slice(offset, offset + limit)
+		const responseBody: GraceActivityResponse = {
+			actions: slice,
+			total: filtered.length,
+			totalUnfiltered: allActions.length,
+			offset,
+			limit,
+			fetchedAt: Date.now(),
+			query: { q, type: activityType, minBlockTimeMs },
+		}
+		return new Response(JSON.stringify(responseBody), {
+			status: 200,
+			headers: { ...corsHeaders, 'X-Cache': 'MISS', 'Cache-Control': 'no-store, max-age=0' },
+		})
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Failed to fetch collection activity'
+		return new Response(JSON.stringify({ error: message, actions: [] }), {
+			status: 200,
+			headers: { ...corsHeaders, 'Cache-Control': 'no-store, max-age=0' },
+		})
+	}
+}
+
+function filterGraceActivity(
+	entries: GraceActivityEntry[],
+	q: string,
+	activityType: string,
+): GraceActivityEntry[] {
+	const query = q.trim().toLowerCase()
+	const typeFilter = activityType.trim().toLowerCase()
+	const filtered: GraceActivityEntry[] = []
+	for (let i = 0; i < entries.length; i++) {
+		const entry = entries[i]
+		if (typeFilter && entry.type !== typeFilter) continue
+		if (query.length > 0) {
+			const name = entry.nftName.toLowerCase()
+			const sender = entry.sender.toLowerCase()
+			const receiver = entry.receiver.toLowerCase()
+			const tokenId = entry.nftTokenId.toLowerCase()
+			if (
+				!name.includes(query) &&
+				!sender.includes(query) &&
+				!receiver.includes(query) &&
+				!tokenId.includes(query)
+			)
+				continue
+		}
+		filtered.push(entry)
+	}
+	return filtered
 }
 
 /**
@@ -2572,37 +3601,13 @@ const SUGGESTION_CACHE_TTL_MS = 3600000
 const MAX_SUGGESTION_CACHE_SIZE = 200
 const MAX_SUGGESTIONS = 24
 const SUGGESTION_NAME_RE = /^[a-z0-9-]{3,18}$/
-type SuggestionMode = 'x402' | 'related'
-const SUGGESTION_X402_SEEDS = [
-	'x402',
-	'x402ai',
-	'x402pay',
-	'x402agent',
-	'x402wallet',
-	'x402app',
-	'x402hub',
-	'x402sdk',
-	'x402kit',
-	'x402labs',
-]
-const SUGGESTION_AI_SEEDS = [
-	'ai',
-	'agent',
-	'agents',
-	'aikit',
-	'aiwallet',
-	'payai',
-	'agentai',
-	'miniai',
-	'quickai',
-	'liteai',
-]
+type SuggestionMode = 'related'
 const SUGGESTION_FALLBACK_SUFFIXES = ['ai', 'agent', 'agents', 'app', 'hub', 'sdk', 'kit', 'labs']
 
 const suggestionMemCache = new Map<string, { data: string[]; exp: number }>()
 
-function normalizeSuggestionMode(value: string | undefined): SuggestionMode {
-	return value === 'related' ? 'related' : 'x402'
+function normalizeSuggestionMode(_value: string | undefined): SuggestionMode {
+	return 'related'
 }
 
 function normalizeSuggestionName(value: string): string | null {
@@ -2618,55 +3623,28 @@ function normalizeSuggestionName(value: string): string | null {
 	return cleaned
 }
 
-function buildX402PriorityCandidates(base: string): string[] {
-	const normalizedBase = normalizeSuggestionName(base)
-	if (!normalizedBase) return [...SUGGESTION_X402_SEEDS]
-	const candidates = [
-		`x402${normalizedBase}`,
-		`${normalizedBase}x402`,
-		`x402-${normalizedBase}`,
-		`${normalizedBase}-x402`,
-		`x402${normalizedBase}ai`,
-		`${normalizedBase}x402ai`,
-	]
-	for (const suffix of SUGGESTION_FALLBACK_SUFFIXES) {
-		candidates.push(`${normalizedBase}${suffix}`)
-		candidates.push(`x402${normalizedBase}${suffix}`)
-	}
-	return candidates
-}
-
-function rankSuggestion(name: string, query: string, mode: SuggestionMode): number {
+function rankSuggestion(name: string, query: string): number {
 	let score = 0
 	if (name === query) score += 7000
-	if (mode === 'related') {
-		if (name.startsWith(query)) score += 380
-		if (name.includes(query)) score += 220
-		if (query.startsWith(name)) score += 140
-		if (name.includes('x402')) score -= 2200
-		if (name.length <= 6) score += 360
-		else if (name.length <= 8) score += 220
-		else if (name.length <= 12) score += 100
-		if (/\d/.test(name)) score -= 60
-	} else {
-		if (name.includes('x402')) score += 1200
-		if (name.startsWith('x402')) score += 500
-		if (name.includes('ai')) score += 220
-		if (name.includes('agent')) score += 180
-		if (name.length <= 8) score += 120
-		if (name.length <= 12) score += 40
-	}
+	if (name.startsWith(query)) score += 380
+	if (name.includes(query)) score += 220
+	if (query.startsWith(name)) score += 140
+	if (name.includes('x402')) score -= 2200
+	if (name.length <= 6) score += 360
+	else if (name.length <= 8) score += 220
+	else if (name.length <= 12) score += 100
+	if (/\d/.test(name)) score -= 60
 	if (name.includes('-')) score -= 15
 	return score
 }
 
-function finalizeSuggestions(query: string, values: string[], mode: SuggestionMode): string[] {
+function finalizeSuggestions(query: string, values: string[]): string[] {
 	const normalizedQuery = normalizeSuggestionName(query)
 	const seen = new Set<string>()
 	const normalized: string[] = []
 	for (const candidate of values) {
 		const clean = normalizeSuggestionName(candidate)
-		if (mode === 'related' && clean?.includes('x402')) continue
+		if (clean?.includes('x402')) continue
 		if (!clean || seen.has(clean)) continue
 		seen.add(clean)
 		normalized.push(clean)
@@ -2675,20 +3653,14 @@ function finalizeSuggestions(query: string, values: string[], mode: SuggestionMo
 	const sorted = normalized
 		.filter((name) => !!name)
 		.sort((a, b) => {
-			const scoreDiff =
-				rankSuggestion(b, normalizedQuery, mode) - rankSuggestion(a, normalizedQuery, mode)
+			const scoreDiff = rankSuggestion(b, normalizedQuery) - rankSuggestion(a, normalizedQuery)
 			if (scoreDiff !== 0) return scoreDiff
 			if (a.length !== b.length) return a.length - b.length
 			return a.localeCompare(b)
 		})
-	if (mode === 'related') {
-		const withoutQuery = sorted.filter((name) => name !== normalizedQuery)
-		if (withoutQuery.length > 0) return withoutQuery.slice(0, MAX_SUGGESTIONS)
-		return sorted.slice(0, MAX_SUGGESTIONS)
-	}
-	if (normalizedQuery.includes('x402')) return sorted.slice(0, MAX_SUGGESTIONS)
 	const withoutQuery = sorted.filter((name) => name !== normalizedQuery)
-	return [...withoutQuery.slice(0, MAX_SUGGESTIONS - 1), normalizedQuery]
+	if (withoutQuery.length > 0) return withoutQuery.slice(0, MAX_SUGGESTIONS)
+	return sorted.slice(0, MAX_SUGGESTIONS)
 }
 
 async function fetchBraveContext(query: string, apiKey: string): Promise<string[]> {
@@ -2741,19 +3713,15 @@ async function fetchAISuggestions(
 	query: string,
 	braveContext: string[],
 	apiKey: string,
-	mode: SuggestionMode,
 ): Promise<string[]> {
 	const contextBlock =
 		braveContext.length > 0
 			? `\nWeb context for "${query}":\n${braveContext.slice(0, 10).join('\n')}`
 			: ''
-	const strategyBlock =
-		mode === 'related'
-			? `- Focus on names related to "${query}" from mainstream search context
+	const strategyBlock = `- Focus on names related to "${query}" from mainstream search context
+- Favor common words people actually search for and recognize
 - Include many single-word premium names someone would actually pay for
 - Avoid "x402" or anything that looks like x402 derivatives`
-			: `- Prioritize cheap-feeling, utility-style names
-- Make most suggestions include "x402" (prefix/suffix/infix)`
 
 	const res = await fetch(OPENROUTER_URL, {
 		method: 'POST',
@@ -2801,7 +3769,7 @@ Rules: each suggestion must be 3-18 chars, lowercase a-z 0-9 and optional hyphen
 async function handleNameSuggestions(
 	query: string,
 	env: Env,
-	mode: SuggestionMode = 'x402',
+	mode: SuggestionMode = 'related',
 ): Promise<Response> {
 	const normalizedQueryRaw =
 		normalizeSuggestionName(query) ||
@@ -2809,8 +3777,7 @@ async function handleNameSuggestions(
 			.toLowerCase()
 			.replace(/[^a-z0-9-]/g, '')
 			.slice(0, 18)
-	const normalizedQuery =
-		normalizedQueryRaw.length >= 3 ? normalizedQueryRaw : mode === 'related' ? 'name' : 'x402'
+	const normalizedQuery = normalizedQueryRaw.length >= 3 ? normalizedQueryRaw : 'name'
 	const key = `${mode}:${normalizedQuery}`
 	const cached = suggestionMemCache.get(key)
 	if (cached && cached.exp > Date.now()) {
@@ -2821,21 +3788,15 @@ async function handleNameSuggestions(
 	const seen = new Set<string>([normalizedQuery])
 	const pushSuggestion = (value: string) => {
 		const clean = normalizeSuggestionName(value)
-		if (mode === 'related' && clean?.includes('x402')) return
+		if (clean?.includes('x402')) return
 		if (!clean || seen.has(clean)) return
 		seen.add(clean)
 		suggestions.push(clean)
 	}
 
-	if (mode === 'related') {
-		for (const suffix of SUGGESTION_FALLBACK_SUFFIXES) {
-			pushSuggestion(`${normalizedQuery}${suffix}`)
-		}
-	} else {
-		for (const seed of SUGGESTION_X402_SEEDS) pushSuggestion(seed)
-		for (const seed of buildX402PriorityCandidates(normalizedQuery)) pushSuggestion(seed)
+	for (const suffix of SUGGESTION_FALLBACK_SUFFIXES) {
+		pushSuggestion(`${normalizedQuery}${suffix}`)
 	}
-	for (const seed of SUGGESTION_AI_SEEDS) pushSuggestion(seed)
 
 	const braveKey = env.BRAVE_SEARCH_API_KEY
 	const aiKey = env.OPENROUTER_API_KEY
@@ -2843,12 +3804,9 @@ async function handleNameSuggestions(
 	if (aiKey) {
 		try {
 			const braveContext = braveKey ? await fetchBraveContext(normalizedQuery, braveKey) : []
-			const aiNames = await fetchAISuggestions(normalizedQuery, braveContext, aiKey, mode)
+			const aiNames = await fetchAISuggestions(normalizedQuery, braveContext, aiKey)
 			for (const name of aiNames) {
 				pushSuggestion(name)
-				if (mode === 'x402') {
-					for (const derived of buildX402PriorityCandidates(name)) pushSuggestion(derived)
-				}
 			}
 		} catch (e) {
 			console.error('AI suggestion error:', e)
@@ -2862,14 +3820,11 @@ async function handleNameSuggestions(
 				.split(/\s+/)
 			for (const w of words) {
 				pushSuggestion(w)
-				if (mode === 'x402') {
-					for (const derived of buildX402PriorityCandidates(w)) pushSuggestion(derived)
-				}
 			}
 		}
 	}
 
-	const finalized = finalizeSuggestions(normalizedQuery, suggestions, mode)
+	const finalized = finalizeSuggestions(normalizedQuery, suggestions)
 
 	if (suggestionMemCache.size > MAX_SUGGESTION_CACHE_SIZE) {
 		const first = suggestionMemCache.keys().next().value
@@ -2888,15 +3843,6 @@ interface FeaturedName {
 }
 
 const FEATURED_NAME_CANDIDATES = [
-	'x402',
-	'x402ai',
-	'x402pay',
-	'x402agent',
-	'x402wallet',
-	'x402app',
-	'x402hub',
-	'x402sdk',
-	'x402kit',
 	'agents',
 	'agent',
 	'ai',
@@ -2976,18 +3922,8 @@ async function handleFeaturedNames(env: Env): Promise<Response> {
 		})
 		.slice(0, 10)
 
-	const pinnedX402 = ranked.find((item) => item.name === 'x402') || {
-		name: 'x402',
-		marketSui: 0,
-		registrySui: 0,
-		premiumX: 9999,
-		source: 'offer' as const,
-	}
-
-	const featuredPinned = [pinnedX402, ...ranked.filter((item) => item.name !== 'x402')].slice(0, 10)
-
-	featuredNamesCache = { data: featuredPinned, exp: Date.now() + FEATURED_NAMES_TTL_MS }
-	return jsonResponse({ names: featuredPinned, cached: false })
+	featuredNamesCache = { data: ranked, exp: Date.now() + FEATURED_NAMES_TTL_MS }
+	return jsonResponse({ names: ranked, cached: false })
 }
 
 export function landingPageHTML(_network: string, options: LandingPageOptions = {}): string {
@@ -3584,30 +4520,6 @@ ${socialMeta}
 
 		body.search-focused .wk-dropdown { display: none !important; }
 
-		.swap-toggle-btn {
-			width: 40px;
-			height: 40px;
-			border-radius: 10px;
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			background: rgba(167, 139, 250, 0.12);
-			border: 1px solid rgba(167, 139, 250, 0.35);
-			cursor: pointer;
-			transition: all 0.2s ease;
-			padding: 0;
-			color: #a78bfa;
-		}
-		.swap-toggle-btn svg {
-			width: 18px;
-			height: 18px;
-		}
-		.swap-toggle-btn:hover {
-			background: rgba(167, 139, 250, 0.2);
-			border-color: rgba(167, 139, 250, 0.55);
-			transform: translateY(-1px);
-		}
-
 		.reg-modal-overlay {
 			position: fixed;
 			inset: 0;
@@ -3799,224 +4711,6 @@ ${socialMeta}
 			text-underline-offset: 2px;
 		}
 
-		.swap-panel {
-			position: fixed;
-			top: calc(68px + env(safe-area-inset-top));
-			right: calc(16px + env(safe-area-inset-right));
-			z-index: 10050;
-			width: 380px;
-			max-height: calc(100vh - 100px);
-			overflow-y: auto;
-			background: rgba(15, 15, 22, 0.98);
-			backdrop-filter: blur(24px);
-			-webkit-backdrop-filter: blur(24px);
-			border: 1px solid rgba(96, 165, 250, 0.15);
-			border-radius: 16px;
-			box-shadow: 0 18px 44px rgba(2, 6, 23, 0.62), 0 0 30px rgba(96, 165, 250, 0.06);
-			animation: swapPanelIn 0.2s ease;
-		}
-		@keyframes swapPanelIn {
-			from { opacity: 0; transform: translateY(-8px) scale(0.97); }
-			to { opacity: 1; transform: translateY(0) scale(1); }
-		}
-		.swap-panel-header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			padding: 14px 16px 0;
-		}
-		.swap-panel-tabs {
-			display: flex;
-			gap: 4px;
-		}
-		.swap-tab {
-			padding: 6px 14px;
-			border-radius: 8px;
-			border: none;
-			background: transparent;
-			color: #71717a;
-			font-size: 0.82rem;
-			font-weight: 600;
-			cursor: pointer;
-			transition: all 0.15s ease;
-		}
-		.swap-tab:hover {
-			color: #e4e4e7;
-			background: rgba(255, 255, 255, 0.04);
-		}
-		.swap-tab.active {
-			color: #fff;
-			background: rgba(96, 165, 250, 0.12);
-		}
-		.swap-panel-close {
-			width: 28px;
-			height: 28px;
-			border-radius: 6px;
-			border: none;
-			background: transparent;
-			color: #71717a;
-			font-size: 1.2rem;
-			cursor: pointer;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			transition: all 0.15s ease;
-		}
-		.swap-panel-close:hover {
-			background: rgba(255, 255, 255, 0.06);
-			color: #e4e4e7;
-		}
-		.swap-tab-content {
-			padding: 12px 16px 16px;
-		}
-		#sui-coins-terminal {
-			min-height: 360px;
-		}
-		.crosschain-ui {
-			display: flex;
-			flex-direction: column;
-			gap: 14px;
-		}
-		.cc-direction {
-			font-size: 0.85rem;
-			font-weight: 700;
-			color: #a78bfa;
-			letter-spacing: 0.5px;
-		}
-		.cc-field {
-			display: flex;
-			flex-direction: column;
-			gap: 6px;
-		}
-		.cc-label {
-			font-size: 0.72rem;
-			font-weight: 600;
-			color: #71717a;
-			text-transform: uppercase;
-			letter-spacing: 0.5px;
-		}
-		.cc-input {
-			background: rgba(20, 20, 28, 0.9);
-			border: 1px solid rgba(255, 255, 255, 0.08);
-			border-radius: 10px;
-			padding: 10px 14px;
-			color: #e4e4e7;
-			font-size: 0.88rem;
-			outline: none;
-			transition: border-color 0.2s;
-		}
-		.cc-input:focus {
-			border-color: rgba(96, 165, 250, 0.4);
-		}
-		.cc-rate {
-			display: flex;
-			align-items: center;
-			gap: 6px;
-			font-size: 0.78rem;
-			color: #71717a;
-		}
-		.cc-rate-value {
-			color: #60a5fa;
-			font-weight: 600;
-		}
-		.cc-output {
-			background: rgba(20, 20, 28, 0.9);
-			border: 1px solid rgba(255, 255, 255, 0.06);
-			border-radius: 10px;
-			padding: 10px 14px;
-			color: #60a5fa;
-			font-size: 0.88rem;
-			font-weight: 600;
-		}
-		.cc-fee {
-			font-size: 0.72rem;
-			color: #71717a;
-		}
-		.cc-btn {
-			padding: 10px 16px;
-			border-radius: 10px;
-			border: none;
-			background: linear-gradient(135deg, #3b82f6, #6366f1);
-			color: #fff;
-			font-weight: 600;
-			font-size: 0.85rem;
-			cursor: pointer;
-			transition: all 0.2s;
-		}
-		.cc-btn:hover:not(:disabled) {
-			background: linear-gradient(135deg, #2563eb, #4f46e5);
-		}
-		.cc-btn:disabled {
-			opacity: 0.5;
-			cursor: not-allowed;
-		}
-		.cc-confirm-btn {
-			margin-top: 8px;
-		}
-		.cc-deposit {
-			background: rgba(96, 165, 250, 0.06);
-			border: 1px solid rgba(96, 165, 250, 0.15);
-			border-radius: 12px;
-			padding: 14px;
-		}
-		.cc-deposit-label {
-			font-size: 0.75rem;
-			color: #71717a;
-			margin-bottom: 6px;
-		}
-		.cc-deposit-addr {
-			font-size: 0.78rem;
-			color: #60a5fa;
-			word-break: break-all;
-			font-family: 'SF Mono', 'Fira Code', monospace;
-			margin-bottom: 8px;
-		}
-		.cc-copy-btn {
-			padding: 6px 14px;
-			border-radius: 8px;
-			border: 1px solid rgba(96, 165, 250, 0.3);
-			background: rgba(96, 165, 250, 0.1);
-			color: #60a5fa;
-			font-size: 0.78rem;
-			font-weight: 600;
-			cursor: pointer;
-			transition: all 0.15s;
-			margin-bottom: 10px;
-		}
-		.cc-copy-btn:hover {
-			background: rgba(96, 165, 250, 0.2);
-		}
-		.cc-confirm-section {
-			display: flex;
-			flex-direction: column;
-			gap: 8px;
-			margin-top: 10px;
-			padding-top: 10px;
-			border-top: 1px solid rgba(255, 255, 255, 0.06);
-		}
-		.cc-status {
-			font-size: 0.78rem;
-			color: #71717a;
-			min-height: 20px;
-		}
-		.cc-status.success { color: #4ade80; }
-		.cc-status.error { color: #f87171; }
-
-		@media (max-width: 480px) {
-			.swap-panel {
-				position: fixed;
-				top: auto;
-				bottom: 0;
-				left: 0;
-				right: 0;
-				width: 100%;
-				max-height: 80vh;
-				border-radius: 16px 16px 0 0;
-			}
-		}
-
-		body.search-focused .swap-panel { display: none !important; }
-
 		${generateWalletUiCss()}
 
 		@media (max-width: 540px) {
@@ -4030,11 +4724,6 @@ ${socialMeta}
 	<div class="wallet-widget" id="wallet-widget">
 		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile">
 			${generateLogoSvg(18)}
-		</button>
-		<button class="swap-toggle-btn" id="swap-toggle-btn" title="Swap tokens" style="display:none">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/>
-			</svg>
 		</button>
 		<div id="wk-widget"></div>
 	</div>
@@ -4059,60 +4748,6 @@ ${socialMeta}
 				<button type="button" class="reg-modal-primary-toggle" id="reg-modal-primary-toggle" aria-pressed="false" title="Set as primary name"><span class="reg-modal-star">&#9734;</span> Set as primary name</button>
 				<button class="reg-modal-register-btn" id="reg-modal-register-btn">Register</button>
 				<div class="reg-modal-status" id="reg-modal-status"></div>
-			</div>
-		</div>
-	</div>
-
-	<div class="swap-panel" id="swap-panel" style="display:none;">
-		<div class="swap-panel-header">
-			<div class="swap-panel-tabs">
-				<button class="swap-tab active" data-tab="swap">Swap</button>
-				<button class="swap-tab" data-tab="crosschain">Cross-Chain</button>
-			</div>
-			<button class="swap-panel-close" id="swap-panel-close">&times;</button>
-		</div>
-		<div class="swap-tab-content" id="swap-tab-swap">
-			<div id="sui-coins-terminal"></div>
-		</div>
-		<div class="swap-tab-content" id="swap-tab-crosschain" style="display:none;">
-			<div class="crosschain-ui" id="crosschain-ui">
-				<div class="cc-direction">SOL &rarr; SUI</div>
-				<div class="cc-field">
-					<label class="cc-label">Source Asset</label>
-					<select id="cc-source" class="cc-input">
-						<option value="sol_to_sui">SOL</option>
-						<option value="usdc_to_sui">USDC</option>
-					</select>
-				</div>
-				<div class="cc-field">
-					<label class="cc-label" id="cc-amount-label">Amount (SOL)</label>
-					<input type="text" id="cc-sol-amount" class="cc-input" placeholder="0.00" inputmode="decimal" autocomplete="off">
-				</div>
-				<div class="cc-field">
-					<label class="cc-label">Recipient (Sui Address or Name)</label>
-					<input type="text" id="cc-target" class="cc-input" placeholder="0x... or name.sui" autocomplete="off">
-				</div>
-				<div class="cc-rate" id="cc-rate">
-					<span class="cc-rate-label">Rate:</span>
-					<span class="cc-rate-value" id="cc-rate-value">--</span>
-				</div>
-				<div class="cc-field">
-					<label class="cc-label">You receive</label>
-					<div class="cc-output" id="cc-output">-- SUI</div>
-				</div>
-				<div class="cc-fee" id="cc-fee"></div>
-				<button class="cc-btn" id="cc-quote-btn" disabled>Get Deposit Address</button>
-				<div class="cc-deposit" id="cc-deposit" style="display:none;">
-					<div class="cc-deposit-label">Send SOL to:</div>
-					<div class="cc-deposit-addr" id="cc-deposit-addr"></div>
-					<button class="cc-copy-btn" id="cc-copy-addr">Copy</button>
-					<div class="cc-confirm-section">
-						<label class="cc-label">Solana TX Signature</label>
-						<input type="text" id="cc-sol-tx" class="cc-input" placeholder="Paste Solana transaction signature">
-						<button class="cc-btn cc-confirm-btn" id="cc-confirm-btn" disabled>Confirm &amp; Receive SUI</button>
-					</div>
-				</div>
-				<div class="cc-status" id="cc-status"></div>
 			</div>
 		</div>
 	</div>
@@ -4572,24 +5207,16 @@ ${socialMeta}
 			let featuredNamePoolExp = 0;
 			const FEATURED_POOL_TTL_MS = 2 * 60 * 1000;
 			const FEATURED_FALLBACK = [
-				'x402',
-				'x402ai',
-				'x402pay',
-				'x402agent',
-				'x402wallet',
-				'x402app',
-				'x402hub',
-				'x402sdk',
-				'x402kit',
-				'aikit',
-				'aiwallet',
-				'agentai',
-				'payai',
 				'agents',
 				'agent',
 				'ai',
+				'alpha',
+				'pro',
 				'vault',
 				'wallet',
+				'builder',
+				'domain',
+				'defi',
 			];
 				let featuredRequestNonce = 0;
 
@@ -4634,15 +5261,6 @@ ${socialMeta}
 					base + 'kit',
 					base + 'labs',
 				];
-				if (!base.includes('x402')) {
-					pool.push(
-						'x402' + base,
-						base + 'x402',
-						'x402-' + base,
-						base + '-x402',
-						'x402' + base + 'ai',
-					);
-				}
 				return dedupeSuggestedNames(pool, 24);
 			}
 
@@ -4662,7 +5280,7 @@ ${socialMeta}
 							.filter((name) => !!name && /^[a-z0-9-]{3,}$/.test(name));
 						if (extracted.length) {
 							const unique = Array.from(new Set(extracted));
-							names = ['x402', ...unique.filter((name) => name !== 'x402')].slice(0, 18);
+							names = unique.slice(0, 18);
 						}
 					}
 				} catch {}
@@ -4674,7 +5292,7 @@ ${socialMeta}
 
 			async function fetchAiSuggestions(query) {
 				try {
-					const res = await fetch('/api/suggest-names?q=' + encodeURIComponent(query));
+					const res = await fetch('/api/suggest-names?q=' + encodeURIComponent(query) + '&mode=related');
 					if (!res.ok) return [query];
 					const data = await res.json();
 					const names = Array.isArray(data?.suggestions) ? data.suggestions : [query];
@@ -5375,10 +5993,440 @@ ${socialMeta}
 		setInterval(updatePrice, 60000);
 	</script>
 
-	<style>${generateX402ChatCss()}</style>
-	<div id="x402-chat-root"></div>
-	<script>${generateX402ChatJs({ page: 'landing', network: options.network || 'mainnet' })}</script>
+	<style>${generateMessagingChatCss()}</style>
+	<div id="messaging-chat-root"></div>
+	<script>${generateMessagingChatJs({ page: 'landing', network: options.network || 'mainnet' })}</script>
 
+</body>
+</html>`
+}
+
+export function cloudflareGracePageHTML(network: string): string {
+	return `<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>SuiNS Grace Radar | sui.ski</title>
+	<style>
+		:root { --bg: #07101f; --panel: #0c1830; --line: #22375b; --text: #d9e7ff; --muted: #88a1c7; --accent: #60a5fa; --grace: #fbbf24; --exp: #34d399; --ok: #10b981; --danger: #ef4444; }
+		* { box-sizing: border-box; }
+		body { margin: 0; font-family: 'SF Mono', 'Consolas', monospace; background: var(--bg); color: var(--text); }
+		.wrap { max-width: 1160px; margin: 0 auto; padding: 18px; }
+		h1 { margin: 0; font-size: 24px; line-height: 1.1; }
+		.subtitle { margin-top: 6px; color: var(--muted); font-size: 12px; }
+		.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+		.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+		.input, .select, .button { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 9px; padding: 10px 12px; font: inherit; font-size: 13px; }
+		.input { min-width: 260px; flex: 1; }
+		.button { cursor: pointer; }
+		.button:disabled { opacity: 0.5; cursor: not-allowed; }
+		.meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+		.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+		.stat { border: 1px solid var(--line); background: rgba(12, 24, 48, 0.82); border-radius: 10px; padding: 10px; }
+		.stat .k { color: var(--muted); font-size: 11px; }
+		.stat .v { font-size: 18px; font-weight: 800; margin-top: 3px; }
+		.tab-bar { display: flex; gap: 0; margin-bottom: 10px; border-bottom: 2px solid var(--line); }
+		.tab-btn { background: none; border: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 700; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s, border-color 0.15s; }
+		.tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+		.tab-btn:hover { color: var(--text); }
+		.tab-panel { display: none; }
+		.tab-panel.active { display: block; }
+		.table-wrap { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: var(--panel); }
+		table { width: 100%; border-collapse: collapse; }
+		th, td { padding: 10px 12px; border-bottom: 1px solid rgba(34, 55, 91, 0.7); font-size: 12px; text-align: left; vertical-align: middle; }
+		th { font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; background: rgba(6, 13, 27, 0.45); }
+		tr:last-child td { border-bottom: none; }
+		.name { color: var(--text); text-decoration: none; font-weight: 700; }
+		.name:hover { color: var(--accent); }
+		.tag { display: inline-flex; padding: 2px 8px; border-radius: 999px; border: 1px solid; font-size: 11px; font-weight: 700; }
+		.tag.grace { color: var(--grace); border-color: rgba(251, 191, 36, 0.5); }
+		.tag.expiring { color: var(--exp); border-color: rgba(52, 211, 153, 0.5); }
+		.tag.buy, .tag.sale { color: #86efac; border-color: rgba(34, 197, 94, 0.5); }
+		.tag.list { color: #93c5fd; border-color: rgba(77, 163, 255, 0.5); }
+		.tag.bid { color: #fdba74; border-color: rgba(251, 146, 60, 0.5); }
+		.tag.mint { color: #c4b5fd; border-color: rgba(168, 85, 247, 0.5); }
+		.tag.delist { color: #fca5a5; border-color: rgba(239, 68, 68, 0.5); }
+		.tag.unknown { color: var(--muted); border-color: rgba(136, 161, 199, 0.4); }
+		.muted { color: var(--muted); }
+		.pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); font-size: 12px; }
+		.diamond-btn { width: 28px; height: 28px; background: transparent; border: none; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0; position: relative; transition: filter 0.25s ease; }
+		.diamond-btn::before { content: ''; width: 12px; height: 12px; border-radius: 2px; background: linear-gradient(145deg, #60a5fa, #2563eb); border: 1px solid rgba(191, 219, 254, 0.75); box-shadow: 0 0 0 1px rgba(30, 58, 138, 0.35), 0 2px 6px rgba(37, 99, 235, 0.45); transform: rotate(0deg) scale(1); transition: transform 0.45s cubic-bezier(0.2, 0.85, 0.2, 1), background 0.45s ease, border-color 0.35s ease, box-shadow 0.45s ease, border-radius 0.35s ease; }
+		.diamond-btn:hover { filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.9)); }
+		.diamond-btn:hover::before { transform: rotate(0deg) scale(1.12); }
+		.diamond-btn.bookmarked { filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.92)); }
+		.diamond-btn.bookmarked::before { transform: rotate(45deg) scale(1.45); border-radius: 0; background: linear-gradient(160deg, #000, #050505 52%, #000); border-color: rgba(8, 8, 10, 0.98); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 0 16px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(20, 20, 24, 0.9); }
+		.diamond-btn.bookmarked::after { content: ''; position: absolute; width: 15px; height: 15px; border: 1px solid rgba(157, 172, 196, 0.7); border-radius: 0; transform: rotate(45deg) scale(1.12); box-shadow: 0 0 8px rgba(144, 158, 181, 0.35); pointer-events: none; }
+		.diamond-btn.bookmarked:hover::before { transform: rotate(45deg) scale(1.55); }
+		.diamond-btn.diamond-transforming::before { animation: diamond-turn-ink 760ms cubic-bezier(0.2, 0.85, 0.2, 1) both; }
+		@keyframes diamond-turn-ink { 0% { transform: rotate(0deg) scale(1); border-radius: 2px; } 34% { transform: rotate(240deg) scale(1.9); } 70% { transform: rotate(560deg) scale(1.38); } 100% { transform: rotate(45deg) scale(1.45); border-radius: 0; background: linear-gradient(160deg, #000, #050505 52%, #000); } }
+		@keyframes diamond-pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; transform: scale(1.1); } }
+		.bm-panel { border: 1px solid var(--line); border-radius: 11px; background: rgba(12, 24, 48, 0.85); margin-bottom: 10px; overflow: hidden; }
+		.bm-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; user-select: none; }
+		.bm-header:hover { background: rgba(12, 24, 48, 0.6); }
+		.bm-title { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+		.bm-badge { background: rgba(96, 165, 250, 0.2); color: var(--accent); border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; }
+		.bm-body { display: none; padding: 0 14px 14px; }
+		.bm-panel.open .bm-body { display: block; }
+		.bm-grid { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
+		.bm-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px 6px 8px; border-radius: 8px; background: linear-gradient(135deg, rgba(6, 6, 14, 0.85), rgba(12, 12, 22, 0.75)); border: 1px solid rgba(60, 65, 85, 0.4); color: rgba(200, 205, 220, 0.9); font-size: 0.78rem; font-weight: 600; text-decoration: none; cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.15s; }
+		.bm-chip:hover { border-color: rgba(120, 130, 170, 0.55); transform: translateY(-1px); }
+		.bm-diamond { flex-shrink: 0; width: 8px; height: 8px; background: linear-gradient(160deg, #000, #050505 52%, #000); border: 1px solid rgba(157, 172, 196, 0.5); transform: rotate(45deg); }
+		.bm-name { flex: 1; white-space: nowrap; }
+		.bm-price { color: #fff; font-weight: 600; font-size: 0.72rem; }
+		.chip-rm { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 0 0 4px; line-height: 1; }
+		.chip-rm:hover { color: var(--danger); }
+		.wallet-btn { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 9px; padding: 10px 14px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+		.wallet-btn:hover { border-color: #3a5a8a; }
+		.wallet-btn.connected { border-color: rgba(34, 197, 94, 0.5); }
+		.w-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); display: inline-block; }
+		.wallet-btn.connected .w-dot { background: var(--ok); }
+		${generateWalletUiCss()}
+		@media (max-width: 940px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .input { min-width: 0; width: 100%; } }
+		@media (max-width: 820px) { .table-wrap { overflow-x: auto; } table { min-width: 820px; } }
+	</style>
+</head>
+<body>
+	<div class="wrap">
+		<div class="top">
+			<div>
+				<h1>SuiNS Grace Radar</h1>
+				<div class="subtitle">Network: ${network} · SuiNS expirations + marketplace activity since ${DEFAULT_MIN_EXPIRATION_MS}</div>
+			</div>
+			<div class="controls">
+				<input id="q" class="input" placeholder="Search name, token id, owner..." />
+				<select id="status" class="select">
+					<option value="all">All tracked</option>
+					<option value="expiring">Expiring soon</option>
+					<option value="grace">In grace period</option>
+				</select>
+				<button id="refresh" class="button">Refresh</button>
+				<button id="wallet-btn" class="wallet-btn"><span class="w-dot"></span><span id="w-label">Connect</span></button>
+			</div>
+		</div>
+
+		<div id="bm-panel" class="bm-panel" style="display:none">
+			<div class="bm-header" id="bm-toggle">
+				<span class="bm-title"><span class="bm-diamond"></span> Black Diamonds <span class="bm-badge" id="bm-count">0</span></span>
+				<span class="muted" style="font-size:11px" id="bm-arrow">&#9660;</span>
+			</div>
+			<div class="bm-body"><div class="bm-grid" id="bm-grid"></div></div>
+		</div>
+
+		<div class="stats" id="stats-listings">
+			<div class="stat"><div class="k">Total</div><div class="v" id="s-total">-</div></div>
+			<div class="stat"><div class="k">Grace</div><div class="v" id="s-grace">-</div></div>
+			<div class="stat"><div class="k">Expiring</div><div class="v" id="s-exp">-</div></div>
+			<div class="stat"><div class="k">Fetched</div><div class="v" id="s-time">-</div></div>
+		</div>
+		<div class="stats" id="stats-activity" style="display:none">
+			<div class="stat"><div class="k">Total Actions</div><div class="v" id="sa-total">-</div></div>
+			<div class="stat"><div class="k">Buys</div><div class="v" id="sa-buys">-</div></div>
+			<div class="stat"><div class="k">Lists</div><div class="v" id="sa-lists">-</div></div>
+			<div class="stat"><div class="k">Bids</div><div class="v" id="sa-bids">-</div></div>
+		</div>
+
+		<div id="meta" class="meta"></div>
+
+		<div class="tab-bar">
+			<button class="tab-btn active" data-tab="listings">Listings</button>
+			<button class="tab-btn" data-tab="activity">Activity</button>
+		</div>
+
+		<div id="panel-listings" class="tab-panel active">
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th style="width:28px"></th><th>Name</th><th>Status</th><th>Expiry</th><th>Clock</th><th>Grace</th><th>Owner</th><th>Source</th></tr></thead>
+					<tbody id="rows"><tr><td colspan="8" class="muted">Loading...</td></tr></tbody>
+				</table>
+			</div>
+			<div class="pager">
+				<div id="count">-</div>
+				<div class="controls"><button id="prev" class="button">Prev</button><button id="next" class="button">Next</button></div>
+			</div>
+		</div>
+
+		<div id="panel-activity" class="tab-panel">
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th style="width:28px"></th><th>Name</th><th>Type</th><th>Price</th><th>From</th><th>To</th><th>Market</th><th>Time</th><th>Tx</th></tr></thead>
+					<tbody id="act-rows"><tr><td colspan="9" class="muted">Click Activity tab to load</td></tr></tbody>
+				</table>
+			</div>
+			<div class="pager">
+				<div id="act-count">-</div>
+				<div class="controls"><button id="act-prev" class="button">Prev</button><button id="act-next" class="button">Next</button></div>
+			</div>
+		</div>
+	</div>
+
+	<div id="wk-modal"></div>
+
+	<script type="module">
+	var SDK_TIMEOUT = 20000;
+	var timedImport = function(url, ms) { ms = ms || SDK_TIMEOUT; return Promise.race([import(url), new Promise(function(_, r) { setTimeout(function() { r(new Error('Timeout')); }, ms); })]); };
+	var pick = function(m, n) { if (!m || typeof m !== 'object') return undefined; if (n in m) return m[n]; if (m.default && typeof m.default === 'object' && n in m.default) return m.default[n]; return undefined; };
+	var getWallets;
+	var sdkR = await Promise.allSettled([timedImport('https://esm.sh/@wallet-standard/app@1.1.0')]);
+	if (sdkR[0].status === 'fulfilled') getWallets = pick(sdkR[0].value, 'getWallets');
+	${generateWalletSessionJs()}
+	${generateWalletKitJs({ network: network || 'mainnet', autoConnect: true })}
+	${generateWalletUiJs({ showPrimaryName: false, onConnect: 'onGraceWalletConnected', onDisconnect: 'onGraceWalletDisconnected' })}
+
+	function getAddr() {
+		if (typeof SuiWalletKit === 'undefined') return null;
+		var c = SuiWalletKit.$connection.value;
+		return c && (c.status === 'connected' || c.status === 'session') ? c.address : null;
+	}
+	var wBtn = document.getElementById('wallet-btn');
+	var wLbl = document.getElementById('w-label');
+	function syncW() {
+		var a = getAddr();
+		if (a) { wBtn.classList.add('connected'); wLbl.textContent = a.slice(0, 6) + '...' + a.slice(-4); }
+		else { wBtn.classList.remove('connected'); wLbl.textContent = 'Connect'; }
+	}
+	window.onGraceWalletConnected = function() { syncW(); if (window.loadBm) window.loadBm(); };
+	window.onGraceWalletDisconnected = function() { syncW(); window.bookmarks = {}; if (window.renderBm) window.renderBm(); };
+	wBtn.addEventListener('click', function() {
+		if (getAddr()) { if (typeof SuiWalletKit !== 'undefined' && SuiWalletKit.disconnect) SuiWalletKit.disconnect(); }
+		else { if (typeof SuiWalletKit !== 'undefined' && SuiWalletKit.openModal) SuiWalletKit.openModal(); }
+	});
+	setTimeout(syncW, 500);
+	window.getAddr = getAddr;
+	</script>
+
+	<script>
+	(function() {
+		var LIMIT = 50;
+		var MIN_EXP = ${DEFAULT_MIN_EXPIRATION_MS};
+		var state = { offset: 0, total: 0, q: '', status: 'all', minExpirationMs: MIN_EXP, windowDays: 180, tab: 'listings', actOff: 0, actTotal: 0, actLoaded: false };
+		var qEl = document.getElementById('q');
+		var statusEl = document.getElementById('status');
+		var refreshEl = document.getElementById('refresh');
+		var prevEl = document.getElementById('prev');
+		var nextEl = document.getElementById('next');
+		var rowsEl = document.getElementById('rows');
+		var metaEl = document.getElementById('meta');
+		var countEl = document.getElementById('count');
+		var actRowsEl = document.getElementById('act-rows');
+		var actCountEl = document.getElementById('act-count');
+		var actPrevEl = document.getElementById('act-prev');
+		var actNextEl = document.getElementById('act-next');
+		var statsL = document.getElementById('stats-listings');
+		var statsA = document.getElementById('stats-activity');
+		var bmPanelEl = document.getElementById('bm-panel');
+		var bmToggleEl = document.getElementById('bm-toggle');
+		var bmGridEl = document.getElementById('bm-grid');
+		var bmCountEl = document.getElementById('bm-count');
+		var bmArrowEl = document.getElementById('bm-arrow');
+		var debounceTimer = null;
+		var syncTimer = null;
+		window.bookmarks = {};
+
+		function bmKey() { var a = typeof getAddr === 'function' ? getAddr() : null; return 'grace-bm-' + (a || 'anon'); }
+
+		window.loadBm = function() {
+			try { var raw = localStorage.getItem(bmKey()); window.bookmarks = raw ? JSON.parse(raw) : {}; } catch(e) { window.bookmarks = {}; }
+			window.renderBm();
+		};
+
+		function saveBm() {
+			try { localStorage.setItem(bmKey(), JSON.stringify(window.bookmarks)); } catch(e) {}
+			window.renderBm();
+			if (syncTimer) clearTimeout(syncTimer);
+			syncTimer = setTimeout(function() {
+				var a = typeof getAddr === 'function' ? getAddr() : null;
+				if (!a) return;
+				fetch('/api/vault/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: a, category: 'grace', data: JSON.stringify(window.bookmarks) }) }).catch(function(){});
+			}, 2000);
+		}
+
+		function toggleBm(name, tokenId, price) {
+			if (window.bookmarks[name]) delete window.bookmarks[name];
+			else window.bookmarks[name] = { name: name, address: tokenId || '', addedAt: Date.now(), note: '', category: 'grace', priceSnapshot: price || 0, lastActivityAt: Date.now() };
+			saveBm();
+			syncDiamonds();
+		}
+
+		function syncDiamonds() {
+			document.querySelectorAll('.diamond-btn').forEach(function(btn) {
+				var n = btn.getAttribute('data-name');
+				var is = !!window.bookmarks[n];
+				var was = btn.classList.contains('bookmarked');
+				if (is && !was) {
+					btn.classList.add('diamond-transforming');
+					btn.addEventListener('animationend', function h() { btn.classList.remove('diamond-transforming'); btn.removeEventListener('animationend', h); });
+				}
+				btn.classList.toggle('bookmarked', is);
+			});
+		}
+
+		window.renderBm = function() {
+			var keys = Object.keys(window.bookmarks);
+			bmCountEl.textContent = String(keys.length);
+			if (keys.length === 0) { bmPanelEl.style.display = 'none'; return; }
+			bmPanelEl.style.display = '';
+			var html = '';
+			for (var i = 0; i < keys.length; i++) {
+				var b = window.bookmarks[keys[i]];
+				html += '<a class="bm-chip" href="/' + esc(b.name.replace(/\\.sui$/i, '')) + '" target="_blank">'
+					+ '<span class="bm-diamond"></span><span class="bm-name">' + esc(b.name) + '</span>'
+					+ (b.priceSnapshot ? '<span class="bm-price">' + Number(b.priceSnapshot).toFixed(2) + ' SUI</span>' : '')
+					+ '<button class="chip-rm" data-rm="' + esc(keys[i]) + '">&times;</button></a>';
+			}
+			bmGridEl.innerHTML = html;
+		};
+
+		bmToggleEl.addEventListener('click', function() { bmPanelEl.classList.toggle('open'); bmArrowEl.innerHTML = bmPanelEl.classList.contains('open') ? '&#9650;' : '&#9660;'; });
+		bmGridEl.addEventListener('click', function(e) { var rm = e.target.closest('.chip-rm'); if (rm) { e.preventDefault(); e.stopPropagation(); var k = rm.getAttribute('data-rm'); if (k && window.bookmarks[k]) { delete window.bookmarks[k]; saveBm(); syncDiamonds(); } } });
+		document.addEventListener('click', function(e) { var d = e.target.closest('.diamond-btn'); if (d) { e.preventDefault(); toggleBm(d.getAttribute('data-name'), d.getAttribute('data-token'), parseFloat(d.getAttribute('data-price') || '0')); } });
+
+		function esc(str) { return String(str || '').replace(/[&<>"']/g, function(c) { return c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '"' ? '&quot;' : '&#39;'; }); }
+		function shortAddr(v) { v = String(v || ''); if (!v) return '-'; if (v.length <= 14) return v; return v.slice(0, 8) + '...' + v.slice(-4); }
+		function relTime(ms) { var d = Date.now() - ms; if (d < 60000) return 'now'; if (d < 3600000) return Math.floor(d/60000) + 'm ago'; if (d < 86400000) return Math.floor(d/3600000) + 'h ago'; return Math.floor(d/86400000) + 'd ago'; }
+		function dHtml(name, tid, price) { var bm = window.bookmarks[name] ? ' bookmarked' : ''; return '<button class="diamond-btn' + bm + '" data-name="' + esc(name) + '" data-token="' + esc(tid) + '" data-price="' + (price||0) + '" title="Bookmark"></button>'; }
+
+		function renderRows(names) {
+			if (!Array.isArray(names) || names.length === 0) { rowsEl.innerHTML = '<tr><td colspan="8" class="muted">No names found.</td></tr>'; return; }
+			var html = '';
+			for (var i = 0; i < names.length; i++) {
+				var it = names[i] || {};
+				var cn = String(it.name || '').replace(/\\.sui$/i, '');
+				var st = it.inGracePeriod ? 'grace' : 'expiring';
+				var sl = it.inGracePeriod ? 'GRACE' : 'EXPIRING';
+				var ck = it.expired ? ('Expired ' + Number(it.daysSinceExpiry||0).toFixed(1) + 'd ago') : ('In ' + Number(it.daysUntilExpiry||0).toFixed(1) + 'd');
+				var gt = it.inGracePeriod ? (Number(it.daysUntilGraceEnds||0).toFixed(1) + 'd left') : '-';
+				html += '<tr><td>' + dHtml(it.name, it.tokenId, 0) + '</td>'
+					+ '<td><a class="name" href="/' + encodeURIComponent(cn) + '" target="_blank" rel="noreferrer">' + esc(it.name) + '</a><div class="muted" style="font-size:10px">' + shortAddr(it.tokenId) + '</div></td>'
+					+ '<td><span class="tag ' + st + '">' + sl + '</span></td>'
+					+ '<td>' + new Date(Number(it.expirationMs||0)).toLocaleDateString() + '</td>'
+					+ '<td>' + esc(ck) + '</td><td>' + esc(gt) + '</td>'
+					+ '<td title="' + esc(it.owner) + '">' + esc(shortAddr(it.owner)) + '</td>'
+					+ '<td>' + esc(it.dataSource||'-') + '</td></tr>';
+			}
+			rowsEl.innerHTML = html;
+		}
+
+		function renderAct(actions) {
+			if (!Array.isArray(actions) || actions.length === 0) { actRowsEl.innerHTML = '<tr><td colspan="9" class="muted">No activity found.</td></tr>'; return; }
+			var tc = { buy: 'buy', sale: 'sale', list: 'list', bid: 'bid', mint: 'mint', delist: 'delist' };
+			var html = '';
+			for (var i = 0; i < actions.length; i++) {
+				var a = actions[i];
+				var cls = tc[a.type] || 'unknown';
+				var ps = Number(a.priceSui || 0);
+				html += '<tr><td>' + dHtml(a.nftName, a.nftTokenId, ps) + '</td>'
+					+ '<td><a class="name" href="/' + encodeURIComponent(String(a.nftName||'').replace(/\\.sui$/i,'')) + '" target="_blank">' + esc(a.nftName) + '</a></td>'
+					+ '<td><span class="tag ' + cls + '">' + esc(a.type.toUpperCase()) + '</span></td>'
+					+ '<td>' + (ps > 0 ? ps.toFixed(2) + ' SUI' : '-') + '</td>'
+					+ '<td title="' + esc(a.sender) + '">' + esc(shortAddr(a.sender)) + '</td>'
+					+ '<td title="' + esc(a.receiver) + '">' + esc(shortAddr(a.receiver)) + '</td>'
+					+ '<td>' + esc(a.marketName) + '</td>'
+					+ '<td>' + relTime(a.blockTimeMs) + '</td>'
+					+ '<td><a class="name" href="https://suivision.xyz/txblock/' + esc(a.txId) + '" target="_blank">view</a></td></tr>';
+			}
+			actRowsEl.innerHTML = html;
+		}
+
+		function updateUrl() {
+			var url = new URL(window.location.href);
+			url.searchParams.set('q', state.q); url.searchParams.set('status', state.status);
+			url.searchParams.set('offset', String(state.offset)); url.searchParams.set('tab', state.tab);
+			window.history.replaceState({}, '', url.toString());
+		}
+
+		function hydrateFromUrl() {
+			var url = new URL(window.location.href);
+			state.q = String(url.searchParams.get('q') || '');
+			state.status = String(url.searchParams.get('status') || 'all');
+			if (state.status !== 'grace' && state.status !== 'expiring') state.status = 'all';
+			var po = parseInt(url.searchParams.get('offset') || '0', 10);
+			state.offset = Number.isFinite(po) && po > 0 ? po : 0;
+			var tab = String(url.searchParams.get('tab') || '');
+			if (tab === 'activity') state.tab = 'activity';
+			qEl.value = state.q; statusEl.value = state.status;
+		}
+
+		async function load() {
+			rowsEl.innerHTML = '<tr><td colspan="8" class="muted">Loading...</td></tr>';
+			updateUrl();
+			var params = new URLSearchParams();
+			params.set('limit', String(LIMIT)); params.set('offset', String(state.offset));
+			params.set('q', state.q); params.set('status', state.status);
+			params.set('minExpirationMs', String(state.minExpirationMs));
+			params.set('windowDays', String(state.windowDays)); params.set('_', String(Date.now()));
+			var res = await fetch('/api/grace-feed?' + params.toString());
+			if (!res.ok) { rowsEl.innerHTML = '<tr><td colspan="8" class="muted">Failed to load.</td></tr>'; return; }
+			var data = await res.json().catch(function() { return null; });
+			if (!data || !Array.isArray(data.names)) { rowsEl.innerHTML = '<tr><td colspan="8" class="muted">Invalid response.</td></tr>'; return; }
+			state.total = Number(data.total || 0);
+			renderRows(data.names);
+			document.getElementById('s-total').textContent = String(state.total);
+			var gc = 0, ec = 0;
+			for (var i = 0; i < data.names.length; i++) { if (data.names[i].inGracePeriod) gc++; else ec++; }
+			document.getElementById('s-grace').textContent = String(gc);
+			document.getElementById('s-exp').textContent = String(ec);
+			document.getElementById('s-time').textContent = new Date(Number(data.fetchedAt || Date.now())).toLocaleTimeString();
+			metaEl.textContent = 'Window: next ' + state.windowDays + 'd + 30d grace';
+			var from = state.total === 0 ? 0 : state.offset + 1;
+			var to = Math.min(state.offset + LIMIT, state.total);
+			countEl.textContent = from + '-' + to + ' of ' + state.total;
+			prevEl.disabled = state.offset <= 0; nextEl.disabled = state.offset + LIMIT >= state.total;
+		}
+
+		async function loadAct() {
+			actRowsEl.innerHTML = '<tr><td colspan="9" class="muted">Loading activity...</td></tr>';
+			var params = new URLSearchParams();
+			params.set('limit', String(LIMIT)); params.set('offset', String(state.actOff));
+			params.set('minBlockTimeMs', String(state.minExpirationMs)); params.set('_', String(Date.now()));
+			if (state.q) params.set('q', state.q);
+			var res = await fetch('/api/grace-activity?' + params.toString());
+			if (!res.ok) { actRowsEl.innerHTML = '<tr><td colspan="9" class="muted">Failed to load.</td></tr>'; return; }
+			var data = await res.json().catch(function() { return null; });
+			if (!data || !Array.isArray(data.actions)) { actRowsEl.innerHTML = '<tr><td colspan="9" class="muted">Invalid response.</td></tr>'; return; }
+			state.actTotal = Number(data.total || 0); state.actLoaded = true;
+			renderAct(data.actions);
+			document.getElementById('sa-total').textContent = String(state.actTotal);
+			var buys = 0, lists = 0, bids = 0;
+			for (var i = 0; i < data.actions.length; i++) { var t = data.actions[i].type; if (t === 'buy' || t === 'sale') buys++; else if (t === 'list') lists++; else if (t === 'bid') bids++; }
+			document.getElementById('sa-buys').textContent = String(buys);
+			document.getElementById('sa-lists').textContent = String(lists);
+			document.getElementById('sa-bids').textContent = String(bids);
+			var from = state.actTotal === 0 ? 0 : state.actOff + 1;
+			var to = Math.min(state.actOff + LIMIT, state.actTotal);
+			actCountEl.textContent = from + '-' + to + ' of ' + state.actTotal;
+			actPrevEl.disabled = state.actOff <= 0; actNextEl.disabled = state.actOff + LIMIT >= state.actTotal;
+		}
+
+		function switchTab(tab) {
+			state.tab = tab;
+			document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
+			document.getElementById('panel-listings').classList.toggle('active', tab === 'listings');
+			document.getElementById('panel-activity').classList.toggle('active', tab === 'activity');
+			statsL.style.display = tab === 'listings' ? '' : 'none';
+			statsA.style.display = tab === 'activity' ? '' : 'none';
+			updateUrl();
+			if (tab === 'activity' && !state.actLoaded) loadAct();
+		}
+
+		document.querySelectorAll('.tab-btn').forEach(function(b) { b.addEventListener('click', function() { switchTab(b.getAttribute('data-tab')); }); });
+		qEl.addEventListener('input', function() { state.q = String(qEl.value || '').trim(); state.offset = 0; state.actOff = 0; state.actLoaded = false; if (debounceTimer) clearTimeout(debounceTimer); debounceTimer = setTimeout(function() { load(); if (state.tab === 'activity') loadAct(); }, 250); });
+		statusEl.addEventListener('change', function() { state.status = statusEl.value === 'grace' || statusEl.value === 'expiring' ? statusEl.value : 'all'; state.offset = 0; load(); });
+		refreshEl.addEventListener('click', function() { if (state.tab === 'activity') { state.actLoaded = false; loadAct(); } else load(); });
+		prevEl.addEventListener('click', function() { state.offset = Math.max(0, state.offset - LIMIT); load(); });
+		nextEl.addEventListener('click', function() { state.offset += LIMIT; load(); });
+		actPrevEl.addEventListener('click', function() { state.actOff = Math.max(0, state.actOff - LIMIT); loadAct(); });
+		actNextEl.addEventListener('click', function() { state.actOff += LIMIT; loadAct(); });
+
+		hydrateFromUrl();
+		window.loadBm();
+		if (state.tab === 'activity') switchTab('activity'); else load();
+	})();
+	</script>
+
+	<style>${generateMessagingChatCss()}</style>
+	<div id="messaging-chat-root"></div>
+	<script>${generateMessagingChatJs({ page: 'landing', network: network || 'mainnet' })}</script>
 </body>
 </html>`
 }
