@@ -6,8 +6,18 @@
  */
 
 export const SDK_VERSION = '2.4.0'
-export const MESSAGING_SDK_VERSION = '0.3.0'
+export const MESSAGING_SDK_VERSION = '0.4.0'
 export const SEAL_SDK_VERSION = '1.0.1'
+
+export const CDN_TAG = 'mainnet-messaging-v2.1-2026-02-16'
+export const CDN_REPO = 'arbuthnot-eth/sui-stack-messaging-sdk'
+export const CDN_MANIFEST_URL = `https://cdn.jsdelivr.net/gh/${CDN_REPO}@${CDN_TAG}/cdn/messaging-mainnet.json`
+export const CDN_SDK_URLS = {
+	messaging: [
+		`https://esm.sh/gh/${CDN_REPO}@${CDN_TAG}/packages/messaging`,
+		`https://cdn.jsdelivr.net/gh/${CDN_REPO}@${CDN_TAG}/packages/messaging/dist/esm/index.js`,
+	],
+}
 
 export const PACKAGE_IDS = {
 	mainnet: '0xbcdf77f551f12be0fa61d1eb7bb2ff4169c1587aaa86fab84d95213cc75139f9',
@@ -116,10 +126,7 @@ export function getSdkImportUrls(): {
 			`https://cdn.jsdelivr.net/npm/@mysten/seal@${SEAL_SDK_VERSION}/+esm`,
 			`https://esm.sh/@mysten/seal@${SEAL_SDK_VERSION}?bundle`,
 		],
-		messaging: [
-			`https://cdn.jsdelivr.net/npm/@mysten/messaging@${MESSAGING_SDK_VERSION}/+esm`,
-			`https://esm.sh/@mysten/messaging@${MESSAGING_SDK_VERSION}?bundle`,
-		],
+		messaging: CDN_SDK_URLS.messaging,
 	}
 }
 
@@ -169,7 +176,7 @@ export async function fetchChannelMembershipsViaRpc(
 				address,
 				{
 					filter: {
-						StructType: `${packageId}::channel::MemberCap`,
+						StructType: `${packageId}::member_cap::MemberCap`,
 					},
 					options: { showContent: true, showOwner: true },
 				},

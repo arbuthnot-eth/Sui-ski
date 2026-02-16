@@ -1156,6 +1156,7 @@ window.addEventListener('message', function(e) {
 	(async function() {
 		try {
 			await SuiWalletKit.detectWallets();
+			if (window.__wkWaaPLoading) await window.__wkWaaPLoading;
 			var wallets = SuiWalletKit.getSuiWallets();
 			var waapWallet = null;
 			for (var i = 0; i < wallets.length; i++) {

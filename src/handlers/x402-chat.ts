@@ -23,8 +23,8 @@ const MAX_HISTORY = 50
 const MAX_MESSAGE_LENGTH = 2000
 const DICE_COMMIT_TTL_SECONDS = 300
 const DICE_EMOJI = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
-const OFFICIAL_MESSAGING_SDK_VERSION = '0.3.0'
-const OFFICIAL_MESSAGING_SDK_URL = `https://cdn.jsdelivr.net/npm/@mysten/messaging@${OFFICIAL_MESSAGING_SDK_VERSION}/+esm`
+const OFFICIAL_MESSAGING_SDK_VERSION = '0.4.0'
+const OFFICIAL_MESSAGING_SDK_URL = 'https://esm.sh/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v2.1-2026-02-16/packages/messaging'
 const AGENT_DISPATCH_ALLOWLIST: Record<string, Set<string>> = {
 	'x402-register': new Set(['info', 'quote', 'register', 'status', 'sweep']),
 	subnamecap: new Set(['info', 'register', 'status']),

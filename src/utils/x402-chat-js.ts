@@ -13,16 +13,15 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 	return `
 		(function() {
 			var CONFIG = ${JSON.stringify(config)};
-			var OFFICIAL_MESSAGING_SDK_VERSION = '0.3.0';
+			var OFFICIAL_MESSAGING_SDK_VERSION = '0.4.0';
 			var OFFICIAL_SUI_SDK_VERSION = '2.4.0';
 			var OFFICIAL_SEAL_SDK_VERSION = '1.0.1';
 			var OFFICIAL_MESSAGING_SDK_URLS = [
-				'https://cdn.jsdelivr.net/npm/@mysten/messaging@' + OFFICIAL_MESSAGING_SDK_VERSION + '/+esm',
-				'https://esm.sh/@mysten/messaging@' + OFFICIAL_MESSAGING_SDK_VERSION + '?bundle',
+				'https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3-2026-02-16/cdn/messaging-browser.mjs',
 			];
 			var OFFICIAL_SUI_CLIENT_URLS = [
-				'https://esm.sh/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/client',
-				'https://cdn.jsdelivr.net/npm/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/dist/client/index.mjs',
+				'https://esm.sh/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/graphql',
+				'https://cdn.jsdelivr.net/npm/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/dist/graphql/index.mjs',
 			];
 			var OFFICIAL_SUI_TX_URLS = [
 				'https://cdn.jsdelivr.net/npm/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/transactions/+esm',
@@ -32,6 +31,11 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 				'https://cdn.jsdelivr.net/npm/@mysten/seal@' + OFFICIAL_SEAL_SDK_VERSION + '/+esm',
 				'https://esm.sh/@mysten/seal@' + OFFICIAL_SEAL_SDK_VERSION + '?bundle',
 			];
+			var OFFICIAL_GRAPHQL_URLS = {
+				mainnet: 'https://graphql.mainnet.sui.io/graphql',
+				testnet: 'https://graphql.testnet.sui.io/graphql',
+				devnet: 'https://graphql.devnet.sui.io/graphql',
+			};
 			var OFFICIAL_RPC_URLS = {
 				mainnet: 'https://fullnode.mainnet.sui.io:443',
 				testnet: 'https://fullnode.testnet.sui.io:443',
@@ -926,6 +930,12 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 				return OFFICIAL_RPC_URLS.mainnet;
 			}
 
+			function getGraphqlUrlForNetwork(network) {
+				if (network === 'testnet') return OFFICIAL_GRAPHQL_URLS.testnet;
+				if (network === 'devnet') return OFFICIAL_GRAPHQL_URLS.devnet;
+				return OFFICIAL_GRAPHQL_URLS.mainnet;
+			}
+
 			function getMessagingPackageId() {
 				if (officialMessagingPackageId) return officialMessagingPackageId;
 				return getNetwork() === 'mainnet'
@@ -1147,28 +1157,20 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 						: input;
 					var client = input && input.client ? input.client : null;
 					if (!transaction) return transaction;
+					if (transaction && typeof transaction.build === 'function') {
+						if (client) {
+							try {
+								var builtWithClient = await transaction.build({ client: client });
+								if (builtWithClient) return builtWithClient;
+							} catch (_buildClientErr) {
+								console.warn('[messaging-signer] build({ client }) failed:', _buildClientErr && _buildClientErr.message);
+							}
+						}
+					}
 					if (transaction && typeof transaction.serialize === 'function') {
 						try {
 							return await transaction.serialize();
-						} catch (_e) {}
-					}
-					if (transaction && typeof transaction.build === 'function') {
-						try {
-							var builtWithoutClient = await transaction.build();
-							if (builtWithoutClient) return builtWithoutClient;
-						} catch (_buildNoClientError) {}
-						try {
-							if (client) return await transaction.build({ client: client });
-							var RpcClient = window.SuiJsonRpcClient || window.SuiClient;
-							if (RpcClient) {
-								var rpcOpts = { url: getRpcUrlForNetwork(getNetwork()) };
-								if (officialMessagingPackageId) {
-									rpcOpts.mvr = { overrides: { packages: { '@local-pkg/sui-stack-messaging': officialMessagingPackageId } } };
-								}
-								var rpcClient = new RpcClient(rpcOpts);
-								return await transaction.build({ client: rpcClient });
-							}
-						} catch (_e2) {}
+						} catch (_serializeErr) {}
 					}
 					return transaction;
 				}
@@ -1284,7 +1286,13 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 						if (rawResult && rawResult.effects && typeof rawResult.effects !== 'object') {
 							rawResult.effects = undefined;
 						}
-						return rawResult;
+						if (rawResult && rawResult.$kind) return rawResult;
+						var txResult = { digest: rawResult.digest, effects: rawResult.effects };
+						if (rawResult.rawEffects) txResult.rawEffects = rawResult.rawEffects;
+						var isFailure = rawResult.effects && rawResult.effects.status && rawResult.effects.status.status === 'failure';
+						return isFailure
+							? { $kind: 'FailedTransaction', FailedTransaction: txResult }
+							: { $kind: 'Transaction', Transaction: txResult };
 					},
 					signAndExecuteTransactionBlock: async function(input) {
 						if (typeof SuiWalletKit === 'undefined' || typeof SuiWalletKit.signAndExecute !== 'function') {
@@ -1311,7 +1319,13 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 						if (rawResult && rawResult.effects && typeof rawResult.effects !== 'object') {
 							rawResult.effects = undefined;
 						}
-						return rawResult;
+						if (rawResult && rawResult.$kind) return rawResult;
+						var txResult = { digest: rawResult.digest, effects: rawResult.effects };
+						if (rawResult.rawEffects) txResult.rawEffects = rawResult.rawEffects;
+						var isFailure = rawResult.effects && rawResult.effects.status && rawResult.effects.status.status === 'failure';
+						return isFailure
+							? { $kind: 'FailedTransaction', FailedTransaction: txResult }
+							: { $kind: 'Transaction', Transaction: txResult };
 					},
 				};
 			}
@@ -1406,24 +1420,24 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 
 				officialMessagingClientLoadPromise = (async function() {
 					var sdk = await ensureOfficialMessagingSdk();
-					if (!sdk || !sdk.messaging) return null;
+					if (!sdk || !sdk.messaging) { console.error('[messaging-init] SDK missing: sdk=', !!sdk, 'messaging=', sdk && !!sdk.messaging); return null; }
 					var loaded = await Promise.all([
 						importFirstAvailable(OFFICIAL_SUI_CLIENT_URLS),
 						importFirstAvailable(OFFICIAL_SEAL_SDK_URLS),
 					]);
 					var suiMod = loaded[0] || {};
 					var sealMod = loaded[1] || {};
-					var SuiClientCtor = suiMod.CoreClient || suiMod.SuiClient || suiMod.SuiJsonRpcClient;
+					console.log('[messaging-init] suiMod keys:', Object.keys(suiMod).slice(0, 15), 'sealMod keys:', Object.keys(sealMod).slice(0, 10));
+					var SuiClientCtor = suiMod.SuiGraphQLClient || suiMod.SuiJsonRpcClient || suiMod.SuiClient;
 					if (!SuiClientCtor || !sealMod.SealClient) {
-						throw new Error('Required Sui SDK modules are unavailable (CoreClient, SealClient)');
+						throw new Error('Required Sui SDK modules are unavailable (SuiGraphQLClient=' + !!suiMod.SuiGraphQLClient + ', SealClient=' + !!sealMod.SealClient + ')');
 					}
 					if (!window.SuiClient) window.SuiClient = SuiClientCtor;
-					if (!window.SuiJsonRpcClient) window.SuiJsonRpcClient = SuiClientCtor;
-					if (!window.CoreClient) window.CoreClient = SuiClientCtor;
+					if (!window.SuiGraphQLClient) window.SuiGraphQLClient = SuiClientCtor;
 
 					var config = await fetchOfficialMessagingConfig();
 					var network = getNetwork();
-					var rpcUrl = getRpcUrlForNetwork(network);
+					var graphqlUrl = getGraphqlUrlForNetwork(network);
 					var sealServers = resolveSealServerConfigs(network, config);
 					if (!sealServers.length) {
 						throw new Error('No Seal key servers configured for messaging SDK');
@@ -1432,30 +1446,17 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 					var walrusConfig = resolveWalrusConfig(network, config);
 					var signer = createOfficialMessagingSigner(normalizedAddress);
 
-					var resolvedPackageConfig = null;
-					if (network === 'testnet' && sdk.TESTNET_MESSAGING_PACKAGE_CONFIG) {
-						resolvedPackageConfig = sdk.TESTNET_MESSAGING_PACKAGE_CONFIG;
-					} else if (sdk.MAINNET_MESSAGING_PACKAGE_CONFIG) {
-						resolvedPackageConfig = sdk.MAINNET_MESSAGING_PACKAGE_CONFIG;
-					}
+					var resolvedPackageConfig = { packageId: getMessagingPackageId() };
 					if (config && config.sdk && config.sdk.messagingPackageConfig && config.sdk.messagingPackageConfig.packageId) {
 						resolvedPackageConfig = config.sdk.messagingPackageConfig;
 					}
-					if (resolvedPackageConfig && resolvedPackageConfig.packageId) {
-						officialMessagingPackageId = resolvedPackageConfig.packageId;
-					}
+					officialMessagingPackageId = resolvedPackageConfig.packageId;
 
-					var clientOpts = { url: rpcUrl };
+					var clientOpts = { url: graphqlUrl, network: network };
 					if (officialMessagingPackageId) {
 						clientOpts.mvr = { overrides: { packages: { '@local-pkg/sui-stack-messaging': officialMessagingPackageId } } };
 					}
 					var baseClient = new SuiClientCtor(clientOpts);
-					
-					// Compatibility patch: SDK expects getOwnedObjects but CoreClient has listOwnedObjects
-					if (baseClient.core && baseClient.core.listOwnedObjects && !baseClient.core.getOwnedObjects) {
-						baseClient.core.getOwnedObjects = baseClient.core.listOwnedObjects.bind(baseClient.core);
-					}
-					
 					var SealClientCtor = sealMod.SealClient;
 					var sealExtension = {
 						name: 'seal',
@@ -1484,12 +1485,6 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 					}
 
 					var withMessaging = withSeal.$extend(sdk.messaging(extensionOptions));
-					
-					// Apply compatibility patch to extended client as well
-					if (withMessaging.core && withMessaging.core.listOwnedObjects && !withMessaging.core.getOwnedObjects) {
-						withMessaging.core.getOwnedObjects = withMessaging.core.listOwnedObjects.bind(withMessaging.core);
-					}
-					
 					var client = withMessaging && withMessaging.messaging ? withMessaging.messaging : null;
 					if (!client || typeof client.getChannelMemberships !== 'function') {
 						throw new Error('Failed to initialize official messaging client');
@@ -1503,7 +1498,7 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 					return client;
 				})()
 					.catch(function(error) {
-						console.warn('Official messaging client init failed:', error);
+						console.error('[messaging-init] FAILED:', error && error.message || error, error && error.stack || '');
 						officialMessagingClient = null;
 						officialMessagingSigner = null;
 						officialMessagingAddress = '';
@@ -1532,7 +1527,7 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 
 				try {
 					var membershipsResp = await client.getChannelMemberships({
-						address: address,
+						owner: address,
 						limit: OFFICIAL_CHANNEL_LIMIT,
 					});
 					var memberships = membershipsResp && Array.isArray(membershipsResp.memberships)
@@ -2954,6 +2949,18 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 			addSystemMessage('Purged #' + label + ' messages in this linked profile view.');
 		}
 
+		function unwrapTxResult(raw) {
+			if (!raw) return raw;
+			if (raw.$kind === 'FailedTransaction' && raw.FailedTransaction) {
+				var failed = raw.FailedTransaction;
+				var errMsg = 'Transaction failed on-chain';
+				if (failed.effects && failed.effects.status && failed.effects.status.error) errMsg = failed.effects.status.error;
+				throw new Error(errMsg);
+			}
+			if (raw.$kind === 'Transaction' && raw.Transaction) return raw.Transaction;
+			return raw;
+		}
+
 		async function burnChannel(channelId, options) {
 			var burnOptions = options || {};
 			var skipConfirm = !!burnOptions.skipConfirm;
@@ -3051,7 +3058,7 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 				}
 
 				async function executeBurnTx(includeMembershipRemoval) {
-					return await signer.signAndExecuteTransaction({
+					var raw = await signer.signAndExecuteTransaction({
 						transaction: buildBurnTx(includeMembershipRemoval),
 						options: {
 							showEffects: true,
@@ -3060,6 +3067,7 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 						},
 						forceSignBridge: true,
 					});
+					return unwrapTxResult(raw);
 				}
 
 				function extractStorageRebateMist(result) {
@@ -3138,59 +3146,124 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 				addSystemMessage('Only the owner wallet can bulk-burn duplicate channels.');
 				return;
 			}
+			addSystemMessage('Refreshing channel state...');
+			await loadChannels();
 			var burnable = getBulkBurnableChannelIds();
 			if (!burnable.length) {
 				addSystemMessage('No duplicate channels are eligible for bulk burn.');
 				return;
 			}
-			if (!window.confirm('Burn ' + String(burnable.length) + ' duplicate channels? You may see multiple wallet confirmations.')) {
+
+			var burnTargets = [];
+			var skippedLabels = [];
+			for (var i = 0; i < burnable.length; i++) {
+				var cid = burnable[i];
+				var state = getOfficialChannelState(cid);
+				var channel = null;
+				for (var j = 0; j < channels.length; j++) {
+					if (channels[j] && channels[j].id === cid) { channel = channels[j]; break; }
+				}
+				var label = sanitizeSlug((channel && channel.name) || cid) || cid;
+				if (!state || !state.channelId || !state.memberCapId || !state.creatorCapId) {
+					skippedLabels.push('#' + label);
+					continue;
+				}
+				burnTargets.push({ channelId: state.channelId, memberCapId: state.memberCapId, creatorCapId: state.creatorCapId, memberAddress: normalizeAddress(state.memberAddress || ''), encryptedKey: state.encryptedKey, label: label });
+			}
+
+			if (!burnTargets.length) {
+				addSystemMessage('No duplicate channels have the required on-chain state for burn.');
+				return;
+			}
+			if (!window.confirm('Burn ' + String(burnTargets.length) + ' duplicate channel' + (burnTargets.length > 1 ? 's' : '') + ' in a single transaction? This cannot be undone.')) {
 				return;
 			}
 
 			bulkBurnPending = true;
+			for (var bp = 0; bp < burnTargets.length; bp++) channelBurnPendingById[burnTargets[bp].channelId] = true;
 			renderChannelList();
-			var successCount = 0;
-			var failureCount = 0;
-			var rebatePathCount = 0;
-			var fallbackCount = 0;
-			var rebateTotalMist = 0;
-			var failedLabels = [];
+
 			try {
-				for (var i = 0; i < burnable.length; i++) {
-					var nextId = burnable[i];
-					var result = await burnChannel(nextId, {
-						skipConfirm: true,
-						suppressSuccessMessage: true,
-						suppressFailureMessage: true,
-					});
-					if (result && result.ok) {
-						successCount += 1;
-						if (result.usedRebatePath) rebatePathCount += 1;
-						if (result.fallbackUsed) fallbackCount += 1;
-						var nextRebate = Number(result.rebateMist || '0');
-						if (isFinite(nextRebate) && nextRebate > 0) rebateTotalMist += nextRebate;
-					} else {
-						failureCount += 1;
-						var failedName = result && result.channelLabel ? '#' + result.channelLabel : '#' + nextId;
-						failedLabels.push(failedName);
+				var senderAddress = normalizeAddress(await ensureWalletSigningAddress());
+				if (!senderAddress) throw new Error('Connect wallet to burn channel objects.');
+				await ensureOfficialMessagingClient();
+				var txMod = await ensureOfficialSuiTransactionSdk();
+				var TxCtor = txMod && (txMod.Transaction || txMod.TransactionBlock);
+				if (!TxCtor) throw new Error('Sui transaction builder module is unavailable.');
+				var signer = officialMessagingSigner || createOfficialMessagingSigner(senderAddress);
+				var burnAddress = '0x0000000000000000000000000000000000000000000000000000000000000000';
+				var pkgId = getMessagingPackageId();
+
+				function buildBulkBurnTx(withMemberRemoval) {
+					var tx = new TxCtor();
+					if (typeof tx.setSenderIfNotSet === 'function') tx.setSenderIfNotSet(senderAddress);
+					if (typeof tx.setGasBudget === 'function') tx.setGasBudget(200000000);
+					for (var k = 0; k < burnTargets.length; k++) {
+						var t = burnTargets[k];
+						if (withMemberRemoval) {
+							var memberAddr = t.memberAddress || senderAddress;
+							if (!t.encryptedKey) {
+								tx.moveCall({
+									target: pkgId + '::channel::add_encrypted_key',
+									arguments: [tx.object(t.channelId), tx.object(t.memberCapId), tx.pure.vector('u8', [1])],
+								});
+							}
+							var clockArg = tx.object && typeof tx.object.clock === 'function' ? tx.object.clock() : tx.object('0x6');
+							tx.moveCall({
+								target: pkgId + '::channel::remove_members',
+								arguments: [tx.object(t.channelId), tx.object(t.memberCapId), tx.pure.vector('address', [memberAddr]), clockArg],
+							});
+						}
+						tx.moveCall({
+							target: pkgId + '::member_cap::transfer_to_recipient',
+							arguments: [tx.object(t.memberCapId), tx.object(t.creatorCapId), tx.pure.address(burnAddress)],
+						});
 					}
+					return tx;
 				}
+
+				var burnResult = null;
+				var usedRebatePath = false;
+				try {
+					burnResult = unwrapTxResult(await signer.signAndExecuteTransaction({
+						transaction: buildBulkBurnTx(true),
+						options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
+						forceSignBridge: true,
+					}));
+					usedRebatePath = true;
+				} catch (rebateError) {
+					console.warn('Bulk burn rebate path failed, falling back to transfer-only:', rebateError);
+					burnResult = unwrapTxResult(await signer.signAndExecuteTransaction({
+						transaction: buildBulkBurnTx(false),
+						options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
+						forceSignBridge: true,
+					}));
+				}
+				console.log('[bulk-burn] result:', burnResult);
+
+				for (var r = 0; r < burnTargets.length; r++) {
+					removeStoredChannelMeta(burnTargets[r].channelId);
+					delete channelMessages[burnTargets[r].channelId];
+				}
+
+				var effects = burnResult && burnResult.effects ? burnResult.effects : null;
+				var gasUsed = effects && effects.gasUsed ? effects.gasUsed : (effects && effects.effects && effects.effects.gasUsed ? effects.effects.gasUsed : null);
+				var rebateMist = gasUsed ? Number(gasUsed.storageRebate || gasUsed.storage_rebate || gasUsed.storageRebateMist || 0) : 0;
+				var rebateSui = rebateMist / 1000000000;
+				var rebateText = rebateMist > 0 ? (' Storage rebate: ' + rebateSui.toFixed(rebateSui >= 1 ? 4 : 6) + ' SUI.') : '';
+				var labels = [];
+				for (var lb = 0; lb < burnTargets.length; lb++) labels.push('#' + burnTargets[lb].label);
+				addSystemMessage('Burned ' + String(burnTargets.length) + ' duplicate channel' + (burnTargets.length > 1 ? 's' : '') + ' (' + labels.join(', ') + ').' + (usedRebatePath ? '' : ' (transfer-only fallback)') + rebateText);
+				if (skippedLabels.length) addSystemMessage('Skipped (missing state): ' + skippedLabels.join(', ') + '.');
+				await loadChannels();
+			} catch (error) {
+				var errText = String(error && error.message ? error.message : 'unknown error');
+				addSystemMessage('Bulk burn failed: ' + errText);
 			} finally {
 				bulkBurnPending = false;
+				for (var fp = 0; fp < burnTargets.length; fp++) channelBurnPendingById[burnTargets[fp].channelId] = false;
 				renderChannelList();
-			}
-
-			var rebateSui = rebateTotalMist / 1000000000;
-			var rebateText = rebateTotalMist > 0 ? (' Total storage rebate: ' + rebateSui.toFixed(rebateSui >= 1 ? 4 : 6) + ' SUI.') : '';
-			addSystemMessage(
-				'Bulk burn complete. Success: ' + String(successCount)
-				+ ', failed: ' + String(failureCount)
-				+ ', rebate-path: ' + String(rebatePathCount)
-				+ ', transfer-fallback: ' + String(fallbackCount)
-				+ '.' + rebateText,
-			);
-			if (failedLabels.length) {
-				addSystemMessage('Bulk burn failures: ' + failedLabels.join(', ') + '.');
+				applyComposerState();
 			}
 		}
 

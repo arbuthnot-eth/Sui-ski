@@ -798,6 +798,26 @@ Best practices for maintaining packages in the Move Registry:
 
 ---
 
+## Sui Client Architecture (@mysten/sui v2.x)
+
+**JSON-RPC is deprecated — migrate to GraphQL by April 2026.**
+
+When loading the Sui SDK from CDN for browser use:
+- `@mysten/sui/client` exports only the **abstract** `CoreClient` — DO NOT instantiate
+- `@mysten/sui/graphql` exports `SuiGraphQLClient` (preferred, extends `BaseClient`)
+- `@mysten/sui/jsonRpc` exports `SuiJsonRpcClient` (legacy, extends `BaseClient`)
+
+Both concrete clients have:
+- `.core` property → concrete `CoreClient` subclass with `listOwnedObjects`, `getObjects`, etc.
+- `.$extend()` for composing with Seal, Messaging, and other extensions
+
+**GraphQL Endpoints:**
+- Mainnet: `https://graphql-beta.mainnet.sui.io`
+- Testnet: `https://graphql-beta.testnet.sui.io`
+- Devnet: `https://graphql-beta.devnet.sui.io`
+
+---
+
 ## Sui Transaction Building
 
 This project uses the `Transaction` class from `@mysten/sui/transactions`:
@@ -1037,3 +1057,48 @@ For a comprehensive visual reference of the complete Sui ecosystem architecture,
 - Added cache snapshotting for tracked registrations so new/known names persist between refresh windows.
 - Added SuiNS RPC lookup fallback for direct searched names (e.g. `usd.sui.ski`) when indexer rows are missing.
 - Deployed after each change with `npx wrangler deploy` per project instructions.
+
+---
+
+## Sui Stack Messaging SDK - Mainnet Deployment (v0.4.0 CDN)
+
+### Mainnet Package
+
+- **Package ID:** `0x74e34e2e4a2ba60d935db245c0ed93070bbbe23bf1558ae5c6a2a8590c8ad470`
+- **Deployer:** `0x3db42086e9271787046859d60af7933fa7ea70148df37c9fd693195533eabb57`
+- **Tx digest:** `E551CSSGWQsXChSCFQPR7BNMWWQv7TB7KYV2iyZkxVyz`
+- **Upgrade cap:** `0x1829ea7b90624dc019fd4df90e58bc092da03117f11ff585af958f0fb074d324`
+
+### CDN Manifest
+
+- **Git tag:** `mainnet-messaging-v2-2026-02-16`
+- **Manifest commit:** `e7280c8`
+- **Manifest path:** `cdn/messaging-mainnet.json` (in `sui-stack-messaging-sdk` repo)
+- **jsDelivr:** `https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v2-2026-02-16/cdn/messaging-mainnet.json`
+- **Raw GitHub:** `https://raw.githubusercontent.com/arbuthnot-eth/sui-stack-messaging-sdk/mainnet-messaging-v2-2026-02-16/cdn/messaging-mainnet.json`
+
+### Runtime Usage
+
+Fetch the CDN manifest at startup, read `packageId`, and inject into the SDK:
+
+```typescript
+const manifest = await fetch(
+  'https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v2-2026-02-16/cdn/messaging-mainnet.json'
+).then(r => r.json());
+
+const client = new SuiStackMessagingClient({
+  suiClient,
+  storage,
+  packageConfig: {
+    packageId: manifest.packageId,
+  },
+});
+```
+
+### Local Metadata
+
+Updated after upgrade:
+- `move/sui_stack_messaging/Published.toml:7` (package ID)
+- `move/sui_stack_messaging/Published.toml:9` (version)
+
+Note: default constants in `packages/messaging/src/constants.ts:6` still reference an older fallback ID.

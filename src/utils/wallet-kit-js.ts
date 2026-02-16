@@ -474,8 +474,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	          } catch (_e) {
 	            iframeReady = false;
 	          }
-	          var options = { useStaging: useStaging };
-	          if (iframeReady) options.config = config;
+	          var options = { useStaging: useStaging, config: config };
 	          var wallet = mod.initWaaPSui(options);
 	          __wkInitWalletsApi();
 	          if (__wkWalletsApi && typeof __wkWalletsApi.register === 'function') {

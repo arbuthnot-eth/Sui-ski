@@ -5,6 +5,7 @@
  */
 
 import {
+	CDN_SDK_URLS,
 	fetchChannelMembershipsViaRpc,
 	fetchChannelObjectsViaRpc,
 	formatSdkConfig,
@@ -244,7 +245,7 @@ export function generateSdkClientJs(config: { network: string; address?: string 
 			suiClient: 'https://cdn.jsdelivr.net/npm/@mysten/sui@' + SDK_VERSION + '/client/+esm',
 			suiTransactions: 'https://cdn.jsdelivr.net/npm/@mysten/sui@' + SDK_VERSION + '/transactions/+esm',
 			seal: 'https://cdn.jsdelivr.net/npm/@mysten/seal@' + SEAL_SDK_VERSION + '/+esm',
-			messaging: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@' + MESSAGING_SDK_VERSION + '/+esm',
+			messaging: '${CDN_SDK_URLS.messaging[0]}',
 		};
 	}
 
