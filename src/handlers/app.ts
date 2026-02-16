@@ -953,7 +953,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				replication: '4-5x',
 			},
 			sdk: {
-				messagingSdk: 'https://esm.sh/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.1-2026-02-16/packages/messaging',
+				messagingSdk: 'https://esm.sh/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.2-2026-02-16/packages/messaging',
 				sealSdk: 'https://cdn.jsdelivr.net/npm/@mysten/seal@1.0.1/+esm',
 				suiSdk: 'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/+esm',
 				messagingVersion: '0.4.0',
