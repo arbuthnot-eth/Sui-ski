@@ -1297,8 +1297,12 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 							}
 							var signed = null;
 							var firstError = null;
+							var personalMessageOptions = {
+								forceSignBridge: true,
+								expectedSender: signerAddress,
+							};
 							try {
-								signed = await SuiWalletKit.signPersonalMessage(messageBytes, { forceSignBridge: true });
+								signed = await SuiWalletKit.signPersonalMessage(messageBytes, personalMessageOptions);
 							} catch (error) {
 								firstError = error;
 								console.warn('[ski-chat-signer] bridge sign failed:', error && error.message ? error.message : error);
@@ -1321,6 +1325,7 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 							}
 							var transaction = await prepareWalletTransactionInput(input);
 							var signOptions = { forceSignBridge: true };
+							signOptions.expectedSender = signerAddress;
 							if (input && input.account) {
 								signOptions.account = input.account;
 							} else {
@@ -1349,6 +1354,7 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 								txOptions: txOptions,
 							};
 							signOptions.forceSignBridge = isSubdomainSuiHost() || !!(input && input.forceSignBridge);
+							signOptions.expectedSender = signerAddress;
 							if (input && input.account) {
 								signOptions.account = input.account;
 							} else {
@@ -1387,6 +1393,7 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 								txOptions: txOptions,
 							};
 							signOptions.forceSignBridge = isSubdomainSuiHost() || !!(input && input.forceSignBridge);
+							signOptions.expectedSender = signerAddress;
 							if (input && input.account) {
 								signOptions.account = input.account;
 							} else {

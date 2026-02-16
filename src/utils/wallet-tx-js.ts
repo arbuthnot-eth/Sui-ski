@@ -105,29 +105,39 @@ export function generateWalletTxJs(): string {
 
     function __wkNormalizeAccountAddress(account) {
       if (!account) return '';
-      var rawAddress = '';
-      if (typeof account === 'string') {
-        rawAddress = account.trim();
-      } else if (typeof account === 'object') {
-        if (typeof account.address === 'string') rawAddress = account.address.trim();
-        if (!rawAddress && account.address && typeof account.address.toString === 'function') {
-          rawAddress = String(account.address.toString()).trim();
+      function __wkNormalizeRawAddress(rawAddress) {
+        if (!rawAddress) return '';
+        var clean = String(rawAddress).trim().toLowerCase();
+        if (!clean) return '';
+        if (clean.indexOf('0x') === 0) {
+          clean = clean.slice(2);
         }
-        if (!rawAddress && account.publicKey && typeof account.publicKey.toSuiAddress === 'function') {
+        if (!clean || clean.length > 64 || /[^0-9a-f]/.test(clean)) return '';
+        clean = clean.replace(/^0+/, '');
+        if (!clean) return '';
+        return '0x' + clean.padStart(64, '0');
+      }
+
+      var normalizedFromAddress = '';
+      if (typeof account === 'string') {
+        normalizedFromAddress = __wkNormalizeRawAddress(account);
+        if (normalizedFromAddress) return normalizedFromAddress;
+      } else if (typeof account === 'object') {
+        if (typeof account.address === 'string') {
+          normalizedFromAddress = __wkNormalizeRawAddress(account.address);
+        }
+        if (!normalizedFromAddress && account.address && typeof account.address.toString === 'function') {
+          normalizedFromAddress = __wkNormalizeRawAddress(account.address.toString());
+        }
+        if (normalizedFromAddress) return normalizedFromAddress;
+        if (account.publicKey && typeof account.publicKey.toSuiAddress === 'function') {
           try {
-            rawAddress = String(account.publicKey.toSuiAddress() || '').trim();
+            var fromKey = __wkNormalizeRawAddress(account.publicKey.toSuiAddress() || '');
+            if (fromKey) return fromKey;
           } catch (_e) {}
         }
       }
-      if (!rawAddress) return '';
-      rawAddress = rawAddress.toLowerCase();
-      if (rawAddress.indexOf('0x') === 0) {
-        rawAddress = rawAddress.slice(2);
-      }
-      if (!rawAddress || rawAddress.length > 64 || /[^0-9a-f]/.test(rawAddress)) return '';
-      rawAddress = rawAddress.replace(/^0+/, '');
-      if (!rawAddress) return '';
-      return '0x' + rawAddress.padStart(64, '0');
+      return '';
     }
 
     function __wkResolveConnectionAddress(conn, preferredAccount) {
@@ -1009,7 +1019,11 @@ export function generateWalletTxJs(): string {
 	          var txOptions = (options && options.txOptions) || {};
 	          var sessionConn = SuiWalletKit.$connection.value || {};
 	          var sessionAccount = (options && options.account) || sessionConn.account;
-	          var expectedSender = __wkResolveConnectionAddress(sessionConn, sessionAccount);
+	          var forcedExpectedSender = __wkNormalizeAccountAddress(
+	            options && options.expectedSender ? options.expectedSender : '',
+	          );
+	          var expectedSender = forcedExpectedSender
+	            || __wkResolveConnectionAddress(sessionConn, sessionAccount);
             var preferredWalletName = __skiResolvePreferredWalletName();
 	          return await __skiPostAndWait(frame, b64, txOptions, expectedSender, preferredWalletName);
 	        } catch (err) {
@@ -1045,7 +1059,11 @@ export function generateWalletTxJs(): string {
           var frame = await __skiEnsureBridge();
           var conn = SuiWalletKit.$connection.value || {};
           var account = (options && options.account) || conn.account;
-          var expectedSender = __wkResolveConnectionAddress(conn, account);
+          var forcedExpectedSender = __wkNormalizeAccountAddress(
+            options && options.expectedSender ? options.expectedSender : '',
+          );
+          var expectedSender = forcedExpectedSender
+            || __wkResolveConnectionAddress(conn, account);
           var preferredWalletName = __skiResolvePreferredWalletName();
           var bytes = __wkNormalizeMessageBytes(message);
           if (!bytes.length) throw new Error('Missing message bytes for bridge signing');
@@ -1090,7 +1108,11 @@ export function generateWalletTxJs(): string {
 	          var b64 = await __skiSerializeTx(txInput);
 	          var conn = SuiWalletKit.$connection.value || {};
 	          var account = (options && options.account) || conn.account;
-	          var expectedSender = __wkResolveConnectionAddress(conn, account);
+	          var forcedExpectedSender = __wkNormalizeAccountAddress(
+	            options && options.expectedSender ? options.expectedSender : '',
+	          );
+	          var expectedSender = forcedExpectedSender
+	            || __wkResolveConnectionAddress(conn, account);
             var preferredWalletName = __skiResolvePreferredWalletName();
 	          return await __skiPostAndWait(frame, b64, {}, expectedSender, preferredWalletName);
 	        } catch (err) {
