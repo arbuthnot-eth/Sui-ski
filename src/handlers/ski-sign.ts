@@ -1,11 +1,12 @@
 import type { Env } from '../types'
-import { generateWalletKitJs } from '../utils/wallet-kit-js'
+import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
 
 export function generateSkiSignPage(env: Env): string {
 	return `<!DOCTYPE html>
 <html lang="en"><head>
+${generateExtensionNoiseFilter()}
 <meta charset="utf-8">
 <title>SKI Sign Bridge</title>
 <style>
@@ -813,7 +814,7 @@ async function __phantomSignThenExecute(txInput, execOptions, senderAddress, txJ
 async function __getSuiClient() {
 	if (__suiClient) return __suiClient;
 	if (!__SuiClientClass) {
-		var mod = await import('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle');
+		var mod = await import('https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle');
 		__SuiClientClass = mod.SuiJsonRpcClient;
 	}
 	var network = SuiWalletKit.__config.network || 'mainnet';
@@ -882,23 +883,51 @@ async function __executeSignedTransaction(signed, tx, execOptions) {
 	return rpcJson.result;
 }
 
+var __TransactionClassFallback = null;
+
 async function __getTransactionClass() {
 	if (__TransactionClass) return __TransactionClass;
-	var candidates = [
-		'https://cdn.jsdelivr.net/npm/@mysten/sui@1.45.2/transactions/+esm',
-		'https://esm.sh/@mysten/sui@1.45.2/transactions?bundle',
-		'https://esm.sh/@mysten/sui@2.2.0/transactions?bundle',
+	var primaryUrls = [
+		'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/transactions/+esm',
+		'https://esm.sh/@mysten/sui@2.4.0/transactions?bundle',
 	];
-	for (var i = 0; i < candidates.length; i++) {
+	var fallbackUrls = [
+		'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/transactions/+esm',
+		'https://esm.sh/@mysten/sui@2.4.0/transactions?bundle',
+	];
+	for (var i = 0; i < primaryUrls.length; i++) {
 		try {
-			var mod = await import(candidates[i]);
+			var mod = await import(primaryUrls[i]);
 			if (mod && mod.Transaction) {
 				__TransactionClass = mod.Transaction;
-				return __TransactionClass;
+				break;
 			}
 		} catch (_e) {}
 	}
-	throw new Error('Failed to load Sui Transaction class');
+	for (var j = 0; j < fallbackUrls.length; j++) {
+		try {
+			var fbMod = await import(fallbackUrls[j]);
+			if (fbMod && fbMod.Transaction) {
+				if (!__TransactionClass) __TransactionClass = fbMod.Transaction;
+				else __TransactionClassFallback = fbMod.Transaction;
+				break;
+			}
+		} catch (_e2) {}
+	}
+	if (!__TransactionClass) throw new Error('Failed to load Sui Transaction class');
+	return __TransactionClass;
+}
+
+function __tryParseTx(data) {
+	if (!data) return null;
+	var classes = [__TransactionClass, __TransactionClassFallback].filter(Boolean);
+	for (var i = 0; i < classes.length; i++) {
+		try {
+			var result = classes[i].from(data);
+			if (result) return result;
+		} catch (_e) {}
+	}
+	return null;
 }
 
 window.addEventListener('message', function(e) {
@@ -931,19 +960,13 @@ window.addEventListener('message', function(e) {
 			}
 			var tx = null;
 			if (txBytesFromInput && txBytesFromInput.length) {
-				try {
-					tx = Tx.from(txBytesFromInput);
-				} catch (_fromBytesErr) {}
+				tx = __tryParseTx(txBytesFromInput);
 			}
 			if (!tx && rawSerializedTx) {
-				try {
-					tx = Tx.from(rawSerializedTx);
-				} catch (_fromRawStringErr) {}
+				tx = __tryParseTx(rawSerializedTx);
 			}
 			if (!tx) {
-				try {
-					tx = Tx.from(parsed && typeof parsed === 'object' ? parsed : extractedPayload);
-				} catch (_fromParsedErr) {}
+				tx = __tryParseTx(parsed && typeof parsed === 'object' ? parsed : extractedPayload);
 			}
 			if (!tx && !txBytesFromInput) {
 				throw new Error('Invalid transaction payload for sign bridge');

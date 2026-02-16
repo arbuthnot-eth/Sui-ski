@@ -2,7 +2,7 @@ import type { Env } from '../types'
 import { generateLogoSvg } from '../utils/og-image'
 import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import { renderSocialMeta } from '../utils/social'
-import { generateWalletKitJs } from '../utils/wallet-kit-js'
+import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
@@ -23,6 +23,7 @@ export function generateDashboardPage(env: Env): string {
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
+	${generateExtensionNoiseFilter()}
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>My Names — sui.ski</title>
@@ -1208,8 +1209,8 @@ export function generateDashboardPage(env: Env): string {
 			]);
 			const results = await Promise.allSettled([
 				timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
-				timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
-				timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
+				timedImport('https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle'),
+				timedImport('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle'),
 				timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
 			]);
 			if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);

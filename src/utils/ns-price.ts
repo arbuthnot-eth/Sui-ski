@@ -327,16 +327,6 @@ function createUSDCFallbackResult(): USDCPriceResult {
 	}
 }
 
-export async function convertSuiToNs(suiAmount: bigint, env: Env): Promise<bigint> {
-	const price = await getNSSuiPrice(env)
-	return BigInt(Math.ceil(Number(suiAmount) * price.nsPerSui))
-}
-
-export async function convertNsToSui(nsAmount: bigint, env: Env): Promise<bigint> {
-	const price = await getNSSuiPrice(env)
-	return BigInt(Math.ceil(Number(nsAmount) * price.suiPerNs))
-}
-
 export interface SwappablePool {
 	name: string
 	coinType: string

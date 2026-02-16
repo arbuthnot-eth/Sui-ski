@@ -64,9 +64,8 @@ Client Request
 ## Key Design Decisions
 
 1. **Inline HTML generation** - No client-side framework, all HTML rendered server-side
-2. **No SDK imports for large packages** - Vortex SDK (9MB) loaded client-side from CDN
-3. **Transaction building** - Server builds unsigned transactions, client signs
-4. **gRPC primary, SDK fallback** - Surflux gRPC for fast resolution, @mysten/suins as fallback
+2. **Transaction building** - Server builds unsigned transactions, client signs
+3. **gRPC primary, SDK fallback** - Surflux gRPC for fast resolution, @mysten/suins as fallback
 
 ## File Structure
 

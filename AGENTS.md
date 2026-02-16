@@ -1,26 +1,37 @@
 # Agent Guidelines for Sui-ski Gateway
 
-This file contains instructions for AI agents working on this Cloudflare Workers project serving the Sui ecosystem.
+Sui-ski is a Cloudflare Workers gateway serving the Sui blockchain ecosystem. It resolves wildcard subdomains (`*.sui.ski`) to route requests to SuiNS names, Move Registry packages, decentralized content (IPFS/Walrus), and provides a read-only RPC proxy.
 
-## Progress Log
+## Core Architecture
 
-### 2026-02-14
-- Started messaging-only branding cleanup for the profile/landing chat widget.
-- Added new `generateMessagingChatCss` and `generateMessagingChatJs` exports while keeping backward-compatible `generateX402ChatCss` and `generateX402ChatJs` aliases.
-- Migrated page mounts from `x402-chat-root` to `messaging-chat-root` on landing and profile pages, with JS fallback support for legacy root IDs.
-- Preserved existing moderation, channel controls, and owner-scoped server context behavior from prior fixes.
-- Added `/cloudflare` searchable grace-radar page for SuiNS listings, backed by `/api/expiring-listings`.
-- Extended expiring listings API with query filters (`q`, `mode`) and grace-window metrics (`daysSinceExpiry`, `daysUntilGraceEnds`, `graceEndsMs`).
-- Tightened expired window handling to prioritize names still inside 30-day grace period.
-- Added adjustable ranking weights (`graceWeight`, `priceWeight`) so grace mode can prioritize urgency vs cheaper listings.
-- Exposed weighting controls in `/cloudflare` UI and added per-row priority score output.
-- Added one-click ranking presets in `/cloudflare` (`Prime Targets`, `Balanced`, `Incoming Expiry`) with shareable URL state via `preset` query param.
-- Added `/grace` route alias and configured default hard filter `minExpirationMs=1716660606618` for both TradePort listing activity and SuiNS expiration cutoff.
-- Added `/grace` empty-state fallback: when no grace matches exist, UI auto-displays expiring-soon results with a visible notice.
-- Switched TradePort time gating for grace ingestion to `expires_at` (SDK-aligned), with query-level and runtime filtering against `minExpirationMs`.
-- Added freshness safeguards for `/api/expiring-listings` (`Cache-Control: no-store` + client cache-busting query param) to avoid stale empty responses from edge cache.
-- Added resilient query fallback: if `expires_at` GraphQL selection fails/unavailable, the pipeline auto-falls back to `block_time` and reports source mode in debug.
-- Added RPC-backed search augmentation for `/api/expiring-listings`: direct name searches (e.g., `usd.sui.ski`) now resolve via SuiNS and are included even when not listed on TradePort.
+### Subdomain Routing (`src/utils/subdomain.ts`)
+| Pattern                      | Route Type | Handler                    |
+| ---------------------------- | ---------- | -------------------------- |
+| `sui.ski`                    | root       | Landing page, API routes   |
+| `my.sui.ski`                 | dashboard  | User's names management    |
+| `rpc.sui.ski`                | rpc        | JSON-RPC proxy             |
+| `{name}.sui.ski`             | suins      | SuiNS profile resolution   |
+| `{pkg}--{name}.sui.ski`      | mvr        | MVR package resolution     |
+| `ipfs-{cid}.sui.ski`         | content    | Direct IPFS gateway        |
+| `walrus-{blobId}.sui.ski`    | content    | Direct Walrus aggregator   |
+| `app.sui.ski`                | app        | Messaging/chat application |
+| `.t.` prefix                 | testnet    | Override to testnet        |
+| `.d.` prefix                 | devnet     | Override to devnet         |
+
+### Key Handlers
+- `src/handlers/landing.ts` - Root domain + API routes (`/api/*`)
+- `src/handlers/profile.ts` - SuiNS profile pages with grace period support
+- `src/handlers/app.ts` - Messaging/chat WebSocket and REST APIs
+- `src/handlers/dashboard.ts` - My Names dashboard at `my.sui.ski`
+- `src/handlers/mcp.ts` - Model Context Protocol server for AI tools
+- `src/resolvers/suins.ts` - SuiNS resolution via gRPC-Web + JSON-RPC fallback
+- `src/resolvers/rpc.ts` - Read-only RPC proxy with rate limiting
+
+### Bundle Constraints
+- **Worker size limit: 3MB** (Cloudflare Workers)
+- **Current bundle: ~5.5MB** - needs reduction
+- **@mysten/sui is 42MB** - tree-shaken but still significant
+- **zod + @modelcontextprotocol/sdk** add ~12MB combined
 
 ## CRITICAL: Always Deploy With Wrangler
 - **After every change, run `npx wrangler deploy` first.**
@@ -160,33 +171,36 @@ Use helper functions from `src/utils/response.ts`:
 
 ## Important Notes
 
-1. **Vortex SDK:** NOT imported in worker (9MB > 3MB limit). Client-side SDK loaded from CDN.
+1. **No console.log:** Use structured logging; errors logged to Cloudflare via `console.error`.
 
-2. **No console.log:** Use structured logging; errors logged to Cloudflare via `console.error`.
+2. **Rate limiting:** RPC proxy enforces 100 req/min per IP.
 
-3. **Rate limiting:** RPC proxy enforces 100 req/min per IP.
+3. **Grace period:** 30 days post-expiration before name becomes available.
 
-4. **Grace period:** 30 days post-expiration before name becomes available.
-
-5. **Security:** Only read-only RPC methods allowed (block writes like `sui_executeTransactionBlock`).
+4. **Security:** Only read-only RPC methods allowed (block writes like `sui_executeTransactionBlock`).
 
 ## TypeScript Version
 Target: ES2022, strict mode enabled
 
-## Progress Log (2026-02-15)
-- Replaced `/grace` UI with a plain expiring-names feed (search, status filter, pagination only).
-- `/grace` now reads `/api/grace-feed` (registrations feed), not `/api/expiring-listings` (listings feed).
-- Extended `/api/grace-feed` response with `expired`, `inGracePeriod`, `daysSinceExpiry`, and `daysUntilGraceEnds`.
-- Added `status` query support to `/api/grace-feed`: `all`, `expiring`, `grace`.
-- Increased default feed horizon to `windowDays=3650` so non-imminent expirations are still tracked.
-- Added cache-backed registration snapshot keys (`grace-feed-source-v2`, `grace-feed-snapshot-v2`) for rolling tracking.
-- Added direct SuiNS resolve fallback for explicit name searches (e.g. `usd.sui.ski`) when missing from indexer scan.
-- Fixed duplicate constant collision by renaming NFT activity cache constant to `NFT_ACTIVITY_CACHE_TTL`.
-- Upgraded the profile/landing chat widget to initialize the official Sui Stack Messaging SDK client (`@mysten/messaging@0.3.0`) with Seal + Walrus config from `/api/app/subscriptions/config`.
-- Added on-chain channel ingestion to the widget (`getChannelMemberships`, `getChannelMessages`, `executeSendMessageTransaction`) with safe fallback to existing `/api/app/messages/server/*` transport.
-- Extended `/api/app/subscriptions/config` with explicit SDK/runtime fields (`seal.rpcUrl`, `sdk.messagingVersion`, `sdk.messagingPackageConfig`) and network-aware Walrus defaults.
-- Fixed chat header control visibility by hiding `#wallet-widget` while the chat panel is open (`body.x402-chat-open`), and switched chat/badge visuals to square style.
-- Mounted `x402ChatRoutes` at `/api/x402-chat/*` with root-domain guard so x402 chat APIs are now live.
-- Added `/api/x402-chat/integrations` to publish Sui Stack Messaging SDK config, WebMCP proxy info, agent endpoint map, and x402 payment hints.
-- Added `/api/x402-chat/webmcp` (+ wildcard) as a WebMCP proxy bridge that forwards payment headers and surfaces x402 response headers.
-- Added `/api/x402-chat/agents/dispatch` and `/api/x402-chat/agents/webmcp/tool` for allowlisted agent dispatch + MCP tool calls with x402/webMCP header passthrough.
+## Local SDK Dependencies
+
+### Sui Stack Messaging SDK
+**Path:** `/home/brandon/Dev/Contributor/sui-stack-messaging-sdk`
+
+Local fork of `@mysten/messaging` for customization and mainnet support:
+- Already updated to `@mysten/sui@^2.4.0`
+- Built and ready at `packages/messaging/dist/`
+- Use for client-side messaging operations (decentralized, no server intermediary)
+
+**Key exports:**
+```typescript
+import { SuiStackMessagingClient, messaging } from '@mysten/messaging'
+import { MAINNET_MESSAGING_PACKAGE_CONFIG, TESTNET_MESSAGING_PACKAGE_CONFIG } from '@mysten/messaging'
+```
+
+**Architecture principle:** Messaging is client-side only. The server:
+- Serves static HTML/JS
+- Provides SDK config (package IDs, Seal servers, Walrus endpoints)
+- Does NOT store messages, resolve channels, or manage memberships
+
+All channel operations go directly to Sui RPC + Walrus from the client.

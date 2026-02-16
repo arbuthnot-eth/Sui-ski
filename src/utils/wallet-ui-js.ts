@@ -6,6 +6,7 @@ interface WalletUiConfig {
 
 export function generateWalletUiCss(): string {
 	return `
+body.wk-modal-open { overflow: hidden !important; }
 .wk-modal-overlay {
 	display: none;
 	position: fixed;
@@ -20,19 +21,21 @@ export function generateWalletUiCss(): string {
 	z-index: 13000;
 	align-items: center;
 	justify-content: center;
-	padding: 20px;
+	padding: 16px;
+	overflow: hidden;
 }
 .wk-modal-overlay.open { display: flex; }
 .wk-modal {
 	background: linear-gradient(180deg, #141820 0%, #0e1118 50%, #101520 100%);
 	border: 1px solid rgba(160,200,240,0.12);
-	border-radius: 24px;
-	max-width: 400px;
+	border-radius: 0 20px 20px 0;
+	max-width: 480px;
 	width: 100%;
 	overflow: hidden;
 	position: relative;
 	box-shadow: 0 28px 84px rgba(2,6,23,0.82), 0 0 38px rgba(180,210,240,0.1), inset 0 1px 0 rgba(200,220,255,0.06);
-	animation: wk-modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+	flex: 1;
+	min-width: 0;
 }
 .wk-modal::before {
 	content: '';
@@ -127,7 +130,7 @@ export function generateWalletUiCss(): string {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: 22px 24px 0;
+	padding: 14px 18px 0;
 }
 .wk-modal-header-left {
 	display: flex;
@@ -138,9 +141,9 @@ export function generateWalletUiCss(): string {
 	display: block;
 }
 .wk-modal-logo {
-	width: 44px;
-	height: 44px;
-	border-radius: 11px;
+	width: 72px;
+	height: 72px;
+	border-radius: 14px;
 	overflow: hidden;
 	border: 1px solid rgba(200,220,240,0.2);
 	background: rgba(180,200,220,0.08);
@@ -152,7 +155,7 @@ export function generateWalletUiCss(): string {
 .wk-modal-logo-img {
 	width: 100%;
 	height: 100%;
-	object-fit: cover;
+	object-fit: contain;
 	object-position: center;
 	display: block;
 	filter: brightness(1.1) contrast(1.05);
@@ -166,9 +169,9 @@ export function generateWalletUiCss(): string {
 	letter-spacing: -0.02em;
 }
 .wk-modal-subtitle {
-	padding: 5px 24px 18px;
+	padding: 2px 18px 10px;
 	color: #ffffff;
-	font-size: 0.76rem;
+	font-size: 0.72rem;
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 	font-weight: 600;
 	letter-spacing: 0.01em;
@@ -182,38 +185,38 @@ export function generateWalletUiCss(): string {
 	cursor: pointer;
 	padding: 0;
 	line-height: 1;
-	width: 30px;
-	height: 30px;
+	width: 28px;
+	height: 28px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	border-radius: 10px;
+	border-radius: 8px;
 	transition: all 0.15s;
 }
 .wk-modal-close:hover { background: rgba(255,255,255,0.1); color: #d0d0e0; }
 
 .wk-social-section {
-	padding: 0 20px;
+	padding: 0 16px;
 }
 .wk-social-grid {
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
-	gap: 8px;
+	gap: 6px;
 }
 .wk-social-btn {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 7px;
-	padding: 16px 6px 13px;
+	gap: 5px;
+	padding: 11px 6px 9px;
 	background: rgba(255,255,255,0.025);
 	border: 1px solid rgba(255,255,255,0.06);
-	border-radius: 14px;
+	border-radius: 12px;
 	cursor: pointer;
 	transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 	color: #8e8ea4;
-	font-size: 0.7rem;
+	font-size: 0.65rem;
 	font-weight: 500;
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 	letter-spacing: 0.02em;
@@ -222,16 +225,16 @@ export function generateWalletUiCss(): string {
 	background: rgba(255,255,255,0.06);
 	border-color: rgba(255,255,255,0.14);
 	color: #d8d8ec;
-	transform: translateY(-2px);
-	box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+	transform: translateY(-1px);
+	box-shadow: 0 6px 18px rgba(0,0,0,0.3);
 }
 .wk-social-btn:active {
 	transform: translateY(0);
 	transition-duration: 0.05s;
 }
 .wk-social-btn svg {
-	width: 24px;
-	height: 24px;
+	width: 22px;
+	height: 22px;
 	flex-shrink: 0;
 }
 .wk-social-btn.wk-sep-left {
@@ -239,62 +242,121 @@ export function generateWalletUiCss(): string {
 	margin-left: 2px;
 	padding-left: 8px;
 }
-.wk-powered-by {
+.wk-modal-wrap {
+	display: flex;
+	flex-direction: row;
+	align-items: stretch;
+	gap: 0;
+	max-width: 780px;
+	width: 100%;
+	animation: wk-modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.wk-qr-panel {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 10px;
-	padding: 14px 0 6px;
-}
-.wk-qr-wrap {
-	display: flex;
-	align-items: center;
 	justify-content: center;
+	gap: 12px;
+	padding: 28px 24px;
+	background: linear-gradient(180deg, #141820 0%, #0e1118 50%, #101520 100%);
+	border: 1px solid rgba(160,200,240,0.12);
+	border-right: none;
+	border-radius: 20px 0 0 20px;
+	min-width: 210px;
+	position: relative;
+	overflow: hidden;
+}
+.wk-qr-link {
+	display: block;
+	padding: 10px;
+	background: rgba(10,14,24,0.9);
+	border: 1px solid rgba(160,200,240,0.1);
+	border-radius: 14px;
+	box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+	transition: transform 0.18s, box-shadow 0.18s;
 	position: relative;
 }
-.wk-qr-wrap a {
-	display: block;
-	width: 96px;
-	height: 96px;
-	padding: 6px;
-	background: rgba(255,255,255,0.92);
-	border-radius: 10px;
-	box-shadow: 0 2px 12px rgba(0,0,0,0.2), 0 0 20px rgba(180,210,240,0.08);
-	transition: transform 0.18s, box-shadow 0.18s;
-}
-.wk-qr-wrap a:hover {
+.wk-qr-link:hover {
 	transform: scale(1.04);
-	box-shadow: 0 4px 18px rgba(0,0,0,0.3), 0 0 24px rgba(180,210,240,0.12);
+	box-shadow: 0 6px 28px rgba(0,0,0,0.4), 0 0 24px rgba(99,102,241,0.12);
 }
-.wk-qr-wrap svg {
+.wk-qr-link svg {
 	width: 100%;
 	height: 100%;
 	display: block;
-	color: #1a1b23;
+	color: #6366f1;
 }
-.wk-qr-logo {
+.wk-qr-link .wk-qr-center-logo {
 	position: absolute;
 	top: 50%;
 	left: 50%;
 	transform: translate(-50%, -50%);
-	width: 22px;
-	height: 22px;
-	border-radius: 4px;
-	background: #fff;
-	padding: 2px;
-	box-shadow: 0 0 4px rgba(0,0,0,0.15);
+	border-radius: 6px;
+	background: rgba(10,14,24,0.95);
+	padding: 3px;
+	box-shadow: 0 0 8px rgba(0,0,0,0.4);
 }
-.wk-qr-logo img {
-	width: 100%;
-	height: 100%;
-	border-radius: 3px;
+.wk-qr-link .wk-qr-center-logo img {
+	display: block;
+	border-radius: 4px;
+}
+.wk-qr-panel .wk-qr-link {
+	width: 160px;
+	height: 160px;
+	z-index: 1;
+}
+.wk-qr-panel .wk-qr-center-logo { width: 34px; height: 34px; }
+.wk-qr-panel .wk-qr-center-logo img { width: 28px; height: 28px; }
+.wk-qr-copy {
+	background: none;
+	border: none;
+	color: rgba(255,255,255,0.45);
+	cursor: pointer;
+	padding: 4px;
+	transition: color 0.15s;
+	z-index: 1;
+	line-height: 1;
+}
+.wk-qr-copy:hover {
+	color: rgba(255,255,255,0.8);
+}
+.wk-qr-copy svg {
+	width: 16px;
+	height: 16px;
 	display: block;
 }
-.wk-powered-by .wk-powered-pill {
+.wk-qr-inline {
+	display: none;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 12px 16px 6px;
+}
+.wk-qr-inline .wk-qr-link {
+	width: 120px;
+	height: 120px;
+	padding: 8px;
+}
+.wk-qr-inline .wk-qr-center-logo { width: 28px; height: 28px; }
+.wk-qr-inline .wk-qr-center-logo img { width: 22px; height: 22px; }
+@media (max-width: 640px) {
+	.wk-qr-panel {
+		display: none !important;
+	}
+	.wk-qr-inline {
+		display: flex;
+	}
+	.wk-modal {
+		border-radius: 20px !important;
+	}
+}
+.wk-powered-pill {
 	display: inline-flex;
 	align-items: center;
+	justify-content: center;
 	gap: 5px;
 	padding: 4px 12px;
+	margin: 4px auto 0;
 	background: rgba(255,255,255,0.08);
 	border: 1px solid rgba(255,255,255,0.12);
 	border-radius: 20px;
@@ -306,12 +368,12 @@ export function generateWalletUiCss(): string {
 	text-decoration: none;
 	transition: all 0.18s;
 }
-.wk-powered-by .wk-powered-pill:hover {
+.wk-powered-pill:hover {
 	background: rgba(255,255,255,0.14);
 	border-color: rgba(255,255,255,0.2);
 	color: #fff;
 }
-.wk-powered-by .wk-powered-pill img {
+.wk-powered-pill img {
 	width: 14px;
 	height: 14px;
 	border-radius: 3px;
@@ -343,7 +405,14 @@ export function generateWalletUiCss(): string {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
+	max-height: 270px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: rgba(255,255,255,0.12) transparent;
 }
+.wk-wallet-list::-webkit-scrollbar { width: 4px; }
+.wk-wallet-list::-webkit-scrollbar-track { background: transparent; }
+.wk-wallet-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
 .wk-wallet-item {
 	display: flex;
 	align-items: center;
@@ -1496,7 +1565,16 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       if (!container) throw new Error('Modal container not found: ' + containerId);
       __wkModalContainer = container;
 
+      var __wkQrUrl = 'https://waap.sui.ski?ref=ski-keyin&src=wallet-modal';
       container.innerHTML = '<div class="wk-modal-overlay" id="__wk-overlay">'
+        + '<div class="wk-modal-wrap">'
+        + '<div class="wk-qr-panel">'
+        + '<a class="wk-qr-link" href="' + __wkQrUrl + '" target="_blank" rel="noopener">'
+        + __wkQrSvg
+        + '<div class="wk-qr-center-logo"><img src="' + __wkWaaPIcon + '" alt="WaaP"></div>'
+        + '</a>'
+        + '<button class="wk-qr-copy" id="__wk-qr-copy" title="Copy WaaP link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
+        + '</div>'
         + '<div class="wk-modal">'
         + '<div class="wk-snow-layer"></div>'
         + '<div class="wk-modal-header">'
@@ -1509,15 +1587,18 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
         + '<div class="wk-modal-subtitle">.SKI once, everywhere</div>'
         + '<div class="wk-social-section" style="display:none">'
         + '<div class="wk-social-grid"></div>'
-        + '<div class="wk-powered-by">'
-        + '<div class="wk-qr-wrap"><a href="https://waap.sui.ski?ref=ski-keyin&src=wallet-modal" target="_blank" rel="noopener">' + __wkQrSvg + '</a>'
-        + '<div class="wk-qr-logo"><img src="/media-pack/dotSKI.png" alt="WaaP"></div>'
+        + '<a class="wk-powered-pill" href="https://waap.sui.ski" target="_blank" rel="noopener"><img src="' + __wkWaaPIcon + '" alt="WaaP"> powered by WaaP</a>'
         + '</div>'
-        + '<a class="wk-powered-pill" href="https://waap.sui.ski" target="_blank" rel="noopener"><img src="/media-pack/dotSKI.png" alt=".SKI"> powered by WaaP</a>'
-        + '</div>'
+        + '<div class="wk-qr-inline">'
+        + '<a class="wk-qr-link" href="' + __wkQrUrl + '" target="_blank" rel="noopener">'
+        + __wkQrSvg
+        + '<div class="wk-qr-center-logo"><img src="' + __wkWaaPIcon + '" alt="WaaP"></div>'
+        + '</a>'
+        + '<button class="wk-qr-copy wk-qr-copy-inline" title="Copy WaaP link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>'
         + '</div>'
         + '<div class="wk-divider" style="display:none"><span>Trad Wallet</span></div>'
         + '<div class="wk-wallet-list"></div>'
+        + '</div>'
         + '</div>'
         + '</div>';
 
@@ -1530,6 +1611,21 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       closeBtn.addEventListener('click', function() {
         SuiWalletKit.closeModal();
       });
+
+      var __wkCopyIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+      var __wkCheckIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      function __wkBindCopy(btn) {
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+          navigator.clipboard.writeText(__wkQrUrl).then(function() {
+            btn.innerHTML = __wkCheckIcon;
+            btn.style.color = '#4ade80';
+            setTimeout(function() { btn.innerHTML = __wkCopyIcon; btn.style.color = ''; }, 1500);
+          }).catch(function() {});
+        });
+      }
+      __wkBindCopy(document.getElementById('__wk-qr-copy'));
+      __wkBindCopy(container.querySelector('.wk-qr-copy-inline'));
 
       if (__wkModalUnsub) __wkModalUnsub();
       __wkModalUnsub = SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
@@ -1631,13 +1727,6 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
       html += '<button class="wk-dropdown-item" id="__wk-dd-copy" style="position:relative;">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
         + 'Copy Address</button>';
-
-      var profileHref = primaryName
-        ? 'https://' + encodeURIComponent(primaryName) + '.sui.ski'
-        : 'https://sui.ski';
-      html += '<a class="wk-dropdown-item" href="' + profileHref + '">'
-        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>'
-        + 'My Profile</a>';
 
       html += '<button class="wk-dropdown-item" id="__wk-dd-switch">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>'
@@ -1831,7 +1920,7 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	      var widget = container.querySelector('.wk-widget');
 	      if (!widget) {
 	        container.innerHTML = '<div class="wk-widget">'
-	          + '<button class="wk-widget-btn" data-wk-role="toggle">.ski</button>'
+	          + '<button class="wk-widget-btn" data-wk-role="toggle">.SKI</button>'
 	          + '<div class="wk-dropdown"></div>'
 	          + '</div>';
 	        widget = container.querySelector('.wk-widget');

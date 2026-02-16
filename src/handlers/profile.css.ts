@@ -138,73 +138,63 @@ export const profileStyles = `
 			gap: 10px;
 		}
 		.wallet-profile-btn {
-			height: 44px;
-			border-radius: 14px;
+			min-height: 38px;
+			border-radius: 10px;
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
-			background: linear-gradient(135deg, rgba(20, 30, 54, 0.9), rgba(26, 44, 78, 0.88));
-			border: 1.5px solid rgba(147, 197, 253, 0.58);
+			background: transparent;
+			border: 1.5px solid rgba(255, 255, 255, 0.7);
 			cursor: pointer;
 			transition: all 0.2s ease;
-			padding: 0 14px;
-			box-shadow:
-				0 0 0 1px rgba(148, 163, 184, 0.14) inset,
-				0 8px 22px rgba(2, 6, 23, 0.52),
-				0 0 18px rgba(96, 165, 250, 0.18);
+			padding: 6px 10px;
+			box-shadow: 0 4px 18px rgba(2, 6, 23, 0.36);
 		}
 		.ski-logo-text {
 			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 			font-size: 15px;
 			font-weight: 800;
 			letter-spacing: 0.5px;
-			background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-			-webkit-background-clip: text;
-			-webkit-text-fill-color: transparent;
-			background-clip: text;
+			color: #fff;
+			-webkit-text-fill-color: #fff;
 		}
 		.wallet-profile-btn:hover {
-			background: linear-gradient(135deg, rgba(30, 45, 74, 0.94), rgba(34, 56, 94, 0.92));
-			border-color: rgba(186, 230, 253, 0.85);
-			transform: translateY(-1px) scale(1.02);
-			box-shadow:
-				0 0 0 1px rgba(191, 219, 254, 0.24) inset,
-				0 12px 26px rgba(2, 6, 23, 0.58),
-				0 0 24px rgba(96, 165, 250, 0.26);
+			background: rgba(255, 255, 255, 0.08);
+			border-color: #fff;
+			transform: translateY(-1px);
+			box-shadow: 0 8px 22px rgba(2, 6, 23, 0.5), 0 0 18px rgba(255, 255, 255, 0.12);
 		}
 		.wallet-widget.has-black-diamond .wallet-profile-btn {
+			background: transparent;
+			border-color: rgba(255, 255, 255, 0.7);
+			box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+		}
+		.wallet-widget.has-black-diamond .wallet-profile-btn .ski-logo-text {
+			color: #fff;
+			-webkit-text-fill-color: #fff;
+		}
+		.wallet-widget.has-black-diamond .wallet-profile-btn:hover {
+			background: rgba(255, 255, 255, 0.08);
+			border-color: #fff;
+			box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5), 0 0 18px rgba(255, 255, 255, 0.12);
+		}
+		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
+		.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
 			background: linear-gradient(135deg, rgba(8, 8, 16, 0.95), rgba(16, 16, 30, 0.94));
 			border-color: rgba(198, 170, 98, 0.62);
+			color: #d0d4e0;
 			box-shadow:
 				0 0 0 1px rgba(160, 120, 56, 0.24) inset,
 				0 10px 24px rgba(0, 0, 0, 0.58),
 				0 0 18px rgba(194, 145, 72, 0.26);
 		}
-		.wallet-widget.has-black-diamond .wallet-profile-btn .ski-logo-text {
-			background: linear-gradient(135deg, #c6aa62 0%, #eacea0 100%);
-			-webkit-background-clip: text;
-			-webkit-text-fill-color: transparent;
-			background-clip: text;
-		}
-		.wallet-widget.has-black-diamond .wallet-profile-btn:hover {
-			background: linear-gradient(135deg, rgba(14, 14, 24, 0.97), rgba(26, 22, 34, 0.95));
+		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected:hover,
+		.wallet-widget.has-black-diamond #wk-widget > div > button.connected:hover {
 			border-color: rgba(234, 206, 128, 0.88);
 			box-shadow:
 				0 0 0 1px rgba(196, 154, 76, 0.34) inset,
 				0 12px 28px rgba(0, 0, 0, 0.62),
 				0 0 24px rgba(234, 179, 8, 0.28);
-		}
-		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
-		.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
-			background: linear-gradient(135deg, rgba(10, 10, 18, 0.6), rgba(18, 18, 28, 0.7));
-			border-color: rgba(120, 130, 155, 0.42);
-			color: #d0d4e0;
-			box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
-		}
-		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected:hover,
-		.wallet-widget.has-black-diamond #wk-widget > div > button.connected:hover {
-			border-color: rgba(140, 150, 175, 0.62);
-			box-shadow: 0 0 28px rgba(0, 0, 0, 0.5);
 		}
 		.wallet-btn {
 			display: flex;
@@ -2077,8 +2067,8 @@ export const profileStyles = `
 				grid-template-columns: repeat(4, minmax(0, 1fr));
 				gap: 4px;
 				width: 100%;
-				max-width: 740px;
-				margin-top: 0;
+				max-width: 370px;
+				margin-top: -4px;
 			}
 			.header-action-btn {
 				display: flex;
@@ -2129,6 +2119,66 @@ export const profileStyles = `
 				border-color: rgba(96, 165, 250, 0.22);
 				opacity: 0.72;
 				pointer-events: none;
+			}
+			#inline-json-toggle { cursor: pointer; }
+			#inline-json-toggle.active {
+				border-color: rgba(147, 197, 253, 0.85);
+				background: linear-gradient(135deg, rgba(56, 189, 248, 0.24), rgba(37, 99, 235, 0.32));
+				color: #eff6ff;
+			}
+			.inline-json-panel {
+				width: 100%;
+				max-width: 370px;
+				margin-top: -5px;
+				border: 1px solid rgba(96, 165, 250, 0.25);
+				border-radius: 10px;
+				background: rgba(2, 6, 23, 0.7);
+				backdrop-filter: blur(12px);
+				-webkit-backdrop-filter: blur(12px);
+				overflow: hidden;
+				position: relative;
+			}
+			.inline-json-copy-btn {
+				position: absolute;
+				top: 6px;
+				right: 6px;
+				z-index: 1;
+				display: inline-flex;
+				align-items: center;
+				gap: 4px;
+				padding: 3px 8px;
+				border: 1px solid rgba(96, 165, 250, 0.3);
+				border-radius: 6px;
+				background: rgba(2, 6, 23, 0.85);
+				color: #93c5fd;
+				font-size: 0.58rem;
+				font-weight: 600;
+				text-transform: uppercase;
+				letter-spacing: 0.03em;
+				cursor: pointer;
+				transition: all 0.15s ease;
+			}
+			.inline-json-copy-btn:hover {
+				background: rgba(96, 165, 250, 0.2);
+				border-color: rgba(147, 197, 253, 0.6);
+			}
+			.inline-json-copy-btn.copied {
+				background: rgba(34, 197, 94, 0.15);
+				border-color: rgba(74, 222, 128, 0.4);
+				color: #4ade80;
+			}
+			.inline-json-content {
+				margin: 0;
+				padding: 10px 12px;
+				font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+				font-size: 0.62rem;
+				line-height: 1.5;
+				color: #c8cde0;
+				overflow-x: auto;
+				white-space: pre-wrap;
+				word-break: break-all;
+				max-height: 320px;
+				overflow-y: auto;
 			}
 			.target-meta-item {
 				gap: 5px;
@@ -11068,6 +11118,10 @@ export const profileStyles = `
 				.header-action-grid.owner-link-strip {
 					grid-template-columns: repeat(4, minmax(0, 1fr));
 					gap: 4px;
+					max-width: 370px;
+				}
+				.inline-json-panel {
+					max-width: 100%;
 				}
 				.header-action-btn {
 					gap: 4px;
@@ -11187,22 +11241,14 @@ export const profileStyles = `
 		/* Gateway Services Links Hover Effects */
 		.card a[href="/mvr"]:hover,
 		.card a[href="/upload"]:hover,
-		.card a[href="/messages"]:hover,
-		.card a[href="/vortex"]:hover {
+		.card a[href="/messages"]:hover {
 			border-color: var(--border-glow) !important;
 			background: rgba(104, 137, 176, 0.06) !important;
 			transform: translateY(-2px);
 			box-shadow: 0 6px 20px rgba(104, 137, 176, 0.1);
 		}
 
-		/* Vortex Section Styling */
-		.card a[href="/vortex"]:hover {
-			filter: brightness(1.1);
-			transform: translateY(-2px);
-			box-shadow: 0 6px 20px rgba(96, 165, 250, 0.4);
-		}
-
-		/* Vortex Quick Access Links */
+		/* Quick Access Links */
 		.card .sdk-note a,
 		.card div[style*="Quick Access"] a {
 			transition: all 0.2s;
@@ -13366,10 +13412,6 @@ export const profileStyles = `
 			gap: 16px;
 		}
 
-		.protocol-card.vortex-card {
-			border-left: 3px solid #8b5cf6;
-		}
-
 		.protocol-card.seal-card {
 			border-left: 3px solid #f59e0b;
 		}
@@ -13385,11 +13427,6 @@ export const profileStyles = `
 			display: flex;
 			align-items: center;
 			justify-content: center;
-		}
-
-		.vortex-card .protocol-icon {
-			background: rgba(139, 92, 246, 0.15);
-			color: #a78bfa;
 		}
 
 		.seal-card .protocol-icon {
@@ -13471,15 +13508,6 @@ export const profileStyles = `
 			font-weight: 500;
 			cursor: pointer;
 			transition: all 0.2s;
-		}
-
-		.vortex-card .protocol-action-btn {
-			background: rgba(139, 92, 246, 0.2);
-			color: #a78bfa;
-		}
-
-		.vortex-card .protocol-action-btn:hover {
-			background: rgba(139, 92, 246, 0.3);
 		}
 
 		.seal-card .protocol-action-btn {
@@ -13731,13 +13759,7 @@ export const profileStyles = `
 			font-size: 0.75rem;
 		}
 
-		/* Vortex Pools Section */
-		.vortex-pools-section {
-			display: grid;
-			gap: 24px;
-		}
-
-		.vortex-info-card,
+		/* Info Cards */
 		.seal-info-card,
 		.walrus-info-card {
 			display: flex;
@@ -13748,7 +13770,6 @@ export const profileStyles = `
 			border-radius: 12px;
 		}
 
-		.vortex-info-icon,
 		.seal-info-icon,
 		.walrus-info-icon {
 			flex-shrink: 0;
@@ -13758,11 +13779,6 @@ export const profileStyles = `
 			display: flex;
 			align-items: center;
 			justify-content: center;
-		}
-
-		.vortex-info-icon {
-			background: rgba(139, 92, 246, 0.15);
-			color: #a78bfa;
 		}
 
 		.seal-info-icon {
@@ -13775,14 +13791,12 @@ export const profileStyles = `
 			color: #22d3ee;
 		}
 
-		.vortex-info-icon svg,
 		.seal-info-icon svg,
 		.walrus-info-icon svg {
 			width: 28px;
 			height: 28px;
 		}
 
-		.vortex-info-text h3,
 		.seal-info-text h3,
 		.walrus-info-text h3 {
 			margin: 0 0 8px 0;
@@ -13790,7 +13804,6 @@ export const profileStyles = `
 			color: var(--text);
 		}
 
-		.vortex-info-text p,
 		.seal-info-text p,
 		.walrus-info-text p {
 			margin: 0 0 16px 0;
@@ -13799,7 +13812,6 @@ export const profileStyles = `
 			line-height: 1.5;
 		}
 
-		.vortex-features,
 		.walrus-features {
 			list-style: none;
 			padding: 0;
@@ -13809,7 +13821,6 @@ export const profileStyles = `
 			gap: 12px;
 		}
 
-		.vortex-features li,
 		.walrus-features li {
 			display: flex;
 			align-items: center;
@@ -13818,7 +13829,6 @@ export const profileStyles = `
 			color: var(--text-muted);
 		}
 
-		.vortex-features li svg,
 		.walrus-features li svg {
 			color: #22c55e;
 		}
@@ -13835,300 +13845,7 @@ export const profileStyles = `
 		}
 
 		.policy-type strong {
-			color: var(--text);
-		}
-
-		/* Pools Grid */
-		.vortex-pools-list {
-			background: var(--card-bg);
-			border: 1px solid var(--border);
-			border-radius: 12px;
-		}
-
-		.pools-header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			padding: 16px 20px;
-			border-bottom: 1px solid var(--border);
-		}
-
-		.pools-header h3 {
-			margin: 0;
-			font-size: 1rem;
-			color: var(--text);
-		}
-
-		.pools-refresh-btn {
-			display: flex;
-			align-items: center;
-			gap: 6px;
-			padding: 8px 12px;
-			border: none;
-			border-radius: 8px;
-			background: var(--bg-hover);
-			color: var(--text-muted);
-			font-size: 0.8rem;
-			cursor: pointer;
-			transition: all 0.2s;
-		}
-
-		.pools-refresh-btn:hover {
-			color: var(--text);
-		}
-
-		.pools-grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-			gap: 16px;
-			padding: 20px;
-		}
-
-		.pools-loading,
-		.pools-empty,
-		.pools-error {
-			grid-column: 1 / -1;
-			text-align: center;
-			padding: 40px 20px;
-			color: var(--text-muted);
-		}
-
-		.pools-loading {
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			gap: 12px;
-		}
-
-		.loading-spinner {
-			width: 32px;
-			height: 32px;
-			border: 3px solid var(--border);
-			border-top-color: var(--accent);
-			border-radius: 50%;
-			animation: spin 1s linear infinite;
-		}
-
-		@keyframes spin {
-			to { transform: rotate(360deg); }
-		}
-
-		.pool-card {
-			background: var(--bg);
-			border: 1px solid var(--border);
-			border-radius: 10px;
-			padding: 16px;
-		}
-
-		.pool-header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			margin-bottom: 12px;
-		}
-
-		.pool-token {
-			font-size: 1rem;
-			font-weight: 600;
-			color: var(--text);
-		}
-
-		.pool-tvl {
-			font-size: 0.75rem;
-			color: var(--text-muted);
-		}
-
-		.pool-stats {
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 12px;
-			margin-bottom: 16px;
-		}
-
-		.pool-stat {
-			text-align: center;
-		}
-
-		.stat-label {
-			display: block;
-			font-size: 0.7rem;
-			color: var(--text-muted);
-			margin-bottom: 4px;
-		}
-
-		.stat-value {
-			font-size: 0.875rem;
-			font-weight: 600;
-			color: var(--text);
-		}
-
-		.pool-deposit-btn {
-			width: 100%;
-			padding: 10px;
-			border: none;
-			border-radius: 8px;
-			background: rgba(139, 92, 246, 0.15);
-			color: #a78bfa;
-			font-size: 0.8rem;
-			font-weight: 500;
-			cursor: pointer;
-			transition: all 0.2s;
-		}
-
-		.pool-deposit-btn:hover {
-			background: rgba(139, 92, 246, 0.25);
-		}
-
-		/* Vortex Deposit Form */
-		.vortex-deposit-form,
-		.seal-encrypt-form,
-		.seal-decrypt-form,
-		.walrus-upload-form {
-			background: var(--card-bg);
-			border: 1px solid var(--border);
-			border-radius: 12px;
-			padding: 20px;
-		}
-
-		.vortex-deposit-form h3,
-		.seal-encrypt-form h3,
-		.seal-decrypt-form h3,
-		.walrus-upload-form h3 {
-			margin: 0 0 20px 0;
-			font-size: 1rem;
-			color: var(--text);
-		}
-
-		.form-group {
-			margin-bottom: 16px;
-		}
-
-		.form-group label {
-			display: block;
-			margin-bottom: 8px;
-			font-size: 0.875rem;
-			font-weight: 500;
-			color: var(--text);
-		}
-
-		.form-group select,
-		.form-group input,
-		.form-group textarea {
-			width: 100%;
-			padding: 10px 12px;
-			border: 1px solid var(--border);
-			border-radius: 8px;
-			background: var(--bg);
-			color: var(--text);
-			font-size: 0.875rem;
-		}
-
-		.form-group select:focus,
-		.form-group input:focus,
-		.form-group textarea:focus {
-			outline: none;
-			border-color: var(--accent);
-		}
-
-		.input-with-suffix {
-			display: flex;
-			border: 1px solid var(--border);
-			border-radius: 8px;
-			overflow: hidden;
-		}
-
-		.input-with-suffix input {
-			flex: 1;
-			border: none;
-			border-radius: 0;
-		}
-
-		.input-suffix {
-			padding: 10px 12px;
-			background: var(--bg-hover);
-			color: var(--text-muted);
-			font-size: 0.875rem;
-			border-left: 1px solid var(--border);
-		}
-
-		.form-info {
-			display: flex;
-			align-items: flex-start;
-			gap: 8px;
-			padding: 12px;
-			background: rgba(59, 130, 246, 0.1);
-			border-radius: 8px;
-			font-size: 0.8rem;
-			color: var(--text-muted);
-			margin-bottom: 16px;
-		}
-
-		.form-info svg {
-			flex-shrink: 0;
-			margin-top: 2px;
-			color: #60a5fa;
-		}
-
-		.vortex-deposit-btn,
-		.seal-encrypt-btn,
-		.seal-decrypt-btn,
-		.walrus-upload-btn {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			gap: 8px;
-			width: 100%;
-			padding: 12px;
-			border: none;
-			border-radius: 8px;
-			font-size: 0.875rem;
-			font-weight: 500;
-			cursor: pointer;
-			transition: all 0.2s;
-		}
-
-		.vortex-deposit-btn {
-			background: rgba(139, 92, 246, 0.2);
-			color: #a78bfa;
-		}
-
-		.vortex-deposit-btn:hover:not(:disabled) {
-			background: rgba(139, 92, 246, 0.3);
-		}
-
-		.seal-encrypt-btn {
-			background: rgba(245, 158, 11, 0.2);
-			color: #fbbf24;
-		}
-
-		.seal-encrypt-btn:hover:not(:disabled) {
-			background: rgba(245, 158, 11, 0.3);
-		}
-
-		.seal-decrypt-btn {
-			background: var(--bg-hover);
-			color: var(--text-muted);
-		}
-
-		.seal-decrypt-btn:hover:not(:disabled) {
-			color: var(--text);
-		}
-
-		.walrus-upload-btn {
-			background: rgba(6, 182, 212, 0.2);
-			color: #22d3ee;
-		}
-
-		.walrus-upload-btn:hover:not(:disabled) {
-			background: rgba(6, 182, 212, 0.3);
-		}
-
-		.vortex-deposit-btn:disabled,
-		.seal-encrypt-btn:disabled,
-		.seal-decrypt-btn:disabled,
-		.walrus-upload-btn:disabled {
-			opacity: 0.5;
-			cursor: not-allowed;
+color: var(--text);
 		}
 
 		/* Walrus Storage Section */
@@ -14437,7 +14154,6 @@ export const profileStyles = `
 				-webkit-overflow-scrolling: touch;
 			}
 
-			.vortex-info-card,
 			.seal-info-card,
 			.walrus-info-card {
 				flex-direction: column;

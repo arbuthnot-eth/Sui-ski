@@ -25,19 +25,6 @@ Complete list of API routes served by the gateway.
 | GET | `/api/mvr/packages/{suinsName}` | List packages |
 | GET | `/api/mvr/search?q={query}` | Search packages |
 
-## Vortex Privacy
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/vortex/info` | Protocol overview |
-| GET | `/api/vortex/health` | Service health |
-| GET | `/api/vortex/pools` | List privacy pools |
-| GET | `/api/vortex/pools/{coinType}` | Pool details |
-| GET | `/api/vortex/relayer` | Relayer info |
-| GET | `/api/vortex/commitments` | Get commitments |
-| POST | `/api/vortex/merkle-path` | Merkle path for proofs |
-| GET | `/api/vortex/accounts` | Accounts by hashed secret |
-
 ## Wallet Session
 
 | Method | Path | Purpose |

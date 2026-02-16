@@ -4,9 +4,15 @@ import { handleAppRequest } from './handlers/app'
 import { handleAuthenticatedEvents } from './handlers/authenticated-events'
 import { generateDashboardPage } from './handlers/dashboard'
 import { agentGraceVaultRoutes } from './handlers/grace-vault-agent'
-import { apiRoutes, cloudflareGracePageHTML, landingPageHTML } from './handlers/landing'
-import { generateEmbedProfilePage, generateProfilePage } from './handlers/profile'
+import {
+	apiRoutes,
+	cloudflareGracePageHTML,
+	generateCancelBidPage,
+	landingPageHTML,
+} from './handlers/landing'
 import { createSuiMcpHandler } from './handlers/mcp'
+import { handleMessagingApi } from './handlers/messaging-sdk'
+import { generateEmbedProfilePage, generateProfilePage } from './handlers/profile'
 import { handleBuildRegisterTx, handleRegistrationSubmission } from './handlers/register2'
 import { generateSkiPage } from './handlers/ski'
 import { generateSkiSignPage } from './handlers/ski-sign'
@@ -25,13 +31,13 @@ import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
 import type { Env, ParsedSubdomain, SuiNSRecord } from './types'
+import { generateDotSkiPngBytes, generateSuiIconSvg } from './utils/media-pack'
 import {
 	generateBrandOgPng,
 	generateBrandOgSvg,
 	generateFaviconSvg,
 	generateProfileOgSvg,
 } from './utils/og-image'
-import { generateDotSkiPngBytes, generateSuiIconSvg } from './utils/media-pack'
 import { errorResponse, htmlResponse, jsonResponse, notFoundPage } from './utils/response'
 import { ensureRpcEnv } from './utils/rpc'
 import { isTwitterPreviewBot } from './utils/social'
@@ -224,6 +230,9 @@ app.route('/api/x402-chat', x402ChatRoutes)
 app.all('/api/agents/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.all('/api/ika/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
+app.all('/api/messaging/*', async (c) =>
+	handleMessagingApi(c.req.raw, c.get('env'), new URL(c.req.url)),
+)
 
 app.route('/api/subnamecap', subnameCapRoutes)
 app.route('/api/vault', vaultRoutes)
@@ -235,17 +244,22 @@ app.get('/favicon.svg', () => new Response(generateFaviconSvg(), { headers: SVG_
 
 app.get('/og-image.svg', () => new Response(generateBrandOgSvg(), { headers: SVG_HEADERS }))
 
-app.get('/media-pack/SuiIcon.svg', () => new Response(generateSuiIconSvg(), { headers: SVG_HEADERS }))
+app.get(
+	'/media-pack/SuiIcon.svg',
+	() => new Response(generateSuiIconSvg(), { headers: SVG_HEADERS }),
+)
 
 const PNG_HEADERS = { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800' }
 
-app.get('/media-pack/dotSKI.png', () =>
-	new Response(generateDotSkiPngBytes(), {
-		headers: {
-			'Content-Type': 'image/webp',
-			'Cache-Control': 'public, max-age=604800',
-		},
-	}),
+app.get(
+	'/media-pack/dotSKI.png',
+	() =>
+		new Response(generateDotSkiPngBytes(), {
+			headers: {
+				'Content-Type': 'image/webp',
+				'Cache-Control': 'public, max-age=604800',
+			},
+		}),
 )
 
 app.get('/og-image.png', () => new Response(generateBrandOgPng(), { headers: PNG_HEADERS }))
@@ -280,6 +294,15 @@ app.get('/sign', async (c) => {
 	return htmlResponse(generateSkiSignPage(c.get('env')), 200, {
 		'Cache-Control': 'no-store, no-cache, must-revalidate',
 		Pragma: 'no-cache',
+	})
+})
+
+app.get('/cancel-bid', async (c) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	const bidId = new URL(c.req.url).searchParams.get('bid') || ''
+	const env = c.get('env')
+	return htmlResponse(generateCancelBidPage(env, bidId), 200, {
+		'Cache-Control': 'no-store',
 	})
 })
 

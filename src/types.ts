@@ -265,40 +265,6 @@ export interface ContentIntegrity {
 	sizeBytes: number
 }
 
-/** Secure message structure aligned with Seal whitepaper */
-export interface SecureMessage {
-	/** Unique message ID (derived from content hash + timestamp + nonce) */
-	id: string
-	/** Seal-encrypted content envelope */
-	envelope: SealEncryptedEnvelope
-	/** Sender's Sui address */
-	sender: string
-	/** Sender's SuiNS name (optional) */
-	senderName: string | null
-	/** Recipient's Sui address */
-	recipient: string
-	/** Recipient's SuiNS name (optional) */
-	recipientName: string | null
-	/** Message timestamp (milliseconds since epoch) */
-	timestamp: number
-	/** Cryptographic nonce for replay protection */
-	nonce: string
-	/** Content integrity data */
-	integrity: ContentIntegrity
-	/** Message authentication */
-	auth: MessageAuthentication
-	/** Message type */
-	messageType: 'direct' | 'channel' | 'broadcast'
-	/** Optional reply reference */
-	replyTo?: string
-	/** Message metadata (not encrypted) */
-	metadata?: {
-		hasAttachments?: boolean
-		attachmentCount?: number
-		contentType?: 'text' | 'media' | 'file'
-	}
-}
-
 /** Message stored in inbox (index entry) */
 export interface StoredMessage {
 	id: string
@@ -346,18 +312,6 @@ export interface UserConversationStore {
 	updatedAt: number
 }
 
-/** User's read state across conversations */
-export interface UserReadState {
-	address: string
-	conversations: Record<
-		string,
-		{
-			lastReadTimestamp: number
-		}
-	>
-	globalLastChecked: number
-}
-
 /** Message send request */
 export interface MessageSendRequest {
 	/** Seal-encrypted message envelope */
@@ -393,26 +347,6 @@ export interface MessageSendResponse {
 	conversationId: string
 	signatureVerified: boolean
 	timestamp: number
-}
-
-/** Scheduled claim for grace period name registration */
-export interface ScheduledClaim {
-	id: string
-	name: string
-	targetAddress: string
-	expirationMs: number
-	availableAt: number
-	scheduledAt: number
-	paymentDigest: string
-	paymentAmount: string
-	paidBy: string
-	years: number
-	status: 'pending' | 'processing' | 'completed' | 'failed'
-	attempts: number
-	createdAt: number
-	lastAttemptAt?: number
-	resultDigest?: string
-	error?: string
 }
 
 export type X402ChatPage = 'profile' | 'landing' | 'register'

@@ -16,12 +16,6 @@ export interface MmrState {
 	size: number
 }
 
-interface MmrProof {
-	leafHash: Uint8Array
-	siblings: Uint8Array[]
-	leafIndex: number
-}
-
 export function createMmr(): MmrState {
 	return { peaks: [], leafCount: 0, size: 0 }
 }
@@ -81,35 +75,6 @@ export async function appendLeaf(state: MmrState, leafHash: Uint8Array): Promise
 		leafCount: state.leafCount + 1,
 		size: nextPosition,
 	}
-}
-
-export async function computeRoot(state: MmrState): Promise<Uint8Array> {
-	invariant(state.peaks.length > 0, 'Cannot compute root of empty MMR')
-
-	if (state.peaks.length === 1) {
-		return new Uint8Array(state.peaks[0].hash)
-	}
-
-	let acc = state.peaks[state.peaks.length - 1].hash
-	for (let i = state.peaks.length - 2; i >= 0; i--) {
-		acc = await sha256(concat(acc, state.peaks[i].hash))
-	}
-	return acc
-}
-
-function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
-	const result = new Uint8Array(a.length + b.length)
-	result.set(a, 0)
-	result.set(b, a.length)
-	return result
-}
-
-export function peakHashes(state: MmrState): Uint8Array[] {
-	const hashes: Uint8Array[] = []
-	for (let i = 0; i < state.peaks.length; i++) {
-		hashes.push(new Uint8Array(state.peaks[i].hash))
-	}
-	return hashes
 }
 
 export function verifyAgainstCommitment(state: MmrState, commitment: bigint[]): boolean {

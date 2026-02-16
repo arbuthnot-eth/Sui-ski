@@ -50,13 +50,6 @@ Additional features beyond core SuiNS/MVR functionality.
 - API endpoints for CRUD operations
 - Version management
 
-## Vortex Privacy Protocol
-
-- Privacy transactions via ZK proofs
-- Server-side API proxy (SDK too large for Worker)
-- Client-side SDK loaded from CDN
-- Endpoints at `/api/vortex/*`
-
 ## Ligetron ZK Integration
 
 - Groth16 ZK proof verification

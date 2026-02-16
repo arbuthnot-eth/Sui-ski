@@ -15,7 +15,7 @@ import {
 	prependGasSwapIfNeeded,
 } from '../utils/swap-transactions'
 import { relaySignedTransaction } from '../utils/transactions'
-import { generateWalletKitJs } from '../utils/wallet-kit-js'
+import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
@@ -107,6 +107,7 @@ export function generateRegistrationPage(
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
+	${generateExtensionNoiseFilter()}
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="sui-ski-register-flow" content="${registerFlow}">
@@ -687,15 +688,21 @@ export function generateRegistrationPage(
 			}
 			.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
 			.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
-				background: linear-gradient(135deg, rgba(10, 10, 18, 0.6), rgba(18, 18, 28, 0.7));
-				border-color: rgba(120, 130, 155, 0.42);
+				background: linear-gradient(135deg, rgba(8, 8, 16, 0.95), rgba(16, 16, 30, 0.94));
+				border-color: rgba(198, 170, 98, 0.62);
 				color: #d0d4e0;
-				box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
+				box-shadow:
+					0 0 0 1px rgba(160, 120, 56, 0.24) inset,
+					0 10px 24px rgba(0, 0, 0, 0.58),
+					0 0 18px rgba(194, 145, 72, 0.26);
 			}
 			.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected:hover,
 			.wallet-widget.has-black-diamond #wk-widget > div > button.connected:hover {
-				border-color: rgba(140, 150, 175, 0.62);
-				box-shadow: 0 0 28px rgba(0, 0, 0, 0.5);
+				border-color: rgba(234, 206, 128, 0.88);
+				box-shadow:
+					0 0 0 1px rgba(196, 154, 76, 0.34) inset,
+					0 12px 28px rgba(0, 0, 0, 0.62),
+					0 0 24px rgba(234, 179, 8, 0.28);
 			}
 			.tracker-footer {
 				position: fixed;
@@ -865,8 +872,8 @@ export function generateRegistrationPage(
 			])
 			const results = await Promise.allSettled([
 				timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
-				timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
-				timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
+				timedImport('https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle'),
+				timedImport('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle'),
 				timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
 			])
 			if (results[1].status === 'fulfilled') ({ SuiJsonRpcClient } = results[1].value)
@@ -2272,7 +2279,11 @@ async function resolveCoinPayment(
 					coinObjectIds: usdcCoins.coinObjectIds,
 				}
 			}
-			if (totalUsdcMist >= usdcRequiredMist && usdcCoins.total >= usdcRequiredMist && usdcCoins.coinObjectIds.length > 0) {
+			if (
+				totalUsdcMist >= usdcRequiredMist &&
+				usdcCoins.total >= usdcRequiredMist &&
+				usdcCoins.coinObjectIds.length > 0
+			) {
 				return {
 					sourceCoinType: USDC_COIN_TYPE,
 					coinObjectIds: usdcCoins.coinObjectIds,

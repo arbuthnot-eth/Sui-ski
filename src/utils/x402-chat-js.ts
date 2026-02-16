@@ -14,15 +14,15 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 		(function() {
 			var CONFIG = ${JSON.stringify(config)};
 			var OFFICIAL_MESSAGING_SDK_VERSION = '0.3.0';
-			var OFFICIAL_SUI_SDK_VERSION = '1.45.2';
-			var OFFICIAL_SEAL_SDK_VERSION = '0.9.6';
+			var OFFICIAL_SUI_SDK_VERSION = '2.4.0';
+			var OFFICIAL_SEAL_SDK_VERSION = '1.0.1';
 			var OFFICIAL_MESSAGING_SDK_URLS = [
 				'https://cdn.jsdelivr.net/npm/@mysten/messaging@' + OFFICIAL_MESSAGING_SDK_VERSION + '/+esm',
 				'https://esm.sh/@mysten/messaging@' + OFFICIAL_MESSAGING_SDK_VERSION + '?bundle',
 			];
 			var OFFICIAL_SUI_CLIENT_URLS = [
-				'https://cdn.jsdelivr.net/npm/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/client/+esm',
-				'https://esm.sh/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/client?bundle',
+				'https://esm.sh/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/client',
+				'https://cdn.jsdelivr.net/npm/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/dist/client/index.mjs',
 			];
 			var OFFICIAL_SUI_TX_URLS = [
 				'https://cdn.jsdelivr.net/npm/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/transactions/+esm',
@@ -39,13 +39,13 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 			};
 			var OFFICIAL_DEFAULT_SEAL_KEY_SERVERS = {
 				mainnet: [
-					'0x145540d931f182fef76467dd8074c9839aea126852d90d18e1556fcbbd1208b6',
-					'0x1afb3a57211ceff8f6781757821847e3ddae73f64e78ec8cd9349914ad985475',
+					{ objectId: '0x145540d931f182fef76467dd8074c9839aea126852d90d18e1556fcbbd1208b6', weight: 1 },
+					{ objectId: '0x1afb3a57211ceff8f6781757821847e3ddae73f64e78ec8cd9349914ad985475', weight: 1 },
 				],
 				testnet: [
-					'0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75',
-					'0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8',
-					'0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46',
+					{ objectId: '0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75', weight: 1 },
+					{ objectId: '0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8', weight: 1 },
+					{ objectId: '0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46', weight: 1 },
 				],
 				devnet: [],
 			};
@@ -1413,12 +1413,13 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 					]);
 					var suiMod = loaded[0] || {};
 					var sealMod = loaded[1] || {};
-					var SuiClientCtor = suiMod.SuiClient || suiMod.SuiJsonRpcClient;
-					if (!SuiClientCtor || !sealMod.SealClient || !sealMod.SealClient.asClientExtension) {
-						throw new Error('Required Sui SDK modules are unavailable');
+					var SuiClientCtor = suiMod.CoreClient || suiMod.SuiClient || suiMod.SuiJsonRpcClient;
+					if (!SuiClientCtor || !sealMod.SealClient) {
+						throw new Error('Required Sui SDK modules are unavailable (CoreClient, SealClient)');
 					}
 					if (!window.SuiClient) window.SuiClient = SuiClientCtor;
 					if (!window.SuiJsonRpcClient) window.SuiJsonRpcClient = SuiClientCtor;
+					if (!window.CoreClient) window.CoreClient = SuiClientCtor;
 
 					var config = await fetchOfficialMessagingConfig();
 					var network = getNetwork();
@@ -1449,12 +1450,18 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 						clientOpts.mvr = { overrides: { packages: { '@local-pkg/sui-stack-messaging': officialMessagingPackageId } } };
 					}
 					var baseClient = new SuiClientCtor(clientOpts);
-					var withSeal = baseClient.$extend(
-						sealMod.SealClient.asClientExtension({
-							serverConfigs: sealServers,
-							verifyKeyServers: false,
-						}),
-					);
+					
+					// Compatibility patch: SDK expects getOwnedObjects but CoreClient has listOwnedObjects
+					if (baseClient.core && baseClient.core.listOwnedObjects && !baseClient.core.getOwnedObjects) {
+						baseClient.core.getOwnedObjects = baseClient.core.listOwnedObjects.bind(baseClient.core);
+					}
+					
+					var SealClientCtor = sealMod.SealClient;
+					var sealExtension = {
+						name: 'seal',
+						register: (client) => new SealClientCtor({ suiClient: client, serverConfigs: sealServers, verifyKeyServers: false }),
+					};
+					var withSeal = baseClient.$extend(sealExtension);
 
 					var extensionOptions = {
 						walrusStorageConfig: {
@@ -1477,6 +1484,12 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 					}
 
 					var withMessaging = withSeal.$extend(sdk.messaging(extensionOptions));
+					
+					// Apply compatibility patch to extended client as well
+					if (withMessaging.core && withMessaging.core.listOwnedObjects && !withMessaging.core.getOwnedObjects) {
+						withMessaging.core.getOwnedObjects = withMessaging.core.listOwnedObjects.bind(withMessaging.core);
+					}
+					
 					var client = withMessaging && withMessaging.messaging ? withMessaging.messaging : null;
 					if (!client || typeof client.getChannelMemberships !== 'function') {
 						throw new Error('Failed to initialize official messaging client');
@@ -1757,19 +1770,29 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 			+ '<button class="x402-sidebar-burn-all-btn" id="x402-burn-duplicates-btn" style="display:none">Burn Duplicates</button>'
 			+ '</div>'
 			+ '<div id="x402-channel-list"></div>'
+			+ '<div class="x402-sidebar-footer">'
+			+ '<div class="x402-onchain-badge" id="x402-onchain-badge" style="display:none">'
+			+ '<img src="/media-pack/SuiIcon.svg" alt="Sui" width="12" height="12">'
+			+ '<span>Settled on Sui Stack Messaging SDK</span>'
+			+ '</div>'
+			+ '</div>'
 			+ '</aside>'
 			+ '<section class="x402-thread">'
 			+ '<div class="x402-thread-head">'
 			+ '<div class="x402-thread-name" id="x402-channel-name">#general</div>'
+			+ '<div class="x402-channel-gear-wrap" id="x402-channel-gear-wrap" style="display:none">'
+			+ '<button class="x402-channel-gear-btn" id="x402-channel-gear-btn" title="Channel settings" aria-label="Channel settings">'
+			+ '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
+			+ '</button>'
+			+ '<div class="x402-channel-gear-menu" id="x402-channel-gear-menu" style="display:none">'
+			+ '<button class="x402-gear-item" id="x402-gear-sync">Sync</button>'
+			+ '<button class="x402-gear-item" id="x402-gear-rename">Rename</button>'
+			+ '<button class="x402-gear-item x402-gear-item-danger" id="x402-gear-purge">Purge</button>'
+			+ '</div>'
+			+ '</div>'
 			+ '<div class="x402-thread-state" id="x402-thread-state"></div>'
 			+ '</div>'
-			+ '<div class="x402-mode-banner" id="x402-mode-banner">'
-			+ '<img class="x402-mode-banner-icon" src="/media-pack/SuiIcon.svg" alt="Sui">'
-			+ '<div class="x402-mode-banner-copy">'
-			+ '<div class="x402-mode-banner-title">On-chain mode</div>'
-			+ '<div class="x402-mode-banner-subtitle">Messages settle on Sui with the Sui Stack Messaging SDK.</div>'
-			+ '</div>'
-			+ '</div>'
+			+ '<div class="x402-mode-banner" id="x402-mode-banner" style="display:none"></div>'
 			+ '<div class="x402-messages" id="x402-messages"></div>'
 			+ '<div class="x402-input-wrap">'
 			+ '<div class="x402-composer-identity" id="x402-composer-identity"></div>'
@@ -1935,12 +1958,10 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 		}
 
 		function renderModeBanner(channel) {
-			if (!modeBannerEl) return;
-			if (isOfficialChannel(channel)) {
-				modeBannerEl.style.display = 'flex';
-				return;
+			var badge = document.getElementById('x402-onchain-badge');
+			if (badge) {
+				badge.style.display = isOfficialChannel(channel) ? 'inline-flex' : 'none';
 			}
-			modeBannerEl.style.display = 'none';
 		}
 
 		function renderComposerIdentity() {
@@ -2083,17 +2104,8 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 							html += '<button class="x402-channel-accept-btn" data-accept-channel="' + escapeHtml(channel.id) + '" title="Create #' + escapeHtml(displayName) + ' on-chain">Accept</button>';
 						} else if (isBootstrap && channelAcceptPending) {
 							html += '<span class="x402-channel-accept-pending">...</span>';
-						} else if (showSyncMembers || showRename || showPurge || showBurn) {
+						} else if (showBurn) {
 							html += '<span class="x402-channel-actions">';
-							if (showSyncMembers) {
-								html += '<button class="x402-channel-sync" data-sync-members="' + escapeHtml(channel.id) + '" title="Sync linked members into #' + escapeHtml(displayName) + '">Sync</button>';
-							}
-							if (showRename) {
-								html += '<button class="x402-channel-rename" data-rename-channel="' + escapeHtml(channel.id) + '" title="Rename #' + escapeHtml(displayName) + '">Rename</button>';
-							}
-							if (showPurge) {
-								html += '<button class="x402-channel-purge" data-purge-channel="' + escapeHtml(channel.id) + '" title="Purge message history for #' + escapeHtml(displayName) + '">Purge</button>';
-							}
 							if (showBurn) {
 								html += '<button class="x402-channel-delete" data-burn-channel="' + escapeHtml(channel.id) + '"'
 									+ (isBurning ? ' disabled' : '')
@@ -2199,6 +2211,15 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 				|| sanitizeSlug(displayChannelName || '')
 				|| 'public';
 				channelNameEl.textContent = (channel && channel.encrypted ? '🔒 ' : '#') + displayChannelName;
+				var gearWrap = document.getElementById('x402-channel-gear-wrap');
+				if (gearWrap) {
+					var chState = getOfficialChannelState(activeChannel);
+					var showGear = !!(official && chState && chState.canManage);
+					gearWrap.style.display = showGear ? '' : 'none';
+					gearWrap.dataset.channelId = activeChannel || '';
+					var gearMenu = document.getElementById('x402-channel-gear-menu');
+					if (gearMenu) gearMenu.style.display = 'none';
+				}
 				renderModeBanner(channel);
 				renderComposerIdentity();
 				renderThreadState();
@@ -3711,6 +3732,36 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 			if (!item) return;
 			switchChannel(item.getAttribute('data-channel'));
 		});
+
+		var gearBtn = document.getElementById('x402-channel-gear-btn');
+		var gearMenu = document.getElementById('x402-channel-gear-menu');
+		var gearWrap = document.getElementById('x402-channel-gear-wrap');
+		if (gearBtn && gearMenu) {
+			gearBtn.addEventListener('click', function(e) {
+				e.stopPropagation();
+				gearMenu.style.display = gearMenu.style.display === 'none' ? '' : 'none';
+			});
+			document.addEventListener('click', function(e) {
+				if (gearWrap && !gearWrap.contains(e.target)) {
+					gearMenu.style.display = 'none';
+				}
+			});
+			var gearSync = document.getElementById('x402-gear-sync');
+			var gearRename = document.getElementById('x402-gear-rename');
+			var gearPurge = document.getElementById('x402-gear-purge');
+			if (gearSync) gearSync.addEventListener('click', function() {
+				gearMenu.style.display = 'none';
+				syncLinkedMembersToActiveChannel(activeChannel || '');
+			});
+			if (gearRename) gearRename.addEventListener('click', function() {
+				gearMenu.style.display = 'none';
+				renameChannel(activeChannel || '');
+			});
+			if (gearPurge) gearPurge.addEventListener('click', function() {
+				gearMenu.style.display = 'none';
+				purgeChannelMessages(activeChannel || '');
+			});
+		}
 
 		inputEl.addEventListener('input', function() {
 			this.style.height = 'auto';

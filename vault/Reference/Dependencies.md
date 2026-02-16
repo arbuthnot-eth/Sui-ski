@@ -32,7 +32,6 @@ tags: [reference, dependencies, packages]
 
 ## Notable Constraints
 
-- **Vortex SDK** (`@interest-protocol/vortex-sdk`) is NOT imported in the Worker (9MB exceeds CF's 3MB limit). Loaded client-side from CDN instead.
 - **Hono** is the web framework (lightweight, CF Workers native)
 - **Biome** replaces ESLint + Prettier (single tool)
 

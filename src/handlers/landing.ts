@@ -12,7 +12,7 @@ import { getDefaultRpcUrl } from '../utils/rpc'
 import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import { renderSocialMeta } from '../utils/social'
 import { getGatewayStatus } from '../utils/status'
-import { generateWalletKitJs } from '../utils/wallet-kit-js'
+import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
@@ -801,6 +801,47 @@ apiRoutes.post('/marketplace/accept-bid', async (c) => {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Invalid request body'
 		return jsonResponse({ error: message }, 400)
+	}
+})
+
+apiRoutes.post('/marketplace/cancel-bid', async (c) => {
+	try {
+		const body = await c.req.json()
+		const { bidId, buyerAddress } = body as { bidId?: string; buyerAddress?: string }
+		if (!bidId || !buyerAddress || !buyerAddress.startsWith('0x')) {
+			return jsonResponse({ error: 'Valid bidId and buyerAddress are required' }, 400)
+		}
+
+		const TRADEPORT_MULTI_BID_PACKAGE =
+			'0x63ce6caee2ba264e92bca2d160036eb297d99b2d91d4db89d48a9bffca66e55b'
+		const TRADEPORT_MULTI_BID_STORE =
+			'0x8aaed7e884343fb8b222c721d02eaac2c6ae2abbb4ddcdf16cb55cf8754ee860'
+		const TRADEPORT_MULTI_BID_STORE_VERSION = '572206387'
+
+		const tx = new Transaction()
+		tx.setSender(buyerAddress)
+		tx.setGasBudget(50_000_000)
+
+		tx.moveCall({
+			target: `${TRADEPORT_MULTI_BID_PACKAGE}::tradeport_biddings::cancel_bid`,
+			arguments: [
+				tx.sharedObjectRef({
+					objectId: TRADEPORT_MULTI_BID_STORE,
+					initialSharedVersion: TRADEPORT_MULTI_BID_STORE_VERSION,
+					mutable: true,
+				}),
+				tx.pure.id(bidId),
+				tx.pure.option('address', null),
+			],
+		})
+
+		const txBytes = await tx.toJSON()
+		return jsonResponse({ txBytes })
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : 'Failed to build cancel-bid transaction'
+		console.error('Cancel bid tx error:', error)
+		return jsonResponse({ error: message }, 500)
 	}
 })
 
@@ -2687,7 +2728,9 @@ async function handleGraceFeed(env: Env, options: GraceFeedOptions): Promise<Res
 						const obj = objects[j]
 						const fields = (obj.data?.content as { fields?: Record<string, unknown> })?.fields
 						if (!fields) continue
-						const expMs = Number(fields.expiration_timestamp_ms ?? fields.expirationTimestampMs ?? 0)
+						const expMs = Number(
+							fields.expiration_timestamp_ms ?? fields.expirationTimestampMs ?? 0,
+						)
 						if (expMs > 0) {
 							expirationMap.set(ids[j], { expirationMs: expMs, source: 'rpc' })
 						}
@@ -2849,9 +2892,7 @@ function filterExpiringListings(
 			const graceRatioRaw = 1 - entry.daysUntilGraceEnds / GRACE_PERIOD_DAYS
 			const graceUrgency = Math.max(0, Math.min(1, graceRatioRaw))
 			const priceValue =
-				priceSpread > 0
-					? Math.max(0, Math.min(1, (maxPrice - entry.price) / priceSpread))
-					: 1
+				priceSpread > 0 ? Math.max(0, Math.min(1, (maxPrice - entry.price) / priceSpread)) : 1
 			const score = graceUrgency * graceWeight + priceValue * priceWeight
 			ranked.push({
 				...entry,
@@ -2875,7 +2916,9 @@ function filterExpiringListings(
 }
 
 function normalizeSearchName(rawValue: string): string | null {
-	let value = String(rawValue || '').trim().toLowerCase()
+	let value = String(rawValue || '')
+		.trim()
+		.toLowerCase()
 	if (!value) return null
 	value = value.replace(/^https?:\/\//, '')
 	value = value.replace(/\/.*$/, '')
@@ -3287,10 +3330,7 @@ async function handleExpiringListings(
 	}
 }
 
-async function handleGraceActivity(
-	env: Env,
-	options: GraceActivityOptions,
-): Promise<Response> {
+async function handleGraceActivity(env: Env, options: GraceActivityOptions): Promise<Response> {
 	const { offset, limit, q, type: activityType, minBlockTimeMs } = options
 	const corsHeaders = {
 		'Access-Control-Allow-Origin': '*',
@@ -3967,6 +4007,7 @@ export function landingPageHTML(_network: string, options: LandingPageOptions = 
 	return `<!DOCTYPE html>
 <html lang="en">
 	<head>
+		${generateExtensionNoiseFilter()}
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 		<title>sui.ski - SuiNS Gateway</title>
@@ -4504,15 +4545,21 @@ ${socialMeta}
 		}
 		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
 		.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
-			background: linear-gradient(135deg, rgba(10, 10, 18, 0.6), rgba(18, 18, 28, 0.7));
-			border-color: rgba(120, 130, 155, 0.42);
+			background: linear-gradient(135deg, rgba(8, 8, 16, 0.95), rgba(16, 16, 30, 0.94));
+			border-color: rgba(198, 170, 98, 0.62);
 			color: #d0d4e0;
-			box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
+			box-shadow:
+				0 0 0 1px rgba(160, 120, 56, 0.24) inset,
+				0 10px 24px rgba(0, 0, 0, 0.58),
+				0 0 18px rgba(194, 145, 72, 0.26);
 		}
 		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected:hover,
 		.wallet-widget.has-black-diamond #wk-widget > div > button.connected:hover {
-			border-color: rgba(140, 150, 175, 0.62);
-			box-shadow: 0 0 28px rgba(0, 0, 0, 0.5);
+			border-color: rgba(234, 206, 128, 0.88);
+			box-shadow:
+				0 0 0 1px rgba(196, 154, 76, 0.34) inset,
+				0 12px 28px rgba(0, 0, 0, 0.62),
+				0 0 24px rgba(234, 179, 8, 0.28);
 		}
 		@media (max-width: 540px) {
 			.wallet-widget { top: 12px; right: 12px; }
@@ -4811,8 +4858,8 @@ ${socialMeta}
 					]);
 					const results = await Promise.allSettled([
 						timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
-						timedImport('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle'),
-						timedImport('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle'),
+						timedImport('https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle'),
+						timedImport('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle'),
 						timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
 					]);
 						if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
@@ -6005,6 +6052,7 @@ export function cloudflareGracePageHTML(network: string): string {
 	return `<!doctype html>
 <html lang="en">
 <head>
+	${generateExtensionNoiseFilter()}
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>SuiNS Grace Radar | sui.ski</title>
@@ -6429,4 +6477,147 @@ export function cloudflareGracePageHTML(network: string): string {
 	<script>${generateMessagingChatJs({ page: 'landing', network: network || 'mainnet' })}</script>
 </body>
 </html>`
+}
+
+export function generateCancelBidPage(env: Env, bidId: string): string {
+	const escapedBidId = bidId.replace(/[^a-fA-F0-9x]/g, '')
+	return `<!DOCTYPE html>
+<html lang="en"><head>
+${generateExtensionNoiseFilter()}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cancel Bid - sui.ski</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#060610;color:#e0e0e8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:linear-gradient(135deg,#0c0c1a 0%,#101028 100%);border:1px solid rgba(120,100,200,.2);border-radius:16px;padding:32px;max-width:480px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.6)}
+h1{font-size:1.4rem;margin-bottom:8px;color:#c8c0f0}
+.subtitle{color:#888;font-size:.85rem;margin-bottom:24px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:.75rem;color:#999;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.field input{width:100%;background:#0a0a18;border:1px solid rgba(120,100,200,.2);border-radius:8px;padding:10px 12px;color:#e0e0e8;font-family:monospace;font-size:.85rem}
+.field input:focus{outline:none;border-color:rgba(120,100,200,.5)}
+button{width:100%;padding:14px;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;transition:all .2s}
+button.primary{background:linear-gradient(135deg,#6040c0,#4020a0);color:#fff}
+button.primary:hover{filter:brightness(1.15)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.status{margin-top:16px;padding:10px 12px;border-radius:8px;font-size:.85rem;display:none}
+.status.error{display:block;background:rgba(200,60,60,.15);border:1px solid rgba(200,60,60,.3);color:#f08080}
+.status.success{display:block;background:rgba(60,200,120,.15);border:1px solid rgba(60,200,120,.3);color:#80f0a0}
+.status.info{display:block;background:rgba(100,100,200,.15);border:1px solid rgba(100,100,200,.3);color:#a0a0f0}
+a{color:#a090e0;text-decoration:none}
+a:hover{text-decoration:underline}
+.back{display:inline-block;margin-bottom:16px;font-size:.8rem;color:#888}
+.back:hover{color:#c8c0f0}
+${generateWalletUiCss()}
+</style>
+</head><body>
+<div class="card">
+<a class="back" href="/">&larr; Back to sui.ski</a>
+<h1>Cancel TradePort Bid</h1>
+<p class="subtitle">Cancel an active bid and return locked SUI to your wallet.</p>
+<div class="field">
+<label>Bid Object ID</label>
+<input id="bidId" type="text" placeholder="0x..." value="${escapedBidId}">
+</div>
+<button id="cancelBtn" class="primary">Connect Wallet</button>
+<div id="status" class="status"></div>
+</div>
+<div id="wk-modal"></div>
+
+<script>
+${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
+${generateWalletTxJs()}
+${generateWalletUiJs({ onConnect: 'onWalletConnect', onDisconnect: '' })}
+
+var statusEl = document.getElementById('status');
+var cancelBtn = document.getElementById('cancelBtn');
+var bidInput = document.getElementById('bidId');
+var connectedAddress = null;
+
+function showStatus(msg, type) {
+	statusEl.className = 'status ' + type;
+	statusEl.innerHTML = msg;
+}
+
+function onWalletConnect() {
+	var conn = SuiWalletKit.$connection.value;
+	if (conn && conn.address) {
+		connectedAddress = conn.address;
+		cancelBtn.textContent = 'Cancel Bid';
+	}
+}
+
+SuiWalletKit.$connection.listen(function(conn) {
+	if (conn && conn.address) {
+		onWalletConnect();
+	} else {
+		connectedAddress = null;
+		cancelBtn.textContent = 'Connect Wallet';
+	}
+});
+
+cancelBtn.addEventListener('click', async function() {
+	if (!connectedAddress) {
+		SuiWalletKit.openModal();
+		return;
+	}
+	var bid = (bidInput.value || '').trim();
+	if (!bid || !bid.startsWith('0x')) {
+		showStatus('Enter a valid bid object ID', 'error');
+		return;
+	}
+	cancelBtn.disabled = true;
+	cancelBtn.textContent = 'Building transaction...';
+	showStatus('Building cancel transaction...', 'info');
+
+	try {
+		var res = await fetch('/api/marketplace/cancel-bid', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ bidId: bid, buyerAddress: connectedAddress }),
+		});
+		var data = await res.json();
+		if (!res.ok || data.error) throw new Error(data.error || 'API error');
+
+		showStatus('Waiting for wallet approval...', 'info');
+
+		var Tx = await import('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle').then(function(m) { return m.Transaction; });
+		var tx = Tx.from(data.txBytes);
+
+		var result = await SuiWalletKit.signAndExecute(tx, {
+			txOptions: { showEffects: true },
+		});
+
+		var digest = result.digest || (result.result && result.result.digest) || '';
+		if (digest) {
+			showStatus(
+				'Bid cancelled! SUI returned to your wallet.<br>' +
+				'<a href="https://suiscan.xyz/mainnet/tx/' + digest + '" target="_blank">View on Suiscan</a> | ' +
+				'<a href="https://suivision.xyz/txblock/' + digest + '" target="_blank">View on SuiVision</a>',
+				'success'
+			);
+		} else {
+			showStatus('Bid cancelled!', 'success');
+		}
+	} catch (e) {
+		var msg = (e && e.message) || 'Transaction failed';
+		if (msg.includes('rejected') || msg.includes('cancelled')) {
+			showStatus('Transaction cancelled by user', 'error');
+		} else {
+			showStatus('Failed: ' + msg, 'error');
+		}
+	} finally {
+		cancelBtn.disabled = false;
+		cancelBtn.textContent = 'Cancel Bid';
+	}
+});
+
+SuiWalletKit.detectWallets().then(function() {
+	var conn = SuiWalletKit.$connection.value;
+	if (conn && conn.address) onWalletConnect();
+});
+SuiWalletKit.renderModal('wk-modal');
+</script>
+</body></html>`
 }

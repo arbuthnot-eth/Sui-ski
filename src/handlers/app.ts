@@ -21,8 +21,6 @@
  * /api/llm/*     - LLM completion proxy
  */
 
-import { verifyPersonalMessageSignature } from '@mysten/sui/verify'
-
 import type {
 	ContentIntegrity,
 	Conversation,
@@ -36,7 +34,7 @@ import type {
 	UserConversationStore,
 } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
-import { generateWalletKitJs } from '../utils/wallet-kit-js'
+import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
 
@@ -284,515 +282,6 @@ function validateSealPolicy(envelope: SealEncryptedEnvelope): { valid: boolean; 
 function stripSuiSuffix(name: string | null): string | null {
 	if (!name) return null
 	return name.replace(/\.sui$/i, '')
-}
-
-interface SignalServerContext {
-	id: string
-	name: string
-	displayName: string
-	ownerAddress: string | null
-	isModerator: boolean
-	scope: 'global' | 'owner' | 'name'
-}
-
-interface SignalServerChannel {
-	id: string
-	name: string
-	description: string
-	encrypted: boolean
-	protected: boolean
-	custom: boolean
-	createdAt: number
-}
-
-interface SignalMuteInfo {
-	address: string
-	mutedAt: number
-	mutedBy: string
-}
-
-interface SignalMuteState {
-	server: Record<string, SignalMuteInfo>
-	channel: Record<string, Record<string, SignalMuteInfo>>
-}
-
-interface SignalChannelMessage {
-	id: string
-	serverId: string
-	channel: string
-	sender: string
-	senderName: string | null
-	content: string
-	encrypted: boolean
-	timestamp: number
-	replyTo?: string
-	auth?: SignalChannelMessageAuth
-}
-
-interface SignalChannelJoinRequest {
-	id: string
-	serverId: string
-	channelId: string
-	requesterAddress: string
-	requesterName: string | null
-	note: string
-	status: 'pending' | 'approved' | 'cancelled'
-	createdAt: number
-	updatedAt: number
-	approvedAt: number | null
-	approvedBy: string | null
-	txDigest: string | null
-}
-
-const SIGNAL_CHAT_TTL = 60 * 60 * 24 * 30
-const SIGNAL_CHAT_AUTH_STANDARD = 'sui.ski/chat-auth@v1'
-const SIGNAL_CHAT_AUTH_VERSION = 1
-const SIGNAL_CHAT_AUTH_MAX_SKEW_MS = 10 * 60 * 1000
-const SIGNAL_JOIN_REQUEST_LIMIT = 200
-const SIGNAL_JOIN_REQUEST_MAX_NOTE_LENGTH = 240
-
-interface SignalChannelMessageAuth {
-	standard: string
-	version: number
-	payload: string
-	signature: string
-	verified: boolean
-	timestamp: number
-	nonce: string
-}
-
-interface SignalChannelMessageAuthRequest {
-	standard?: string
-	version?: number
-	payload?: string
-	signature?: string
-}
-
-interface SignalChannelMessageAuthPayload {
-	standard: string
-	version: number
-	serverId: string
-	channel: string
-	sender: string
-	senderName?: string | null
-	content: string
-	timestamp: number
-	nonce: string
-}
-
-function normalizeSignalAddress(value: string | null | undefined): string {
-	return String(value || '')
-		.trim()
-		.toLowerCase()
-}
-
-function sanitizeSignalSlug(value: string | null | undefined): string {
-	const slug = String(value || '')
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9-]/g, '-')
-		.replace(/-+/g, '-')
-		.replace(/^-|-$/g, '')
-	return slug.slice(0, 48)
-}
-
-function normalizeSignalSenderName(value: string | null | undefined): string | null {
-	if (!value) return null
-	const cleaned = String(value)
-		.trim()
-		.toLowerCase()
-		.replace(/\.sui$/i, '')
-		.replace(/\.sui\.ski$/i, '')
-	const slug = sanitizeSignalSlug(cleaned)
-	return slug || null
-}
-
-async function verifySignalChannelMessageAuth(
-	auth: SignalChannelMessageAuthRequest,
-	serverId: string,
-	channelId: string,
-	senderAddress: string,
-	content: string,
-): Promise<
-	| {
-			valid: true
-			payload: string
-			signature: string
-			timestamp: number
-			nonce: string
-			senderName: string | null
-	  }
-	| { valid: false; reason: string }
-> {
-	const payload = String(auth.payload || '')
-	const signature = String(auth.signature || '')
-	if (!payload || !signature) return { valid: false, reason: 'Missing auth payload or signature' }
-	if (payload.length > 4096) return { valid: false, reason: 'Auth payload too large' }
-	if (signature.length > 1024) return { valid: false, reason: 'Auth signature too large' }
-
-	let parsed: SignalChannelMessageAuthPayload
-	try {
-		parsed = JSON.parse(payload) as SignalChannelMessageAuthPayload
-	} catch {
-		return { valid: false, reason: 'Invalid auth payload JSON' }
-	}
-
-	if (parsed.standard !== SIGNAL_CHAT_AUTH_STANDARD || parsed.version !== SIGNAL_CHAT_AUTH_VERSION) {
-		return { valid: false, reason: 'Unsupported auth standard version' }
-	}
-	if (String(parsed.serverId || '') !== serverId) {
-		return { valid: false, reason: 'Auth payload server mismatch' }
-	}
-	if (sanitizeSignalSlug(parsed.channel) !== channelId) {
-		return { valid: false, reason: 'Auth payload channel mismatch' }
-	}
-	if (normalizeSignalAddress(parsed.sender) !== senderAddress) {
-		return { valid: false, reason: 'Auth payload sender mismatch' }
-	}
-	if (String(parsed.content || '') !== content) {
-		return { valid: false, reason: 'Auth payload content mismatch' }
-	}
-
-	const timestamp = Number(parsed.timestamp || 0)
-	if (!Number.isFinite(timestamp) || timestamp <= 0) {
-		return { valid: false, reason: 'Invalid auth timestamp' }
-	}
-	if (Math.abs(Date.now() - timestamp) > SIGNAL_CHAT_AUTH_MAX_SKEW_MS) {
-		return { valid: false, reason: 'Auth timestamp outside allowed window' }
-	}
-
-	const nonce = String(parsed.nonce || '').trim()
-	if (!nonce || nonce.length > 96) {
-		return { valid: false, reason: 'Invalid auth nonce' }
-	}
-
-	try {
-		await verifyPersonalMessageSignature(new TextEncoder().encode(payload), signature, {
-			address: senderAddress,
-		})
-	} catch {
-		return { valid: false, reason: 'Signature verification failed' }
-	}
-
-	return {
-		valid: true,
-		payload,
-		signature,
-		timestamp,
-		nonce,
-		senderName: normalizeSignalSenderName(parsed.senderName ?? null),
-	}
-}
-
-function getWalletAddressFromCookie(request: Request): string | null {
-	const cookieHeader = request.headers.get('Cookie') || ''
-	const parts = cookieHeader.split(';')
-	for (let i = 0; i < parts.length; i++) {
-		const chunk = parts[i].trim()
-		if (!chunk.startsWith('wallet_address=')) continue
-		const value = chunk.slice('wallet_address='.length)
-		if (!value) return null
-		try {
-			return normalizeSignalAddress(decodeURIComponent(value))
-		} catch {
-			return normalizeSignalAddress(value)
-		}
-	}
-	return null
-}
-
-function getSignalServerContext(url: URL, sessionAddress: string | null): SignalServerContext {
-	const rawName = url.searchParams.get('name')
-	const rawOwner = url.searchParams.get('owner')
-	const rawScope = String(url.searchParams.get('scope') || '').trim().toLowerCase()
-	const name = sanitizeSignalSlug(rawName)
-	const ownerAddress = normalizeSignalAddress(rawOwner) || null
-	const requester = normalizeSignalAddress(sessionAddress)
-	const scope = rawScope === 'name' ? 'name' : 'owner'
-
-	if (!name) {
-		return {
-			id: 'global:sui-ski',
-			name: 'sui-ski',
-			displayName: 'sui.ski',
-			ownerAddress: null,
-			isModerator: false,
-			scope: 'global',
-		}
-	}
-
-	if (ownerAddress && scope === 'owner') {
-		return {
-			id: `suins-owner:${ownerAddress}`,
-			name,
-			displayName: `${name}.sui`,
-			ownerAddress,
-			isModerator: requester === ownerAddress,
-			scope: 'owner',
-		}
-	}
-
-	const ownerPart = ownerAddress || 'unowned'
-	return {
-		id: `suins:${name}:${ownerPart}`,
-		name,
-		displayName: `${name}.sui`,
-		ownerAddress,
-		isModerator: !!ownerAddress && requester === ownerAddress,
-		scope: 'name',
-	}
-}
-
-function signalServerChannelsKey(serverId: string): string {
-	return `signal_server_channels_${serverId}`
-}
-
-function signalServerMutesKey(serverId: string): string {
-	return `signal_server_mutes_${serverId}`
-}
-
-function signalServerMessagesKey(serverId: string, channelId: string): string {
-	return `signal_server_messages_${serverId}_${channelId}`
-}
-
-function signalServerJoinRequestsKey(serverId: string, channelId: string): string {
-	return `signal_server_join_requests_${serverId}_${channelId}`
-}
-
-function createSignalMessageId(): string {
-	const timestamp = Date.now().toString(36)
-	const random = Math.random().toString(36).slice(2, 10)
-	return `${timestamp}-${random}`
-}
-
-function createSignalJoinRequestId(): string {
-	const timestamp = Date.now().toString(36)
-	const random = Math.random().toString(36).slice(2, 10)
-	return `jr_${timestamp}_${random}`
-}
-
-function getDefaultSignalChannels(server: SignalServerContext): SignalServerChannel[] {
-	const now = Date.now()
-	const channels: SignalServerChannel[] = [
-		{
-			id: 'general',
-			name: 'general',
-			description: 'General server chat',
-			encrypted: false,
-			protected: true,
-			custom: false,
-			createdAt: now,
-		},
-		{
-			id: 'announcements',
-			name: 'announcements',
-			description: 'Server announcements',
-			encrypted: false,
-			protected: true,
-			custom: false,
-			createdAt: now,
-		},
-		{
-			id: 'ops',
-			name: 'ops',
-			description: 'Ops and strategy',
-			encrypted: false,
-			protected: true,
-			custom: false,
-			createdAt: now,
-		},
-	]
-
-	if (server.name !== 'sui-ski') {
-		channels.push({
-			id: server.name,
-			name: server.name,
-			description: `Main room for ${server.displayName}`,
-			encrypted: false,
-			protected: true,
-			custom: false,
-			createdAt: now,
-		})
-		channels.push({
-			id: `dm-${server.name}`,
-			name: `dm-${server.name}`,
-			description: `Encrypted room for ${server.displayName}`,
-			encrypted: true,
-			protected: true,
-			custom: false,
-			createdAt: now,
-		})
-	}
-
-	return channels
-}
-
-async function getSignalChannels(
-	env: Env,
-	server: SignalServerContext,
-): Promise<SignalServerChannel[]> {
-	const defaults = getDefaultSignalChannels(server)
-	const raw = await env.CACHE.get(signalServerChannelsKey(server.id))
-	if (!raw) {
-		await env.CACHE.put(signalServerChannelsKey(server.id), JSON.stringify(defaults), {
-			expirationTtl: SIGNAL_CHAT_TTL,
-		})
-		return defaults
-	}
-
-	try {
-		const parsed = JSON.parse(raw) as SignalServerChannel[]
-		const merged = new Map<string, SignalServerChannel>()
-		for (let i = 0; i < defaults.length; i++) merged.set(defaults[i].id, defaults[i])
-		for (let i = 0; i < parsed.length; i++) {
-			const channel = parsed[i]
-			if (!channel || !channel.id) continue
-			const id = sanitizeSignalSlug(channel.id)
-			if (!id) continue
-			merged.set(id, {
-				id,
-				name: sanitizeSignalSlug(channel.name || id),
-				description: String(channel.description || '').slice(0, 120),
-				encrypted: !!channel.encrypted,
-				protected: !!channel.protected,
-				custom: !!channel.custom,
-				createdAt: Number(channel.createdAt || Date.now()),
-			})
-		}
-		const result = Array.from(merged.values())
-		await env.CACHE.put(signalServerChannelsKey(server.id), JSON.stringify(result), {
-			expirationTtl: SIGNAL_CHAT_TTL,
-		})
-		return result
-	} catch {
-		return defaults
-	}
-}
-
-async function setSignalChannels(
-	env: Env,
-	serverId: string,
-	channels: SignalServerChannel[],
-): Promise<void> {
-	await env.CACHE.put(signalServerChannelsKey(serverId), JSON.stringify(channels), {
-		expirationTtl: SIGNAL_CHAT_TTL,
-	})
-}
-
-async function getSignalMuteState(env: Env, serverId: string): Promise<SignalMuteState> {
-	const raw = await env.CACHE.get(signalServerMutesKey(serverId))
-	if (!raw) return { server: {}, channel: {} }
-	try {
-		const parsed = JSON.parse(raw) as SignalMuteState
-		if (!parsed || !parsed.server || !parsed.channel) return { server: {}, channel: {} }
-		return parsed
-	} catch {
-		return { server: {}, channel: {} }
-	}
-}
-
-async function setSignalMuteState(
-	env: Env,
-	serverId: string,
-	state: SignalMuteState,
-): Promise<void> {
-	await env.CACHE.put(signalServerMutesKey(serverId), JSON.stringify(state), {
-		expirationTtl: SIGNAL_CHAT_TTL,
-	})
-}
-
-function getSignalMuteScope(
-	state: SignalMuteState,
-	channelId: string,
-	address: string,
-): 'server' | 'channel' | null {
-	if (!address) return null
-	if (state.server[address]) return 'server'
-	if (state.channel[channelId] && state.channel[channelId][address]) return 'channel'
-	return null
-}
-
-async function getSignalChannelMessages(
-	env: Env,
-	serverId: string,
-	channelId: string,
-): Promise<SignalChannelMessage[]> {
-	const raw = await env.CACHE.get(signalServerMessagesKey(serverId, channelId))
-	if (!raw) return []
-	try {
-		const parsed = JSON.parse(raw) as SignalChannelMessage[]
-		return Array.isArray(parsed) ? parsed : []
-	} catch {
-		return []
-	}
-}
-
-async function setSignalChannelMessages(
-	env: Env,
-	serverId: string,
-	channelId: string,
-	messages: SignalChannelMessage[],
-): Promise<void> {
-	await env.CACHE.put(signalServerMessagesKey(serverId, channelId), JSON.stringify(messages), {
-		expirationTtl: SIGNAL_CHAT_TTL,
-	})
-}
-
-async function getSignalChannelJoinRequests(
-	env: Env,
-	serverId: string,
-	channelId: string,
-): Promise<SignalChannelJoinRequest[]> {
-	const raw = await env.CACHE.get(signalServerJoinRequestsKey(serverId, channelId))
-	if (!raw) return []
-	try {
-		const parsed = JSON.parse(raw) as SignalChannelJoinRequest[]
-		if (!Array.isArray(parsed)) return []
-		const result: SignalChannelJoinRequest[] = []
-		for (let i = 0; i < parsed.length; i++) {
-			const item = parsed[i]
-			if (!item || typeof item !== 'object') continue
-			const id = String(item.id || '').trim()
-			const requesterAddress = normalizeSignalAddress(item.requesterAddress)
-			const status = item.status === 'approved' || item.status === 'cancelled' ? item.status : 'pending'
-			if (!id || !requesterAddress) continue
-			result.push({
-				id,
-				serverId,
-				channelId,
-				requesterAddress,
-				requesterName: normalizeSignalSenderName(item.requesterName ?? null),
-				note: String(item.note || '').slice(0, SIGNAL_JOIN_REQUEST_MAX_NOTE_LENGTH),
-				status,
-				createdAt: Number(item.createdAt || Date.now()),
-				updatedAt: Number(item.updatedAt || Date.now()),
-				approvedAt:
-					item.approvedAt == null || !Number.isFinite(Number(item.approvedAt))
-						? null
-						: Number(item.approvedAt),
-				approvedBy: item.approvedBy ? normalizeSignalAddress(item.approvedBy) : null,
-				txDigest: item.txDigest ? String(item.txDigest) : null,
-			})
-		}
-		result.sort((a, b) => b.createdAt - a.createdAt)
-		return result
-	} catch {
-		return []
-	}
-}
-
-async function setSignalChannelJoinRequests(
-	env: Env,
-	serverId: string,
-	channelId: string,
-	requests: SignalChannelJoinRequest[],
-): Promise<void> {
-	const trimmed = requests.length > SIGNAL_JOIN_REQUEST_LIMIT
-		? requests.slice(0, SIGNAL_JOIN_REQUEST_LIMIT)
-		: requests
-	await env.CACHE.put(signalServerJoinRequestsKey(serverId, channelId), JSON.stringify(trimmed), {
-		expirationTtl: SIGNAL_CHAT_TTL,
-	})
 }
 
 const CONV_STORE_TTL = 60 * 60 * 24 * 90
@@ -1268,552 +757,62 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 		}
 	}
 
-	// GET /api/app/messages/server - Resolve Signal-style server + channels
+	// ===== MESSAGING SDK ENDPOINTS (Client-side Decentralized) =====
+	// All messaging operations happen client-side via @mysten/messaging SDK
+	// Server only provides config and static assets
+
+	// GET /api/app/messages/server - Return SDK config (channels resolved client-side)
 	if (path === 'messages/server' && request.method === 'GET') {
-		const sessionAddress = getWalletAddressFromCookie(request)
-		const server = getSignalServerContext(url, sessionAddress)
-		const channels = await getSignalChannels(env, server)
-		const muteState = await getSignalMuteState(env, server.id)
-
 		return jsonResponse({
 			server: {
-				id: server.id,
-				name: server.name,
-				displayName: server.displayName,
-				ownerAddress: server.ownerAddress,
-				isModerator: server.isModerator,
-				scope: server.scope,
+				id: 'decentralized',
+				name: 'sui-stack-messaging',
+				displayName: 'Sui Stack Messaging',
+				ownerAddress: null,
+				isModerator: false,
+				scope: 'decentralized',
 			},
-			channels,
-			moderation: {
-				serverMuted: server.isModerator ? Object.keys(muteState.server) : [],
-				channelMuted: server.isModerator
-					? Object.fromEntries(
-							Object.entries(muteState.channel).map(([channelId, muted]) => [
-								channelId,
-								Object.keys(muted),
-							]),
-						)
-					: {},
-			},
+			channels: [],
+			moderation: { serverMuted: [], channelMuted: {} },
+			note: 'Channels are resolved client-side via @mysten/messaging SDK. Use /api/app/subscriptions/config for SDK bootstrap.',
 		})
 	}
 
-	// POST /api/app/messages/server/channels - Add channel (moderator only)
-	if (path === 'messages/server/channels' && request.method === 'POST') {
-		const sessionAddress = getWalletAddressFromCookie(request)
-		if (!sessionAddress) {
-			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-		}
-
-		const server = getSignalServerContext(url, sessionAddress)
-		if (!server.isModerator) {
-			return jsonResponse(
-				{ error: 'Only server moderator can add channels', code: 'FORBIDDEN' },
-				403,
-			)
-		}
-
-		try {
-			const body = (await request.json()) as {
-				name?: string
-				encrypted?: boolean
-				description?: string
-			}
-			const channelSlug = sanitizeSignalSlug(body.name)
-			if (!channelSlug) {
-				return jsonResponse({ error: 'Channel name required', code: 'MISSING_CHANNEL' }, 400)
-			}
-
-			const channels = await getSignalChannels(env, server)
-			if (channels.some((channel) => channel.id === channelSlug)) {
-				return jsonResponse({ error: 'Channel already exists', code: 'DUPLICATE_CHANNEL' }, 409)
-			}
-
-			const nextChannel: SignalServerChannel = {
-				id: channelSlug,
-				name: channelSlug,
-				description: String(body.description || '').slice(0, 120),
-				encrypted: !!body.encrypted,
-				protected: false,
-				custom: true,
-				createdAt: Date.now(),
-			}
-			channels.push(nextChannel)
-			await setSignalChannels(env, server.id, channels)
-			return jsonResponse({ channel: nextChannel, channels })
-		} catch {
-			return jsonResponse({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
-		}
-	}
-
-	// DELETE /api/app/messages/server/channels/:id - Delete channel (moderator only)
-	const serverChannelDeleteMatch = path.match(/^messages\/server\/channels\/([^/]+)$/)
-	if (serverChannelDeleteMatch && request.method === 'DELETE') {
-		const sessionAddress = getWalletAddressFromCookie(request)
-		if (!sessionAddress) {
-			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-		}
-
-		const server = getSignalServerContext(url, sessionAddress)
-		if (!server.isModerator) {
-			return jsonResponse(
-				{ error: 'Only server moderator can delete channels', code: 'FORBIDDEN' },
-				403,
-			)
-		}
-
-		const channelId = sanitizeSignalSlug(serverChannelDeleteMatch[1])
-		if (!channelId) {
-			return jsonResponse({ error: 'Invalid channel id', code: 'INVALID_CHANNEL' }, 400)
-		}
-
-		const channels = await getSignalChannels(env, server)
-		const target = channels.find((channel) => channel.id === channelId)
-		if (!target) return jsonResponse({ error: 'Channel not found', code: 'NOT_FOUND' }, 404)
-		if (target.protected) {
-			return jsonResponse(
-				{ error: 'Protected channels cannot be deleted', code: 'PROTECTED_CHANNEL' },
-				400,
-			)
-		}
-
-		const nextChannels = channels.filter((channel) => channel.id !== channelId)
-		await setSignalChannels(env, server.id, nextChannels)
-		await setSignalChannelMessages(env, server.id, channelId, [])
-
-		const muteState = await getSignalMuteState(env, server.id)
-		if (muteState.channel[channelId]) {
-			delete muteState.channel[channelId]
-			await setSignalMuteState(env, server.id, muteState)
-		}
-
-		return jsonResponse({ deleted: true, channelId, channels: nextChannels })
-	}
-
-	// POST /api/app/messages/server/channels/:id/mute - Mute/unmute participant (moderator only)
-	const serverChannelMuteMatch = path.match(/^messages\/server\/channels\/([^/]+)\/mute$/)
-	if (serverChannelMuteMatch && request.method === 'POST') {
-		const sessionAddress = getWalletAddressFromCookie(request)
-		if (!sessionAddress) {
-			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-		}
-
-		const server = getSignalServerContext(url, sessionAddress)
-		if (!server.isModerator) {
-			return jsonResponse({ error: 'Only server moderator can mute users', code: 'FORBIDDEN' }, 403)
-		}
-
-		try {
-			const channelId = sanitizeSignalSlug(serverChannelMuteMatch[1])
-			const body = (await request.json()) as {
-				targetAddress?: string
-				scope?: 'server' | 'channel'
-				muted?: boolean
-			}
-			const targetAddress = normalizeSignalAddress(body.targetAddress)
-			if (!targetAddress) {
-				return jsonResponse({ error: 'Target address required', code: 'MISSING_TARGET' }, 400)
-			}
-			if (server.ownerAddress && targetAddress === server.ownerAddress) {
-				return jsonResponse({ error: 'Cannot mute server moderator', code: 'INVALID_TARGET' }, 400)
-			}
-
-			const scope = body.scope === 'server' ? 'server' : 'channel'
-			const muted = body.muted !== false
-			const state = await getSignalMuteState(env, server.id)
-
-			if (scope === 'server') {
-				if (!muted) {
-					delete state.server[targetAddress]
-				} else {
-					state.server[targetAddress] = {
-						address: targetAddress,
-						mutedAt: Date.now(),
-						mutedBy: sessionAddress,
-					}
-				}
-			} else {
-				if (!state.channel[channelId]) state.channel[channelId] = {}
-				if (!muted) {
-					delete state.channel[channelId][targetAddress]
-				} else {
-					state.channel[channelId][targetAddress] = {
-						address: targetAddress,
-						mutedAt: Date.now(),
-						mutedBy: sessionAddress,
-					}
-				}
-			}
-
-			await setSignalMuteState(env, server.id, state)
-			return jsonResponse({ ok: true, scope, channelId, targetAddress, muted })
-		} catch {
-			return jsonResponse({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
-		}
-	}
-
-	// GET|POST /api/app/messages/server/channels/:id/join-requests
-	const serverChannelJoinRequestsMatch = path.match(
-		/^messages\/server\/channels\/([^/]+)\/join-requests$/,
-	)
-	if (serverChannelJoinRequestsMatch && request.method === 'GET') {
-		const sessionAddress = getWalletAddressFromCookie(request)
-		if (!sessionAddress) {
-			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-		}
-
-		const server = getSignalServerContext(url, sessionAddress)
-		const channelId = sanitizeSignalSlug(serverChannelJoinRequestsMatch[1])
-		if (!channelId) {
-			return jsonResponse({ error: 'Invalid channel id', code: 'INVALID_CHANNEL' }, 400)
-		}
-
-		const requests = await getSignalChannelJoinRequests(env, server.id, channelId)
-		const pending = requests.filter((item) => item.status === 'pending')
-		const visible = server.isModerator
-			? pending
-			: pending.filter((item) => item.requesterAddress === sessionAddress)
-		return jsonResponse({
-			server: {
-				id: server.id,
-				name: server.name,
-				displayName: server.displayName,
-				ownerAddress: server.ownerAddress,
-				isModerator: server.isModerator,
-				scope: server.scope,
-			},
-			channelId,
-			requests: visible,
-			count: visible.length,
-			pendingCount: pending.length,
-			canModerate: server.isModerator,
-		})
-	}
-
-	if (serverChannelJoinRequestsMatch && request.method === 'POST') {
-		const sessionAddress = getWalletAddressFromCookie(request)
-		if (!sessionAddress) {
-			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-		}
-
-		const server = getSignalServerContext(url, sessionAddress)
-		const channelId = sanitizeSignalSlug(serverChannelJoinRequestsMatch[1])
-		if (!channelId) {
-			return jsonResponse({ error: 'Invalid channel id', code: 'INVALID_CHANNEL' }, 400)
-		}
-
-		try {
-			const body = (await request.json()) as {
-				requesterName?: string | null
-				note?: string | null
-			}
-			const requests = await getSignalChannelJoinRequests(env, server.id, channelId)
-			const existing = requests.find(
-				(item) =>
-					item.status === 'pending' &&
-					item.requesterAddress === sessionAddress,
-			)
-			if (existing) {
-				return jsonResponse({
-					request: existing,
-					duplicate: true,
-					pendingCount: requests.filter((item) => item.status === 'pending').length,
-				})
-			}
-
-			const note = String(body.note || '').trim().slice(0, SIGNAL_JOIN_REQUEST_MAX_NOTE_LENGTH)
-			const nextRequest: SignalChannelJoinRequest = {
-				id: createSignalJoinRequestId(),
-				serverId: server.id,
-				channelId,
-				requesterAddress: sessionAddress,
-				requesterName: normalizeSignalSenderName(body.requesterName ?? null),
-				note,
-				status: 'pending',
-				createdAt: Date.now(),
-				updatedAt: Date.now(),
-				approvedAt: null,
-				approvedBy: null,
-				txDigest: null,
-			}
-			requests.unshift(nextRequest)
-			await setSignalChannelJoinRequests(env, server.id, channelId, requests)
-			return jsonResponse({
-				request: nextRequest,
-				pendingCount: requests.filter((item) => item.status === 'pending').length,
-			})
-		} catch {
-			return jsonResponse({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
-		}
-	}
-
-	// POST /api/app/messages/server/channels/:id/join-requests/:requestId/approve
-	const serverChannelJoinApproveMatch = path.match(
-		/^messages\/server\/channels\/([^/]+)\/join-requests\/([^/]+)\/approve$/,
-	)
-	if (serverChannelJoinApproveMatch && request.method === 'POST') {
-		const sessionAddress = getWalletAddressFromCookie(request)
-		if (!sessionAddress) {
-			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-		}
-
-		const server = getSignalServerContext(url, sessionAddress)
-		if (!server.isModerator) {
-			return jsonResponse(
-				{ error: 'Only server moderator can approve requests', code: 'FORBIDDEN' },
-				403,
-			)
-		}
-
-		const channelId = sanitizeSignalSlug(serverChannelJoinApproveMatch[1])
-		const requestId = String(serverChannelJoinApproveMatch[2] || '').trim()
-		if (!channelId || !requestId) {
-			return jsonResponse({ error: 'Invalid request id', code: 'INVALID_REQUEST' }, 400)
-		}
-
-		let txDigest = ''
-		try {
-			const body = (await request.json()) as { txDigest?: string }
-			txDigest = String(body.txDigest || '').trim()
-		} catch {
-			txDigest = ''
-		}
-
-		const requests = await getSignalChannelJoinRequests(env, server.id, channelId)
-		const target = requests.find((item) => item.id === requestId)
-		if (!target) {
-			return jsonResponse({ error: 'Request not found', code: 'NOT_FOUND' }, 404)
-		}
-		const now = Date.now()
-		const next = requests.map((item) => {
-			if (item.id === requestId) {
-				if (item.status !== 'pending') return item
-				return {
-					...item,
-					status: 'approved' as const,
-					updatedAt: now,
-					approvedAt: now,
-					approvedBy: sessionAddress,
-					txDigest: txDigest || item.txDigest || null,
-				}
-			}
-			if (item.status === 'pending' && item.requesterAddress === target.requesterAddress) {
-				return {
-					...item,
-					status: 'cancelled' as const,
-					updatedAt: now,
-					approvedBy: sessionAddress,
-				}
-			}
-			return item
-		})
-		const approvedRequest = next.find((item) => item.id === requestId) || target
-		await setSignalChannelJoinRequests(env, server.id, channelId, next)
-		return jsonResponse({ request: approvedRequest })
-	}
-
-	// DELETE /api/app/messages/server/channels/:id/join-requests/:requestId
-	const serverChannelJoinDeleteMatch = path.match(
-		/^messages\/server\/channels\/([^/]+)\/join-requests\/([^/]+)$/,
-	)
-	if (serverChannelJoinDeleteMatch && request.method === 'DELETE') {
-		const sessionAddress = getWalletAddressFromCookie(request)
-		if (!sessionAddress) {
-			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-		}
-
-		const server = getSignalServerContext(url, sessionAddress)
-		const channelId = sanitizeSignalSlug(serverChannelJoinDeleteMatch[1])
-		const requestId = String(serverChannelJoinDeleteMatch[2] || '').trim()
-		if (!channelId || !requestId) {
-			return jsonResponse({ error: 'Invalid request id', code: 'INVALID_REQUEST' }, 400)
-		}
-
-		const requests = await getSignalChannelJoinRequests(env, server.id, channelId)
-		const existing = requests.find((item) => item.id === requestId)
-		if (!existing) return jsonResponse({ error: 'Request not found', code: 'NOT_FOUND' }, 404)
-		if (!server.isModerator && existing.requesterAddress !== sessionAddress) {
-			return jsonResponse({ error: 'Not authorized to cancel this request', code: 'FORBIDDEN' }, 403)
-		}
-
-		const next = requests.filter((item) => item.id !== requestId)
-		await setSignalChannelJoinRequests(env, server.id, channelId, next)
-		return jsonResponse({ deleted: true, requestId })
-	}
-
-	// GET /api/app/messages/server/channels/:id/messages - Fetch channel messages
+	// GET /api/app/messages/server/channels/:id/messages - Redirect to client-side SDK
 	const serverChannelMessagesMatch = path.match(/^messages\/server\/channels\/([^/]+)\/messages$/)
 	if (serverChannelMessagesMatch && request.method === 'GET') {
-		const sessionAddress = getWalletAddressFromCookie(request)
-		const server = getSignalServerContext(url, sessionAddress)
-		const channelId = sanitizeSignalSlug(serverChannelMessagesMatch[1])
-		const channels = await getSignalChannels(env, server)
-		const exists = channels.some((channel) => channel.id === channelId)
-		if (!exists) return jsonResponse({ error: 'Channel not found', code: 'NOT_FOUND' }, 404)
-
-		const messages = await getSignalChannelMessages(env, server.id, channelId)
-		const muteState = await getSignalMuteState(env, server.id)
-		const mutedScope = getSignalMuteScope(
-			muteState,
-			channelId,
-			normalizeSignalAddress(sessionAddress),
-		)
-
 		return jsonResponse({
-			server: {
-				id: server.id,
-				displayName: server.displayName,
-				isModerator: server.isModerator,
-				scope: server.scope,
-			},
-			channel: channelId,
-			messages,
-			count: messages.length,
-			muted: {
-				server: mutedScope === 'server',
-				channel: mutedScope === 'channel',
-			},
+			error: 'Use client-side @mysten/messaging SDK',
+			code: 'CLIENT_SIDE_ONLY',
+			note: 'Messages are stored on Walrus and resolved on-chain. Load @mysten/messaging SDK client-side.',
+			sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
 		})
 	}
 
-	// POST /api/app/messages/server/channels/:id/messages - Send channel message
+	// POST /api/app/messages/server/channels/:id/messages - Redirect to client-side SDK
 	if (serverChannelMessagesMatch && request.method === 'POST') {
-		const sessionAddress = getWalletAddressFromCookie(request)
-		if (!sessionAddress) {
-			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-		}
-
-		const server = getSignalServerContext(url, sessionAddress)
-		const channelId = sanitizeSignalSlug(serverChannelMessagesMatch[1])
-		const channels = await getSignalChannels(env, server)
-		const channel = channels.find((candidate) => candidate.id === channelId)
-		if (!channel) return jsonResponse({ error: 'Channel not found', code: 'NOT_FOUND' }, 404)
-
-		const muteState = await getSignalMuteState(env, server.id)
-		const mutedScope = getSignalMuteScope(muteState, channelId, sessionAddress)
-		if (mutedScope) {
-			return jsonResponse(
-				{
-					error:
-						mutedScope === 'server'
-							? 'You are muted in this server'
-							: 'You are muted in this channel',
-					code: 'MUTED',
-					scope: mutedScope,
-				},
-				403,
-			)
-		}
-
-		try {
-			const body = (await request.json()) as {
-				content?: string
-				senderName?: string | null
-				encrypted?: boolean
-				replyTo?: string
-				auth?: SignalChannelMessageAuthRequest
-			}
-			const content = String(body.content || '').trim()
-			if (!content) {
-				return jsonResponse({ error: 'Message content required', code: 'MISSING_CONTENT' }, 400)
-			}
-			const canonicalContent = content.slice(0, MAX_MESSAGE_SIZE_BYTES)
-
-			let authenticated: {
-				payload: string
-				signature: string
-				timestamp: number
-				nonce: string
-				senderName: string | null
-			} | null = null
-
-			if (body.auth && (body.auth.payload || body.auth.signature)) {
-				const verified = await verifySignalChannelMessageAuth(
-					body.auth,
-					server.id,
-					channelId,
-					sessionAddress,
-					canonicalContent,
-				)
-				if (!verified.valid) {
-					return jsonResponse(
-						{ error: verified.reason, code: 'INVALID_MESSAGE_AUTH' },
-						401,
-					)
-				}
-				authenticated = verified
-			}
-
-			const message: SignalChannelMessage = {
-				id: createSignalMessageId(),
-				serverId: server.id,
-				channel: channelId,
-				sender: sessionAddress,
-				senderName: authenticated?.senderName || normalizeSignalSenderName(body.senderName || null),
-				content: canonicalContent,
-				encrypted: !!(channel.encrypted || body.encrypted),
-				timestamp: Date.now(),
-				replyTo: body.replyTo,
-				auth: authenticated
-					? {
-							standard: SIGNAL_CHAT_AUTH_STANDARD,
-							version: SIGNAL_CHAT_AUTH_VERSION,
-							payload: authenticated.payload,
-							signature: authenticated.signature,
-							verified: true,
-							timestamp: authenticated.timestamp,
-							nonce: authenticated.nonce,
-						}
-					: undefined,
-			}
-
-			const messages = await getSignalChannelMessages(env, server.id, channelId)
-			messages.push(message)
-			const trimmed = messages.length > 200 ? messages.slice(messages.length - 200) : messages
-			await setSignalChannelMessages(env, server.id, channelId, trimmed)
-
-			return jsonResponse({ message })
-		} catch {
-			return jsonResponse({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
-		}
+		return jsonResponse({
+			error: 'Use client-side @mysten/messaging SDK',
+			code: 'CLIENT_SIDE_ONLY',
+			note: 'Messages are encrypted with Seal and stored on Walrus. Send client-side.',
+			sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+		})
 	}
 
-	// DELETE /api/app/messages/server/channels/:id/messages/:messageId
-	const serverChannelMessageDeleteMatch = path.match(
-		/^messages\/server\/channels\/([^/]+)\/messages\/([^/]+)$/,
-	)
-	if (serverChannelMessageDeleteMatch && request.method === 'DELETE') {
-		const sessionAddress = getWalletAddressFromCookie(request)
-		if (!sessionAddress) {
-			return jsonResponse({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-		}
-
-		const server = getSignalServerContext(url, sessionAddress)
-		const channelId = sanitizeSignalSlug(serverChannelMessageDeleteMatch[1])
-		const messageId = serverChannelMessageDeleteMatch[2]
-		const messages = await getSignalChannelMessages(env, server.id, channelId)
-		const target = messages.find((message) => message.id === messageId)
-		if (!target) return jsonResponse({ error: 'Message not found', code: 'NOT_FOUND' }, 404)
-
-		const isSender = normalizeSignalAddress(target.sender) === sessionAddress
-		if (!server.isModerator && !isSender) {
-			return jsonResponse(
-				{ error: 'Not authorized to delete this message', code: 'FORBIDDEN' },
-				403,
-			)
-		}
-
-		const nextMessages = messages.filter((message) => message.id !== messageId)
-		await setSignalChannelMessages(env, server.id, channelId, nextMessages)
-		return jsonResponse({ deleted: true, messageId, count: nextMessages.length })
+	// All other Signal-style endpoints redirect to client-side SDK
+	const signalChannelMatch = path.match(/^messages\/server\/channels\/(.+)$/)
+	if (signalChannelMatch) {
+		return jsonResponse({
+			error: 'Use client-side @mysten/messaging SDK',
+			code: 'CLIENT_SIDE_ONLY',
+			note: 'Channel management happens on-chain. Use the SDK to create, join, and manage channels.',
+			sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+		})
 	}
 
-	// GET /api/app/channels - Browse public channels
 	if (path === 'channels' && request.method === 'GET') {
 		const limit = Number.parseInt(url.searchParams.get('limit') || '20', 10)
 		const cursor = url.searchParams.get('cursor')
-		// Placeholder - would query on-chain channel registry
 		return jsonResponse({
 			channels: [],
 			pagination: { limit, cursor, hasMore: false },
@@ -1866,22 +865,24 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 			(network === 'testnet'
 				? 'https://fullnode.testnet.sui.io:443'
 				: network === 'devnet'
-				? 'https://fullnode.devnet.sui.io:443'
-				: 'https://fullnode.mainnet.sui.io:443')
+					? 'https://fullnode.devnet.sui.io:443'
+					: 'https://fullnode.mainnet.sui.io:443')
 		const defaultSealKeyServers =
 			network === 'mainnet'
 				? ['0x145540d931f182fef76467dd8074c9839aea126852d90d18e1556fcbbd1208b6']
 				: [
-					'0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75',
-					'0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8',
-					'0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46',
-				]
+						'0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75',
+						'0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8',
+						'0x4cded1abeb52a22b6becb42a91d3686a4c901cf52eee16234214d0b5b2da4c46',
+					]
 		const sealKeyServers = (env.SEAL_KEY_SERVERS || defaultSealKeyServers.join(','))
 			.split(',')
 			.map((id: string) => id.trim())
 			.filter(Boolean)
 		const walrusNetwork =
-			network === 'mainnet' && env.WALRUS_NETWORK !== 'testnet' ? 'mainnet' : env.WALRUS_NETWORK || 'testnet'
+			network === 'mainnet' && env.WALRUS_NETWORK !== 'testnet'
+				? 'mainnet'
+				: env.WALRUS_NETWORK || 'testnet'
 		const walrusPublisherDefault =
 			walrusNetwork === 'mainnet'
 				? 'https://publisher.walrus.space'
@@ -1953,8 +954,8 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 			},
 			sdk: {
 				messagingSdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
-				sealSdk: 'https://cdn.jsdelivr.net/npm/@mysten/seal@0.9.6/+esm',
-				suiSdk: 'https://cdn.jsdelivr.net/npm/@mysten/sui@1.45.2/+esm',
+				sealSdk: 'https://cdn.jsdelivr.net/npm/@mysten/seal@1.0.1/+esm',
+				suiSdk: 'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/+esm',
 				messagingVersion: '0.3.0',
 				messagingPackageConfig,
 			},
@@ -2894,6 +1895,7 @@ function generateAppShell(
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
+	${generateExtensionNoiseFilter()}
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 	<title>${title} | sui.ski</title>

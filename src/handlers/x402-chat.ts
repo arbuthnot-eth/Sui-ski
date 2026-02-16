@@ -8,20 +8,19 @@ import type {
 	X402DiceCommit,
 	X402DiceReveal,
 } from '../types'
+import { cacheKey, getCached, setCache } from '../utils/cache'
+import { fetchMultichainPaymentRequirements, resolveX402Providers } from '../utils/x402-middleware'
+import { resolveX402Recipient } from '../utils/x402-sui'
 import { agentGraceVaultRoutes } from './grace-vault-agent'
 import { createSuiMcpHandler } from './mcp'
 import { agentSubnameCapRoutes } from './subnamecap'
 import { x402RegisterRoutes } from './x402-register'
-import { cacheKey, getCached, setCache } from '../utils/cache'
-import { fetchMultichainPaymentRequirements, resolveX402Providers } from '../utils/x402-middleware'
-import { resolveX402Recipient } from '../utils/x402-sui'
 
 const TAB_THRESHOLD_MIST = '100000000'
 const COST_PER_EXCHANGE_MIST = '5000000'
 const TAB_TTL_SECONDS = 86400
 const MAX_HISTORY = 50
 const MAX_MESSAGE_LENGTH = 2000
-const MAX_CHANNEL_MESSAGES = 200
 const DICE_COMMIT_TTL_SECONDS = 300
 const DICE_EMOJI = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
 const OFFICIAL_MESSAGING_SDK_VERSION = '0.3.0'
@@ -35,48 +34,6 @@ const AGENT_DISPATCH_ALLOWLIST: Record<string, Set<string>> = {
 interface ChatMessage {
 	role: 'user' | 'assistant'
 	content: string
-}
-
-interface ChannelMessage {
-	id: string
-	serverId: string
-	channel: string
-	sender: string
-	senderName: string | null
-	content: string
-	encrypted: boolean
-	timestamp: number
-	replyTo?: string
-}
-
-interface ServerChannel {
-	id: string
-	name: string
-	description: string
-	encrypted: boolean
-	protected: boolean
-	custom: boolean
-	createdAt: number
-}
-
-interface MuteInfo {
-	address: string
-	mutedAt: number
-	mutedBy: string
-}
-
-interface ServerMuteState {
-	server: Record<string, MuteInfo>
-	channel: Record<string, Record<string, MuteInfo>>
-}
-
-interface ServerContext {
-	id: string
-	name: string
-	displayName: string
-	ownerAddress: string | null
-	isModerator: boolean
-	scope: 'global' | 'owner' | 'name'
 }
 
 type X402Env = {
@@ -101,187 +58,8 @@ function historyKey(address: string): string {
 	return cacheKey('x402-history', 'v1', address.toLowerCase())
 }
 
-function channelKey(channelId: string): string {
-	return cacheKey('x402-channel', 'v2', channelId.toLowerCase())
-}
-
-function serverChannelsKey(serverId: string): string {
-	return cacheKey('x402-server-channels', 'v1', serverId)
-}
-
-function serverMutesKey(serverId: string): string {
-	return cacheKey('x402-server-mutes', 'v1', serverId)
-}
-
 function diceKey(address: string): string {
 	return cacheKey('x402-dice', 'v1', address.toLowerCase())
-}
-
-function normalizeAddress(value: string | null | undefined): string {
-	return String(value || '')
-		.trim()
-		.toLowerCase()
-}
-
-function sanitizeSlug(value: string | null | undefined): string {
-	const slug = String(value || '')
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9-]/g, '-')
-		.replace(/-+/g, '-')
-		.replace(/^-|-$/g, '')
-	return slug.slice(0, 48)
-}
-
-function getServerContext(requestUrl: string, sessionAddress: string | null): ServerContext {
-	const url = new URL(requestUrl)
-	const rawName = url.searchParams.get('name')
-	const rawOwner = url.searchParams.get('owner')
-	const rawScope = String(url.searchParams.get('scope') || '').trim().toLowerCase()
-	const name = sanitizeSlug(rawName)
-	const ownerAddress = normalizeAddress(rawOwner) || null
-	const requester = normalizeAddress(sessionAddress)
-	const scope = rawScope === 'name' ? 'name' : 'owner'
-
-	if (!name) {
-		return {
-			id: 'global:sui-ski',
-			name: 'sui-ski',
-			displayName: 'sui.ski',
-			ownerAddress: null,
-			isModerator: false,
-			scope: 'global',
-		}
-	}
-
-	if (ownerAddress && scope === 'owner') {
-		return {
-			id: `suins-owner:${ownerAddress}`,
-			name,
-			displayName: `${name}.sui`,
-			ownerAddress,
-			isModerator: requester === ownerAddress,
-			scope: 'owner',
-		}
-	}
-
-	const ownerPart = ownerAddress || 'unowned'
-	return {
-		id: `suins:${name}:${ownerPart}`,
-		name,
-		displayName: `${name}.sui`,
-		ownerAddress,
-		isModerator: !!ownerAddress && requester === ownerAddress,
-		scope: 'name',
-	}
-}
-
-function buildDefaultChannels(server: ServerContext): ServerChannel[] {
-	const now = Date.now()
-	const base: ServerChannel[] = [
-		{
-			id: 'general',
-			name: 'general',
-			description: 'General server chat',
-			encrypted: false,
-			protected: true,
-			custom: false,
-			createdAt: now,
-		},
-		{
-			id: 'announcements',
-			name: 'announcements',
-			description: 'Server announcements',
-			encrypted: false,
-			protected: true,
-			custom: false,
-			createdAt: now,
-		},
-		{
-			id: 'ops',
-			name: 'ops',
-			description: 'Ops and strategy chat',
-			encrypted: false,
-			protected: true,
-			custom: false,
-			createdAt: now,
-		},
-	]
-
-	if (server.name !== 'sui-ski') {
-		base.push({
-			id: server.name,
-			name: server.name,
-			description: `Main chat for ${server.displayName}`,
-			encrypted: false,
-			protected: true,
-			custom: false,
-			createdAt: now,
-		})
-		base.push({
-			id: `dm-${server.name}`,
-			name: `dm-${server.name}`,
-			description: `Encrypted room for ${server.displayName}`,
-			encrypted: true,
-			protected: true,
-			custom: false,
-			createdAt: now,
-		})
-	}
-
-	return base
-}
-
-async function loadServerChannels(server: ServerContext): Promise<ServerChannel[]> {
-	const defaults = buildDefaultChannels(server)
-	const existing = await getCached<ServerChannel[]>(serverChannelsKey(server.id))
-	if (!Array.isArray(existing) || existing.length === 0) {
-		await setCache(serverChannelsKey(server.id), defaults, TAB_TTL_SECONDS)
-		return defaults
-	}
-
-	const byId = new Map<string, ServerChannel>()
-	for (let i = 0; i < defaults.length; i++) byId.set(defaults[i].id, defaults[i])
-	for (let i = 0; i < existing.length; i++) {
-		const channel = existing[i]
-		if (!channel || !channel.id) continue
-		byId.set(channel.id, {
-			id: sanitizeSlug(channel.id),
-			name: sanitizeSlug(channel.name || channel.id),
-			description: channel.description || '',
-			encrypted: !!channel.encrypted,
-			protected: !!channel.protected,
-			custom: !!channel.custom,
-			createdAt: Number(channel.createdAt || Date.now()),
-		})
-	}
-
-	const merged = Array.from(byId.values()).filter((channel) => channel.id)
-	await setCache(serverChannelsKey(server.id), merged, TAB_TTL_SECONDS)
-	return merged
-}
-
-async function loadMuteState(serverId: string): Promise<ServerMuteState> {
-	const state = await getCached<ServerMuteState>(serverMutesKey(serverId))
-	if (state && state.server && state.channel) return state
-	return { server: {}, channel: {} }
-}
-
-function getMuteScope(
-	state: ServerMuteState,
-	channelId: string,
-	address: string,
-): 'server' | 'channel' | null {
-	if (!address) return null
-	if (state.server[address]) return 'server'
-	if (state.channel[channelId] && state.channel[channelId][address]) return 'channel'
-	return null
-}
-
-function generateMessageId(): string {
-	const timestamp = Date.now().toString(36)
-	const random = Math.random().toString(36).slice(2, 8)
-	return `${timestamp}-${random}`
 }
 
 function buildSystemPrompt(context: X402ChatContext): string {
@@ -480,7 +258,10 @@ x402ChatRoutes.all('/webmcp', async (c) => {
 	const headers = new Headers(proxied.headers)
 	headers.set('X-X402-Chat-Bridge', 'webmcp')
 	if (!headers.get('Access-Control-Expose-Headers')) {
-		headers.set('Access-Control-Expose-Headers', 'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-X402-PROVIDER')
+		headers.set(
+			'Access-Control-Expose-Headers',
+			'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-X402-PROVIDER',
+		)
 	}
 	return new Response(proxied.body, {
 		status: proxied.status,
@@ -508,7 +289,10 @@ x402ChatRoutes.all('/webmcp/*', async (c) => {
 	const headers = new Headers(proxied.headers)
 	headers.set('X-X402-Chat-Bridge', 'webmcp')
 	if (!headers.get('Access-Control-Expose-Headers')) {
-		headers.set('Access-Control-Expose-Headers', 'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-X402-PROVIDER')
+		headers.set(
+			'Access-Control-Expose-Headers',
+			'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-X402-PROVIDER',
+		)
 	}
 	return new Response(proxied.body, {
 		status: proxied.status,
@@ -532,11 +316,17 @@ x402ChatRoutes.post('/agents/dispatch', async (c) => {
 		return c.json({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
 	}
 
-	const agent = String(body.agent || '').trim().toLowerCase()
+	const agent = String(body.agent || '')
+		.trim()
+		.toLowerCase()
 	const allowlist = AGENT_DISPATCH_ALLOWLIST[agent]
 	if (!allowlist) {
 		return c.json(
-			{ error: 'Unsupported agent target', code: 'INVALID_AGENT', supported: Object.keys(AGENT_DISPATCH_ALLOWLIST) },
+			{
+				error: 'Unsupported agent target',
+				code: 'INVALID_AGENT',
+				supported: Object.keys(AGENT_DISPATCH_ALLOWLIST),
+			},
 			400,
 		)
 	}
@@ -548,12 +338,18 @@ x402ChatRoutes.post('/agents/dispatch', async (c) => {
 	const rootPath = cleanPath.split('/')[0]
 	if (!allowlist.has(rootPath)) {
 		return c.json(
-			{ error: 'Path is not allowed for this agent', code: 'PATH_NOT_ALLOWED', allowed: Array.from(allowlist) },
+			{
+				error: 'Path is not allowed for this agent',
+				code: 'PATH_NOT_ALLOWED',
+				allowed: Array.from(allowlist),
+			},
 			403,
 		)
 	}
 
-	const method = String(body.method || 'POST').trim().toUpperCase()
+	const method = String(body.method || 'POST')
+		.trim()
+		.toUpperCase()
 	const requestMethod = ['GET', 'POST', 'PUT', 'DELETE'].includes(method) ? method : 'POST'
 	const target = new URL(`https://internal/${cleanPath}`)
 	const query = body.query || {}
@@ -585,7 +381,10 @@ x402ChatRoutes.post('/agents/dispatch', async (c) => {
 	const responseHeaders = new Headers(forwarded.headers)
 	responseHeaders.set('X-X402-Chat-Bridge', 'agents')
 	if (!responseHeaders.get('Access-Control-Expose-Headers')) {
-		responseHeaders.set('Access-Control-Expose-Headers', 'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-X402-PROVIDER')
+		responseHeaders.set(
+			'Access-Control-Expose-Headers',
+			'PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-X402-PROVIDER',
+		)
 	}
 
 	const contentType = forwarded.headers.get('Content-Type') || ''
@@ -1057,296 +856,73 @@ x402ChatRoutes.post('/dice/reveal', async (c) => {
 })
 
 x402ChatRoutes.get('/channels', async (c) => {
-	const session = c.get('session')
-	const server = getServerContext(c.req.url, session.address)
-	const channels = await loadServerChannels(server)
-	const muteState = await loadMuteState(server.id)
-
 	return c.json({
 		server: {
-			id: server.id,
-			name: server.name,
-			displayName: server.displayName,
-			ownerAddress: server.ownerAddress,
-			isModerator: server.isModerator,
-			scope: server.scope,
+			id: 'decentralized',
+			name: 'sui-stack-messaging',
+			displayName: 'Sui Stack Messaging',
+			ownerAddress: null,
+			isModerator: false,
+			scope: 'decentralized',
 		},
-		channels,
-		moderation: {
-			serverMuted: server.isModerator ? Object.keys(muteState.server) : [],
-			channelMuted: server.isModerator
-				? Object.fromEntries(
-						Object.entries(muteState.channel).map(([channelId, muted]) => [
-							channelId,
-							Object.keys(muted),
-						]),
-					)
-				: {},
-		},
+		channels: [],
+		moderation: { serverMuted: [], channelMuted: {} },
+		note: 'Channels are resolved client-side via @mysten/messaging SDK. Use /api/app/subscriptions/config for SDK bootstrap.',
 	})
 })
 
 x402ChatRoutes.post('/channels', async (c) => {
-	const session = c.get('session')
-	const address = normalizeAddress(session.address)
-	if (!address) {
-		return c.json({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-	}
-
-	const server = getServerContext(c.req.url, session.address)
-	if (!server.isModerator) {
-		return c.json({ error: 'Only server moderator can add channels', code: 'FORBIDDEN' }, 403)
-	}
-
-	let body: { name?: string; encrypted?: boolean; description?: string }
-	try {
-		body = await c.req.json()
-	} catch {
-		return c.json({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
-	}
-
-	const channelSlug = sanitizeSlug(body.name)
-	if (!channelSlug) {
-		return c.json({ error: 'Channel name required', code: 'MISSING_CHANNEL' }, 400)
-	}
-
-	const channels = await loadServerChannels(server)
-	if (channels.some((channel) => channel.id === channelSlug)) {
-		return c.json({ error: 'Channel already exists', code: 'DUPLICATE_CHANNEL' }, 409)
-	}
-
-	const nextChannel: ServerChannel = {
-		id: channelSlug,
-		name: channelSlug,
-		description: String(body.description || '').slice(0, 120),
-		encrypted: !!body.encrypted,
-		protected: false,
-		custom: true,
-		createdAt: Date.now(),
-	}
-
-	channels.push(nextChannel)
-	await setCache(serverChannelsKey(server.id), channels, TAB_TTL_SECONDS)
-
-	return c.json({ channel: nextChannel, channels })
+	return c.json({
+		error: 'Use client-side @mysten/messaging SDK',
+		code: 'CLIENT_SIDE_ONLY',
+		note: 'Channel creation happens on-chain via the SDK.',
+		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+	})
 })
 
 x402ChatRoutes.delete('/channels/:id', async (c) => {
-	const session = c.get('session')
-	const address = normalizeAddress(session.address)
-	if (!address) {
-		return c.json({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-	}
-
-	const server = getServerContext(c.req.url, session.address)
-	if (!server.isModerator) {
-		return c.json({ error: 'Only server moderator can delete channels', code: 'FORBIDDEN' }, 403)
-	}
-
-	const channelId = sanitizeSlug(c.req.param('id'))
-	if (!channelId) {
-		return c.json({ error: 'Invalid channel id', code: 'INVALID_CHANNEL' }, 400)
-	}
-
-	const channels = await loadServerChannels(server)
-	const found = channels.find((channel) => channel.id === channelId)
-	if (!found) return c.json({ error: 'Channel not found', code: 'NOT_FOUND' }, 404)
-	if (found.protected) {
-		return c.json({ error: 'Protected channels cannot be deleted', code: 'PROTECTED_CHANNEL' }, 400)
-	}
-
-	const nextChannels = channels.filter((channel) => channel.id !== channelId)
-	await setCache(serverChannelsKey(server.id), nextChannels, TAB_TTL_SECONDS)
-	await setCache(channelKey(`${server.id}:${channelId}`), [], 1)
-
-	const muteState = await loadMuteState(server.id)
-	if (muteState.channel[channelId]) {
-		delete muteState.channel[channelId]
-		await setCache(serverMutesKey(server.id), muteState, TAB_TTL_SECONDS)
-	}
-
-	return c.json({ deleted: true, channelId, channels: nextChannels })
+	return c.json({
+		error: 'Use client-side @mysten/messaging SDK',
+		code: 'CLIENT_SIDE_ONLY',
+		note: 'Channel management happens on-chain via the SDK.',
+		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+	})
 })
 
 x402ChatRoutes.post('/channels/:id/mute', async (c) => {
-	const session = c.get('session')
-	const address = normalizeAddress(session.address)
-	if (!address) {
-		return c.json({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-	}
-
-	const server = getServerContext(c.req.url, session.address)
-	if (!server.isModerator) {
-		return c.json({ error: 'Only server moderator can mute users', code: 'FORBIDDEN' }, 403)
-	}
-
-	const channelId = sanitizeSlug(c.req.param('id'))
-	let body: { targetAddress?: string; scope?: 'server' | 'channel'; muted?: boolean }
-	try {
-		body = await c.req.json()
-	} catch {
-		return c.json({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
-	}
-
-	const targetAddress = normalizeAddress(body.targetAddress)
-	if (!targetAddress) {
-		return c.json({ error: 'Target address required', code: 'MISSING_TARGET' }, 400)
-	}
-	if (server.ownerAddress && targetAddress === server.ownerAddress) {
-		return c.json({ error: 'Cannot mute server moderator', code: 'INVALID_TARGET' }, 400)
-	}
-
-	const muted = body.muted !== false
-	const scope = body.scope === 'server' ? 'server' : 'channel'
-	const muteState = await loadMuteState(server.id)
-
-	if (scope === 'server') {
-		if (!muted) {
-			delete muteState.server[targetAddress]
-		} else {
-			muteState.server[targetAddress] = {
-				address: targetAddress,
-				mutedAt: Date.now(),
-				mutedBy: address,
-			}
-		}
-	} else {
-		if (!muteState.channel[channelId]) muteState.channel[channelId] = {}
-		if (!muted) {
-			delete muteState.channel[channelId][targetAddress]
-		} else {
-			muteState.channel[channelId][targetAddress] = {
-				address: targetAddress,
-				mutedAt: Date.now(),
-				mutedBy: address,
-			}
-		}
-	}
-
-	await setCache(serverMutesKey(server.id), muteState, TAB_TTL_SECONDS)
-
-	return c.json({ ok: true, scope, channelId, targetAddress, muted })
+	return c.json({
+		error: 'Use client-side @mysten/messaging SDK',
+		code: 'CLIENT_SIDE_ONLY',
+		note: 'Moderation happens on-chain via the SDK.',
+		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+	})
 })
 
 x402ChatRoutes.get('/channels/:id/messages', async (c) => {
-	const session = c.get('session')
-	const server = getServerContext(c.req.url, session.address)
-	const channelId = c.req.param('id')
-	const key = channelKey(`${server.id}:${channelId}`)
-	const messages = (await getCached<ChannelMessage[]>(key)) || []
-	const muteState = await loadMuteState(server.id)
-	const requester = normalizeAddress(session.address)
-	const mutedScope = getMuteScope(muteState, channelId, requester)
-
 	return c.json({
-		server: {
-			id: server.id,
-			displayName: server.displayName,
-			isModerator: server.isModerator,
-			scope: server.scope,
-		},
-		channel: channelId,
-		messages,
-		count: messages.length,
-		muted: {
-			server: mutedScope === 'server',
-			channel: mutedScope === 'channel',
-		},
+		error: 'Use client-side @mysten/messaging SDK',
+		code: 'CLIENT_SIDE_ONLY',
+		note: 'Messages are stored on Walrus and resolved on-chain.',
+		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
 	})
 })
 
 x402ChatRoutes.delete('/channels/:id/messages/:messageId', async (c) => {
-	const session = c.get('session')
-	const address = normalizeAddress(session.address)
-	if (!address) {
-		return c.json({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-	}
-
-	const server = getServerContext(c.req.url, session.address)
-	const channelId = sanitizeSlug(c.req.param('id'))
-	const messageId = c.req.param('messageId')
-	const key = channelKey(`${server.id}:${channelId}`)
-	const messages = (await getCached<ChannelMessage[]>(key)) || []
-	const targetMessage = messages.find((message) => message.id === messageId)
-	if (!targetMessage) return c.json({ error: 'Message not found', code: 'NOT_FOUND' }, 404)
-
-	const senderAddress = normalizeAddress(targetMessage.sender)
-	if (!server.isModerator && senderAddress !== address) {
-		return c.json({ error: 'Not authorized to delete this message', code: 'FORBIDDEN' }, 403)
-	}
-
-	const nextMessages = messages.filter((message) => message.id !== messageId)
-	await setCache(key, nextMessages, TAB_TTL_SECONDS)
-
-	return c.json({ deleted: true, messageId, count: nextMessages.length })
+	return c.json({
+		error: 'Use client-side @mysten/messaging SDK',
+		code: 'CLIENT_SIDE_ONLY',
+		note: 'Message management happens on-chain via the SDK.',
+		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+	})
 })
 
 x402ChatRoutes.post('/channels/:id/messages', async (c) => {
-	const session = c.get('session')
-	const address = session.address
-	if (!address) {
-		return c.json({ error: 'Wallet not connected', code: 'AUTH_REQUIRED' }, 401)
-	}
-
-	const channelId = c.req.param('id')
-	const server = getServerContext(c.req.url, session.address)
-	const normalizedAddress = normalizeAddress(address)
-	const muteState = await loadMuteState(server.id)
-	const mutedScope = getMuteScope(muteState, channelId, normalizedAddress)
-	if (mutedScope) {
-		return c.json(
-			{
-				error:
-					mutedScope === 'server'
-						? 'You are muted in this server'
-						: 'You are muted in this channel',
-				code: 'MUTED',
-				scope: mutedScope,
-			},
-			403,
-		)
-	}
-
-	let body: {
-		content: string
-		senderName?: string | null
-		encrypted?: boolean
-		replyTo?: string
-	}
-	try {
-		body = await c.req.json()
-	} catch {
-		return c.json({ error: 'Invalid request body', code: 'INVALID_BODY' }, 400)
-	}
-
-	if (!body.content || typeof body.content !== 'string') {
-		return c.json({ error: 'Message content required', code: 'MISSING_CONTENT' }, 400)
-	}
-
-	const msg: ChannelMessage = {
-		id: generateMessageId(),
-		serverId: server.id,
-		channel: channelId,
-		sender: address,
-		senderName: body.senderName || null,
-		content: body.content.slice(0, MAX_MESSAGE_LENGTH),
-		encrypted: body.encrypted || false,
-		timestamp: Date.now(),
-		replyTo: body.replyTo,
-	}
-
-	const key = channelKey(`${server.id}:${channelId}`)
-	const messages = (await getCached<ChannelMessage[]>(key)) || []
-	messages.push(msg)
-
-	const trimmed =
-		messages.length > MAX_CHANNEL_MESSAGES
-			? messages.slice(messages.length - MAX_CHANNEL_MESSAGES)
-			: messages
-
-	await setCache(key, trimmed, TAB_TTL_SECONDS)
-
-	return c.json({ message: msg })
+	return c.json({
+		error: 'Use client-side @mysten/messaging SDK',
+		code: 'CLIENT_SIDE_ONLY',
+		note: 'Messages are encrypted with Seal and stored on Walrus. Send client-side.',
+		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+	})
 })
 
 function generateSuggestions(context: X402ChatContext, aiReply: string): string[] {

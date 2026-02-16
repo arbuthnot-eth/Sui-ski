@@ -1,6 +1,6 @@
 import type { Env } from '../types'
 import { generateLogoSvg } from '../utils/og-image'
-import { generateWalletKitJs } from '../utils/wallet-kit-js'
+import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
@@ -19,6 +19,7 @@ export function generateSkiPage(env: Env, session?: SkiSession): string {
 
 	return `<!DOCTYPE html>
 <html lang="en"><head>
+${generateExtensionNoiseFilter()}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sui Key-In</title>

@@ -2,7 +2,7 @@ import type { Env, SuiNSRecord } from '../types'
 import { generateLogoSvg, getDefaultOgImageUrl, getProfileOgImageUrl } from '../utils/og-image'
 import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import { normalizeMediaUrl, renderSocialMeta } from '../utils/social'
-import { generateWalletKitJs } from '../utils/wallet-kit-js'
+import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
@@ -146,6 +146,7 @@ export function generateProfilePage(
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
+	${generateExtensionNoiseFilter()}
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>${escapeHtml(fullName)} | sui.ski</title>${canonicalTag}${socialMeta}
@@ -156,8 +157,8 @@ export function generateProfilePage(
 	<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 	<link rel="preconnect" href="https://unpkg.com" crossorigin>
 		<script type="module">
-			import('https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle').catch(()=>{});
-			import('https://esm.sh/@mysten/sui@2.2.0/transactions?bundle').catch(()=>{});
+			import('https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle').catch(()=>{});
+			import('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle').catch(()=>{});
 			import('https://esm.sh/@mysten/suins@1.0.0?bundle').catch(()=>{});
 			import('https://esm.sh/@wallet-standard/app@1.1.0').catch(()=>{});
 		</script>
@@ -295,19 +296,27 @@ ${generateZkSendCss()}</style>
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
 									<a href="https://${escapeHtml(cleanName)}.sui.ski" target="_blank">${escapeHtml(cleanName)}.sui.ski</a>
 								</div>
+						<div class="header-action-grid owner-link-strip">
+							${
+								record.nftId
+									? `<a href="${escapeHtml(nftExplorerUrl)}" target="_blank" class="header-action-btn" title="View NFT object"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg><span>NFT</span></a>`
+									: '<span class="header-action-btn disabled" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg><span>NFT</span></span>'
+							}
+							<button type="button" class="header-action-btn" id="inline-json-toggle" title="View JSON record"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg><span>JSON</span></button>
+							<a href="${escapeHtml(explorerUrl)}" target="_blank" class="header-action-btn" title="View owner on explorer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg><span>Explorer</span></a>
+							<a href="${escapeHtml(tradeportPortfolioUrl)}" target="_blank" id="view-portfolio-link" class="header-action-btn" title="View all SuiNS names on TradePort"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"></path></svg><span>Portfolio</span></a>
+						</div>
+						<div class="inline-json-panel" id="inline-json-panel" style="display:none">
+							<button type="button" class="inline-json-copy-btn" id="inline-json-copy" title="Copy JSON">
+								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+								<span>Copy</span>
+							</button>
+							<pre class="inline-json-content" id="inline-json-content"></pre>
+						</div>
 								</div>
 							</div>
 
 						<div class="overview-module linked-owner-row">
-						<div class="header-action-grid owner-link-strip">
-							${record.nftId
-								? `<a href="${escapeHtml(nftExplorerUrl)}" target="_blank" class="header-action-btn" title="View NFT object"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg><span>NFT</span></a>`
-								: '<span class="header-action-btn disabled" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg><span>NFT</span></span>'
-							}
-							<a href="/json" class="header-action-btn" title="View JSON record"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg><span>JSON</span></a>
-							<a href="${escapeHtml(explorerUrl)}" target="_blank" class="header-action-btn" title="View owner on explorer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg><span>Explorer</span></a>
-							<a href="${escapeHtml(tradeportPortfolioUrl)}" target="_blank" id="view-portfolio-link" class="header-action-btn" title="View all SuiNS names on TradePort"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"></path></svg><span>Portfolio</span></a>
-						</div>
 						<div class="owner-display linked-owner-card">
 							<div class="owner-info" id="owner-info">
 								<span class="owner-label">Owner:</span>
@@ -510,7 +519,7 @@ ${generateZkSendCss()}</style>
 							<path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
 						</svg>
 						<span>Marketplace</span>
-						<a href="${record.nftId ? `https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=${escapeHtml(record.nftId)}&modalSlug=suins&nav=1` : `https://www.tradeport.xyz/sui/collection/suins?search=${escapeHtml(cleanName)}`}" target="_blank" class="marketplace-link">Tradeport</a>
+						<a href="${record.nftId ? `https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=${escapeHtml(record.nftId)}&modalSlug=suins&nav=1` : `https://www.tradeport.xyz/sui/collection/suins?search=${escapeHtml(cleanName)}`}" target="_blank" id="marketplace-activity-link-top" class="marketplace-activity-link" style="margin-left:auto">${escapeHtml(cleanName)}.sui</a>
 					</div>
 				</div>
 				<div class="marketplace-body">
@@ -590,7 +599,7 @@ ${generateZkSendCss()}</style>
 					<div class="marketplace-activity" id="marketplace-activity" style="display:none;">
 						<div class="marketplace-activity-header">
 							<span>Activity</span>
-							<a href="${record.nftId ? `https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=${escapeHtml(record.nftId)}&modalSlug=suins&nav=1` : `https://www.tradeport.xyz/sui/collection/suins?search=${escapeHtml(cleanName)}`}" target="_blank" id="marketplace-activity-link" class="marketplace-activity-link">${escapeHtml(cleanName)}.sui</a>
+							<a href="${record.nftId ? `https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=${escapeHtml(record.nftId)}&modalSlug=suins&nav=1` : `https://www.tradeport.xyz/sui/collection/suins?search=${escapeHtml(cleanName)}`}" target="_blank" id="marketplace-activity-link" class="marketplace-activity-link">Tradeport</a>
 						</div>
 						<div class="marketplace-activity-list" id="marketplace-activity-list">
 							<div class="marketplace-activity-empty">Loading activity...</div>
@@ -851,16 +860,16 @@ ${generateZkSendCss()}</style>
 					'https://unpkg.com/@wallet-standard/app@1.1.0?module',
 				];
 				const suiJsonRpcUrls = [
-					'https://esm.sh/@mysten/sui@2.2.0/jsonRpc?bundle',
-					'https://esm.sh/@mysten/sui@2.2.0/jsonRpc',
-					'https://cdn.jsdelivr.net/npm/@mysten/sui@2.2.0/+esm',
-					'https://unpkg.com/@mysten/sui@2.2.0?module',
+					'https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle',
+					'https://esm.sh/@mysten/sui@2.4.0/jsonRpc',
+					'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/+esm',
+					'https://unpkg.com/@mysten/sui@2.4.0?module',
 				];
 				const suiTransactionsUrls = [
-					'https://esm.sh/@mysten/sui@2.2.0/transactions?bundle',
-					'https://esm.sh/@mysten/sui@2.2.0/transactions',
-					'https://cdn.jsdelivr.net/npm/@mysten/sui@2.2.0/+esm',
-					'https://unpkg.com/@mysten/sui@2.2.0?module',
+					'https://esm.sh/@mysten/sui@2.4.0/transactions?bundle',
+					'https://esm.sh/@mysten/sui@2.4.0/transactions',
+					'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/+esm',
+					'https://unpkg.com/@mysten/sui@2.4.0?module',
 				];
 				const suinsUrls = [
 					'https://esm.sh/@mysten/suins@1.0.0?bundle',
@@ -1365,6 +1374,7 @@ ${generateZkSendCss()}</style>
 		const marketplaceActivity = document.getElementById('marketplace-activity');
 		const marketplaceActivityList = document.getElementById('marketplace-activity-list');
 		const marketplaceActivityLink = document.getElementById('marketplace-activity-link');
+		const marketplaceActivityLinkTop = document.getElementById('marketplace-activity-link-top');
 		const marketplaceSoldRow = document.getElementById('marketplace-sold-row');
 		const marketplaceSoldPrice = document.getElementById('marketplace-sold-price');
 		const marketplaceSeller = document.getElementById('marketplace-seller');
@@ -4754,6 +4764,49 @@ ${generateZkSendCss()}</style>
 			if (e.target === jacketModal) closeJacketModal();
 		});
 		if (copyBtn) copyBtn.addEventListener('click', copyAddress);
+
+		var inlineJsonToggle = document.getElementById('inline-json-toggle');
+		var inlineJsonPanel = document.getElementById('inline-json-panel');
+		var inlineJsonContent = document.getElementById('inline-json-content');
+		var inlineJsonCopyBtn = document.getElementById('inline-json-copy');
+		var inlineJsonLoaded = false;
+		if (inlineJsonToggle && inlineJsonPanel) {
+			inlineJsonToggle.addEventListener('click', async function() {
+				var isOpen = inlineJsonPanel.style.display !== 'none';
+				if (isOpen) {
+					inlineJsonPanel.style.display = 'none';
+					inlineJsonToggle.classList.remove('active');
+					return;
+				}
+				inlineJsonPanel.style.display = 'block';
+				inlineJsonToggle.classList.add('active');
+				if (!inlineJsonLoaded && inlineJsonContent) {
+					inlineJsonContent.textContent = 'Loading...';
+					try {
+						var resp = await fetch('/json');
+						var data = await resp.json();
+						inlineJsonContent.textContent = JSON.stringify(data, null, 2);
+						inlineJsonLoaded = true;
+					} catch (err) {
+						inlineJsonContent.textContent = 'Failed to load JSON record.';
+					}
+				}
+			});
+			if (inlineJsonCopyBtn && inlineJsonContent) {
+				inlineJsonCopyBtn.addEventListener('click', async function() {
+					try {
+						await navigator.clipboard.writeText(inlineJsonContent.textContent || '');
+						inlineJsonCopyBtn.classList.add('copied');
+						inlineJsonCopyBtn.querySelector('span').textContent = 'Copied';
+						setTimeout(function() {
+							inlineJsonCopyBtn.classList.remove('copied');
+							inlineJsonCopyBtn.querySelector('span').textContent = 'Copy';
+						}, 1500);
+					} catch (_) {}
+				});
+			}
+		}
+
 		if (ownerAddrText) {
 			ownerAddrText.classList.add('copyable');
 			ownerAddrText.setAttribute('title', 'Copy owner address');
@@ -5848,10 +5901,10 @@ ${generateZkSendCss()}</style>
 							throw lastError || new Error('Import failed');
 						};
 						const suiUrls = [
-							'https://esm.sh/@mysten/sui@2.2.0?bundle',
-							'https://esm.sh/@mysten/sui@2.2.0',
-							'https://cdn.jsdelivr.net/npm/@mysten/sui@2.2.0/+esm',
-							'https://unpkg.com/@mysten/sui@2.2.0?module',
+							'https://esm.sh/@mysten/sui@2.4.0?bundle',
+							'https://esm.sh/@mysten/sui@2.4.0',
+							'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/+esm',
+							'https://unpkg.com/@mysten/sui@2.4.0?module',
 						];
 						const sdkModule = await importFirst(suiUrls);
 						SuiJsonRpcClient = sdkModule?.SuiJsonRpcClient || sdkModule?.SuiClient || sdkModule?.default?.SuiJsonRpcClient || SuiJsonRpcClient;
@@ -7291,7 +7344,7 @@ ${generateZkSendCss()}</style>
 			const withoutWallet = stripped.endsWith(' wallet')
 				? stripped.slice(0, -7).trim()
 				: stripped;
-			return withoutWallet.replace(/\s+/g, '');
+			return withoutWallet.replace(/s+/g, '');
 		}
 
 		function walletNamesMatchForReconnect(left, right) {
@@ -9172,25 +9225,19 @@ function shortAddr(addr) {
 					const primaryResolutions = await Promise.all(
 						addressesToQuery.map(async function(addr) {
 							const primary = await fetchPrimaryName(addr).catch(() => null);
-							console.log('fetchPrimaryName for', addr, 'returned:', primary);
 							return normalizeLinkedNameKey(primary);
 						}),
 					);
-					console.log('primaryResolutions:', primaryResolutions);
 					const primaryNameSet = new Set(primaryResolutions.filter(Boolean));
-					console.log('primaryNameSet:', Array.from(primaryNameSet));
 					if (primaryNameSet.size > 0) {
 						for (var pi = 0; pi < names.length; pi++) {
 							var normalizedName = normalizeLinkedNameKey(names[pi].name);
 							if (primaryNameSet.has(normalizedName)) {
-								console.log('Marking as primary:', names[pi].name);
 								names[pi].isPrimary = true;
 							}
 						}
 					}
-				} catch (e) {
-					console.log('Primary fallback resolution failed:', e);
-				}
+				} catch (e) {}
 
 				var hasPrimary = names.some(function(n) { return n.isPrimary; });
 				if (!hasPrimary) {
@@ -9330,7 +9377,7 @@ function shortAddr(addr) {
 					return normalized
 						.toFixed(9)
 						.replace(/0+$/, '')
-						.replace(/\.$/, '');
+						.replace(/.$/, '');
 				}
 
 				function toMistBigInt(value) {
@@ -9368,8 +9415,8 @@ function shortAddr(addr) {
 					if (parts.length > 2) return null;
 					const wholePart = parts[0] || '0';
 					const fractionPartRaw = parts[1] || '';
-					if (!/^\d+$/.test(wholePart)) return null;
-					if (fractionPartRaw && !/^\d+$/.test(fractionPartRaw)) return null;
+					if (!/^d+$/.test(wholePart)) return null;
+					if (fractionPartRaw && !/^d+$/.test(fractionPartRaw)) return null;
 					const fractionPart = fractionPartRaw.slice(0, 9).padEnd(9, '0');
 					try {
 						const wholeMist = BigInt(wholePart) * MIST_PER_SUI_BIGINT;
@@ -9923,6 +9970,9 @@ function shortAddr(addr) {
 						marketplaceActivityLink.title = tokenForLink
 							? 'View full NFT trades on TradePort'
 							: 'View SuiNS trades on TradePort';
+					}
+					if (marketplaceActivityLinkTop) {
+						marketplaceActivityLinkTop.href = getTradeportItemUrl(tokenForLink);
 					}
 
 					const activityPayload = targetNft && targetNft.id
@@ -10865,6 +10915,9 @@ function shortAddr(addr) {
 				setMarketplaceActivityMessage('Loading activity...');
 				if (marketplaceActivityLink) {
 					marketplaceActivityLink.href = getTradeportItemUrl(NFT_ID || '');
+				}
+				if (marketplaceActivityLinkTop) {
+					marketplaceActivityLinkTop.href = getTradeportItemUrl(NFT_ID || '');
 				}
 				ensureProfileRegistrationCostSui()
 					.then(() => {
@@ -12258,13 +12311,12 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 		const GLOBAL_NETWORK = ${serializeJson(network)};
 		const GLOBAL_NAME = ${serializeJson(cleanName)};
 		const GLOBAL_TARGET_ADDRESS = ${serializeJson(record.address || '')};
-		const GLOBAL_OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
+const GLOBAL_OWNER_ADDRESS = ${serializeJson(record.ownerAddress || '')};
 
-		const ENABLE_UPLOAD = false;
-		const ENABLE_BOUNTIES = false;
-		const ENABLE_VORTEX = false;
+const ENABLE_UPLOAD = false;
+const ENABLE_BOUNTIES = false;
 
-		// Getters for wallet state from module script (via window)
+// Getters for wallet state from module script (via window)
 		const getConnectedAddress = () => window.connectedAddress;
 		const getConnectedWallet = () => window.connectedWallet;
 		const getConnectedAccount = () => window.connectedAccount;
@@ -13246,85 +13298,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					if (notesPolicyValue) notesPolicyValue.placeholder = placeholders[val] || 'Enter policy parameters...';
 				}
 			});
-		}
-
-		// Check Vortex status on privacy tab load
-		async function checkVortexStatus() {
-			const statusEl = document.getElementById('vortex-status');
-			if (!statusEl) return;
-			try {
-				const resp = await fetch('/api/vortex/health');
-				if (resp.ok) {
-					const data = await resp.json();
-					statusEl.innerHTML = '<span class="status-dot"></span>' + (data.status === 'ok' ? 'Online' : 'Degraded');
-					statusEl.classList.add(data.status === 'ok' ? 'online' : 'degraded');
-				} else {
-					statusEl.innerHTML = '<span class="status-dot"></span>Offline';
-					statusEl.classList.add('offline');
-				}
-			} catch {
-				statusEl.innerHTML = '<span class="status-dot"></span>Offline';
-				statusEl.classList.add('offline');
-			}
-		}
-
-		// Load Vortex pools
-		async function loadVortexPools() {
-			const poolsGrid = document.getElementById('vortex-pools-grid');
-			const poolSelect = document.getElementById('vortex-pool-select');
-			if (!poolsGrid) return;
-
-			try {
-				const resp = await fetch('/api/vortex/pools');
-				if (!resp.ok) throw new Error('Failed to load pools');
-				const pools = await resp.json();
-
-				if (!pools || pools.length === 0) {
-					poolsGrid.innerHTML = '<div class="pools-empty"><p>No privacy pools available</p></div>';
-					return;
-				}
-
-				poolsGrid.innerHTML = pools.map(pool => \`
-					<div class="pool-card" data-coin-type="\${pool.coinType || pool.coin_type}">
-						<div class="pool-header">
-							<span class="pool-token">\${pool.symbol || 'SUI'}</span>
-							<span class="pool-tvl">\${pool.tvl ? (pool.tvl / 1e9).toFixed(2) : '0'} TVL</span>
-						</div>
-						<div class="pool-stats">
-							<div class="pool-stat">
-								<span class="stat-label">Deposits</span>
-								<span class="stat-value">\${pool.depositCount || pool.deposit_count || 0}</span>
-							</div>
-							<div class="pool-stat">
-								<span class="stat-label">Anonymity Set</span>
-								<span class="stat-value">\${pool.anonymitySet || pool.anonymity_set || 0}</span>
-							</div>
-						</div>
-						<button class="pool-deposit-btn" data-pool="\${pool.coinType || pool.coin_type}">
-							Deposit \${pool.symbol || 'SUI'}
-						</button>
-					</div>
-				\`).join('');
-
-				// Populate pool selector
-				if (poolSelect) {
-					poolSelect.innerHTML = '<option value="">Select a privacy pool...</option>' +
-						pools.map(pool => \`<option value="\${pool.coinType || pool.coin_type}">\${pool.symbol || 'SUI'}</option>\`).join('');
-				}
-
-				// Add click handlers for pool cards
-				poolsGrid.querySelectorAll('.pool-deposit-btn').forEach(btn => {
-					btn.addEventListener('click', () => {
-						const poolType = btn.dataset.pool;
-						if (poolSelect) poolSelect.value = poolType;
-						document.getElementById('vortex-deposit-form')?.scrollIntoView({ behavior: 'smooth' });
-					});
-				});
-			} catch (err) {
-				console.error('Error loading Vortex pools:', err);
-				poolsGrid.innerHTML = '<div class="pools-error"><p>Failed to load pools. Check API connection.</p></div>';
-			}
-		}
+}
 
 		// Walrus dropzone handlers
 		const walrusDropzone = document.getElementById('walrus-dropzone');
@@ -13387,15 +13361,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 			}
 		}
 
-		// Initialize privacy features on page load
-		setTimeout(() => {
-			checkVortexStatus();
-			loadVortexPools();
-		}, 300);
-
-		// Pool refresh button
-		document.getElementById('pools-refresh-btn')?.addEventListener('click', loadVortexPools);
-	</script>
+		</script>
 
 	<style>${generateMessagingChatCss()}</style>
 	<div id="messaging-chat-root"></div>
@@ -13545,6 +13511,7 @@ export function generateEmbedProfilePage(
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
+	${generateExtensionNoiseFilter()}
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>${escapeHtml(fullName)}</title>

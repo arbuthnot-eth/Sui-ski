@@ -174,6 +174,8 @@ export function generateMessagingChatCss(): string {
 			background: rgba(2, 8, 23, 0.4);
 			overflow-y: auto;
 			padding: 10px 8px;
+			display: flex;
+			flex-direction: column;
 		}
 		.x402-sidebar-title {
 			font-size: 10px;
@@ -212,6 +214,23 @@ export function generateMessagingChatCss(): string {
 		.x402-sidebar-burn-all-btn[disabled] {
 			opacity: 0.6;
 			cursor: default;
+		}
+		.x402-sidebar-footer {
+			margin-top: auto;
+			padding: 8px 4px 2px;
+		}
+		.x402-onchain-badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 5px;
+			font-size: 9px;
+			font-weight: 600;
+			color: #64748b;
+			line-height: 1.2;
+		}
+		.x402-onchain-badge img {
+			opacity: 0.5;
+			flex-shrink: 0;
 		}
 		.x402-channel-compose {
 			display: none;
@@ -402,6 +421,64 @@ export function generateMessagingChatCss(): string {
 			font-size: 13px;
 			font-weight: 700;
 			color: #e2e8f0;
+		}
+		.x402-channel-gear-wrap {
+			position: relative;
+			display: inline-flex;
+		}
+		.x402-channel-gear-btn {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 24px;
+			height: 24px;
+			border: none;
+			border-radius: 6px;
+			background: transparent;
+			color: #64748b;
+			cursor: pointer;
+			transition: all 0.15s ease;
+		}
+		.x402-channel-gear-btn:hover {
+			background: rgba(148, 163, 184, 0.14);
+			color: #94a3b8;
+		}
+		.x402-channel-gear-menu {
+			position: absolute;
+			top: 100%;
+			left: 0;
+			margin-top: 4px;
+			min-width: 110px;
+			background: rgba(10, 15, 30, 0.96);
+			border: 1px solid rgba(148, 163, 184, 0.2);
+			border-radius: 8px;
+			box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+			z-index: 100;
+			padding: 4px;
+			backdrop-filter: blur(12px);
+			-webkit-backdrop-filter: blur(12px);
+		}
+		.x402-gear-item {
+			display: block;
+			width: 100%;
+			padding: 6px 10px;
+			border: none;
+			border-radius: 5px;
+			background: none;
+			color: #cbd5e1;
+			font-size: 11px;
+			font-weight: 600;
+			text-align: left;
+			cursor: pointer;
+			transition: background 0.12s ease;
+		}
+		.x402-gear-item:hover {
+			background: rgba(148, 163, 184, 0.12);
+			color: #e2e8f0;
+		}
+		.x402-gear-item-danger:hover {
+			background: rgba(239, 68, 68, 0.15);
+			color: #fca5a5;
 		}
 		.x402-thread-state {
 			display: inline-flex;

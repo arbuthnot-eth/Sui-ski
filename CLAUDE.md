@@ -2,6 +2,18 @@
 
 Instructions for AI assistants working on this codebase.
 
+## The Garbage Goobler
+
+You are a garbage goobler. You love to eat dead code and squash bugs. Your preference is to remove unused code, but you are incredibly cautious because if you eat functionality or code that is actually used, YOU DIE.
+
+**Garbage Goobler Rules:**
+1. Always verify code is unused before removing (check imports, dynamic imports, type usage)
+2. When in doubt, leave it - death awaits the careless goobler
+3. Run `npx ts-prune --project tsconfig.json` to find potential dead exports
+4. Check for dynamic imports with `grep -r "import\(" src/`
+5. Type-only exports are safe to remove if the type is never imported
+6. After removing code, run `npx wrangler deploy` to verify bundle still works
+
 ## Progress Notes
 
 ### 2026-02-14
@@ -41,24 +53,51 @@ Instructions for AI assistants working on this codebase.
 
 ```
 src/
-├── index.ts              # Worker entry point, request routing by subdomain type
-├── types.ts              # Shared TypeScript types (Env, ParsedSubdomain, etc.)
+├── index.ts                 # Worker entry point, Hono router
+├── types.ts                 # Shared TypeScript types (Env, SuiNSRecord, etc.)
 ├── handlers/
-│   ├── landing.ts        # Root domain handler (sui.ski), API endpoints
-│   ├── profile.ts        # SuiNS profile page with grace period support
-│   ├── vortex.ts         # Vortex privacy protocol API and UI
-│   ├── mvr-management.ts # MVR package management API endpoints
-│   └── mvr-ui.ts         # MVR package management web UI
+│   ├── landing.ts           # Root domain handler, /api/* routes
+│   ├── profile.ts           # SuiNS profile pages (14KB CSS-in-JS)
+│   ├── profile.css.ts       # Profile page CSS generation
+│   ├── app.ts               # Messaging/chat WebSocket and REST APIs
+│   ├── dashboard.ts         # My Names dashboard at my.sui.ski
+│   ├── mcp.ts               # MCP server for AI tools (uses zod)
+│   ├── register2.ts         # Domain registration transaction builder
+│   ├── subnamecap.ts        # Subdomain capability management
+│   ├── subnamecap-ui.ts     # Subnamecap web UI
+│   ├── vault.ts             # Grace vault operations
+│   ├── x402-chat.ts         # x402 chat API routes
+│   ├── x402-register.ts     # x402-paid registration routes
+│   └── ski.ts, ski-sign.ts  # Sui Key-In pages
 ├── resolvers/
-│   ├── suins.ts          # SuiNS name resolution using @mysten/suins SDK
-│   ├── mvr.ts            # Move Registry package lookup via on-chain registry
-│   ├── content.ts        # IPFS gateway fallback + Walrus blob fetching
-│   └── rpc.ts            # JSON-RPC proxy with method allowlist + rate limiting
-└── utils/
-    ├── subdomain.ts      # Subdomain parsing logic (pattern matching)
-    ├── cache.ts          # KV-backed caching utilities
-    ├── response.ts       # HTTP response helpers (JSON, HTML, CORS)
-    └── mvr-transactions.ts # MVR transaction builders for offline signing
+│   ├── suins.ts             # SuiNS resolution (gRPC-Web + JSON-RPC fallback)
+│   ├── mvr.ts               # Move Registry package lookup
+│   ├── content.ts           # IPFS gateway + Walrus blob fetching
+│   └── rpc.ts               # JSON-RPC proxy (read-only methods only)
+├── utils/
+│   ├── subdomain.ts         # Subdomain parsing logic
+│   ├── cache.ts             # KV-backed caching utilities
+│   ├── response.ts          # HTTP response helpers
+│   ├── swap-transactions.ts # DeepBook swap + SuiNS registration (1200 lines)
+│   ├── ns-price.ts          # NS token pricing via DeepBook pools
+│   ├── pricing.ts           # SuiNS registration pricing calculator
+│   ├── wallet-*.ts          # Wallet connection UI/JS generation
+│   ├── x402-*.ts            # x402 payment protocol utilities
+│   └── mmr.ts               # Merkle Mountain Range (for authenticated events)
+├── durable-objects/
+│   └── wallet-session.ts    # WalletSession Durable Object
+├── workers/
+│   └── grace-period-monitor.ts # Scheduled grace period monitor (UNUSED)
+└── client/
+    └── wallet-session.ts    # Client-side wallet session helper
+
+scripts/              # NOT bundled in worker
+├── extract-suins-object.ts
+├── setup-ika-dwallet.ts
+└── ...
+
+proxy/                # Separate worker for name lookups
+workers/x402-multichain/  # Separate worker for multi-chain x402
 ```
 
 ---
@@ -476,9 +515,18 @@ Use `env.dev` for testnet development.
 | `@mysten/sui`        | Sui TypeScript SDK         |
 | `@mysten/suins`      | SuiNS client               |
 | `@mysten/walrus`     | Walrus blob storage client |
+| `@mysten/messaging`  | Sui Stack Messaging SDK    |
 | `wrangler`           | Cloudflare Workers CLI     |
 
-**Note:** The Vortex SDK (`@interest-protocol/vortex-sdk`) is NOT imported in the worker due to its 9MB size exceeding Cloudflare's 3MB limit. The gateway proxies Vortex API requests; the SDK should be loaded client-side from CDN.
+### Local SDK: Sui Stack Messaging
+
+**Path:** `/home/brandon/Dev/Contributor/sui-stack-messaging-sdk`
+
+Local fork of `@mysten/messaging` for customization and mainnet support:
+- Updated to `@mysten/sui@^2.4.0`
+- Built at `packages/messaging/dist/`
+
+**Architecture:** Client-side only. Server serves static assets + config, all messaging operations go direct to Sui RPC + Walrus.
 
 ---
 
@@ -766,33 +814,6 @@ See `docs/SUI_TRANSACTION_BUILDING.md` for comprehensive documentation.
 
 ---
 
-## Vortex Privacy Protocol
-
-The gateway integrates with [Vortex](https://github.com/interest-protocol/vortex), a privacy protocol for confidential transactions on Sui using zero-knowledge proofs.
-
-**Architecture:** Server-side proxies API requests (no SDK import). Client-side loads SDK from CDN for ZK proof generation.
-
-**API Endpoints** (`/api/vortex/*`):
-- `GET /api/vortex/info` - Protocol overview (local)
-- `GET /api/vortex/health` - Service health check
-- `GET /api/vortex/pools` - List privacy pools
-- `GET /api/vortex/pools/{coinType}` - Pool details
-- `GET /api/vortex/relayer` - Relayer information
-- `GET /api/vortex/commitments?coinType=...&index=0` - Get commitments
-- `POST /api/vortex/merkle-path` - Merkle path for proof generation
-- `GET /api/vortex/accounts?hashedSecret=...` - Accounts by hashed secret
-
-**Client-Side SDK:**
-```html
-<script src="https://unpkg.com/@interest-protocol/vortex-sdk"></script>
-<script>
-  const { VortexAPI, Vortex } = window.VortexSDK;
-  const api = new VortexAPI({ apiUrl: '/api/vortex' });
-</script>
-```
-
----
-
 ## Seal Decentralized Secrets Management
 
 [Seal](https://github.com/MystenLabs/seal) is a decentralized secrets management (DSM) service for encrypting sensitive data stored on Walrus or other on/off-chain storage, with access controlled by onchain policies on Sui.
@@ -993,7 +1014,7 @@ Required DNS records:
 For a comprehensive visual reference of the complete Sui ecosystem architecture, see `docs/SUI_STACK_SYSTEM_DIAGRAM.md`. This includes:
 
 - High-level architecture diagrams
-- Component deep dives (Sui Core, SuiNS, MVR, Walrus, Vortex, Seal, Nautilus)
+- Component deep dives (Sui Core, SuiNS, MVR, Walrus, Seal, Nautilus)
 - Data flow diagrams (transaction lifecycle, content resolution)
 - Integration patterns for full-stack dApps
 - Network topology and SDK reference

@@ -4,6 +4,20 @@ interface WalletKitConfig {
 	autoConnect?: boolean
 }
 
+export function generateExtensionNoiseFilter(): string {
+	return `<script>(function(){
+var __noisePatterns=['cannot redefine property: ethereum','backpack couldn\\'t override window.ethereum','couldn\\'t override window.ethereum','env value doesn\\'t meet tag requirements','no storage available for session','peanut sdk','thanks for using the peanut'];
+function __isNoise(v){var m=String(v||'').toLowerCase();if(!m)return false;for(var i=0;i<__noisePatterns.length;i++)if(m.indexOf(__noisePatterns[i])!==-1)return true;return false;}
+function __isInjectorNoise(msg,fn){var m=String(msg||'').toLowerCase();var f=String(fn||'').toLowerCase();if(f.indexOf('evmAsk.js'.toLowerCase())!==-1||f.indexOf('injected.js')!==-1)return true;return __isNoise(m);}
+window.addEventListener('error',function(e){var msg=e&&e.message?String(e.message):'';var fn=e&&e.filename?String(e.filename):'';var em=e&&e.error&&e.error.message?String(e.error.message):'';if(!__isInjectorNoise(msg,fn)&&!__isNoise(em))return;try{e.preventDefault();e.stopImmediatePropagation();}catch(_){}return false;},true);
+window.addEventListener('unhandledrejection',function(e){var r=e&&e.reason?e.reason:'';var m=typeof r==='string'?r:(r&&r.message?r.message:'');if(!__isNoise(m))return;try{e.preventDefault();e.stopImmediatePropagation();}catch(_){}return false;},true);
+var __ce=console.error,__cw=console.warn,__cl=console.log;
+if(typeof __ce==='function')console.error=function(){for(var i=0;i<arguments.length;i++)if(__isNoise(arguments[i]))return;return __ce.apply(console,arguments);};
+if(typeof __cw==='function')console.warn=function(){for(var i=0;i<arguments.length;i++)if(__isNoise(arguments[i]))return;return __cw.apply(console,arguments);};
+if(typeof __cl==='function')console.log=function(){for(var i=0;i<arguments.length;i++)if(__isNoise(arguments[i]))return;return __cl.apply(console,arguments);};
+})();</script>`
+}
+
 const PHANTOM_ICON =
 	'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4Ij48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjNTM0QkI1Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNTUxQkY5Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjEyOCIgaGVpZ2h0PSIxMjgiIGZpbGw9InVybCgjYSkiIHJ4PSIyNCIvPjxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0xMTAuNCw2NC4xYy0uMy0xNS44LTEyLjQtMjguMi0yNy4zLTI4LjVIMjcuNmMtMy4yLDAtNS44LDIuNi01LjgsNS44djg1LjRjMCwxLjQuNCwyLjguNiw0LjIuMi40LjQsLjguNSwxLjNsMCwwYy4xLjMuMi43LjQsMS4xLjIuNS41LDEsLjgsMS41LjMuNi43LDEuMSwxLjEsMS43bDAsMGMuNS43LDEuMSwxLjMsMS43LDEuOWwwLDBjLjcuNywxLjUsMS4zLDIuMywxLjhsLjEuMWMuOC41LDEuNiwuOSwyLjUsMS4yLjMuMS42LjIuOS4zaDBoMC4xYy42LjIsMS4yLjMsMS44LjRoMGMuMSwwLC4yLDAsLjMsMCwuNS4xLDEuMS4xLDEuNi4xaDYxLjljMy4yLDAsNS44LTIuNiw1LjgtNS44VjY0LjFoMFoiLz48L3N2Zz4='
 
@@ -31,6 +45,11 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
           normalized.indexOf('cannot redefine property: ethereum') !== -1
           || normalized.indexOf('backpack couldn\\'t override window.ethereum') !== -1
           || normalized.indexOf('couldn\\'t override window.ethereum') !== -1
+          || normalized.indexOf('redefine property') !== -1 && normalized.indexOf('ethereum') !== -1
+          || normalized.indexOf('env value doesn\\'t meet tag requirements') !== -1
+          || normalized.indexOf('no storage available for session') !== -1
+          || normalized.indexOf('peanut sdk') !== -1
+          || normalized.indexOf('thanks for using the peanut') !== -1
         );
       }
 
@@ -43,7 +62,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
             var message = event && event.message ? String(event.message) : '';
             var filename = event && event.filename ? String(event.filename).toLowerCase() : '';
             var errorMessage = event && event.error && event.error.message ? String(event.error.message) : '';
-            var fromKnownInjector = filename.indexOf('evmask.js') !== -1 || filename.indexOf('injected.js') !== -1;
+            var fromKnownInjector = filename.indexOf('evmAsk.js'.toLowerCase()) !== -1 || filename.indexOf('injected.js') !== -1;
             if (!fromKnownInjector && !__wkIsIgnorableExtensionNoiseMessage(message) && !__wkIsIgnorableExtensionNoiseMessage(errorMessage)) {
               return;
             }
@@ -90,6 +109,17 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
                   }
                 }
                 return __wkConsoleWarn.apply(console, arguments);
+              };
+            }
+            var __wkConsoleLog = console.log;
+            if (typeof __wkConsoleLog === 'function') {
+              console.log = function() {
+                if (arguments.length > 0) {
+                  for (var i = 0; i < arguments.length; i++) {
+                    if (__wkIsIgnorableExtensionNoiseMessage(arguments[i])) return;
+                  }
+                }
+                return __wkConsoleLog.apply(console, arguments);
               };
             }
           }
@@ -329,7 +359,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         if (normalized.slice(-7) === ' wallet') {
           normalized = normalized.slice(0, -7).trim();
         }
-        return normalized.replace(/\s+/g, '');
+        return normalized.replace(/s+/g, '');
       }
 
       function __wkWalletNamesMatch(left, right) {
@@ -570,8 +600,8 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 
       async function __wkLoadPasskeySdk() {
         if (__wkPasskeySdk) return __wkPasskeySdk;
-        var passkeyModule = await import('https://esm.sh/@mysten/sui@2.2.0/keypairs/passkey?bundle');
-        var clientModule = await import('https://esm.sh/@mysten/sui@2.2.0/client?bundle');
+        var passkeyModule = await import('https://esm.sh/@mysten/sui@2.4.0/keypairs/passkey?bundle');
+        var clientModule = await import('https://esm.sh/@mysten/sui@2.4.0/client?bundle');
         var PasskeyKeypair = passkeyModule && passkeyModule.PasskeyKeypair;
         var BrowserPasskeyProvider = passkeyModule && passkeyModule.BrowserPasskeyProvider;
         var SuiClient = clientModule && (clientModule.SuiClient || clientModule.SuiJsonRpcClient);

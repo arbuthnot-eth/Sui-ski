@@ -26,10 +26,6 @@ interface LookupNameResponse {
 	record?: NameRecord
 }
 
-interface ReverseLookupNameResponse {
-	record?: NameRecord
-}
-
 // Read varint from buffer, return [value, bytesRead]
 function readVarint(data: Uint8Array, pos: number): [number, number] {
 	let result = 0
@@ -239,25 +235,6 @@ export async function lookupName(name: string, env: Env): Promise<SuiNSRecord | 
 			expirationTimestampMs: expirationMs,
 			records: record.data || {},
 		}
-	} catch {
-		return null
-	}
-}
-
-export async function reverseLookupName(address: string, env: Env): Promise<string | null> {
-	if (!env.SURFLUX_API_KEY) return null
-
-	const requestData = encodeString(1, address)
-
-	try {
-		const response = await grpcWebCall<ReverseLookupNameResponse>(
-			'sui.rpc.v2.NameService',
-			'ReverseLookupName',
-			requestData,
-			env.SURFLUX_API_KEY,
-		)
-
-		return response?.record?.name || null
 	} catch {
 		return null
 	}
