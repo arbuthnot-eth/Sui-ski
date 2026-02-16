@@ -9,7 +9,7 @@ export const SDK_VERSION = '2.4.0'
 export const MESSAGING_SDK_VERSION = '0.4.0'
 export const SEAL_SDK_VERSION = '1.0.1'
 
-export const CDN_TAG = 'mainnet-messaging-v3.2-2026-02-16'
+export const CDN_TAG = 'mainnet-messaging-v3.3-2026-02-16'
 export const CDN_REPO = 'arbuthnot-eth/sui-stack-messaging-sdk'
 export const CDN_MANIFEST_URL = `https://cdn.jsdelivr.net/gh/${CDN_REPO}@${CDN_TAG}/cdn/messaging-mainnet.json`
 export const CDN_SDK_URLS = {

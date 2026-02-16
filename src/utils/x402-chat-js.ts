@@ -17,7 +17,7 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 			var OFFICIAL_SUI_SDK_VERSION = '2.4.0';
 			var OFFICIAL_SEAL_SDK_VERSION = '1.0.1';
 			var OFFICIAL_MESSAGING_SDK_URLS = [
-				'https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.2-2026-02-16/cdn/messaging-browser.mjs',
+				'https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.3-2026-02-16/cdn/messaging-browser.mjs',
 			];
 			var OFFICIAL_SUI_CLIENT_URLS = [
 				'https://esm.sh/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/graphql',
