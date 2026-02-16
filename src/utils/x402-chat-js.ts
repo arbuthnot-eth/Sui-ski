@@ -17,7 +17,7 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 			var OFFICIAL_SUI_SDK_VERSION = '2.4.0';
 			var OFFICIAL_SEAL_SDK_VERSION = '1.0.1';
 			var OFFICIAL_MESSAGING_SDK_URLS = [
-				'https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3-2026-02-16/cdn/messaging-browser.mjs',
+				'https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.1-2026-02-16/cdn/messaging-browser.mjs',
 			];
 			var OFFICIAL_SUI_CLIENT_URLS = [
 				'https://esm.sh/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/graphql',
@@ -148,8 +148,69 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 			return !!(conn && conn.wallet);
 		}
 
+		function normalizeAddress(value) {
+			var raw = String(value || '').trim().toLowerCase();
+			if (!raw) return '';
+			if (raw.indexOf('0x') !== 0) raw = '0x' + raw;
+			var hex = raw.slice(2);
+			if (!hex || hex.length > 64 || /[^0-9a-f]/.test(hex)) return '';
+			hex = hex.replace(/^0+/, '');
+			if (!hex) return '';
+			return '0x' + hex.padStart(64, '0');
+		}
+
+		function resolveAccountAddress(account) {
+			if (!account) return '';
+			if (typeof account.address === 'string') {
+				var fromAddress = normalizeAddress(account.address);
+				if (fromAddress) return fromAddress;
+			}
+			if (account.address && typeof account.address.toString === 'function') {
+				var fromString = normalizeAddress(account.address.toString());
+				if (fromString) return fromString;
+			}
+			if (account.publicKey && typeof account.publicKey.toSuiAddress === 'function') {
+				try {
+					var fromKey = normalizeAddress(account.publicKey.toSuiAddress());
+					if (fromKey) return fromKey;
+				} catch (_e) {}
+			}
+			return '';
+		}
+
+		function getWalletAddressFromConnection(conn) {
+			if (!conn) return '';
+			var fromConn = normalizeAddress(conn.address);
+			if (fromConn) return fromConn;
+			var fromAccount = resolveAccountAddress(conn.account);
+			if (fromAccount) return fromAccount;
+			var walletAccounts = conn.wallet && Array.isArray(conn.wallet.accounts) ? conn.wallet.accounts : [];
+			for (var i = 0; i < walletAccounts.length; i++) {
+				var nextAddress = resolveAccountAddress(walletAccounts[i]);
+				if (nextAddress) return nextAddress;
+			}
+			return '';
+		}
+
+		function getWalletAccountByAddress(conn, address) {
+			if (!conn) return null;
+			var target = normalizeAddress(address);
+			var currentAccount = conn.account || null;
+			if (currentAccount) {
+				var currentAddress = resolveAccountAddress(currentAccount);
+				if (!target || currentAddress === target) return currentAccount;
+			}
+			var walletAccounts = conn.wallet && Array.isArray(conn.wallet.accounts) ? conn.wallet.accounts : [];
+			if (!walletAccounts.length) return null;
+			if (!target) return walletAccounts[0];
+			for (var i = 0; i < walletAccounts.length; i++) {
+				if (resolveAccountAddress(walletAccounts[i]) === target) return walletAccounts[i];
+			}
+			return null;
+		}
+
 		function canUseSessionSignBridge(conn) {
-			if (!conn || !conn.address) return false;
+			if (!conn || !getWalletAddressFromConnection(conn)) return false;
 			if (conn.status !== 'session') return false;
 			if (!isSubdomainSuiHost()) return false;
 			return true;
@@ -157,7 +218,8 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 
 		function getAddress() {
 			var conn = getWalletConnection();
-			if (conn && conn.address) return conn.address;
+			var address = getWalletAddressFromConnection(conn);
+			if (address) return address;
 			return null;
 		}
 
@@ -169,15 +231,13 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 			return null;
 		}
 
-		function normalizeAddress(value) {
-			return String(value || '').trim().toLowerCase();
-		}
-
 		function getSigningAddress() {
 			var conn = getWalletConnection();
-			if (!conn || !conn.address) return '';
+			if (!conn) return '';
+			var address = getWalletAddressFromConnection(conn);
+			if (!address) return '';
 			if (hasWalletSigner(conn) || canUseSessionSignBridge(conn)) {
-				return normalizeAddress(conn.address);
+				return address;
 			}
 			return '';
 		}
@@ -1151,33 +1211,29 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 			}
 
 			function createOfficialMessagingSigner(address) {
-				async function prepareWalletTransactionInput(input) {
+				var signerAddress = normalizeAddress(address);
+				if (!signerAddress) {
+					throw new Error('Wallet signer address is unavailable');
+				}
+
+				function prepareWalletTransactionInput(input) {
 					var transaction = input && (input.transaction || input.transactionBlock)
 						? (input.transaction || input.transactionBlock)
 						: input;
-					var client = input && input.client ? input.client : null;
 					if (!transaction) return transaction;
-					if (transaction && typeof transaction.build === 'function') {
-						if (client) {
-							try {
-								var builtWithClient = await transaction.build({ client: client });
-								if (builtWithClient) return builtWithClient;
-							} catch (_buildClientErr) {
-								console.warn('[messaging-signer] build({ client }) failed:', _buildClientErr && _buildClientErr.message);
-							}
+					if (transaction && signerAddress) {
+						if (typeof transaction.setSender === 'function') {
+							transaction.setSender(signerAddress);
+						} else if (typeof transaction.setSenderIfNotSet === 'function') {
+							transaction.setSenderIfNotSet(signerAddress);
 						}
-					}
-					if (transaction && typeof transaction.serialize === 'function') {
-						try {
-							return await transaction.serialize();
-						} catch (_serializeErr) {}
 					}
 					return transaction;
 				}
 
 					return {
 						toSuiAddress: function() {
-							return address;
+							return signerAddress;
 						},
 						getPublicKey: function() {
 							var connectedKey = null;
@@ -1187,7 +1243,12 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 								connectedKey = account && account.publicKey ? account.publicKey : null;
 							}
 							if (connectedKey && typeof connectedKey.toSuiAddress === 'function') {
-								return connectedKey;
+								try {
+									var connectedKeyAddress = normalizeAddress(connectedKey.toSuiAddress());
+									if (connectedKeyAddress && connectedKeyAddress === signerAddress) {
+										return connectedKey;
+									}
+								} catch (_e) {}
 							}
 							function getBytes() {
 								if (connectedKey && typeof connectedKey.toSuiBytes === 'function') {
@@ -1203,7 +1264,7 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 							}
 							return {
 								toSuiAddress: function() {
-									return address;
+									return signerAddress;
 								},
 								toSuiBytes: function() {
 									return getBytes();
@@ -1254,17 +1315,25 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 							}
 							return normalizeSignPersonalMessageResult(signed, messageBytes);
 						},
-					signTransaction: async function(input) {
-						if (typeof SuiWalletKit === 'undefined' || typeof SuiWalletKit.signTransaction !== 'function') {
-							throw new Error('Wallet signer is unavailable');
-						}
-						var transaction = await prepareWalletTransactionInput(input);
-						return await SuiWalletKit.signTransaction(transaction, { forceSignBridge: true });
-					},
-					signAndExecuteTransaction: async function(input) {
-						if (typeof SuiWalletKit === 'undefined' || typeof SuiWalletKit.signAndExecute !== 'function') {
-							throw new Error('Wallet signer is unavailable');
-						}
+						signTransaction: async function(input) {
+							if (typeof SuiWalletKit === 'undefined' || typeof SuiWalletKit.signTransaction !== 'function') {
+								throw new Error('Wallet signer is unavailable');
+							}
+							var transaction = await prepareWalletTransactionInput(input);
+							var signOptions = { forceSignBridge: true };
+							if (input && input.account) {
+								signOptions.account = input.account;
+							} else {
+								var walletAccount = getWalletAccountByAddress(getWalletConnection(), signerAddress);
+								if (walletAccount) signOptions.account = walletAccount;
+							}
+							if (input && input.chain) signOptions.chain = input.chain;
+							return await SuiWalletKit.signTransaction(transaction, signOptions);
+						},
+						signAndExecuteTransaction: async function(input) {
+							if (typeof SuiWalletKit === 'undefined' || typeof SuiWalletKit.signAndExecute !== 'function') {
+								throw new Error('Wallet signer is unavailable');
+							}
 						var transaction = await prepareWalletTransactionInput(input);
 						var options = input && input.options ? input.options : {};
 						var txOptions = {};
@@ -1276,15 +1345,20 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 						if (txOptions.showEffects == null) txOptions.showEffects = true;
 						if (txOptions.showObjectChanges == null) txOptions.showObjectChanges = true;
 						if (txOptions.showRawEffects == null) txOptions.showRawEffects = true;
-						var signOptions = {
-							txOptions: txOptions,
-						};
-						signOptions.forceSignBridge = isSubdomainSuiHost() || !!(input && input.forceSignBridge);
-						if (input && input.account) signOptions.account = input.account;
-						if (input && input.chain) signOptions.chain = input.chain;
-						var rawResult = await SuiWalletKit.signAndExecute(transaction, signOptions);
-						if (rawResult && rawResult.effects && typeof rawResult.effects !== 'object') {
-							rawResult.effects = undefined;
+							var signOptions = {
+								txOptions: txOptions,
+							};
+							signOptions.forceSignBridge = isSubdomainSuiHost() || !!(input && input.forceSignBridge);
+							if (input && input.account) {
+								signOptions.account = input.account;
+							} else {
+								var walletAccount = getWalletAccountByAddress(getWalletConnection(), signerAddress);
+								if (walletAccount) signOptions.account = walletAccount;
+							}
+							if (input && input.chain) signOptions.chain = input.chain;
+							var rawResult = await SuiWalletKit.signAndExecute(transaction, signOptions);
+							if (rawResult && rawResult.effects && typeof rawResult.effects !== 'object') {
+								rawResult.effects = undefined;
 						}
 						if (rawResult && rawResult.$kind) return rawResult;
 						var txResult = { digest: rawResult.digest, effects: rawResult.effects };
@@ -1309,13 +1383,18 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 						if (txOptions.showEffects == null) txOptions.showEffects = true;
 						if (txOptions.showObjectChanges == null) txOptions.showObjectChanges = true;
 						if (txOptions.showRawEffects == null) txOptions.showRawEffects = true;
-						var signOptions = {
-							txOptions: txOptions,
-						};
-						signOptions.forceSignBridge = isSubdomainSuiHost() || !!(input && input.forceSignBridge);
-						if (input && input.account) signOptions.account = input.account;
-						if (input && input.chain) signOptions.chain = input.chain;
-						var rawResult = await SuiWalletKit.signAndExecute(transaction, signOptions);
+							var signOptions = {
+								txOptions: txOptions,
+							};
+							signOptions.forceSignBridge = isSubdomainSuiHost() || !!(input && input.forceSignBridge);
+							if (input && input.account) {
+								signOptions.account = input.account;
+							} else {
+								var walletAccount = getWalletAccountByAddress(getWalletConnection(), signerAddress);
+								if (walletAccount) signOptions.account = walletAccount;
+							}
+							if (input && input.chain) signOptions.chain = input.chain;
+							var rawResult = await SuiWalletKit.signAndExecute(transaction, signOptions);
 						if (rawResult && rawResult.effects && typeof rawResult.effects !== 'object') {
 							rawResult.effects = undefined;
 						}
@@ -2768,7 +2847,9 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 					var item = sourceMessages[i] || {};
 					var senderAddress = normalizeAddress(item.sender || '');
 					var createdAt = Number(item.createdAtMs || Date.now());
-					var skiParsed = parseSkiMessagePayload(item.text || '');
+					var rawText = String(item.text || '');
+					if (rawText.indexOf('"x-sui-') !== -1 || rawText.indexOf('"sui-node/') !== -1) continue;
+					var skiParsed = parseSkiMessagePayload(rawText);
 					mapped.push({
 						id: state.channelId + ':' + String(i) + ':' + String(createdAt),
 						serverId: server.id,
@@ -3657,10 +3738,21 @@ export function generateMessagingChatJs(config: MessagingChatConfig): string {
 				await pollChannelMessages();
 			} catch (err) {
 				var errText = String(err && err.message ? err.message : 'Connection failed');
+				var metaIdx = errText.indexOf(', metadata:');
+				if (metaIdx > 0) errText = errText.slice(0, metaIdx);
+				var selfIdx = errText.indexOf(', self: "');
+				if (selfIdx > 0) {
+					var selfEnd = errText.indexOf('"', selfIdx + 9);
+					if (selfEnd > selfIdx) {
+						var selfMsg = errText.slice(selfIdx + 9, selfEnd);
+						errText = selfMsg;
+					}
+				}
+				console.error('[send] error:', err);
 				if (isLocalSendErrorMessage(errText)) {
 					addSystemMessage(errText);
 				} else {
-					addSystemMessage('Network error: ' + errText);
+					addSystemMessage('Send failed: ' + errText);
 				}
 			} finally {
 				isSending = false;

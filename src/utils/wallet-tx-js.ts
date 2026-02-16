@@ -106,15 +106,37 @@ export function generateWalletTxJs(): string {
     function __wkNormalizeAccountAddress(account) {
       if (!account) return '';
       var rawAddress = '';
-      if (typeof account.address === 'string') rawAddress = account.address.trim();
-      if (!rawAddress && account.address && typeof account.address.toString === 'function') {
-        rawAddress = String(account.address.toString()).trim();
+      if (typeof account === 'string') {
+        rawAddress = account.trim();
+      } else if (typeof account === 'object') {
+        if (typeof account.address === 'string') rawAddress = account.address.trim();
+        if (!rawAddress && account.address && typeof account.address.toString === 'function') {
+          rawAddress = String(account.address.toString()).trim();
+        }
+        if (!rawAddress && account.publicKey && typeof account.publicKey.toSuiAddress === 'function') {
+          try {
+            rawAddress = String(account.publicKey.toSuiAddress() || '').trim();
+          } catch (_e) {}
+        }
       }
       if (!rawAddress) return '';
-      if (/^[0-9a-fA-F]{2,}$/.test(rawAddress) && rawAddress.indexOf('0x') !== 0) {
-        return '0x' + rawAddress;
+      rawAddress = rawAddress.toLowerCase();
+      if (rawAddress.indexOf('0x') === 0) {
+        rawAddress = rawAddress.slice(2);
       }
-      return rawAddress;
+      if (!rawAddress || rawAddress.length > 64 || /[^0-9a-f]/.test(rawAddress)) return '';
+      rawAddress = rawAddress.replace(/^0+/, '');
+      if (!rawAddress) return '';
+      return '0x' + rawAddress.padStart(64, '0');
+    }
+
+    function __wkResolveConnectionAddress(conn, preferredAccount) {
+      var preferred = __wkNormalizeAccountAddress(preferredAccount);
+      if (preferred) return preferred;
+
+      var fromConnAccount = __wkNormalizeAccountAddress(conn && conn.account);
+      if (fromConnAccount) return fromConnAccount;
+      return '';
     }
 
     function __wkResolveWalletAccount(conn, preferredAccount) {
@@ -124,16 +146,15 @@ export function generateWalletTxJs(): string {
       try {
         walletAccounts = (wallet && Array.isArray(wallet.accounts)) ? wallet.accounts : [];
       } catch (_e) {}
-      if (!walletAccounts.length) return resolved;
-      if (!resolved) return walletAccounts[0];
       var targetAddress = __wkNormalizeAccountAddress(resolved);
-      if (!targetAddress) return walletAccounts[0];
+      if (!targetAddress) return null;
+      if (!walletAccounts.length) return resolved;
       for (var i = 0; i < walletAccounts.length; i++) {
         if (__wkNormalizeAccountAddress(walletAccounts[i]) === targetAddress) {
           return walletAccounts[i];
         }
       }
-      return walletAccounts[0];
+      return null;
     }
 
     function __wkEnsureAccountForSign(conn, account, chain) {
@@ -169,9 +190,7 @@ export function generateWalletTxJs(): string {
       }
 
       var fallbackAddress = __wkNormalizeAccountAddress(account);
-      if (!fallbackAddress && conn && typeof conn.address === 'string') {
-        fallbackAddress = conn.address.trim();
-      }
+      if (!fallbackAddress) fallbackAddress = __wkResolveConnectionAddress(conn);
       if (!fallbackAddress) return null;
       return {
         address: fallbackAddress,
@@ -387,6 +406,19 @@ export function generateWalletTxJs(): string {
       }
       var directBytes = __wkTryNormalizeBytes(extracted || txInput);
       if (directBytes) return __wkBytesToBase64(directBytes);
+      if (candidateTx && typeof candidateTx.serialize === 'function') {
+        try {
+          var serialized = await candidateTx.serialize();
+          var serializedBytes = __wkTryNormalizeBytes(serialized);
+          if (serializedBytes) return __wkBytesToBase64(serializedBytes);
+          if (typeof serialized === 'string') {
+            if (__wkLooksLikeBase64(serialized)) return serialized.trim();
+            var serializedHex = __wkTryHexToBytes(serialized);
+            if (serializedHex) return __wkBytesToBase64(serializedHex);
+            return serialized;
+          }
+        } catch (_serializeErr) {}
+      }
       if (candidateTx && typeof candidateTx.build === 'function') {
         try {
           var builtWithoutClient = await candidateTx.build();
@@ -410,19 +442,6 @@ export function generateWalletTxJs(): string {
             }
           } catch (_buildErr) {}
         }
-      }
-      if (candidateTx && typeof candidateTx.serialize === 'function') {
-        try {
-          var serialized = await candidateTx.serialize();
-          var serializedBytes = __wkTryNormalizeBytes(serialized);
-          if (serializedBytes) return __wkBytesToBase64(serializedBytes);
-          if (typeof serialized === 'string') {
-            if (__wkLooksLikeBase64(serialized)) return serialized.trim();
-            var serializedHex = __wkTryHexToBytes(serialized);
-            if (serializedHex) return __wkBytesToBase64(serializedHex);
-            return serialized;
-          }
-        } catch (_serializeErr) {}
       }
       if (candidateTx && typeof candidateTx.toJSON === 'function') {
         try {
@@ -631,7 +650,7 @@ export function generateWalletTxJs(): string {
         )
       );
       if (singleAttempt && phantom && isPhantomWallet) {
-        var singleSenderAddress = __wkNormalizeAccountAddress(account) || (conn && conn.address) || '';
+        var singleSenderAddress = __wkResolveConnectionAddress(conn, account);
         var singleNetworkCandidates = __wkNetworkCandidates(chain);
         if (preferTransactionBlock && typeof phantom.signAndExecuteTransactionBlock === 'function') {
           return await phantom.signAndExecuteTransactionBlock({
@@ -828,7 +847,7 @@ export function generateWalletTxJs(): string {
       if (phantom && isPhantomWallet) {
         try {
           var networkCandidates = __wkNetworkCandidates(chain);
-          var senderAddress = __wkNormalizeAccountAddress(account) || (conn && conn.address) || '';
+          var senderAddress = __wkResolveConnectionAddress(conn, account);
           return await __wkTryCalls([
             function() {
               if (typeof phantom.signAndExecuteTransactionBlock !== 'function') throw new Error('Unavailable');
@@ -990,7 +1009,7 @@ export function generateWalletTxJs(): string {
 	          var txOptions = (options && options.txOptions) || {};
 	          var sessionConn = SuiWalletKit.$connection.value || {};
 	          var sessionAccount = (options && options.account) || sessionConn.account;
-	          var expectedSender = __wkNormalizeAccountAddress(sessionAccount) || sessionConn.address || '';
+	          var expectedSender = __wkResolveConnectionAddress(sessionConn, sessionAccount);
             var preferredWalletName = __skiResolvePreferredWalletName();
 	          return await __skiPostAndWait(frame, b64, txOptions, expectedSender, preferredWalletName);
 	        } catch (err) {
@@ -1026,7 +1045,7 @@ export function generateWalletTxJs(): string {
           var frame = await __skiEnsureBridge();
           var conn = SuiWalletKit.$connection.value || {};
           var account = (options && options.account) || conn.account;
-          var expectedSender = __wkNormalizeAccountAddress(account) || conn.address || '';
+          var expectedSender = __wkResolveConnectionAddress(conn, account);
           var preferredWalletName = __skiResolvePreferredWalletName();
           var bytes = __wkNormalizeMessageBytes(message);
           if (!bytes.length) throw new Error('Missing message bytes for bridge signing');
@@ -1071,7 +1090,7 @@ export function generateWalletTxJs(): string {
 	          var b64 = await __skiSerializeTx(txInput);
 	          var conn = SuiWalletKit.$connection.value || {};
 	          var account = (options && options.account) || conn.account;
-	          var expectedSender = __wkNormalizeAccountAddress(account) || conn.address || '';
+	          var expectedSender = __wkResolveConnectionAddress(conn, account);
             var preferredWalletName = __skiResolvePreferredWalletName();
 	          return await __skiPostAndWait(frame, b64, {}, expectedSender, preferredWalletName);
 	        } catch (err) {
