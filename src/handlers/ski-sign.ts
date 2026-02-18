@@ -106,7 +106,13 @@ function __walletNamesMatch(left, right) {
 	var rightName = __normalizeWalletName(right);
 	if (!leftName || !rightName) return false;
 	if (leftName === rightName) return true;
-	return leftName.indexOf(rightName) !== -1 || rightName.indexOf(leftName) !== -1;
+	if (leftName.indexOf(rightName) !== -1 || rightName.indexOf(leftName) !== -1) return true;
+	var aliases = { 'slush': 'sui wallet', 'sui wallet': 'slush' };
+	var la = aliases[leftName];
+	if (la && (la === rightName || rightName.indexOf(la) !== -1)) return true;
+	var ra = aliases[rightName];
+	if (ra && (ra === leftName || leftName.indexOf(ra) !== -1)) return true;
+	return false;
 }
 
 function __readSessionWallet() {
