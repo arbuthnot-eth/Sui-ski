@@ -1033,7 +1033,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	      var __wkWindowWallets = [
 	        { check: function() { return window.phantom && window.phantom.sui; }, name: 'Phantom', icon: ${JSON.stringify(PHANTOM_ICON)} },
 	        { check: function() { return (window.backpack && (window.backpack.sui || window.backpack)) || null; }, name: 'Backpack', icon: 'https://backpack.app/favicon.ico' },
-	        { check: function() { return (window.slush && (window.slush.sui || window.slush.wallet || window.slush)) || null; }, name: 'Slush', icon: 'https://slush.app/favicon.ico' },
+	        { check: function() { var sui = window.sui; return (sui && !sui.isPhantom) ? sui : null; }, name: 'Slush', icon: 'https://slush.app/favicon.ico' },
 	        { check: function() { return (window.suiet && (window.suiet.sui || window.suiet.wallet || window.suiet)) || null; }, name: 'Suiet', icon: 'https://suiet.app/favicon.ico' },
 	        { check: function() { return window.martian && window.martian.sui; }, name: 'Martian', icon: 'https://martianwallet.xyz/favicon.ico' },
 	        { check: function() { return (window.ethos && (window.ethos.sui || window.ethos.wallet || window.ethos)) || null; }, name: 'Ethos', icon: 'https://ethoswallet.xyz/favicon.ico' },
