@@ -1,6 +1,6 @@
 /**
  * PWA App Handler
- * Serves the Signal-like communications app with chat, channels, news, and agents.
+ * SKI app — channels, agents, and settings.
  *
  * Routes:
  * /app           - Main dashboard
@@ -15,517 +15,19 @@
  * /app/settings  - User settings, IKA wallet config
  *
  * API Routes:
- * /api/app/*     - Messaging APIs
+ * /api/app/*     - Subscription/config APIs
  * /api/agents/*  - Agency registry APIs
  * /api/ika/*     - IKA dWallet APIs
  * /api/llm/*     - LLM completion proxy
  */
 
-import type {
-	ContentIntegrity,
-	Conversation,
-	Env,
-	MessageAuthentication,
-	MessageSendRequest,
-	MessageSendResponse,
-	SealEncryptedEnvelope,
-	SealPolicyType,
-	StoredMessage,
-	UserConversationStore,
-} from '../types'
+import type { Env } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
 import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
 
-const NONCE_EXPIRY_MS = 5 * 60 * 1000
-const MAX_MESSAGE_SIZE_BYTES = 1024 * 1024
-const NONCE_MAP_MAX_SIZE = 500
-
-const usedNonces = new Map<string, number>()
-
 const llmRateLimits = new Map<string, { count: number; resetAt: number }>()
-
-/**
- * Compute SHA-256 hash of data
- * Used for conversation IDs, content hashes, and message IDs
- */
-async function sha256(data: string): Promise<string> {
-	const encoder = new TextEncoder()
-	const dataBuffer = encoder.encode(data)
-	const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer)
-	const hashArray = new Uint8Array(hashBuffer)
-	let hex = ''
-	for (let i = 0; i < hashArray.length; i++) {
-		hex += hashArray[i].toString(16).padStart(2, '0')
-	}
-	return hex
-}
-
-/**
- * Compute a deterministic conversation ID from two addresses
- * Uses SHA-256 for cryptographic security
- */
-async function computeConversationId(addr1: string, addr2: string): Promise<string> {
-	const sorted = [addr1.toLowerCase(), addr2.toLowerCase()].sort()
-	const combined = sorted.join(':')
-	const hash = await sha256(combined)
-	return `conv_${hash.slice(0, 16)}`
-}
-
-/**
- * Generate a unique message ID from content hash, timestamp, and nonce
- */
-async function generateMessageId(
-	contentHash: string,
-	timestamp: number,
-	nonce: string,
-): Promise<string> {
-	const data = `${contentHash}:${timestamp}:${nonce}`
-	const hash = await sha256(data)
-	return `msg_${hash.slice(0, 24)}`
-}
-
-/**
- * Verify Ed25519 signature using Web Crypto API
- * Returns true if signature is valid, false otherwise
- */
-async function verifyEd25519Signature(
-	publicKeyHex: string,
-	signatureHex: string,
-	message: string,
-): Promise<boolean> {
-	try {
-		const publicKeyBytes = hexToBytes(publicKeyHex)
-		const signatureBytes = hexToBytes(signatureHex)
-		const messageBytes = new TextEncoder().encode(message)
-
-		const publicKey = await crypto.subtle.importKey(
-			'raw',
-			publicKeyBytes,
-			{ name: 'Ed25519' },
-			false,
-			['verify'],
-		)
-
-		return await crypto.subtle.verify('Ed25519', publicKey, signatureBytes, messageBytes)
-	} catch {
-		return false
-	}
-}
-
-/**
- * Verify Secp256k1 signature (used by some Sui wallets)
- * Note: Web Crypto doesn't natively support secp256k1, so we do basic validation
- * Full verification requires the @noble/secp256k1 library on client side
- */
-function verifySecp256k1SignatureFormat(publicKeyHex: string, signatureHex: string): boolean {
-	if (publicKeyHex.length !== 66 && publicKeyHex.length !== 130) {
-		return false
-	}
-	if (signatureHex.length !== 128 && signatureHex.length !== 130) {
-		return false
-	}
-	return true
-}
-
-/**
- * Verify message authentication
- * Validates signature matches the sender's public key and signed payload
- */
-async function verifyMessageAuth(
-	auth: MessageAuthentication,
-	sender: string,
-	recipient: string,
-	timestamp: number,
-	contentHash: string,
-	nonce: string,
-): Promise<{ valid: boolean; reason?: string }> {
-	const expectedPayload = await sha256(
-		`${sender}:${recipient}:${timestamp}:${contentHash}:${nonce}`,
-	)
-
-	if (auth.signedPayload !== expectedPayload) {
-		return { valid: false, reason: 'Signed payload mismatch' }
-	}
-
-	if (auth.scheme === 'ed25519') {
-		const isValid = await verifyEd25519Signature(auth.publicKey, auth.signature, auth.signedPayload)
-		if (!isValid) {
-			return { valid: false, reason: 'Ed25519 signature verification failed' }
-		}
-	} else if (auth.scheme === 'secp256k1' || auth.scheme === 'secp256r1') {
-		if (!verifySecp256k1SignatureFormat(auth.publicKey, auth.signature)) {
-			return { valid: false, reason: 'Invalid secp256k1 signature format' }
-		}
-	} else {
-		return { valid: false, reason: `Unsupported signature scheme: ${auth.scheme}` }
-	}
-
-	return { valid: true }
-}
-
-/**
- * Verify content integrity
- */
-async function verifyContentIntegrity(
-	integrity: ContentIntegrity,
-	envelopeSize: number,
-): Promise<{ valid: boolean; reason?: string }> {
-	if (integrity.algorithm !== 'sha256') {
-		return { valid: false, reason: 'Only sha256 algorithm supported' }
-	}
-
-	if (integrity.sizeBytes > MAX_MESSAGE_SIZE_BYTES) {
-		return { valid: false, reason: `Message too large: ${integrity.sizeBytes} bytes` }
-	}
-
-	if (envelopeSize > MAX_MESSAGE_SIZE_BYTES) {
-		return { valid: false, reason: 'Encrypted envelope too large' }
-	}
-
-	return { valid: true }
-}
-
-function isNonceUsed(nonce: string): boolean {
-	const expiry = usedNonces.get(nonce)
-	if (expiry === undefined) return false
-	if (Date.now() > expiry) {
-		usedNonces.delete(nonce)
-		return false
-	}
-	return true
-}
-
-function markNonceUsed(nonce: string): void {
-	if (usedNonces.size >= NONCE_MAP_MAX_SIZE) {
-		const now = Date.now()
-		for (const [key, exp] of usedNonces) {
-			if (now > exp) usedNonces.delete(key)
-		}
-		if (usedNonces.size >= NONCE_MAP_MAX_SIZE) {
-			const firstKey = usedNonces.keys().next().value
-			if (firstKey) usedNonces.delete(firstKey)
-		}
-	}
-	usedNonces.set(nonce, Date.now() + NONCE_EXPIRY_MS)
-}
-
-/**
- * Validate timestamp is within acceptable range
- */
-function isTimestampValid(timestamp: number): boolean {
-	const now = Date.now()
-	const fiveMinutesAgo = now - NONCE_EXPIRY_MS
-	const oneMinuteAhead = now + 60 * 1000
-	return timestamp >= fiveMinutesAgo && timestamp <= oneMinuteAhead
-}
-
-/**
- * Convert hex string to Uint8Array
- */
-function hexToBytes(hex: string): Uint8Array {
-	const normalized = hex.startsWith('0x') ? hex.slice(2) : hex
-	const bytes = new Uint8Array(normalized.length / 2)
-	for (let i = 0; i < bytes.length; i++) {
-		bytes[i] = Number.parseInt(normalized.slice(i * 2, i * 2 + 2), 16)
-	}
-	return bytes
-}
-
-/**
- * Validate Seal policy structure
- */
-function validateSealPolicy(envelope: SealEncryptedEnvelope): { valid: boolean; reason?: string } {
-	if (!envelope.ciphertext || typeof envelope.ciphertext !== 'string') {
-		return { valid: false, reason: 'Missing or invalid ciphertext' }
-	}
-
-	if (!envelope.identity || typeof envelope.identity !== 'string') {
-		return { valid: false, reason: 'Missing or invalid identity' }
-	}
-
-	if (!envelope.identity.includes('*')) {
-		return { valid: false, reason: 'Identity must be in format [packageId]*[policyId]' }
-	}
-
-	if (!envelope.policy || !envelope.policy.type) {
-		return { valid: false, reason: 'Missing policy information' }
-	}
-
-	const validPolicyTypes: SealPolicyType[] = [
-		'address',
-		'nft',
-		'allowlist',
-		'threshold',
-		'time_locked',
-		'subscription',
-	]
-	if (!validPolicyTypes.includes(envelope.policy.type)) {
-		return { valid: false, reason: `Invalid policy type: ${envelope.policy.type}` }
-	}
-
-	if (envelope.version < 1) {
-		return { valid: false, reason: 'Invalid envelope version' }
-	}
-
-	if (envelope.threshold < 1 || envelope.threshold > 10) {
-		return { valid: false, reason: 'Threshold must be between 1 and 10' }
-	}
-
-	return { valid: true }
-}
-
-/**
- * Strip .sui suffix from name if present
- */
-function stripSuiSuffix(name: string | null): string | null {
-	if (!name) return null
-	return name.replace(/\.sui$/i, '')
-}
-
-const CONV_STORE_TTL = 60 * 60 * 24 * 90
-
-async function getUserConvStore(env: Env, address: string): Promise<UserConversationStore> {
-	const key = `user_convs_${address}`
-	const data = await env.CACHE.get(key)
-	if (data) {
-		try {
-			return JSON.parse(data) as UserConversationStore
-		} catch {
-			// Fall through
-		}
-	}
-	return { conversations: [], totalUnread: 0, updatedAt: 0 }
-}
-
-async function saveUserConvStore(
-	env: Env,
-	address: string,
-	store: UserConversationStore,
-): Promise<void> {
-	const key = `user_convs_${address}`
-	await env.CACHE.put(key, JSON.stringify(store), { expirationTtl: CONV_STORE_TTL })
-}
-
-function upsertConversation(store: UserConversationStore, conv: Conversation): void {
-	const idx = store.conversations.findIndex((c) => c.id === conv.id)
-	if (idx >= 0) {
-		store.conversations[idx] = conv
-	} else {
-		store.conversations.push(conv)
-	}
-	store.updatedAt = Date.now()
-}
-
-function recomputeTotalUnread(store: UserConversationStore): void {
-	let total = 0
-	for (const c of store.conversations) total += c.unreadCount
-	store.totalUnread = total
-}
-
-async function updateConversationWithMessage(
-	env: Env,
-	sender: string,
-	senderName: string | null,
-	recipient: string,
-	recipientName: string | null,
-	messagePreview: string,
-	timestamp: number,
-): Promise<string> {
-	const conversationId = await computeConversationId(sender, recipient)
-
-	const cleanSenderName = stripSuiSuffix(senderName)
-	const cleanRecipientName = stripSuiSuffix(recipientName)
-
-	const [recipientStore, senderStore] = await Promise.all([
-		getUserConvStore(env, recipient),
-		getUserConvStore(env, sender),
-	])
-
-	const existingRecipient = recipientStore.conversations.find((c) => c.id === conversationId)
-	const existingSender = senderStore.conversations.find((c) => c.id === conversationId)
-
-	const baseConv: Conversation = existingRecipient ||
-		existingSender || {
-			id: conversationId,
-			participants: [sender, recipient],
-			participantNames: {
-				[sender]: cleanSenderName,
-				[recipient]: cleanRecipientName,
-			},
-			lastMessage: {
-				preview: '',
-				timestamp,
-				sender,
-				senderName: cleanSenderName,
-			},
-			unreadCount: 0,
-			createdAt: timestamp,
-			updatedAt: timestamp,
-		}
-
-	const recipientConv: Conversation = {
-		...baseConv,
-		lastMessage: {
-			preview: messagePreview.slice(0, 100),
-			timestamp,
-			sender,
-			senderName: cleanSenderName,
-		},
-		updatedAt: timestamp,
-		unreadCount: (existingRecipient?.unreadCount ?? 0) + 1,
-	}
-
-	const senderConv: Conversation = {
-		...baseConv,
-		lastMessage: {
-			preview: messagePreview.slice(0, 100),
-			timestamp,
-			sender,
-			senderName: cleanSenderName,
-		},
-		updatedAt: timestamp,
-		unreadCount: existingSender?.unreadCount ?? 0,
-	}
-
-	upsertConversation(recipientStore, recipientConv)
-	recomputeTotalUnread(recipientStore)
-
-	upsertConversation(senderStore, senderConv)
-	recomputeTotalUnread(senderStore)
-
-	await Promise.all([
-		saveUserConvStore(env, recipient, recipientStore),
-		saveUserConvStore(env, sender, senderStore),
-	])
-
-	return conversationId
-}
-
-const CONV_MSGS_TTL = 60 * 60 * 24 * 90
-
-async function getConversationMessages(env: Env, conversationId: string): Promise<StoredMessage[]> {
-	const key = `conv_msgs_${conversationId}`
-	const data = await env.CACHE.get(key)
-	if (!data) return []
-	try {
-		return JSON.parse(data) as StoredMessage[]
-	} catch {
-		return []
-	}
-}
-
-async function appendConversationMessage(
-	env: Env,
-	conversationId: string,
-	message: StoredMessage,
-): Promise<void> {
-	const key = `conv_msgs_${conversationId}`
-	const existing = await getConversationMessages(env, conversationId)
-	existing.push(message)
-	await env.CACHE.put(key, JSON.stringify(existing), { expirationTtl: CONV_MSGS_TTL })
-}
-
-async function migrateLegacyConversations(
-	env: Env,
-	address: string,
-): Promise<UserConversationStore> {
-	try {
-		const prefix = `conv_index_${address}_`
-		const keys = await env.CACHE.list({ prefix, limit: 50 })
-
-		const conversationIds = new Set<string>()
-		for (const key of keys.keys) {
-			const data = await env.CACHE.get(key.name)
-			if (data) {
-				try {
-					const parsed = JSON.parse(data) as { conversationId: string }
-					conversationIds.add(parsed.conversationId)
-				} catch {
-					// Skip
-				}
-			}
-		}
-
-		const conversations: Conversation[] = []
-		for (const convId of conversationIds) {
-			const convData = await env.CACHE.get(`conv_data_${convId}`)
-			if (convData) {
-				try {
-					conversations.push(JSON.parse(convData) as Conversation)
-				} catch {
-					// Skip
-				}
-			}
-		}
-
-		if (conversations.length === 0) {
-			return { conversations: [], totalUnread: 0, updatedAt: 0 }
-		}
-
-		const store: UserConversationStore = {
-			conversations,
-			totalUnread: 0,
-			updatedAt: Date.now(),
-		}
-		recomputeTotalUnread(store)
-		await saveUserConvStore(env, address, store)
-		return store
-	} catch {
-		return { conversations: [], totalUnread: 0, updatedAt: 0 }
-	}
-}
-
-async function migrateLegacyMessages(
-	env: Env,
-	conversationId: string,
-	conversation: Conversation,
-	address: string,
-): Promise<StoredMessage[]> {
-	try {
-		const otherParticipant =
-			conversation.participants.find((p) => p !== address) || conversation.participants[0]
-
-		const messages: StoredMessage[] = []
-		const [inboxKeys, sentKeys] = await Promise.all([
-			env.CACHE.list({ prefix: `msg_inbox_${address}_`, limit: 100 }),
-			env.CACHE.list({ prefix: `msg_inbox_${otherParticipant}_`, limit: 100 }),
-		])
-
-		const allKeys = [...inboxKeys.keys, ...sentKeys.keys]
-		const fetches = await Promise.all(allKeys.map((key) => env.CACHE.get(key.name)))
-
-		for (const data of fetches) {
-			if (!data) continue
-			try {
-				const msg = JSON.parse(data) as StoredMessage
-				const isRelevant =
-					msg.sender === otherParticipant ||
-					msg.recipient === otherParticipant ||
-					msg.sender === address ||
-					msg.recipient === address
-				if (isRelevant) messages.push(msg)
-			} catch {
-				// Skip
-			}
-		}
-
-		const uniqueMessages = Array.from(
-			new Map(messages.map((m) => [m.id || `${m.sender}_${m.timestamp}`, m])).values(),
-		)
-
-		if (uniqueMessages.length > 0) {
-			await env.CACHE.put(`conv_msgs_${conversationId}`, JSON.stringify(uniqueMessages), {
-				expirationTtl: CONV_MSGS_TTL,
-			})
-		}
-
-		return uniqueMessages
-	} catch {
-		return []
-	}
-}
 
 export async function handleAppRequest(
 	request: Request,
@@ -622,240 +124,8 @@ async function handleAppApi(request: Request, env: Env, url: URL): Promise<Respo
 	return jsonResponse({ error: 'Unknown API endpoint' }, 404)
 }
 
-/**
- * Messaging API handlers
- */
 async function handleMessagingApi(request: Request, env: Env, url: URL): Promise<Response> {
 	const path = url.pathname.replace('/api/app/', '')
-
-	// GET /api/app/conversations - List user conversations
-	if (path === 'conversations' && request.method === 'GET') {
-		const address = url.searchParams.get('address')
-		if (!address) {
-			return jsonResponse({ error: 'Address required' }, 400)
-		}
-
-		try {
-			let store = await getUserConvStore(env, address)
-
-			if (store.conversations.length === 0) {
-				store = await migrateLegacyConversations(env, address)
-			}
-
-			const conversations = [...store.conversations]
-			conversations.sort((a, b) => b.updatedAt - a.updatedAt)
-
-			return jsonResponse({
-				address,
-				conversations,
-				totalUnread: store.totalUnread,
-				count: conversations.length,
-			})
-		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Unknown error'
-			return jsonResponse({ error: `Failed to fetch conversations: ${message}` }, 500)
-		}
-	}
-
-	// GET /api/app/conversations/:id - Get conversation detail with messages
-	const convDetailMatch = path.match(/^conversations\/([^/]+)$/)
-	if (convDetailMatch && request.method === 'GET') {
-		const conversationId = convDetailMatch[1]
-		const address = url.searchParams.get('address')
-
-		if (!address) {
-			return jsonResponse({ error: 'Address required' }, 400)
-		}
-
-		try {
-			const store = await getUserConvStore(env, address)
-			const conversation = store.conversations.find((c) => c.id === conversationId)
-
-			if (!conversation) {
-				return jsonResponse({ error: 'Conversation not found' }, 404)
-			}
-
-			if (!conversation.participants.includes(address)) {
-				return jsonResponse({ error: 'Not a participant' }, 403)
-			}
-
-			let messages = await getConversationMessages(env, conversationId)
-
-			if (messages.length === 0) {
-				messages = await migrateLegacyMessages(env, conversationId, conversation, address)
-			}
-
-			messages.sort((a, b) => a.timestamp - b.timestamp)
-
-			return jsonResponse({
-				conversation,
-				messages,
-				count: messages.length,
-			})
-		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Unknown error'
-			return jsonResponse({ error: `Failed to fetch conversation: ${message}` }, 500)
-		}
-	}
-
-	// POST /api/app/conversations/read - Mark conversation as read
-	if (path === 'conversations/read' && request.method === 'POST') {
-		try {
-			const body = (await request.json()) as {
-				conversationId?: string
-				address?: string
-			}
-
-			if (!body.conversationId || !body.address) {
-				return jsonResponse({ error: 'Conversation ID and address required' }, 400)
-			}
-
-			const store = await getUserConvStore(env, body.address)
-			const conversation = store.conversations.find((c) => c.id === body.conversationId)
-
-			if (!conversation) {
-				return jsonResponse({ error: 'Conversation not found' }, 404)
-			}
-
-			if (!conversation.participants.includes(body.address)) {
-				return jsonResponse({ error: 'Not a participant' }, 403)
-			}
-
-			const previousUnread = conversation.unreadCount
-			conversation.unreadCount = 0
-			recomputeTotalUnread(store)
-
-			await saveUserConvStore(env, body.address, store)
-
-			return jsonResponse({
-				success: true,
-				conversationId: body.conversationId,
-				markedRead: previousUnread,
-			})
-		} catch {
-			return jsonResponse({ error: 'Invalid request body' }, 400)
-		}
-	}
-
-	// GET /api/app/notifications/count - Get unread message count for badge
-	if (path === 'notifications/count' && request.method === 'GET') {
-		const address = url.searchParams.get('address')
-		if (!address) {
-			return jsonResponse({ error: 'Address required' }, 400)
-		}
-
-		try {
-			const store = await getUserConvStore(env, address)
-
-			return jsonResponse({
-				address,
-				unreadCount: store.totalUnread,
-				timestamp: Date.now(),
-			})
-		} catch {
-			return jsonResponse({ unreadCount: 0, timestamp: Date.now() })
-		}
-	}
-
-	// ===== MESSAGING SDK ENDPOINTS (Client-side Decentralized) =====
-	// All messaging operations happen client-side via @mysten/messaging SDK
-	// Server only provides config and static assets
-
-	// GET /api/app/messages/server - Return SDK config (channels resolved client-side)
-	if (path === 'messages/server' && request.method === 'GET') {
-		return jsonResponse({
-			server: {
-				id: 'decentralized',
-				name: 'sui-stack-messaging',
-				displayName: 'Sui Stack Messaging',
-				ownerAddress: null,
-				isModerator: false,
-				scope: 'decentralized',
-			},
-			channels: [],
-			moderation: { serverMuted: [], channelMuted: {} },
-			note: 'Channels are resolved client-side via @mysten/messaging SDK. Use /api/app/subscriptions/config for SDK bootstrap.',
-		})
-	}
-
-	// GET /api/app/messages/server/channels/:id/messages - Redirect to client-side SDK
-	const serverChannelMessagesMatch = path.match(/^messages\/server\/channels\/([^/]+)\/messages$/)
-	if (serverChannelMessagesMatch && request.method === 'GET') {
-		return jsonResponse({
-			error: 'Use client-side @mysten/messaging SDK',
-			code: 'CLIENT_SIDE_ONLY',
-			note: 'Messages are stored on Walrus and resolved on-chain. Load @mysten/messaging SDK client-side.',
-			sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
-		})
-	}
-
-	// POST /api/app/messages/server/channels/:id/messages - Redirect to client-side SDK
-	if (serverChannelMessagesMatch && request.method === 'POST') {
-		return jsonResponse({
-			error: 'Use client-side @mysten/messaging SDK',
-			code: 'CLIENT_SIDE_ONLY',
-			note: 'Messages are encrypted with Seal and stored on Walrus. Send client-side.',
-			sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
-		})
-	}
-
-	// All other Signal-style endpoints redirect to client-side SDK
-	const signalChannelMatch = path.match(/^messages\/server\/channels\/(.+)$/)
-	if (signalChannelMatch) {
-		return jsonResponse({
-			error: 'Use client-side @mysten/messaging SDK',
-			code: 'CLIENT_SIDE_ONLY',
-			note: 'Channel management happens on-chain. Use the SDK to create, join, and manage channels.',
-			sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
-		})
-	}
-
-	if (path === 'channels' && request.method === 'GET') {
-		const limit = Number.parseInt(url.searchParams.get('limit') || '20', 10)
-		const cursor = url.searchParams.get('cursor')
-		return jsonResponse({
-			channels: [],
-			pagination: { limit, cursor, hasMore: false },
-		})
-	}
-
-	// POST /api/app/channels/create - Create channel (returns tx builder)
-	if (path === 'channels/create' && request.method === 'POST') {
-		try {
-			const body = (await request.json()) as {
-				name?: string
-				isPublic?: boolean
-				tokenGate?: unknown
-			}
-			if (!body.name) {
-				return jsonResponse({ error: 'Channel name required' }, 400)
-			}
-			// Return transaction building instructions
-			return jsonResponse({
-				action: 'create_channel',
-				params: body,
-				note: 'Build and sign transaction client-side using @mysten/messaging SDK',
-				sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
-			})
-		} catch {
-			return jsonResponse({ error: 'Invalid request body' }, 400)
-		}
-	}
-
-	// POST /api/app/channels/:id/join - Join token-gated channel
-	const joinMatch = path.match(/^channels\/([^/]+)\/join$/)
-	if (joinMatch && request.method === 'POST') {
-		const channelId = joinMatch[1]
-		return jsonResponse({
-			action: 'join_channel',
-			channelId,
-			note: 'Token gate verification and join happens client-side',
-		})
-	}
-
-	// ===== PRIVATE SUBSCRIPTION ENDPOINTS (Seal + Walrus) =====
-	// Subscriptions are encrypted client-side with Seal and stored on Walrus
-	// Only the subscriber can decrypt their subscription list
 
 	// GET /api/app/subscriptions/config - Get Seal/Walrus config for subscriptions
 	if (path === 'subscriptions/config' && request.method === 'GET') {
@@ -896,6 +166,8 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				? '0xbcdf77f551f12be0fa61d1eb7bb2ff4169c1587aaa86fab84d95213cc75139f9'
 				: '0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d'
 		const messagingPackageConfig = { packageId: messagingPackageId }
+		const stormPackageId = String(env.STORM_PACKAGE_ID || '').trim() || null
+		const stormRegistryId = String(env.STORM_REGISTRY_ID || '').trim() || null
 
 		return jsonResponse({
 			seal: {
@@ -953,20 +225,30 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				replication: '4-5x',
 			},
 			sdk: {
-				messagingSdk: 'https://esm.sh/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.3-2026-02-16/packages/messaging',
+				messagingSdk:
+					'https://esm.sh/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.3-2026-02-16/packages/messaging',
 				sealSdk: 'https://cdn.jsdelivr.net/npm/@mysten/seal@1.0.1/+esm',
 				suiSdk: 'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/+esm',
 				messagingVersion: '0.4.0',
 				messagingPackageConfig,
 			},
+			storm: {
+				packageId: stormPackageId,
+				registryId: stormRegistryId,
+				module: 'registry',
+				setFunction: 'set_channel_for_nft',
+				clearFunction: 'clear_channel_for_nft',
+				keyType: '0x2::object::ID',
+				valueType: 'address',
+			},
 			security: {
 				signatureSchemes: ['ed25519', 'secp256k1', 'secp256r1'],
-				nonceExpiry: NONCE_EXPIRY_MS,
-				maxMessageSize: MAX_MESSAGE_SIZE_BYTES,
+				nonceExpiry: 300_000,
+				maxMessageSize: 1_048_576,
 				replayProtection: true,
 				integrityAlgorithm: 'sha256',
 			},
-			version: 2,
+			version: 3,
 		})
 	}
 
@@ -1036,578 +318,52 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 		}
 	}
 
-	// POST /api/app/subscriptions - Create subscription (client encrypts, we store)
-	if (path === 'subscriptions' && request.method === 'POST') {
-		try {
-			const body = (await request.json()) as {
-				targetName?: string
-				targetAddress?: string
-				notifications?: boolean
-				nickname?: string
-			}
+	// Join request routes: /api/app/messages/server/channels/:channel/join-requests[/:id[/approve]]
+	const joinMatch = path.match(
+		/^messages\/server\/channels\/([^/]+)\/join-requests(?:\/([^/]+))?(?:\/(approve))?$/,
+	)
+	if (joinMatch) {
+		const channelSlug = decodeURIComponent(joinMatch[1])
+		const requestId = joinMatch[2] ? decodeURIComponent(joinMatch[2]) : null
+		const approveAction = joinMatch[3] === 'approve'
+		const serverName = url.searchParams.get('name') || ''
+		const doStub = env.WALLET_SESSIONS.getByName('global')
 
-			if (!body.targetName) {
-				return jsonResponse({ error: 'Target SuiNS name required' }, 400)
-			}
-
-			// Return subscription data for client to encrypt with Seal
-			return jsonResponse({
-				action: 'subscribe',
-				subscription: {
-					targetName: body.targetName.replace('.sui', ''),
-					targetAddress: body.targetAddress || null,
-					notifications: body.notifications ?? false,
-					nickname: body.nickname,
-					subscribedAt: Date.now(),
-				},
-				encryption: {
-					method: 'seal',
-					note: 'Encrypt this subscription client-side with Seal before syncing to Walrus',
-					steps: [
-						'1. Load @mysten/seal SDK',
-						'2. Create address-based policy for your wallet',
-						'3. Encrypt subscription list with policy',
-						'4. POST encrypted blob to /api/app/subscriptions/sync',
-						'5. Store blobId locally for retrieval',
-					],
-				},
-			})
-		} catch {
-			return jsonResponse({ error: 'Invalid request body' }, 400)
+		if (request.method === 'GET' && !requestId) {
+			const requests = await doStub.listJoinRequests(serverName, channelSlug)
+			return jsonResponse({ requests })
 		}
-	}
 
-	// GET /api/app/subscriptions - Get subscription sync info
-	if (path === 'subscriptions' && request.method === 'GET') {
-		const address = url.searchParams.get('address')
-
-		return jsonResponse({
-			subscriptions: [],
-			address: address || null,
-			encryption: {
-				method: 'seal',
-				storage: 'walrus',
-				privacy: 'Only you can decrypt your subscriptions with your wallet',
-			},
-			note: 'Subscriptions are Seal-encrypted and stored on Walrus. Fetch your blob and decrypt client-side.',
-		})
-	}
-
-	// DELETE /api/app/subscriptions/:name - Remove subscription (client re-encrypts list)
-	const unsubMatch = path.match(/^subscriptions\/([^/]+)$/)
-	if (unsubMatch && request.method === 'DELETE') {
-		const targetName = unsubMatch[1]
-		return jsonResponse({
-			action: 'unsubscribe',
-			targetName,
-			note: 'Remove from local list, re-encrypt with Seal, and sync new blob to Walrus',
-		})
-	}
-
-	// GET /api/app/feed - Get aggregated feed from subscriptions
-	if (path === 'feed' && request.method === 'GET') {
-		const limit = Math.min(Number.parseInt(url.searchParams.get('limit') || '50', 10), 100)
-		const cursor = url.searchParams.get('cursor')
-		// Client provides subscription list, server fetches posts
-		return jsonResponse({
-			posts: [],
-			pagination: { limit, cursor, hasMore: false },
-			note: 'Send subscription list in request body to fetch aggregated feed',
-		})
-	}
-
-	// POST /api/app/feed - Get feed for specific subscriptions
-	if (path === 'feed' && request.method === 'POST') {
-		try {
-			const body = (await request.json()) as {
-				subscriptions?: string[] // Array of SuiNS names
-				limit?: number
-				cursor?: string
+		if (request.method === 'POST') {
+			if (requestId && approveAction) {
+				const ok = await doStub.approveJoinRequest(requestId)
+				if (!ok) return jsonResponse({ error: 'Request not found' }, 404)
+				return jsonResponse({ success: true })
 			}
 
-			if (!body.subscriptions?.length) {
-				return jsonResponse({
-					posts: [],
-					note: 'No subscriptions provided',
-				})
+			const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+			const requesterAddress = String(body.requesterAddress || '').trim()
+			const requesterName = String(body.requesterName || '').trim()
+
+			if (!requesterAddress) {
+				return jsonResponse({ error: 'Requester address is required' }, 400)
 			}
 
-			// Would fetch posts from each subscribed name
-			// For now, return placeholder
-			return jsonResponse({
-				posts: [],
-				subscriptions: body.subscriptions,
-				pagination: {
-					limit: Math.min(body.limit || 50, 100),
-					cursor: body.cursor,
-					hasMore: false,
-				},
-				note: 'Feed aggregation from subscribed names - coming with SDK integration',
-			})
-		} catch {
-			return jsonResponse({ error: 'Invalid request body' }, 400)
-		}
-	}
-
-	// POST /api/app/post - Create a post to your feed (for subscribers)
-	if (path === 'post' && request.method === 'POST') {
-		try {
-			const body = (await request.json()) as {
-				content?: string
-				attachments?: string[]
-				type?: string
-				encrypted?: boolean
-			}
-
-			if (!body.content) {
-				return jsonResponse({ error: 'Post content required' }, 400)
-			}
-
-			if (body.content.length > 5000) {
-				return jsonResponse({ error: 'Post too long (max 5000 characters)' }, 400)
-			}
-
-			return jsonResponse({
-				action: 'create_post',
-				post: {
-					content: body.content,
-					attachments: body.attachments || [],
-					type: body.type || 'text',
-					encrypted: body.encrypted || false,
-				},
-				note: 'Sign and submit transaction to publish post. Subscribers will see it in their feed.',
-			})
-		} catch {
-			return jsonResponse({ error: 'Invalid request body' }, 400)
-		}
-	}
-
-	// GET /api/app/posts/:name - Get posts from a specific SuiNS name
-	const postsMatch = path.match(/^posts\/([^/]+)$/)
-	if (postsMatch && request.method === 'GET') {
-		const suinsName = postsMatch[1]
-		const limit = Math.min(Number.parseInt(url.searchParams.get('limit') || '20', 10), 50)
-		const cursor = url.searchParams.get('cursor')
-
-		// Would fetch posts from this user's feed
-		return jsonResponse({
-			name: suinsName,
-			posts: [],
-			pagination: { limit, cursor, hasMore: false },
-			note: 'Posts from this user will appear here',
-		})
-	}
-
-	// ===== ENCRYPTED MESSAGE STORAGE (Seal + Walrus) =====
-	// Implements secure messaging per Seal whitepaper:
-	// - Identity-Based Encryption with onchain access control
-	// - Signature verification for message authentication
-	// - Replay protection via nonce tracking
-	// - Content integrity verification
-
-	// POST /api/app/messages/send - Send Seal-encrypted message with full verification
-	if (path === 'messages/send' && request.method === 'POST') {
-		try {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const body = (await request.json()) as any
-
-			// Handle multiple message formats for backward compatibility
-			const isNewFormat = body.envelope && body.auth && body.integrity
-			let envelope: SealEncryptedEnvelope
-			let auth: MessageAuthentication
-			let integrity: ContentIntegrity
-			let sender: string
-			let senderName: string | null
-			let recipient: string
-			let recipientName: string | null
-			let timestamp: number
-			let nonce: string
-			let messageType: 'direct' | 'channel' | 'broadcast' = 'direct'
-
-			if (isNewFormat) {
-				const newBody = body as MessageSendRequest
-				if (!newBody.envelope || !newBody.sender || !newBody.recipient) {
-					return jsonResponse({ error: 'Envelope, sender, and recipient required' }, 400)
-				}
-				if (!newBody.auth || !newBody.integrity) {
-					return jsonResponse({ error: 'Authentication and integrity data required' }, 400)
-				}
-				envelope = newBody.envelope
-				auth = newBody.auth
-				integrity = newBody.integrity
-				sender = newBody.sender
-				senderName = newBody.senderName || null
-				recipient = newBody.recipient
-				recipientName = newBody.recipientName || null
-				timestamp = newBody.timestamp
-				nonce = newBody.nonce
-				messageType = newBody.messageType || 'direct'
-			} else {
-				// Legacy format - support multiple field names for compatibility
-				const encryptedMessage = body.encryptedMessage || body.encrypted || body.message
-				const senderAddr = body.sender || body.senderAddress || body.from
-				const recipientAddr = body.recipient || body.recipientAddress || body.to
-				const sig = body.signature || body.sig
-				const sigPayload = body.signaturePayload || body.payload || body.message
-
-				// Validate required fields with better error messages
-				if (!encryptedMessage) {
-					return jsonResponse(
-						{
-							error: 'Encrypted message required',
-							hint: 'Expected field: encryptedMessage (or encrypted/message)',
-							received: Object.keys(body),
-						},
-						400,
-					)
-				}
-
-				if (!senderAddr || typeof senderAddr !== 'string' || senderAddr.trim().length === 0) {
-					return jsonResponse(
-						{
-							error: 'Valid sender address required',
-							hint: 'Expected field: sender (or senderAddress/from) with non-empty string value',
-							received: Object.keys(body),
-							debug: {
-								sender: senderAddr,
-								senderType: typeof senderAddr,
-							},
-						},
-						400,
-					)
-				}
-
-				if (
-					!recipientAddr ||
-					typeof recipientAddr !== 'string' ||
-					recipientAddr.trim().length === 0
-				) {
-					return jsonResponse(
-						{
-							error: 'Valid recipient address required',
-							hint: 'Expected field: recipient (or recipientAddress/to) with non-empty string value',
-							received: Object.keys(body),
-							debug: {
-								recipient: recipientAddr,
-								recipientType: typeof recipientAddr,
-							},
-						},
-						400,
-					)
-				}
-
-				// Signature is optional for legacy format to maintain compatibility
-				const hasSignature = sig && sigPayload
-
-				// Handle various encrypted message formats
-				let ciphertext: string
-				let sealPolicyAddress: string
-				let version = 1
-
-				if (typeof encryptedMessage === 'string') {
-					ciphertext = encryptedMessage
-					sealPolicyAddress = recipientAddr
-				} else if (encryptedMessage.encrypted) {
-					ciphertext = encryptedMessage.encrypted
-					sealPolicyAddress = encryptedMessage.sealPolicy?.address || recipientAddr
-					version = encryptedMessage.version || 1
-				} else if (encryptedMessage.ciphertext) {
-					ciphertext = encryptedMessage.ciphertext
-					sealPolicyAddress = encryptedMessage.policy?.address || recipientAddr
-					version = encryptedMessage.version || 1
-				} else {
-					ciphertext = JSON.stringify(encryptedMessage)
-					sealPolicyAddress = recipientAddr
-				}
-
-				const sealPackageId =
-					env.SEAL_PACKAGE_ID ||
-					'0x0000000000000000000000000000000000000000000000000000000000000000'
-				envelope = {
-					ciphertext,
-					identity: `${sealPackageId}*${sealPolicyAddress}`,
-					policy: {
-						type: 'address' as SealPolicyType,
-						packageId: sealPackageId,
-						policyId: sealPolicyAddress,
-						params: { type: 'address', address: sealPolicyAddress },
-					},
-					version,
-					threshold: 2,
-				}
-				auth = {
-					signature: hasSignature ? sig : '',
-					publicKey: '',
-					signedPayload: hasSignature ? sigPayload : '',
-					scheme: 'ed25519',
-				}
-				sender = senderAddr
-				senderName = body.senderName || null
-				recipient = recipientAddr
-				recipientName = body.recipientName || null
-				timestamp = body.timestamp || Date.now()
-				nonce = body.nonce || crypto.randomUUID()
-				integrity = {
-					contentHash: body.contentHash || '',
-					algorithm: 'sha256',
-					sizeBytes: ciphertext.length,
-				}
-			}
-
-			// Validate Seal policy structure
-			const policyValidation = validateSealPolicy(envelope)
-			if (!policyValidation.valid) {
-				return jsonResponse({ error: `Invalid Seal policy: ${policyValidation.reason}` }, 400)
-			}
-
-			// Validate timestamp (prevent replay attacks with old messages)
-			if (!isTimestampValid(timestamp)) {
-				return jsonResponse({ error: 'Message timestamp out of acceptable range' }, 400)
-			}
-
-			// Check for replay attacks (nonce reuse)
-			if (isNonceUsed(nonce)) {
-				return jsonResponse({ error: 'Nonce already used (replay attack prevented)' }, 400)
-			}
-
-			// Verify content integrity
-			const integrityCheck = await verifyContentIntegrity(integrity, envelope.ciphertext.length)
-			if (!integrityCheck.valid) {
-				return jsonResponse({ error: `Integrity check failed: ${integrityCheck.reason}` }, 400)
-			}
-
-			// Verify message authentication (signature)
-			let signatureVerified = false
-			if (auth.publicKey && auth.publicKey.length > 0) {
-				const authCheck = await verifyMessageAuth(
-					auth,
-					sender,
-					recipient,
-					timestamp,
-					integrity.contentHash,
-					nonce,
-				)
-				if (!authCheck.valid) {
-					return jsonResponse({ error: `Authentication failed: ${authCheck.reason}` }, 400)
-				}
-				signatureVerified = true
-			}
-
-			// Mark nonce as used (after all validations pass)
-			markNonceUsed(nonce)
-
-			// Generate unique message ID
-			const messageId = await generateMessageId(integrity.contentHash, timestamp, nonce)
-
-			// Build secure message blob for storage
-			const secureMessageBlob = JSON.stringify({
-				id: messageId,
-				envelope,
-				sender,
-				senderName,
-				recipient,
-				recipientName,
-				timestamp,
-				nonce,
-				integrity,
-				auth: {
-					signature: auth.signature,
-					publicKey: auth.publicKey,
-					scheme: auth.scheme,
-				},
-				messageType,
-				storedAt: Date.now(),
-				version: 2,
-			})
-
-			// Store on Walrus
-			const walrusResponse = await storeOnWalrus(btoa(secureMessageBlob), env)
-
-			let blobId: string
-			let storage: 'walrus' | 'kv'
-
-			if (!walrusResponse.blobId) {
-				// Fallback to KV storage
-				const fallbackKey = `msg_blob_${messageId}`
-				await env.CACHE.put(fallbackKey, secureMessageBlob, { expirationTtl: 60 * 60 * 24 * 30 })
-				blobId = fallbackKey
-				storage = 'kv'
-			} else {
-				blobId = walrusResponse.blobId
-				storage = 'walrus'
-			}
-
-			// Update conversation and store message index
-			const conversationId = await updateConversationWithMessage(
-				env,
-				sender,
-				senderName,
-				recipient,
-				recipientName,
-				'[Encrypted message]',
-				timestamp,
+			const result = await doStub.createJoinRequest(
+				serverName,
+				channelSlug,
+				requesterAddress,
+				requesterName || undefined,
 			)
-
-			const storedMessage: StoredMessage = {
-				id: messageId,
-				blobId,
-				storage,
-				sender,
-				senderName,
-				recipient,
-				recipientName,
-				timestamp,
-				signed: true,
-				conversationId,
-				policyType: envelope.policy.type,
-				signatureVerified,
-				contentHash: integrity.contentHash,
+			if (result.duplicate) {
+				return jsonResponse({ duplicate: true, id: result.id })
 			}
-
-			await appendConversationMessage(env, conversationId, storedMessage)
-
-			const response: MessageSendResponse = {
-				success: true,
-				messageId,
-				blobId,
-				storage,
-				conversationId,
-				signatureVerified,
-				timestamp,
-			}
-
-			return jsonResponse(response)
-		} catch (err) {
-			console.error('Message send error:', err)
-			return jsonResponse({ error: 'Invalid request body or processing error' }, 400)
-		}
-	}
-
-	// POST /api/app/messages/store - Store Seal-encrypted message on Walrus (legacy)
-	if (path === 'messages/store' && request.method === 'POST') {
-		try {
-			const body = (await request.json()) as {
-				encryptedMessage?: {
-					encrypted: string
-					sealPolicy: { type: string; address: string }
-					version: number
-				}
-				sender?: string
-				recipient?: string
-			}
-
-			if (!body.encryptedMessage || !body.sender || !body.recipient) {
-				return jsonResponse({ error: 'Encrypted message, sender, and recipient required' }, 400)
-			}
-
-			// Store encrypted message on Walrus
-			const messageBlob = JSON.stringify({
-				...body.encryptedMessage,
-				sender: body.sender,
-				recipient: body.recipient,
-				storedAt: Date.now(),
-			})
-
-			const walrusResponse = await storeOnWalrus(btoa(messageBlob), env)
-
-			if (!walrusResponse.blobId) {
-				return jsonResponse({ error: 'Failed to store on Walrus' }, 500)
-			}
-
-			const now = Date.now()
-			const conversationId = await computeConversationId(body.sender, body.recipient)
-			const messageId = `msg_${now}`
-
-			const storedMsg: StoredMessage = {
-				id: messageId,
-				blobId: walrusResponse.blobId,
-				storage: 'walrus',
-				sender: body.sender,
-				senderName: null,
-				recipient: body.recipient,
-				recipientName: null,
-				timestamp: now,
-				signed: false,
-				conversationId,
-			}
-
-			await appendConversationMessage(env, conversationId, storedMsg)
-
-			return jsonResponse({
-				success: true,
-				messageId,
-				blobId: walrusResponse.blobId,
-				storage: 'walrus',
-				encryption: 'seal',
-				note: 'Message encrypted with Seal and stored on Walrus. Only recipient can decrypt.',
-			})
-		} catch {
-			return jsonResponse({ error: 'Invalid request body' }, 400)
-		}
-	}
-
-	// GET /api/app/messages/inbox - Get encrypted messages for an address (Seal-gated)
-	if (path === 'messages/inbox' && request.method === 'GET') {
-		const address = url.searchParams.get('address')
-
-		if (!address) {
-			return jsonResponse({ error: 'Address required' }, 400)
+			return jsonResponse({ success: true, id: result.id })
 		}
 
-		try {
-			const store = await getUserConvStore(env, address)
-			const allMessages: StoredMessage[] = []
-
-			const fetches = store.conversations.map((conv) => getConversationMessages(env, conv.id))
-			const results = await Promise.all(fetches)
-			for (const msgs of results) {
-				for (const msg of msgs) {
-					if (msg.recipient === address) {
-						allMessages.push(msg)
-					}
-				}
-			}
-
-			allMessages.sort((a, b) => b.timestamp - a.timestamp)
-
-			return jsonResponse({
-				address,
-				messages: allMessages,
-				count: allMessages.length,
-				encryption: {
-					method: 'seal',
-					note: 'Messages are Seal-encrypted. Decrypt client-side with your wallet.',
-				},
-			})
-		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Unknown error'
-			return jsonResponse({ error: `Failed to fetch inbox: ${message}` }, 500)
-		}
-	}
-
-	// GET /api/app/messages/blob/:blobId - Fetch encrypted message blob from Walrus
-	const msgBlobMatch = path.match(/^messages\/blob\/([^/]+)$/)
-	if (msgBlobMatch && request.method === 'GET') {
-		const blobId = msgBlobMatch[1]
-
-		try {
-			const aggregatorUrl =
-				env.WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space'
-			const response = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`)
-
-			if (!response.ok) {
-				return jsonResponse({ error: 'Message blob not found' }, 404)
-			}
-
-			const encryptedData = await response.text()
-
-			return jsonResponse({
-				blobId,
-				encryptedData,
-				note: 'Decrypt with Seal SDK using your wallet. Only recipient can decrypt.',
-			})
-		} catch {
-			return jsonResponse({ error: 'Failed to fetch message blob' }, 500)
+		if (request.method === 'DELETE' && requestId) {
+			await doStub.deleteJoinRequest(requestId)
+			return jsonResponse({ success: true })
 		}
 	}
 
@@ -1921,13 +677,13 @@ function generateAppShell(
 }
 
 function getPageTitle(path: string): string {
-	if (path === '/' || path === '') return 'Signal'
+	if (path === '/' || path === '') return 'SKI'
 	if (path.startsWith('/chat')) return 'Chat'
 	if (path.startsWith('/channels')) return 'Channels'
 	if (path.startsWith('/news')) return 'News'
 	if (path.startsWith('/agents')) return 'Agents'
 	if (path.startsWith('/settings')) return 'Settings'
-	return 'Signal'
+	return 'SKI'
 }
 
 function getAppStyles(): string {
@@ -2361,7 +1117,7 @@ function generateDashboard(env: Env): string {
 	return `
 		<div class="dashboard">
 			<div class="welcome-card">
-				<h1>Welcome to Signal</h1>
+				<h1>Welcome to SKI</h1>
 				<p>Secure, decentralized communications on Sui blockchain</p>
 				<div class="feature-grid">
 					<a href="/app/chat" class="feature-card">

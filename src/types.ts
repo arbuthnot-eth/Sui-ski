@@ -21,6 +21,8 @@ export interface Env {
 	SEAL_TESTNET_PACKAGE_ID?: string
 	SEAL_TESTNET_KEY_SERVERS?: string
 	SEAL_TESTNET_APPROVE_TARGET?: string
+	STORM_PACKAGE_ID?: string
+	STORM_REGISTRY_ID?: string
 	NATSAI_SEAL_API_KEY?: string
 	PROVIDER3_SEAL_API_KEY?: string
 	WALRUS_PUBLISHER_URL?: string
@@ -33,22 +35,10 @@ export interface Env {
 	COINBASE_X402_API_KEY?: string
 	COINGECKO_API_KEY?: string
 	SURFLUX_API_KEY?: string
-	SUBNAMECAP_SUINS_PACKAGE_ID?: string
-	SUBNAMECAP_SUBDOMAINS_PACKAGE_ID?: string
-	SUBNAMECAP_SUINS_OBJECT_ID?: string
-	JACKET_FEE_PACKAGE_ID?: string
-	JACKET_ALLOWLIST_PACKAGE_ID?: string
-	JACKET_RATE_LIMIT_PACKAGE_ID?: string
-	JACKET_FEE_OBJECT_ID?: string
-	JACKET_ALLOWLIST_OBJECT_ID?: string
-	JACKET_RATE_LIMIT_OBJECT_ID?: string
-	JACKET_SINGLE_USE_PACKAGE_ID?: string
 	DECAY_AUCTION_PACKAGE_ID?: string
 	BRAVE_SEARCH_API_KEY?: string
 	OPENROUTER_API_KEY?: string
 	INDEXER_API_KEY?: string
-	TRADEPORT_USER?: string
-	TRADEPORT_API_KEY?: string
 	SOL_SWAP_POOL_ID?: string
 	SOL_SWAP_DWALLET_ID?: string
 	SOL_SWAP_SOLANA_ADDRESS?: string
@@ -193,186 +183,30 @@ export interface MVRPackageInfo {
 	}
 }
 
-/**
- * Seal Policy Types
- * Based on Seal whitepaper: https://seal.mystenlabs.com
- *
- * Seal uses Identity-Based Encryption (IBE) with onchain access control.
- * The identity format is [PackageId]*[PolicyId] where the package defines
- * the seal_approve function that gates decryption access.
- */
-export type SealPolicyType =
-	| 'address' // Only specific address can decrypt
-	| 'nft' // Current NFT holder can decrypt
-	| 'allowlist' // Any address in allowlist can decrypt
-	| 'threshold' // t-of-n signers required
-	| 'time_locked' // Auto-unlocks at specified timestamp
-	| 'subscription' // Valid subscription pass required
+export type ThunderPage = 'profile' | 'landing' | 'register'
 
-/** Seal encryption policy */
-export interface SealPolicy {
-	type: SealPolicyType
-	/** Package ID containing seal_approve function */
-	packageId: string
-	/** Policy object ID on Sui (the identity suffix after *) */
-	policyId: string
-	/** Policy-specific parameters */
-	params: SealPolicyParams
-}
-
-/** Policy-specific parameters */
-export type SealPolicyParams =
-	| { type: 'address'; address: string }
-	| { type: 'nft'; nftType: string; objectId?: string }
-	| { type: 'allowlist'; listId: string }
-	| { type: 'threshold'; threshold: number; signers: string[] }
-	| { type: 'time_locked'; unlockTimestamp: number }
-	| { type: 'subscription'; subscriptionType: string }
-
-/** Encrypted message envelope following Seal protocol */
-export interface SealEncryptedEnvelope {
-	/** Seal-encrypted ciphertext (base64) */
-	ciphertext: string
-	/** IBE identity used for encryption: [packageId]*[policyId] */
-	identity: string
-	/** Policy details for client-side verification */
-	policy: SealPolicy
-	/** Encryption version for forward compatibility */
-	version: number
-	/** Threshold for key server quorum (typically 2) */
-	threshold: number
-}
-
-/** Message authentication data */
-export interface MessageAuthentication {
-	/** Ed25519 signature of the message hash */
-	signature: string
-	/** Public key that created the signature */
-	publicKey: string
-	/** Signed payload: hash(sender + recipient + timestamp + contentHash + nonce) */
-	signedPayload: string
-	/** Signature scheme used */
-	scheme: 'ed25519' | 'secp256k1' | 'secp256r1'
-}
-
-/** Content integrity verification */
-export interface ContentIntegrity {
-	/** SHA-256 hash of plaintext content before encryption */
-	contentHash: string
-	/** Hash algorithm used */
-	algorithm: 'sha256'
-	/** Content size in bytes (for validation) */
-	sizeBytes: number
-}
-
-/** Message stored in inbox (index entry) */
-export interface StoredMessage {
-	id: string
-	blobId: string
-	storage: 'walrus' | 'kv'
-	sender: string
-	senderName: string | null
-	recipient: string
-	recipientName: string | null
-	timestamp: number
-	signed: boolean
-	conversationId?: string
-	/** Seal policy type used for encryption */
-	policyType?: SealPolicyType
-	/** Whether signature was verified server-side */
-	signatureVerified?: boolean
-	/** Content integrity hash for verification */
-	contentHash?: string
-}
-
-/** Conversation between two participants */
-export interface Conversation {
-	id: string
-	participants: [string, string]
-	participantNames: Record<string, string | null>
-	lastMessage: {
-		preview: string
-		timestamp: number
-		sender: string
-		senderName: string | null
-	}
-	unreadCount: number
-	createdAt: number
-	updatedAt: number
-	/** Encryption policy for this conversation */
-	encryptionPolicy?: {
-		type: SealPolicyType
-		packageId: string
-	}
-}
-
-export interface UserConversationStore {
-	conversations: Conversation[]
-	totalUnread: number
-	updatedAt: number
-}
-
-/** Message send request */
-export interface MessageSendRequest {
-	/** Seal-encrypted message envelope */
-	envelope: SealEncryptedEnvelope
-	/** Sender address */
-	sender: string
-	/** Sender SuiNS name */
-	senderName?: string | null
-	/** Recipient address */
-	recipient: string
-	/** Recipient SuiNS name */
-	recipientName?: string | null
-	/** Message authentication */
-	auth: MessageAuthentication
-	/** Content integrity */
-	integrity: ContentIntegrity
-	/** Timestamp */
-	timestamp: number
-	/** Nonce for replay protection */
-	nonce: string
-	/** Message type */
-	messageType?: 'direct' | 'channel' | 'broadcast'
-	/** Reply reference */
-	replyTo?: string
-}
-
-/** Message send response */
-export interface MessageSendResponse {
-	success: boolean
-	messageId: string
-	blobId: string
-	storage: 'walrus' | 'kv'
-	conversationId: string
-	signatureVerified: boolean
-	timestamp: number
-}
-
-export type X402ChatPage = 'profile' | 'landing' | 'register'
-
-export interface X402ChatContext {
-	page: X402ChatPage
+export interface ThunderContext {
+	page: ThunderPage
 	name?: string
 	address?: string
 	expirationMs?: number
 	linkedNames?: number
 }
 
-export interface X402ChatTab {
+export interface ThunderTab {
 	messages: number
 	costMist: string
 	settledMist: string
 	lastActivity: number
-	context: X402ChatContext
+	context: ThunderContext
 }
 
-export interface X402ChatRequest {
+export interface ThunderRequest {
 	message: string
-	context: X402ChatContext
+	context: ThunderContext
 }
 
-export interface X402ChatResponse {
+export interface ThunderResponse {
 	reply: string
 	suggestions?: string[]
 	action?: 'dice' | 'lookup' | 'navigate'
@@ -384,13 +218,13 @@ export interface X402ChatResponse {
 	}
 }
 
-export interface X402DiceCommit {
+export interface ThunderDiceCommit {
 	commitHash: string
 	serverEntropy: string
 	timestamp: number
 }
 
-export interface X402DiceReveal {
+export interface ThunderDiceReveal {
 	result: number
 	serverEntropy: string
 	clientEntropy: string

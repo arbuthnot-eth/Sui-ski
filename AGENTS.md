@@ -1,206 +1,311 @@
 # Agent Guidelines for Sui-ski Gateway
 
-Sui-ski is a Cloudflare Workers gateway serving the Sui blockchain ecosystem. It resolves wildcard subdomains (`*.sui.ski`) to route requests to SuiNS names, Move Registry packages, decentralized content (IPFS/Walrus), and provides a read-only RPC proxy.
+## Thunder-First Development
+
+Every feature touches Thunder. The `#primary` channel is the source of truth for a user's on-chain activity through the gateway. If you're building a new action (registration, swap, transfer, etc.), it MUST emit a Thunder message.
+
+**Core principle:** The WebMCP format ensures all messages are machine-readable. AI agents can parse the `#primary` channel to reconstruct a user's complete activity history.
+
+**When building any PTB-producing feature:**
+1. Define the `ThunderAction` for the action (tool name, input fields)
+2. Call `appendThunderMessage()` as the last step in PTB construction
+3. Account for ~0.001 SUI gas overhead from the message call
+4. Handle the no-channel case (first action triggers channel creation instead)
+
+---
 
 ## Core Architecture
 
 ### Subdomain Routing (`src/utils/subdomain.ts`)
-| Pattern                      | Route Type | Handler                    |
-| ---------------------------- | ---------- | -------------------------- |
-| `sui.ski`                    | root       | Landing page, API routes   |
-| `my.sui.ski`                 | dashboard  | User's names management    |
-| `rpc.sui.ski`                | rpc        | JSON-RPC proxy             |
-| `{name}.sui.ski`             | suins      | SuiNS profile resolution   |
-| `{pkg}--{name}.sui.ski`      | mvr        | MVR package resolution     |
-| `ipfs-{cid}.sui.ski`         | content    | Direct IPFS gateway        |
-| `walrus-{blobId}.sui.ski`    | content    | Direct Walrus aggregator   |
-| `app.sui.ski`                | app        | Messaging/chat application |
-| `.t.` prefix                 | testnet    | Override to testnet        |
-| `.d.` prefix                 | devnet     | Override to devnet         |
 
-### Key Handlers
-- `src/handlers/landing.ts` - Root domain + API routes (`/api/*`)
-- `src/handlers/profile.ts` - SuiNS profile pages with grace period support
-- `src/handlers/app.ts` - Messaging/chat WebSocket and REST APIs
-- `src/handlers/dashboard.ts` - My Names dashboard at `my.sui.ski`
-- `src/handlers/mcp.ts` - Model Context Protocol server for AI tools
-- `src/resolvers/suins.ts` - SuiNS resolution via gRPC-Web + JSON-RPC fallback
-- `src/resolvers/rpc.ts` - Read-only RPC proxy with rate limiting
+| Pattern | Route | Handler |
+| ------- | ----- | ------- |
+| `sui.ski` | root | Landing page, API routes |
+| `my.sui.ski` | dashboard | User's names management |
+| `rpc.sui.ski` | rpc | Read-only JSON-RPC proxy |
+| `{name}.sui.ski` | suins | SuiNS profile + Thunder feed |
+| `{pkg}--{name}.sui.ski` | mvr | MVR package resolution |
+| `ipfs-{cid}.sui.ski` | content | IPFS gateway |
+| `walrus-{blobId}.sui.ski` | content | Walrus aggregator |
+| `app.sui.ski` | app | Messaging/chat application |
+| `.t.` prefix | testnet | Override to testnet |
+| `.d.` prefix | devnet | Override to devnet |
 
-### Bundle Constraints
-- **Worker size limit: 3MB** (Cloudflare Workers)
-- **Current bundle: ~5.5MB** - needs reduction
-- **@mysten/sui is 42MB** - tree-shaken but still significant
-- **zod + @modelcontextprotocol/sdk** add ~12MB combined
+---
 
-## CRITICAL: Always Deploy With Wrangler
-- **After every change, run `npx wrangler deploy` first.**
-- **Do not substitute this with other deploy commands in final verification steps.**
-- Do not consider work complete until `npx wrangler deploy` has been executed and confirmed.
+## Wallet Bridge Policy
 
-## Commands
+All wallet interaction on any `*.sui.ski` subdomain MUST be routed through `https://sui.ski/sign` using an invisible iframe bridge.
 
-### Development & Testing
+- Subdomains may perform local wallet discovery only to collect wallet name/icon hints.
+- Subdomains MUST forward those hints to the bridge (`postMessage`) and let the bridge own connect/sign/disconnect.
+- Subdomains MUST NOT directly call extension connect/sign APIs for trad wallets.
+- New wallet flows must keep the bridge path as the only signing authority outside `sui.ski`.
+- **Solution: If a wallet is unavailable in iframe context, use a same-tab top-frame handoff to `https://sui.ski/sign` for connect/sign and then return to the subdomain. Do not use popup fallback.**
+
+---
+
+## Thunder Integration Points
+
+| File | Thunder Role |
+| ---- | ------------ |
+| `src/handlers/ski-sign.ts` | Appends Thunder message to every PTB before signing |
+| `src/handlers/ski.ts` | Triggers `#primary` channel creation on first .SKI |
+| `src/durable-objects/wallet-session.ts` | Stores `channelId` + `memberCapId` in session |
+| `src/handlers/thunder.ts` | Reads `#primary` channel for activity display |
+| `src/handlers/profile.ts` | Renders Thunder activity feed on profile pages |
+| `src/utils/thunder.ts` | **(NEW)** Thunder message builder + PTB composer |
+| `contracts/storm/sources/registry.move` | Storm on-chain canonical channel registry (`SuiNS NFT -> channel`) |
+| `src/handlers/app.ts` | Exposes Storm config at `/api/app/subscriptions/config` |
+| `src/utils/thunder-js.ts` | Reads/writes Storm mapping; enforces primary channel identity |
+
+---
+
+## PTB Composition Checklist
+
+When adding or modifying any PTB that goes through `ski-sign.ts`:
+
+- [ ] Define the `ThunderAction` with correct `tool` name (`sui:` prefix) and `input` fields
+- [ ] Serialize the action to the WebMCP envelope format (`v: 1`, `method: 'tools/call'`)
+- [ ] Encrypt the serialized bytes with the channel's DEK via Seal
+- [ ] Append `channel::send_message()` as the **last** MoveCall in the PTB
+- [ ] Verify the PTB handles the no-channel edge case (first .SKI creates channel instead)
+- [ ] Test that gas budget includes the message overhead (~0.001 SUI)
+- [ ] Confirm atomicity: action + log both succeed or both revert
+
+---
+
+## WebMCP Message Catalog
+
+All known Thunder action types:
+
+| Tool | Trigger | Input Fields |
+| ---- | ------- | ------------ |
+| `sui:ski` | First key-in | `name`, `address` |
+| `sui:register` | SuiNS registration | `name`, `years`, `paymentMethod` |
+| `sui:transfer` | Object transfer | `objectId`, `recipient` |
+| `sui:swap` | DeepBook swap | `fromCoin`, `toCoin`, `amount` |
+| `sui:stake` | Validator staking | `validator`, `amount` |
+| `sui:message` | Direct message send | `channel`, `recipient` |
+
+When adding a new action type: add a row here, implement the `ThunderAction` in `src/utils/thunder.ts`, and wire it into the relevant handler's PTB construction.
+
+---
+
+## Deployment
+
+**CRITICAL: Use `npx wrangler deploy` after every change.**
+
+Do not use `bun run deploy` (fails with auth token errors). Do not consider work complete until deployment succeeds.
+
 ```bash
-npx wrangler deploy   # Deploy to Cloudflare (first step after changes)
-bun run dev           # Start development server with hot reload
-bun test              # Run all tests
-bun test --watch      # Watch mode test runner
-bun test src/utils/subdomain.test.ts  # Run single test file
-bun run typecheck     # TypeScript type checking
-bun run lint          # Biome linter (checks code style)
-bun run lint:fix      # Auto-fix linting issues
-bun run format        # Format code
+npx wrangler deploy           # Deploy (MANDATORY after changes)
+bun run dev                   # Local dev server
+bun test                      # Run tests
+bun run typecheck             # Type checking
+bun run lint                  # Biome linter
 ```
 
-### Single Test
-To run a specific test: `bun test <path-to-test-file>`
-
-**CRITICAL: Deployment Requirement**
-- **You MUST run `npx wrangler deploy` every time you make changes, and it should be the first step after editing.**
-- This ensures that the live environment reflects the latest updates immediately.
-- Do not consider a task complete until the deployment command has been executed and confirmed.
-
-**Post-change workflow:**
-- **Run `npx wrangler deploy` immediately after making changes (MANDATORY).**
-- Validation commands (`bun run typecheck`, `bun run lint`, `bun test`) are optional unless explicitly requested.
+---
 
 ## Code Style
 
-### Naming Conventions
-- **Constants:** `UPPER_SNAKE` (e.g., `DEFAULT_TTL`, `CACHE_URL_PREFIX`)
-- **Functions:** `camelCase` (e.g., `memGet`, `parseSubdomain`, `resolveSuiNS`)
-- **Types/Interfaces:** `PascalCase` (e.g., `Env`, `ParsedSubdomain`, `SuiNSRecord`)
-- **Variables:** `camelCase` (e.g., `memCache`, `networkOverride`)
-- **Files:** `kebab-case` (e.g., `cache.ts`, `suins.ts`, `profile.ts`)
+Full standards in `CLAUDE.md`. Key points:
 
-### Imports & Exports
-- Use named imports and exports only (no default exports)
-- Alphabetical imports within the same group
-- Separate imports by empty lines: Node builtins → external packages → internal modules
+- **No comments** — self-documenting code
+- **No dead code** — git has history
+- **Fail fast** — `invariant(condition, actionable message)`
+- **Parallel async** — `Promise.all` for independent operations
+- **Single-pass** — avoid chained array methods
+- Naming: constants `UPPER_SNAKE`, functions `camelCase`, types `PascalCase`, files `kebab-case`
+- Formatting: tabs, single quotes, no semicolons
 
-### Formatting
-- Indent with tabs (1 tab = 4 spaces)
-- Single quotes for strings
-- No semicolons
-- Single-line lists do not need trailing commas
-- Multi-line lists should have trailing commas
+---
 
-### Error Handling
-```typescript
-// Validate upfront
-invariant(condition, `Expected ${expected}, got ${actual}`)
+## Key Files
 
-// Fail fast with actionable messages
-throw new Error(`Failed to fetch: ${response.status}`)
+### Thunder Path (action flow)
 
-// Try-catch with minimal logging
-try {
-  await fetch(...)
-} catch (error) {
-  console.log('Operation failed:', error)
-  return null
-}
-```
+| File | Purpose |
+| ---- | ------- |
+| `src/handlers/ski.ts` | .SKI key-in entry point, wallet connection |
+| `src/handlers/ski-sign.ts` | PTB signing bridge, Thunder message injection |
+| `src/handlers/thunder.ts` | Thunder API, MCP bridge, channel/message endpoints |
+| `src/utils/thunder-js.ts` | Thunder chat runtime UI + SDK transaction orchestration |
+| `src/utils/thunder-css.ts` | Thunder UI styling |
+| `src/durable-objects/wallet-session.ts` | Session state: address, channel/member caps, auth |
 
-### Type Safety
-- Use `invariant` or type guards before unsafe operations
-- Prefer optional chaining (`?.`) and nullish coalescing (`??`)
-- Always handle errors (never silently ignore)
-- Use `@ts-expect-error` for intentionally bypassed type checks
+### Transaction Building
 
-### Constants
-- Extract magic values to named constants at module level
-- Constants computed once, not in hot paths
-- Use readonly for data structures that shouldn't mutate
+| File | Purpose |
+| ---- | ------- |
+| `src/utils/swap-transactions.ts` | DeepBook swap + SuiNS registration PTBs |
+| `src/utils/transactions.ts` | Shared transaction helpers |
+| `src/utils/ns-price.ts` | NS token pricing via DeepBook pools |
+| `src/utils/pricing.ts` | SuiNS pricing + renewal calculations |
+| `src/utils/grace-vault-transactions.ts` | Grace Vault transaction assembly |
 
-### No Comments
-Code must be self-documenting. Only add comments when:
-- Explaining why (not what)
-- Documenting complex algorithms
-- JSDoc @param/@return for APIs
+### Messaging + App Surfaces
 
-### Implementation Patterns
-- Single-pass algorithms (avoid chained `.map().filter().reduce()`)
-- Parallel independent async operations (`Promise.all`)
-- Uint8Array for binary data internally
-- Bitwise for byte conversion (no string intermediates)
+| File | Purpose |
+| ---- | ------- |
+| `src/handlers/app.ts` | `app.sui.ski` shell + `/api/app/*` config/messaging helpers |
+| `src/handlers/profile.ts` | Profile page rendering + Thunder embed |
+| `src/handlers/messaging-sdk.ts` | Messaging SDK status/config API |
+| `src/sdk/messaging.ts` | Shared SDK constants/config/version pins |
 
-### Testing
-- Test filename: `source-file-name.test.ts` (same directory)
-- Use Bun's built-in test framework
-- One assertion per test
-- Descriptive test names
-- AAA pattern: Arrange, Act, Assert
+### Resolution Layer
 
-## Project Structure
+| File | Purpose |
+| ---- | ------- |
+| `src/resolvers/suins.ts` | SuiNS resolution |
+| `src/resolvers/content.ts` | IPFS/Walrus content resolution |
+| `src/resolvers/rpc.ts` | Read-only RPC proxy |
 
-```
-src/
-├── index.ts              # Worker entry point
-├── types.ts              # Shared TypeScript types
-├── handlers/             # Request handlers by subdomain type
-├── resolvers/            # Data resolution (SuiNS, MVR, IPFS, Walrus, RPC)
-├── utils/                # Helper functions
-└── sdk/                  # TypeScript SDK utilities
-```
+---
 
-## Key Patterns
+## Current Progress Log (2026-02-17)
 
-### Subdomain Routing
-- Parse hostnames in `src/utils/subdomain.ts`
-- Route types: `suins`, `content`, `rpc`, `root`, `mvr`, `app`, `dashboard`
-- Network overrides: `.t.` prefix → testnet, `.d.` prefix → devnet
+### Thunder stability and UX
 
-### SuiNS Resolution
-- Primary: Surflux gRPC-Web (faster, proper protobuf)
-- Fallback: SuiNS SDK via JSON-RPC
-- Cache in-memory with 100-entry LRU
+- Done (2026-02-18): Enforced bridge-only wallet interaction on subdomains (`sui.ski/sign` iframe) and added local wallet hint forwarding from subdomains to bridge discovery/connect/sign paths.
+- Done: Robust Sui + messaging SDK module resolution in browser init path.
+- Done: Fixed package-ID mismatch to mainnet messaging package `0xbcdf...39f9` in live runtime/config paths.
+- Done: Added signer result hydration to recover missing transaction effects/object changes.
+- Done: Removed channel-label collapsing that mixed independent channels under one label.
+- Done: Added local cache reset control for channel meta/dismissed keys.
 
-### Response Helpers
-Use helper functions from `src/utils/response.ts`:
-- `jsonResponse(data)`
-- `htmlResponse(content)`
-- `errorResponse(message, code, status)`
-- `notFoundPage(subdomain, env, available)`
+### Hardening completed
 
-### Environment Variables
-- Set in `wrangler.toml` (non-sensitive)
-- Secrets via `wrangler secret put <NAME>` (sensitive keys)
-- Network selection: `SUI_NETWORK`, `WALRUS_NETWORK`, `SEAL_NETWORK`
+- Done: Duplicate-channel prevention at source.
+  - Added on-chain membership guard before any bootstrap/create flow, so existing membership blocks new channel creation.
+  - Removed “dismiss on failed burn” behavior to prevent hidden channels from spawning replacement channels.
+  - Shifted duplicate channels into explicit “extras” management UI, with on-chain cleanup action.
+- Done: Reduced first-message signing path.
+  - Added bootstrap path using `createChannelFlow()` + append `sendMessage()` to key-attach PTB, reducing first send from 3 signatures to 2 when SDK builders are available.
+- Done: Channel-key self-heal for broken legacy channels.
+  - Added on-chain `add_encrypted_key` repair flow as an explicit user action (`Repair key`) when signer has required member capability.
+  - Added send fallback routing to next public channel with a valid encrypted key when active channel is unrecoverable.
+  - Added member-cap permission selection logic so repair uses a cap with `EditEncryptionKey` instead of arbitrary owned caps.
+  - Disabled automatic repair during send to keep one send-click to one transaction attempt.
+- Done: Strict send path (no implicit fallback/switching).
+  - Removed automatic channel switching during send.
+  - Removed “best sendable channel” fallback logic.
+  - Added explicit burn wording and scope for non-primary channels only.
 
-## Important Notes
+### Storm registry rollout
 
-1. **No console.log:** Use structured logging; errors logged to Cloudflare via `console.error`.
+- Done: Added `contracts/storm` Move package with shared `Registry` dynamic fields keyed by SuiNS NFT object ID.
+  - `set_channel_for_nft<T: key>(registry, nft, channel_id)`
+  - `clear_channel_for_nft<T: key>(registry, nft)`
+- Done: Added worker env wiring for Storm (`STORM_PACKAGE_ID`, `STORM_REGISTRY_ID`) and included Storm config in `/api/app/subscriptions/config`.
+- Done: Thunder runtime now resolves canonical channel from Storm mapping first and pins primary channel identity to it.
+- Done: Added channel-gear action `Set primary` to update Storm mapping explicitly on-chain.
+- Done: Bootstrap create+attach+send PTB now appends Storm mapping write when configured, so channel creation + first message + canonical registry update are bundled into one signed finalize PTB.
+- Done: Extra-channel burn paths attempt Storm mapping clear when burned channel matches current mapped primary.
 
-2. **Rate limiting:** RPC proxy enforces 100 req/min per IP.
+### Cleanup policy
 
-3. **Grace period:** 30 days post-expiration before name becomes available.
+- Rule: “Remove” means on-chain delete (`member_cap::transfer_to_recipient`) whenever capability requirements are met.
+- Rule: If deletion caps are missing, do not silently hide; return explicit undeletable state and recovery guidance.
 
-4. **Security:** Only read-only RPC methods allowed (block writes like `sui_executeTransactionBlock`).
+---
 
-## TypeScript Version
-Target: ES2022, strict mode enabled
+## Full App Surface Map
 
-## Local SDK Dependencies
+### Entry + routing
 
-### Sui Stack Messaging SDK
-**Path:** `/home/brandon/Dev/Contributor/sui-stack-messaging-sdk`
+| File | Surface |
+| ---- | ------- |
+| `src/index.ts` | Global routing, host/subdomain dispatch, API wiring, media/OG routes |
+| `src/types.ts` | Worker env/type contracts |
+| `src/utils/subdomain.ts` | Host parsing + network override logic |
 
-Local fork of `@mysten/messaging` for customization and mainnet support:
-- Already updated to `@mysten/sui@^2.4.0`
-- Built and ready at `packages/messaging/dist/`
-- Use for client-side messaging operations (decentralized, no server intermediary)
+### Durable object
 
-**Key exports:**
-```typescript
-import { SuiStackMessagingClient, messaging } from '@mysten/messaging'
-import { MAINNET_MESSAGING_PACKAGE_CONFIG, TESTNET_MESSAGING_PACKAGE_CONFIG } from '@mysten/messaging'
-```
+| File | Surface |
+| ---- | ------- |
+| `src/durable-objects/wallet-session.ts` | Wallet session lifecycle, wallet linkage, messaging caps/session state |
 
-**Architecture principle:** Messaging is client-side only. The server:
-- Serves static HTML/JS
-- Provides SDK config (package IDs, Seal servers, Walrus endpoints)
-- Does NOT store messages, resolve channels, or manage memberships
+### Handlers
 
-All channel operations go directly to Sui RPC + Walrus from the client.
+| File | Surface |
+| ---- | ------- |
+| `src/handlers/landing.ts` | Root landing page + shared API routes |
+| `src/handlers/profile.ts` | SuiNS profile pages + embedded Thunder |
+| `src/handlers/app.ts` | App shell + API namespaces (`/api/app`, `/api/agents`, `/api/ika`, `/api/llm`) |
+| `src/handlers/thunder.ts` | Thunder API + MCP proxy + x402 hints |
+| `src/handlers/ski.ts` | `.SKI` action UI |
+| `src/handlers/ski-sign.ts` | Wallet sign bridge and PTB payload signing |
+| `src/handlers/dashboard.ts` | `my.sui.ski` dashboard |
+| `src/handlers/vault.ts` | Vault routes |
+| `src/handlers/grace-vault-agent.ts` | Grace Vault agent routes |
+| `src/handlers/x402-register.ts` | x402 register agent routes |
+| `src/handlers/mcp.ts` | Sui MCP server wiring |
+| `src/handlers/messaging-sdk.ts` | Messaging SDK informational endpoints |
+| `src/handlers/authenticated-events.ts` | Authenticated events ingestion |
+| `src/handlers/register2.ts` | SuiNS register tx build/submit |
+| `src/handlers/wallet-api.ts` | Wallet challenge/connect/check/disconnect |
+
+### Resolvers
+
+| File | Surface |
+| ---- | ------- |
+| `src/resolvers/suins.ts` | Name lookup / owner/address resolution |
+| `src/resolvers/content.ts` | IPFS/Walrus direct blob routing |
+| `src/resolvers/rpc.ts` | RPC passthrough with env controls |
+
+### SDK + protocol utilities
+
+| File | Surface |
+| ---- | ------- |
+| `src/sdk/messaging.ts` | Messaging SDK pinning/config/bootstrap URLs |
+| `src/utils/x402-middleware.ts` | x402 request middleware |
+| `src/utils/x402-sui.ts` | x402 Sui settlement helpers |
+| `src/utils/vault.ts` | Vault utility operations |
+| `src/utils/agent-keypair.ts` | Agent keypair derivation/helpers |
+
+### Wallet + client runtime
+
+| File | Surface |
+| ---- | ------- |
+| `src/utils/wallet-kit-js.ts` | Wallet integration bootstrap |
+| `src/utils/wallet-session-js.ts` | Session sync in browser |
+| `src/utils/wallet-ui-js.ts` | Wallet modal/UI behavior |
+| `src/utils/wallet-tx-js.ts` | Browser tx helper layer |
+| `src/utils/shared-wallet-js.ts` | Shared wallet mount script |
+| `src/utils/thunder-js.ts` | Thunder interaction + messaging SDK write/read loop |
+| `src/utils/thunder-css.ts` | Thunder presentation layer |
+| `src/utils/zksend-js.ts` | zk-send utilities |
+
+### Data, pricing, status, and cache
+
+| File | Surface |
+| ---- | ------- |
+| `src/utils/cache.ts` | KV/cache helpers |
+| `src/utils/status.ts` | Gateway status assembly |
+| `src/utils/rpc.ts` | RPC URL/env helpers |
+| `src/utils/response.ts` | response helpers |
+| `src/utils/pricing.ts` | registration/renewal pricing |
+| `src/utils/ns-price.ts` | NS market pricing |
+| `src/utils/pyth-price-info.ts` | external price feeds |
+| `src/utils/mmr.ts` | misc on-chain helpers |
+
+### On-chain contracts (workspace)
+
+| File | Surface |
+| ---- | ------- |
+| `contracts/storm/sources/registry.move` | Storm canonical channel registry for Thunder |
+| `contracts/seal_messaging/sources/access.move` | Seal messaging/access control package |
+| `contracts/mvr/sources/registry.move` | Move package registry |
+
+### Media, social, and activity
+
+| File | Surface |
+| ---- | ------- |
+| `src/utils/media-pack.ts` | generated static media assets |
+| `src/utils/og-image.ts` | SVG/PNG OG rendering |
+| `src/utils/social.ts` | social metadata + bot detection |
+| `src/utils/onchain-activity.ts` | profile on-chain activity feeds |
+| `src/utils/onchain-listing.ts` | on-chain listing fetch path |
+| `src/utils/surflux-grpc.ts` | gRPC data integration helpers |

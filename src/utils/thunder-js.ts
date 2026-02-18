@@ -3,6 +3,7 @@ export interface ThunderConfig {
 	name?: string
 	address?: string
 	ownerAddress?: string
+	nftId?: string
 	expirationMs?: number
 	linkedNames?: number
 	serverScope?: 'owner' | 'name'
@@ -17,11 +18,14 @@ export function generateThunderJs(config: ThunderConfig): string {
 			var OFFICIAL_SUI_SDK_VERSION = '2.4.0';
 			var OFFICIAL_SEAL_SDK_VERSION = '1.0.1';
 			var OFFICIAL_MESSAGING_SDK_URLS = [
-				'https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.3-2026-02-16/cdn/messaging-browser.mjs',
+				'https://esm.sh/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.3-2026-02-16/packages/messaging',
+				'https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.3-2026-02-16/packages/messaging/dist/esm/index.js',
+				'https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@thunder-v1.0.0-2026-02-17/cdn/messaging-browser.mjs',
 			];
 			var OFFICIAL_SUI_CLIENT_URLS = [
+				'https://esm.sh/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/jsonRpc?bundle',
+				'https://cdn.jsdelivr.net/npm/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/dist/jsonRpc/index.mjs',
 				'https://esm.sh/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/graphql',
-				'https://cdn.jsdelivr.net/npm/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/dist/graphql/index.mjs',
 			];
 			var OFFICIAL_SUI_TX_URLS = [
 				'https://cdn.jsdelivr.net/npm/@mysten/sui@' + OFFICIAL_SUI_SDK_VERSION + '/transactions/+esm',
@@ -76,6 +80,8 @@ export function generateThunderJs(config: ThunderConfig): string {
 			var activeChannel = '';
 			var channels = [];
 			var channelMessages = {};
+			var messagesInitialLoadPending = false;
+			var loadChannelsInFlight = false;
 			var isOpen = false;
 		var isSending = false;
 		var pollTimer = null;
@@ -87,9 +93,14 @@ export function generateThunderJs(config: ThunderConfig): string {
 			var officialSuiTxSdkLoadPromise = null;
 			var officialMessagingClient = null;
 			var officialMessagingClientLoadPromise = null;
+			var officialMessagingRuntimeClient = null;
+			var officialSealThreshold = 2;
 			var officialMessagingSigner = null;
 			var officialMessagingAddress = '';
 			var officialMessagingPackageId = '';
+			var officialStormConfig = null;
+			var stormMappedChannelId = '';
+			var stormNftType = '';
 			var officialChannelStateById = {};
 			var officialChannelCount = 0;
 			var channelMetaById = {};
@@ -107,9 +118,9 @@ export function generateThunderJs(config: ThunderConfig): string {
 			var effectiveOwnerAddress = normalizeAddress(CONFIG.ownerAddress);
 			var effectiveOwnerAddressResolved = false;
 			var effectiveOwnerAddressPromise = null;
-			var defaultPublicChannelAutoCreateByOwner = {};
 			var channelAcceptPending = false;
 			var channelBurnPendingById = {};
+			var showExtraPublicChannels = false;
 			var localPurgeBeforeByChannelId = {};
 				var joinRequestsByChannelId = {};
 				var joinRequestLoadPendingByChannelId = {};
@@ -445,9 +456,9 @@ export function generateThunderJs(config: ThunderConfig): string {
 			var query = [];
 			var scope = isOwnerScope() ? 'owner' : 'name';
 			var serverName = sanitizeSlug(
-				(isOwnerScope() && firstChannelDefaultName)
-					? firstChannelDefaultName
-					: (server && server.name ? server.name : CONFIG.name || ''),
+				CONFIG.name
+				|| ((isOwnerScope() && firstChannelDefaultName) ? firstChannelDefaultName : '')
+				|| (server && server.name ? server.name : ''),
 			);
 			var ownerAddress = getConnectedOwnerAddress() || normalizeAddress(CONFIG.ownerAddress);
 			if (serverName && serverName !== 'sui-ski') {
@@ -672,23 +683,34 @@ export function generateThunderJs(config: ThunderConfig): string {
 		}
 
 		function getCanonicalPublicChannelName() {
-			return sanitizeSlug(firstChannelDefaultName || '')
-				|| (isOwnerScope() ? '' : sanitizeSlug(normalizeName(CONFIG.name || '')))
+			return sanitizeSlug(normalizeName(CONFIG.name || ''))
+				|| sanitizeSlug(firstChannelDefaultName || '')
 				|| 'public';
 		}
 
 		function getCanonicalPublicChannelId() {
+			if (stormMappedChannelId) {
+				for (var i = 0; i < channels.length; i++) {
+					var mappedChannel = channels[i];
+					if (!mappedChannel || mappedChannel.encrypted || !isOfficialChannel(mappedChannel)) continue;
+					var mappedState = getOfficialChannelState(mappedChannel.id);
+					if (!mappedState) continue;
+					if (normalizeAddress(mappedState.channelId) === normalizeAddress(stormMappedChannelId)) {
+						return String(mappedChannel.id || '');
+					}
+				}
+			}
 			var canonicalName = getCanonicalPublicChannelName();
 			if (canonicalName) {
-				for (var i = 0; i < channels.length; i++) {
-					var channel = channels[i];
+				for (var j = 0; j < channels.length; j++) {
+					var channel = channels[j];
 					if (!channel || channel.encrypted || !isOfficialChannel(channel)) continue;
 					var slug = sanitizeSlug((channel.name) || (channel.id) || '');
 					if (slug === canonicalName) return String(channel.id || '');
 				}
 			}
-			for (var j = 0; j < channels.length; j++) {
-				var ch = channels[j];
+			for (var k = 0; k < channels.length; k++) {
+				var ch = channels[k];
 				if (!ch || ch.encrypted || !isOfficialChannel(ch)) continue;
 				return String(ch.id || '');
 			}
@@ -817,61 +839,12 @@ export function generateThunderJs(config: ThunderConfig): string {
 					linkedCount: 0,
 				};
 			}
-			try {
-				var response = await fetch('/api/names/' + encodeURIComponent(owner), { credentials: 'include' });
-				if (!response.ok) {
-					return {
-						addresses: [],
-						truncated: 0,
-						sharedAddress: owner,
-						linkedCount: 0,
-					};
-				}
-				var data = await response.json();
-				var names = Array.isArray(data && data.names) ? data.names : [];
-				var sharedAddress = normalizeAddress(getConnectedOwnerAddress()) || owner;
-				var linkedCount = names.length;
-				var MAX_LINKED_MEMBER_ADDRESSES = 24;
-				var candidates = [];
-				var dedupe = {};
-				function pushCandidate(nextAddress) {
-					var clean = normalizeAddress(nextAddress);
-					if (!clean || clean === owner || dedupe[clean]) return;
-					dedupe[clean] = true;
-					candidates.push(clean);
-				}
-				if (sharedAddress && sharedAddress !== owner) {
-					pushCandidate(sharedAddress);
-				}
-				var resolveTasks = [];
-				for (var i = 0; i < names.length; i++) {
-					var cleanName = sanitizeSlug(normalizeName(names[i] && names[i].name ? names[i].name : ''));
-					if (!cleanName) continue;
-					resolveTasks.push(resolveAddressForSuiName(cleanName));
-				}
-				var resolvedAddresses = resolveTasks.length ? await Promise.all(resolveTasks) : [];
-				for (var r = 0; r < resolvedAddresses.length; r++) {
-					pushCandidate(resolvedAddresses[r]);
-				}
-				var truncated = 0;
-				if (candidates.length > MAX_LINKED_MEMBER_ADDRESSES) {
-					truncated = candidates.length - MAX_LINKED_MEMBER_ADDRESSES;
-					candidates = candidates.slice(0, MAX_LINKED_MEMBER_ADDRESSES);
-				}
-				return {
-					addresses: candidates,
-					truncated: truncated,
-					sharedAddress: sharedAddress,
-					linkedCount: linkedCount,
-				};
-			} catch (_e) {
-				return {
-					addresses: [],
-					truncated: 0,
-					sharedAddress: owner,
-					linkedCount: 0,
-				};
-			}
+			return {
+				addresses: [],
+				truncated: 0,
+				sharedAddress: owner,
+				linkedCount: 0,
+			};
 		}
 
 		async function resolveMarketplaceSellerAddressForProfile() {
@@ -968,25 +941,57 @@ export function generateThunderJs(config: ThunderConfig): string {
 				return 'SDK loading';
 			}
 
+		function normalizeOfficialMessagingSdk(mod) {
+			var direct = mod && typeof mod === 'object' ? mod : null;
+			if (!direct) return null;
+			var def = direct.default && typeof direct.default === 'object' ? direct.default : null;
+			var candidate = direct;
+			if ((!candidate.messaging && !candidate.SuiStackMessagingClient) && def) {
+				candidate = def;
+			}
+			var clientCtor = candidate && candidate.SuiStackMessagingClient
+				? candidate.SuiStackMessagingClient
+				: (def && def.SuiStackMessagingClient ? def.SuiStackMessagingClient : null);
+			var messagingExt = candidate && typeof candidate.messaging === 'function'
+				? candidate.messaging
+				: (def && typeof def.messaging === 'function' ? def.messaging : null);
+			if (!messagingExt && clientCtor && typeof clientCtor.experimental_asClientExtension === 'function') {
+				messagingExt = function(options) {
+					return clientCtor.experimental_asClientExtension(options);
+				};
+			}
+			if (!clientCtor || typeof messagingExt !== 'function') return null;
+			var normalized = {};
+			for (var key in candidate) normalized[key] = candidate[key];
+			normalized.SuiStackMessagingClient = clientCtor;
+			normalized.messaging = messagingExt;
+			return normalized;
+		}
+
 		function ensureOfficialMessagingSdk() {
-			if (officialMessagingSdk) return Promise.resolve(officialMessagingSdk);
+			if (officialMessagingSdk && typeof officialMessagingSdk.messaging === 'function') {
+				return Promise.resolve(officialMessagingSdk);
+			}
 			if (officialMessagingSdkLoadPromise) return officialMessagingSdkLoadPromise;
-			if (window.__suiStackMessagingSdk && window.__suiStackMessagingSdk.SuiStackMessagingClient) {
-				officialMessagingSdk = window.__suiStackMessagingSdk;
+			var existing = normalizeOfficialMessagingSdk(window.__suiStackMessagingSdk);
+			if (existing) {
+				officialMessagingSdk = existing;
 				officialMessagingSdkStatus = 'ready';
+				window.__suiStackMessagingSdk = existing;
 				return Promise.resolve(officialMessagingSdk);
 			}
 			officialMessagingSdkLoadPromise = importFirstAvailable(OFFICIAL_MESSAGING_SDK_URLS)
 				.then(function(mod) {
-					if (!mod || !mod.SuiStackMessagingClient) {
-						throw new Error('Official SDK did not expose SuiStackMessagingClient');
+					var resolved = normalizeOfficialMessagingSdk(mod);
+					if (!resolved) {
+						throw new Error('Official SDK did not expose messaging extension');
 					}
-					officialMessagingSdk = mod;
+					officialMessagingSdk = resolved;
 					officialMessagingSdkStatus = 'ready';
-					window.__suiStackMessagingSdk = mod;
+					window.__suiStackMessagingSdk = resolved;
 					window.__suiStackMessagingSdkVersion = OFFICIAL_MESSAGING_SDK_VERSION;
 					renderServerHeader();
-					return mod;
+					return resolved;
 				})
 				.catch(function(error) {
 					console.warn('Failed to load official Sui Stack Messaging SDK:', error);
@@ -1037,6 +1042,40 @@ export function generateThunderJs(config: ThunderConfig): string {
 				})();
 			}
 
+			function getModuleExport(mod, exportName) {
+				if (!mod || typeof mod !== 'object') return null;
+				if (mod[exportName]) return mod[exportName];
+				var def = mod.default && typeof mod.default === 'object' ? mod.default : null;
+				if (def && def[exportName]) return def[exportName];
+				return null;
+			}
+
+			function resolveSuiClientCtor(mod) {
+				return getModuleExport(mod, 'SuiClient')
+					|| getModuleExport(mod, 'SuiGraphQLClient')
+					|| getModuleExport(mod, 'SuiJsonRpcClient')
+					|| null;
+			}
+
+			function importFirstSuiClientModule(urls) {
+				return (async function() {
+					var lastError = null;
+					for (var i = 0; i < urls.length; i++) {
+						var url = String(urls[i] || '');
+						if (!url) continue;
+						try {
+							var mod = await import(url);
+							if (resolveSuiClientCtor(mod)) return mod;
+							lastError = new Error('Loaded Sui module without client constructor: ' + url);
+						} catch (error) {
+							lastError = error;
+						}
+					}
+					if (lastError) throw lastError;
+					throw new Error('No Sui client import URLs configured');
+				})();
+			}
+
 			function getNetwork() {
 				var network = String(CONFIG.network || 'mainnet').trim().toLowerCase();
 				if (network !== 'mainnet' && network !== 'testnet' && network !== 'devnet') return 'mainnet';
@@ -1055,12 +1094,12 @@ export function generateThunderJs(config: ThunderConfig): string {
 				return OFFICIAL_GRAPHQL_URLS.mainnet;
 			}
 
-			function getMessagingPackageId() {
-				if (officialMessagingPackageId) return officialMessagingPackageId;
-				return getNetwork() === 'mainnet'
-					? '0xbcdf77f551f12be0fa61d1eb7bb2ff4169c1587aaa86fab84d95213cc75139f9'
-					: '0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d';
-			}
+		function getMessagingPackageId() {
+			if (officialMessagingPackageId) return officialMessagingPackageId;
+			return getNetwork() === 'mainnet'
+				? '0xbcdf77f551f12be0fa61d1eb7bb2ff4169c1587aaa86fab84d95213cc75139f9'
+				: '0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d';
+		}
 
 		function toUint8Array(value) {
 			if (!value) return new Uint8Array(0);
@@ -1101,6 +1140,53 @@ export function generateThunderJs(config: ThunderConfig): string {
 				parts.push(String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK, bytes.length))));
 			}
 			return btoa(parts.join(''));
+		}
+
+		function bytesToHex(value) {
+			var bytes = toUint8Array(value);
+			if (!bytes.length) return '';
+			var hex = '';
+			for (var i = 0; i < bytes.length; i++) {
+				var part = bytes[i].toString(16);
+				if (part.length < 2) part = '0' + part;
+				hex += part;
+			}
+			return '0x' + hex;
+		}
+
+		function hexToBytes(value) {
+			var raw = String(value || '').trim().toLowerCase().replace(/^0x/, '');
+			if (!raw || raw.length % 2 !== 0 || /[^0-9a-f]/.test(raw)) return new Uint8Array(0);
+			var out = new Uint8Array(raw.length / 2);
+			for (var i = 0; i < out.length; i++) {
+				out[i] = parseInt(raw.slice(i * 2, i * 2 + 2), 16);
+			}
+			return out;
+		}
+
+		function concatBytes(parts) {
+			var list = Array.isArray(parts) ? parts : [];
+			var total = 0;
+			for (var i = 0; i < list.length; i++) total += toUint8Array(list[i]).length;
+			if (!total) return new Uint8Array(0);
+			var out = new Uint8Array(total);
+			var offset = 0;
+			for (var j = 0; j < list.length; j++) {
+				var next = toUint8Array(list[j]);
+				if (!next.length) continue;
+				out.set(next, offset);
+				offset += next.length;
+			}
+			return out;
+		}
+
+		function randomBytes(length) {
+			var size = Number(length || 0);
+			if (!isFinite(size) || size <= 0) return new Uint8Array(0);
+			var out = new Uint8Array(Math.floor(size));
+			if (!window.crypto || typeof window.crypto.getRandomValues !== 'function') return out;
+			window.crypto.getRandomValues(out);
+			return out;
 		}
 
 		function fromBase64String(value) {
@@ -1247,6 +1333,54 @@ export function generateThunderJs(config: ThunderConfig): string {
 			};
 		}
 
+		function extractPermissionTypeName(entry) {
+			if (!entry) return '';
+			if (typeof entry === 'string') return entry;
+			if (entry.name && typeof entry.name === 'string') return entry.name;
+			if (entry.typeName && typeof entry.typeName === 'string') return entry.typeName;
+			if (entry.fields && typeof entry.fields.name === 'string') return entry.fields.name;
+			return '';
+		}
+
+		function channelHasEditEncryptionPermission(channelObject, memberCapId) {
+			if (!channelObject || !memberCapId) return false;
+			var auth = channelObject.auth && typeof channelObject.auth === 'object'
+				? channelObject.auth
+				: (channelObject.content && channelObject.content.fields && channelObject.content.fields.auth
+					? channelObject.content.fields.auth
+					: null);
+			if (!auth) return false;
+			var memberPermissions = auth.member_permissions || auth.memberPermissions || null;
+			if (memberPermissions && memberPermissions.fields) memberPermissions = memberPermissions.fields;
+			var entries = memberPermissions && Array.isArray(memberPermissions.contents)
+				? memberPermissions.contents
+				: [];
+			if (!entries.length) return false;
+			var target = normalizeAddress(memberCapId);
+			for (var i = 0; i < entries.length; i++) {
+				var item = entries[i] || {};
+				var keyRaw = String(
+					item.key
+					|| (item.fields ? item.fields.key : '')
+					|| '',
+				).trim();
+				var key = normalizeAddress(keyRaw);
+				if (!key || key !== target) continue;
+				var value = item.value || (item.fields ? item.fields.value : {}) || {};
+				if (value && value.fields) value = value.fields;
+				var permissionSet = value && value.contents && Array.isArray(value.contents)
+					? value.contents
+					: (Array.isArray(value) ? value : []);
+				for (var j = 0; j < permissionSet.length; j++) {
+					var typeName = String(extractPermissionTypeName(permissionSet[j]) || '').toLowerCase();
+					if (!typeName) continue;
+					if (typeName.indexOf('::encryption_key_history::editencryptionkey') !== -1) return true;
+				}
+				return false;
+			}
+			return false;
+		}
+
 		function getWalletPublicKeyBytes() {
 			if (typeof SuiWalletKit === 'undefined' || !SuiWalletKit.$connection) return new Uint8Array(32);
 			var conn = SuiWalletKit.$connection.value;
@@ -1288,6 +1422,67 @@ export function generateThunderJs(config: ThunderConfig): string {
 						}
 					}
 					return transaction;
+				}
+
+				var pendingSignByKey = {};
+
+				function extractTxDigest(rawResult) {
+					var digest = String(
+						(rawResult && (
+							rawResult.digest
+							|| rawResult.transactionDigest
+							|| rawResult.txDigest
+						)) || '',
+					).trim();
+					return digest;
+				}
+
+				function mergeTxResultFields(target, source) {
+					if (!source || typeof source !== 'object') return;
+					if (!target.objectChanges && Array.isArray(source.objectChanges)) {
+						target.objectChanges = source.objectChanges;
+					}
+					if (!target.balanceChanges && Array.isArray(source.balanceChanges)) {
+						target.balanceChanges = source.balanceChanges;
+					}
+					if (!target.events && Array.isArray(source.events)) {
+						target.events = source.events;
+					}
+					if (!target.rawEffects && source.rawEffects) {
+						target.rawEffects = source.rawEffects;
+					}
+				}
+
+				async function hydrateTxEffectsIfNeeded(txResult, input) {
+					var effects = txResult && txResult.effects ? txResult.effects : null;
+					var hasChangedObjects = !!(effects && Array.isArray(effects.changedObjects));
+					if (hasChangedObjects) return;
+					var digest = txResult && txResult.digest ? txResult.digest : '';
+					if (!digest) return;
+					var client = input && input.client ? input.client : null;
+					if (!client || !client.core || typeof client.core.waitForTransaction !== 'function') return;
+					try {
+						var waited = await client.core.waitForTransaction({
+							digest: digest,
+							include: { effects: true },
+						});
+						var waitedTx = waited && waited.$kind === 'Transaction'
+							? waited.Transaction
+							: (waited && waited.$kind === 'FailedTransaction'
+								? waited.FailedTransaction
+								: waited);
+						if (!waitedTx || typeof waitedTx !== 'object') return;
+						if (waitedTx.effects) txResult.effects = waitedTx.effects;
+						mergeTxResultFields(txResult, waitedTx);
+					} catch (_e) {}
+				}
+
+				function isFailedTxEffects(effects) {
+					var status = effects && effects.status ? effects.status : null;
+					if (!status) return false;
+					if (status.$kind === 'Failure') return true;
+					if (typeof status.status === 'string' && status.status.toLowerCase() === 'failure') return true;
+					return !!status.error;
 				}
 
 					return {
@@ -1341,42 +1536,41 @@ export function generateThunderJs(config: ThunderConfig): string {
 								throw new Error('Wallet signer is unavailable');
 							}
 							var message = input && input.message ? input.message : input;
-							console.log('[ski-chat-signer] signPersonalMessage called.',
-								'input type:', typeof input,
-								input instanceof Uint8Array ? 'Uint8Array(' + input.length + ')' :
-								(input && typeof input === 'object') ? 'keys:' + Object.keys(input).slice(0, 5).join(',') : '',
-								'message type:', typeof message,
-								message instanceof Uint8Array ? 'Uint8Array(' + message.length + ')' :
-								Array.isArray(message) ? 'Array(' + message.length + ')' :
-								(message && typeof message === 'object') ? 'keys:' + Object.keys(message).slice(0, 5).join(',') : '');
 							var messageBytes = toMessageBytes(message, 0);
-							console.log('[ski-chat-signer] messageBytes:', messageBytes.length, 'bytes, first8:', Array.from(messageBytes.slice(0, 8)));
 							if (!messageBytes.length) {
 								throw new Error('Wallet signer message payload was empty');
 							}
-							var signed = null;
-							var firstError = null;
-							var personalMessageOptions = {
-								forceSignBridge: true,
-								expectedSender: signerAddress,
-							};
-							try {
-								signed = await SuiWalletKit.signPersonalMessage(messageBytes, personalMessageOptions);
-							} catch (error) {
-								firstError = error;
-								console.warn('[ski-chat-signer] bridge sign failed:', error && error.message ? error.message : error);
+							var dedupKey = signerAddress + ':' + messageBytes.length + ':' + Array.from(messageBytes.slice(0, 16)).join(',');
+							if (pendingSignByKey[dedupKey]) {
+								return pendingSignByKey[dedupKey];
 							}
-							if (!signed) {
-								if (isSubdomainSuiHost()) {
-									throw firstError || new Error('Sign bridge unavailable on subdomain');
-								}
+							var signPromise = (async function() {
+								var signed = null;
+								var firstError = null;
+								var personalMessageOptions = {
+									forceSignBridge: true,
+									expectedSender: signerAddress,
+								};
 								try {
-									signed = await SuiWalletKit.signPersonalMessage(messageBytes);
-								} catch (fallbackError) {
-									throw firstError || fallbackError;
+									signed = await SuiWalletKit.signPersonalMessage(messageBytes, personalMessageOptions);
+								} catch (error) {
+									firstError = error;
 								}
-							}
-							return normalizeSignPersonalMessageResult(signed, messageBytes);
+								if (!signed) {
+									if (isSubdomainSuiHost()) {
+										throw firstError || new Error('Sign bridge unavailable on subdomain');
+									}
+									try {
+										signed = await SuiWalletKit.signPersonalMessage(messageBytes);
+									} catch (fallbackError) {
+										throw firstError || fallbackError;
+									}
+								}
+								return normalizeSignPersonalMessageResult(signed, messageBytes);
+							})();
+							pendingSignByKey[dedupKey] = signPromise;
+							signPromise.finally(function() { delete pendingSignByKey[dedupKey]; });
+							return signPromise;
 						},
 						signTransaction: async function(input) {
 							if (typeof SuiWalletKit === 'undefined' || typeof SuiWalletKit.signTransaction !== 'function') {
@@ -1426,9 +1620,10 @@ export function generateThunderJs(config: ThunderConfig): string {
 								rawResult.effects = undefined;
 						}
 						if (rawResult && rawResult.$kind) return rawResult;
-						var txResult = { digest: rawResult.digest, effects: rawResult.effects };
-						if (rawResult.rawEffects) txResult.rawEffects = rawResult.rawEffects;
-						var isFailure = rawResult.effects && rawResult.effects.status && rawResult.effects.status.status === 'failure';
+						var txResult = { digest: extractTxDigest(rawResult), effects: rawResult.effects };
+						mergeTxResultFields(txResult, rawResult);
+						await hydrateTxEffectsIfNeeded(txResult, input);
+						var isFailure = isFailedTxEffects(txResult.effects);
 						return isFailure
 							? { $kind: 'FailedTransaction', FailedTransaction: txResult }
 							: { $kind: 'Transaction', Transaction: txResult };
@@ -1465,9 +1660,10 @@ export function generateThunderJs(config: ThunderConfig): string {
 							rawResult.effects = undefined;
 						}
 						if (rawResult && rawResult.$kind) return rawResult;
-						var txResult = { digest: rawResult.digest, effects: rawResult.effects };
-						if (rawResult.rawEffects) txResult.rawEffects = rawResult.rawEffects;
-						var isFailure = rawResult.effects && rawResult.effects.status && rawResult.effects.status.status === 'failure';
+						var txResult = { digest: extractTxDigest(rawResult), effects: rawResult.effects };
+						mergeTxResultFields(txResult, rawResult);
+						await hydrateTxEffectsIfNeeded(txResult, input);
+						var isFailure = isFailedTxEffects(txResult.effects);
 						return isFailure
 							? { $kind: 'FailedTransaction', FailedTransaction: txResult }
 							: { $kind: 'Transaction', Transaction: txResult };
@@ -1530,20 +1726,181 @@ export function generateThunderJs(config: ThunderConfig): string {
 				};
 			}
 
-			function channelIdToLabel(channelId, index) {
-				var compact = String(channelId || '').trim();
-				if (!compact) return 'on-chain-' + String(index + 1);
-				var meta = getStoredChannelMeta(compact);
-				if (meta && meta.name) return meta.name;
-				var baseName = firstChannelDefaultName || (isOwnerScope() ? '' : (sanitizeSlug(normalizeName(CONFIG.name || '')) || ''));
-				if (baseName) {
-					var label = index === 0 ? baseName : baseName + '-' + String(index + 1);
-					setStoredChannelMeta(compact, label, 'public');
-					return label;
+			function getStormNftId() {
+				return normalizeAddress(CONFIG && CONFIG.nftId ? CONFIG.nftId : '');
+			}
+
+			function resolveStormConfig(config) {
+				var storm = config && config.storm && typeof config.storm === 'object' ? config.storm : {};
+				return {
+					packageId: normalizeAddress(storm.packageId || ''),
+					registryId: normalizeAddress(storm.registryId || ''),
+					module: String(storm.module || 'registry').trim() || 'registry',
+					setFunction: String(storm.setFunction || 'set_channel_for_nft').trim() || 'set_channel_for_nft',
+					clearFunction: String(storm.clearFunction || 'clear_channel_for_nft').trim() || 'clear_channel_for_nft',
+					keyType: String(storm.keyType || '0x2::object::ID').trim() || '0x2::object::ID',
+				};
+			}
+
+			function hasStormRegistryConfig() {
+				return !!(
+					officialStormConfig
+					&& officialStormConfig.packageId
+					&& officialStormConfig.registryId
+					&& getStormNftId()
+				);
+			}
+
+			function extractStormChannelIdFromValue(input) {
+				if (!input) return '';
+				var queue = [input];
+				var seen = 0;
+				while (queue.length && seen < 64) {
+					var next = queue.shift();
+					seen += 1;
+					if (!next) continue;
+					if (typeof next === 'string') {
+						var normalized = normalizeAddress(next);
+						if (normalized) return normalized;
+						continue;
+					}
+					if (Array.isArray(next)) {
+						for (var i = 0; i < next.length; i++) queue.push(next[i]);
+						continue;
+					}
+					if (typeof next !== 'object') continue;
+					if (next.id != null) queue.push(next.id);
+					if (next.bytes != null) queue.push(next.bytes);
+					if (next.channelId != null) queue.push(next.channelId);
+					if (next.channel_id != null) queue.push(next.channel_id);
+					if (next.channel != null) queue.push(next.channel);
+					if (next.value != null) queue.push(next.value);
+					if (next.fields != null) queue.push(next.fields);
 				}
-				if (compact.length <= 12) return 'on-' + compact;
-				var safe = compact.replace(/^0x/i, '');
-				return 'on-' + safe.slice(0, 8);
+				return '';
+			}
+
+			async function resolveStormChannelMapping(client) {
+				if (!hasStormRegistryConfig()) return '';
+				var runtime = client || officialMessagingRuntimeClient;
+				if (!runtime || typeof runtime.getDynamicFieldObject !== 'function') return '';
+				var nftId = getStormNftId();
+				if (!nftId) return '';
+				try {
+					var dynamicResp = await runtime.getDynamicFieldObject({
+						parentId: officialStormConfig.registryId,
+						name: {
+							type: officialStormConfig.keyType || '0x2::object::ID',
+							value: nftId,
+						},
+					});
+					var dynamicValue = dynamicResp
+						&& dynamicResp.data
+						&& dynamicResp.data.content
+						&& dynamicResp.data.content.fields
+						? dynamicResp.data.content.fields.value
+						: dynamicResp;
+					return extractStormChannelIdFromValue(dynamicValue);
+				} catch (error) {
+					var errText = String(error && error.message ? error.message : error || '');
+					if (
+						errText.indexOf('not found') === -1
+						&& errText.indexOf('DynamicField') === -1
+						&& errText.indexOf('Unknown field') === -1
+					) {
+						console.warn('[storm] failed to read channel mapping:', errText);
+					}
+					return '';
+				}
+			}
+
+			async function resolveStormNftType(client) {
+				if (stormNftType) return stormNftType;
+				var runtime = client || officialMessagingRuntimeClient;
+				if (!runtime || typeof runtime.getObject !== 'function') return '';
+				var nftId = getStormNftId();
+				if (!nftId) return '';
+				try {
+					var nftResp = await runtime.getObject({
+						id: nftId,
+						options: { showType: true },
+					});
+					var nftType = String(
+						nftResp && nftResp.data && nftResp.data.type
+							? nftResp.data.type
+							: '',
+					).trim();
+					if (!nftType) return '';
+					stormNftType = nftType;
+					return nftType;
+				} catch (error) {
+					console.warn('[storm] failed to read SuiNS NFT type:', error);
+					return '';
+				}
+			}
+
+			async function appendStormSetChannelMoveCall(tx, channelObjectId, client) {
+				var mappedChannelId = normalizeAddress(channelObjectId);
+				if (!mappedChannelId || !hasStormRegistryConfig()) return false;
+				if (!tx || typeof tx.moveCall !== 'function' || typeof tx.object !== 'function') return false;
+				if (!tx.pure || typeof tx.pure.address !== 'function') return false;
+				var nftType = await resolveStormNftType(client);
+				if (!nftType) {
+					throw new Error('Storm registry requires SuiNS NFT type, but it could not be resolved.');
+				}
+				var stormTarget = officialStormConfig.packageId
+					+ '::'
+					+ officialStormConfig.module
+					+ '::'
+					+ officialStormConfig.setFunction;
+				tx.moveCall({
+					target: stormTarget,
+					typeArguments: [nftType],
+					arguments: [
+						tx.object(officialStormConfig.registryId),
+						tx.object(getStormNftId()),
+						tx.pure.address(mappedChannelId),
+					],
+				});
+				return true;
+			}
+
+			async function clearStormMappingIfChannel(channelObjectId, senderAddress) {
+				var targetChannelId = normalizeAddress(channelObjectId);
+				var signerAddress = normalizeAddress(senderAddress);
+				if (!targetChannelId || !signerAddress || !hasStormRegistryConfig()) return false;
+				var runtime = officialMessagingRuntimeClient;
+				if (!runtime) return false;
+				var mapped = stormMappedChannelId || await resolveStormChannelMapping(runtime);
+				if (!mapped || mapped !== targetChannelId) return false;
+				var txMod = await ensureOfficialSuiTransactionSdk();
+				var TxCtor = txMod && (txMod.Transaction || txMod.TransactionBlock);
+				if (!TxCtor) throw new Error('Sui transaction builder module is unavailable.');
+				var nftType = await resolveStormNftType(runtime);
+				if (!nftType) throw new Error('Storm registry clear failed: SuiNS NFT type unavailable.');
+				var tx = new TxCtor();
+				if (typeof tx.setSenderIfNotSet === 'function') tx.setSenderIfNotSet(signerAddress);
+				if (typeof tx.setGasBudget === 'function') tx.setGasBudget(60000000);
+				tx.moveCall({
+					target: officialStormConfig.packageId
+						+ '::'
+						+ officialStormConfig.module
+						+ '::'
+						+ officialStormConfig.clearFunction,
+					typeArguments: [nftType],
+					arguments: [
+						tx.object(officialStormConfig.registryId),
+						tx.object(getStormNftId()),
+					],
+				});
+				var signer = officialMessagingSigner || createOfficialMessagingSigner(signerAddress);
+				await signer.signAndExecuteTransaction({
+					transaction: tx,
+					options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
+					forceSignBridge: true,
+				});
+				stormMappedChannelId = '';
+				return true;
 			}
 
 			function isOfficialChannel(channel) {
@@ -1567,27 +1924,41 @@ export function generateThunderJs(config: ThunderConfig): string {
 					var sdk = await ensureOfficialMessagingSdk();
 					if (!sdk || !sdk.messaging) { console.error('[messaging-init] SDK missing: sdk=', !!sdk, 'messaging=', sdk && !!sdk.messaging); return null; }
 					var loaded = await Promise.all([
-						importFirstAvailable(OFFICIAL_SUI_CLIENT_URLS),
+						importFirstSuiClientModule(OFFICIAL_SUI_CLIENT_URLS),
 						importFirstAvailable(OFFICIAL_SEAL_SDK_URLS),
 					]);
 					var suiMod = loaded[0] || {};
 					var sealMod = loaded[1] || {};
-					console.log('[messaging-init] suiMod keys:', Object.keys(suiMod).slice(0, 15), 'sealMod keys:', Object.keys(sealMod).slice(0, 10));
-					var SuiClientCtor = suiMod.SuiGraphQLClient || suiMod.SuiJsonRpcClient || suiMod.SuiClient;
-					if (!SuiClientCtor || !sealMod.SealClient) {
-						throw new Error('Required Sui SDK modules are unavailable (SuiGraphQLClient=' + !!suiMod.SuiGraphQLClient + ', SealClient=' + !!sealMod.SealClient + ')');
+					var suiDefault = suiMod && suiMod.default && typeof suiMod.default === 'object' ? suiMod.default : {};
+					console.log(
+						'[messaging-init] suiMod keys:',
+						Object.keys(suiMod).slice(0, 15),
+						'suiDefault keys:',
+						Object.keys(suiDefault).slice(0, 15),
+						'sealMod keys:',
+						Object.keys(sealMod).slice(0, 10),
+					);
+					var SuiClientCtor = resolveSuiClientCtor(suiMod);
+					var SuiClientExport = getModuleExport(suiMod, 'SuiClient');
+					var SuiGraphQLCtor = getModuleExport(suiMod, 'SuiGraphQLClient');
+					var SuiJsonRpcCtor = getModuleExport(suiMod, 'SuiJsonRpcClient');
+					var SealClientCtor = getModuleExport(sealMod, 'SealClient');
+					if (!SuiClientCtor || !SealClientCtor) {
+						throw new Error('Required Sui SDK modules are unavailable (SuiClient=' + !!SuiClientExport + ', SuiGraphQLClient=' + !!SuiGraphQLCtor + ', SuiJsonRpcClient=' + !!SuiJsonRpcCtor + ', SealClient=' + !!SealClientCtor + ')');
 					}
-					if (!window.SuiClient) window.SuiClient = SuiClientCtor;
-					if (!window.SuiGraphQLClient) window.SuiGraphQLClient = SuiClientCtor;
+					if (!window.SuiClient) window.SuiClient = SuiClientExport || SuiJsonRpcCtor || SuiClientCtor;
+					if (!window.SuiGraphQLClient && SuiGraphQLCtor) window.SuiGraphQLClient = SuiGraphQLCtor;
 
 					var config = await fetchOfficialMessagingConfig();
 					var network = getNetwork();
+					var rpcUrl = getRpcUrlForNetwork(network);
 					var graphqlUrl = getGraphqlUrlForNetwork(network);
 					var sealServers = resolveSealServerConfigs(network, config);
 					if (!sealServers.length) {
 						throw new Error('No Seal key servers configured for messaging SDK');
 					}
 					var sealThreshold = resolveSealThreshold(config, sealServers.length);
+					officialSealThreshold = sealThreshold;
 					var walrusConfig = resolveWalrusConfig(network, config);
 					var signer = createOfficialMessagingSigner(normalizedAddress);
 
@@ -1596,13 +1967,14 @@ export function generateThunderJs(config: ThunderConfig): string {
 						resolvedPackageConfig = config.sdk.messagingPackageConfig;
 					}
 					officialMessagingPackageId = resolvedPackageConfig.packageId;
+					officialStormConfig = resolveStormConfig(config);
 
-					var clientOpts = { url: graphqlUrl, network: network };
+					var isGraphqlClientCtor = !!(SuiGraphQLCtor && SuiClientCtor === SuiGraphQLCtor);
+					var clientOpts = { url: isGraphqlClientCtor ? graphqlUrl : rpcUrl, network: network };
 					if (officialMessagingPackageId) {
 						clientOpts.mvr = { overrides: { packages: { '@local-pkg/sui-stack-messaging': officialMessagingPackageId } } };
 					}
 					var baseClient = new SuiClientCtor(clientOpts);
-					var SealClientCtor = sealMod.SealClient;
 					var sealExtension = {
 						name: 'seal',
 						register: (client) => new SealClientCtor({ suiClient: client, serverConfigs: sealServers, verifyKeyServers: false }),
@@ -1636,6 +2008,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 					}
 
 					officialMessagingClient = client;
+					officialMessagingRuntimeClient = withMessaging;
 					officialMessagingAddress = normalizedAddress;
 					officialMessagingSigner = signer;
 					officialMessagingSdkStatus = 'ready';
@@ -1645,8 +2018,12 @@ export function generateThunderJs(config: ThunderConfig): string {
 					.catch(function(error) {
 						console.error('[messaging-init] FAILED:', error && error.message || error, error && error.stack || '');
 						officialMessagingClient = null;
+						officialMessagingRuntimeClient = null;
 						officialMessagingSigner = null;
 						officialMessagingAddress = '';
+						officialStormConfig = null;
+						stormMappedChannelId = '';
+						stormNftType = '';
 						return null;
 					})
 					.finally(function() {
@@ -1659,6 +2036,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 			async function loadOfficialChannels() {
 				officialChannelStateById = {};
 				officialChannelCount = 0;
+				stormMappedChannelId = '';
 				var address = normalizeAddress(getAddress());
 				if (!address) {
 					renderServerHeader();
@@ -1684,12 +2062,12 @@ export function generateThunderJs(config: ThunderConfig): string {
 					}
 
 					var channelIds = [];
-					var memberCapByChannel = {};
+					var memberCapsByChannel = {};
 					var memberAddressByChannel = {};
 					for (var i = 0; i < memberships.length; i++) {
 						var item = memberships[i];
-						var channelId = String(item && item.channel_id ? item.channel_id : '').trim();
-						var memberCapId = String(item && item.member_cap_id ? item.member_cap_id : '').trim();
+						var channelId = normalizeAddress(item && item.channel_id ? item.channel_id : '');
+						var memberCapId = normalizeAddress(item && item.member_cap_id ? item.member_cap_id : '');
 						var memberAddress = normalizeAddress(
 							(item && (
 								item.member_address
@@ -1699,16 +2077,34 @@ export function generateThunderJs(config: ThunderConfig): string {
 							)) || address,
 						);
 						if (!channelId || !memberCapId) continue;
-						if (!memberCapByChannel[channelId]) {
+						if (!memberCapsByChannel[channelId]) {
 							channelIds.push(channelId);
+							memberCapsByChannel[channelId] = [];
 						}
-						memberCapByChannel[channelId] = memberCapId;
-						memberAddressByChannel[channelId] = memberAddress || address;
+						if (memberCapsByChannel[channelId].indexOf(memberCapId) === -1) {
+							memberCapsByChannel[channelId].push(memberCapId);
+						}
+						if (!memberAddressByChannel[channelId]) memberAddressByChannel[channelId] = memberAddress || address;
 					}
+					channelIds.sort(function(a, b) {
+						if (a < b) return -1;
+						if (a > b) return 1;
+						return 0;
+					});
 					if (!channelIds.length) {
 						renderServerHeader();
 						return [];
 					}
+					var resolvedStormMappedChannelId = '';
+					try {
+						resolvedStormMappedChannelId = await resolveStormChannelMapping(officialMessagingRuntimeClient);
+					} catch (_stormReadErr) {
+						resolvedStormMappedChannelId = '';
+					}
+					if (resolvedStormMappedChannelId && channelIds.indexOf(resolvedStormMappedChannelId) === -1) {
+						resolvedStormMappedChannelId = '';
+					}
+					stormMappedChannelId = resolvedStormMappedChannelId;
 
 					var creatorCapByChannel = {};
 					if (typeof client.getCreatorCap === 'function') {
@@ -1716,7 +2112,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 							var creatorChannelId = channelIds[cc];
 							try {
 								var creatorCap = await client.getCreatorCap(address, creatorChannelId);
-								var creatorCapId = String(
+								var creatorCapId = normalizeAddress(
 									creatorCap && creatorCap.id && creatorCap.id.id
 										? creatorCap.id.id
 										: creatorCap && creatorCap.id
@@ -1728,22 +2124,14 @@ export function generateThunderJs(config: ThunderConfig): string {
 						}
 					}
 
-					var fallbackBase = sanitizeSlug(firstChannelDefaultName || '')
-						|| (isOwnerScope() ? '' : sanitizeSlug(normalizeName(CONFIG.name || '')))
-						|| 'public';
-					var fallbackOrdinal = 0;
-					var usedSyntheticNames = {};
-					for (var p = 0; p < channelIds.length; p++) {
-						var existingMeta = getStoredChannelMeta(channelIds[p]);
-						if (!existingMeta || !existingMeta.name) continue;
-						usedSyntheticNames[existingMeta.name] = true;
-					}
-
 					var channelObjects = [];
 					var membershipCapIds = [];
 					for (var mc = 0; mc < channelIds.length; mc++) {
-						var nextCap = String(memberCapByChannel[channelIds[mc]] || '').trim();
-						if (nextCap) membershipCapIds.push(nextCap);
+						var capList = memberCapsByChannel[channelIds[mc]] || [];
+						for (var cp = 0; cp < capList.length; cp++) {
+							var nextCap = String(capList[cp] || '').trim();
+							if (nextCap && membershipCapIds.indexOf(nextCap) === -1) membershipCapIds.push(nextCap);
+						}
 					}
 					try {
 						channelObjects = await client.getChannelObjectsByChannelIds({
@@ -1766,48 +2154,67 @@ export function generateThunderJs(config: ThunderConfig): string {
 					for (var j = 0; j < channelObjects.length; j++) {
 						var object = channelObjects[j];
 						if (!object) continue;
-						var objectId = String(
+						var objectId = normalizeAddress(
 							object.id && object.id.id ? object.id.id
 							: typeof object.id === 'string' ? object.id
 							: ''
-						).trim();
+						);
 						if (objectId) channelObjectById[objectId] = object;
 					}
+					var canonicalPublicName = getCanonicalPublicChannelName();
+					var canonicalOnChainId = resolvedStormMappedChannelId;
+					if (!canonicalOnChainId && channelIds.length) canonicalOnChainId = channelIds[0];
 					var officialChannels = [];
 					for (var k = 0; k < channelIds.length; k++) {
 						var sdkChannelId = channelIds[k];
-						if (isChannelDismissed(sdkChannelId)) continue;
-						var memberCapId = String(memberCapByChannel[sdkChannelId] || '').trim();
+						var memberCapCandidates = Array.isArray(memberCapsByChannel[sdkChannelId]) ? memberCapsByChannel[sdkChannelId].slice(0) : [];
+						var memberCapId = normalizeAddress(memberCapCandidates[0] || '');
+						var keyEditorMemberCapId = '';
 						var memberAddress = String(memberAddressByChannel[sdkChannelId] || address || '').trim();
 						var channelObject = channelObjectById[sdkChannelId]
 							|| (channelObjects.length === channelIds.length ? channelObjects[k] : null);
+						for (var capIdx = 0; capIdx < memberCapCandidates.length; capIdx++) {
+							var capCandidate = String(memberCapCandidates[capIdx] || '').trim();
+							if (!capCandidate) continue;
+							if (!keyEditorMemberCapId && channelHasEditEncryptionPermission(channelObject, capCandidate)) {
+								keyEditorMemberCapId = capCandidate;
+							}
+						}
+						if (keyEditorMemberCapId) memberCapId = keyEditorMemberCapId;
 						var resolvedEncryptedKey = extractEncryptedKeyFromChannelObject(channelObject);
 						if (!resolvedEncryptedKey) {
 							console.debug('[ski-chat] Channel missing encrypted key (send disabled until repaired):', sdkChannelId);
 						}
 						var storedMeta = getStoredChannelMeta(sdkChannelId);
 						var visibility = storedMeta && storedMeta.visibility === 'private' ? 'private' : 'public';
-						if (!storedMeta || !storedMeta.name) {
-							var nextLabel = '';
-							while (!nextLabel) {
-								var candidate = fallbackBase;
-								if (fallbackOrdinal > 0) candidate = fallbackBase + '-' + String(fallbackOrdinal + 1);
-								fallbackOrdinal += 1;
-								if (!usedSyntheticNames[candidate]) nextLabel = candidate;
-							}
-							setStoredChannelMeta(sdkChannelId, nextLabel, visibility);
-							storedMeta = getStoredChannelMeta(sdkChannelId);
-							usedSyntheticNames[nextLabel] = true;
+						var syntheticId = '';
+						if (visibility !== 'private' && sdkChannelId === canonicalOnChainId) {
+							syntheticId = canonicalPublicName || 'public';
+							setStoredChannelMeta(sdkChannelId, syntheticId, visibility);
 						} else {
-							usedSyntheticNames[storedMeta.name] = true;
+							var preferredMetaName = storedMeta && storedMeta.name ? sanitizeSlug(storedMeta.name) : '';
+							if (preferredMetaName && preferredMetaName !== canonicalPublicName) {
+								syntheticId = preferredMetaName;
+							} else {
+								var suffix = String(sdkChannelId || '').replace(/^0x/i, '').slice(0, 6) || String(k + 1);
+								var prefix = visibility === 'private'
+									? 'dm'
+									: ((canonicalPublicName || 'public') + '-x');
+								syntheticId = prefix + '-' + sanitizeSlug(suffix);
+							}
 						}
-						var syntheticId = storedMeta && storedMeta.name
-							? storedMeta.name
-							: channelIdToLabel(sdkChannelId, k);
-						while (officialChannelStateById[syntheticId]) {
-							syntheticId = syntheticId + '-' + String(k + 1);
+						if (officialChannelStateById[syntheticId]) {
+							var channelSuffix = String(sdkChannelId || '').replace(/^0x/i, '').slice(0, 6);
+							var suffixBase = channelSuffix ? sanitizeSlug(channelSuffix) : String(k + 1);
+							var baseSyntheticId = syntheticId;
+							syntheticId = baseSyntheticId + '-' + suffixBase;
+							var suffixIndex = 2;
+							while (officialChannelStateById[syntheticId]) {
+								syntheticId = baseSyntheticId + '-' + suffixBase + '-' + String(suffixIndex);
+								suffixIndex += 1;
+							}
 						}
-						var creatorCapId = String(creatorCapByChannel[sdkChannelId] || '').trim();
+						var creatorCapId = normalizeAddress(creatorCapByChannel[sdkChannelId] || '');
 						var createdAtMs = Number(
 							channelObject && channelObject.created_at_ms
 								? channelObject.created_at_ms
@@ -1816,6 +2223,8 @@ export function generateThunderJs(config: ThunderConfig): string {
 						officialChannelStateById[syntheticId] = {
 							channelId: sdkChannelId,
 							memberCapId: memberCapId,
+							memberCapIds: memberCapCandidates,
+							keyEditorMemberCapId: keyEditorMemberCapId || null,
 							memberAddress: memberAddress || address,
 							encryptedKey: resolvedEncryptedKey || null,
 							creatorCapId: creatorCapId || null,
@@ -1887,16 +2296,16 @@ export function generateThunderJs(config: ThunderConfig): string {
 		if (!root) return;
 
 		root.innerHTML = ''
-			+ '<button id="thunder-bubble" aria-label="Open secure chat">'
-			+ '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-			+ '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
+			+ '<button id="thunder-bubble" aria-label="Open Thunder">'
+			+ '<img src="/media-pack/ThunderIcon.png" alt="Thunder" draggable="false">'
+			+ '<div class="thunder-shockwave" id="thunder-shockwave"></div>'
 			+ '</button>'
 			+ '<div id="thunder-backdrop"></div>'
 			+ '<div id="thunder-panel">'
 			+ '<div class="thunder-header">'
 			+ '<div class="thunder-ident">'
 			+ '<button class="thunder-avatar-btn" id="thunder-brand-icon" aria-label="Open profile or connect" title="Open profile or connect on sui.ski">'
-			+ '<img class="thunder-avatar" src="/media-pack/dotSKI.png" alt=".ski">'
+			+ '<img class="thunder-avatar" src="/media-pack/dotSKI.png" alt=".SKI">'
 			+ '</button>'
 			+ '<div><div class="thunder-server-title" id="thunder-server-title">Secure Chat</div><div class="thunder-server-meta" id="thunder-server-meta">Wallet-based messaging</div></div>'
 			+ '</div>'
@@ -1908,7 +2317,9 @@ export function generateThunderJs(config: ThunderConfig): string {
 			+ '<aside class="thunder-sidebar">'
 			+ '<div class="thunder-sidebar-title-row">'
 			+ '<div class="thunder-sidebar-title">Channels</div>'
-			+ '<button class="thunder-sidebar-delete-all-btn" id="thunder-delete-all-btn" style="display:none">Delete All</button>'
+			+ '<div class="thunder-sidebar-title-actions">'
+			+ '<button class="thunder-sidebar-reset-btn" id="thunder-reset-local-btn" title="Clear local Thunder channel cache">Reset</button>'
+			+ '</div>'
 			+ '</div>'
 			+ '<div id="thunder-channel-list"></div>'
 			+ '<div class="thunder-sidebar-footer">'
@@ -1928,6 +2339,8 @@ export function generateThunderJs(config: ThunderConfig): string {
 			+ '</button>'
 			+ '<div class="thunder-channel-gear-menu" id="thunder-channel-gear-menu" style="display:none">'
 			+ '<button class="thunder-gear-item" id="thunder-gear-sync">Sync</button>'
+			+ '<button class="thunder-gear-item" id="thunder-gear-storm">Set primary</button>'
+			+ '<button class="thunder-gear-item" id="thunder-gear-repair">Repair key</button>'
 			+ '<button class="thunder-gear-item" id="thunder-gear-rename">Rename</button>'
 			+ '<button class="thunder-gear-item thunder-gear-item-danger" id="thunder-gear-purge">Purge</button>'
 			+ '</div>'
@@ -1958,6 +2371,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 		var sendBtn = document.getElementById('thunder-send-btn');
 		var brandIconEl = document.getElementById('thunder-brand-icon');
 		var deleteAllBtn = document.getElementById('thunder-delete-all-btn');
+		var resetLocalBtn = document.getElementById('thunder-reset-local-btn');
 		var composerIdentityEl = document.getElementById('thunder-composer-identity');
 		var channelNameEl = document.getElementById('thunder-channel-name');
 		var channelListEl = document.getElementById('thunder-channel-list');
@@ -2064,9 +2478,8 @@ export function generateThunderJs(config: ThunderConfig): string {
 		}
 
 		function renderServerHeader() {
-			var titleSlug = isOwnerScope() && firstChannelDefaultName
-				? firstChannelDefaultName
-				: sanitizeSlug(normalizeName(CONFIG.name || ''));
+			var titleSlug = sanitizeSlug(normalizeName(CONFIG.name || ''))
+				|| ((isOwnerScope() && firstChannelDefaultName) ? firstChannelDefaultName : '');
 			if (!titleSlug) {
 				var fromDisplay = sanitizeSlug(normalizeName(server.displayName || ''));
 				if (fromDisplay && fromDisplay !== 'sui-ski') titleSlug = fromDisplay;
@@ -2202,11 +2615,14 @@ export function generateThunderJs(config: ThunderConfig): string {
 		function renderChannelList() {
 			var publicChannels = [];
 			var privateChannels = [];
+			var extraPublicChannels = [];
 			for (var i = 0; i < channels.length; i++) {
 				var nextChannel = channels[i];
 				var isPrivate = !!nextChannel.encrypted || String(nextChannel.id || '').indexOf('dm-') === 0;
 				if (isPrivate) {
 					privateChannels.push(nextChannel);
+				} else if (isOfficialChannel(nextChannel) && !isCanonicalPublicChannel(nextChannel)) {
+					extraPublicChannels.push(nextChannel);
 				} else {
 					publicChannels.push(nextChannel);
 				}
@@ -2224,54 +2640,86 @@ export function generateThunderJs(config: ThunderConfig): string {
 					sdk: 'bootstrap',
 				});
 			}
+			if (!showExtraPublicChannels && activeChannel) {
+				for (var ac = 0; ac < extraPublicChannels.length; ac++) {
+					if (extraPublicChannels[ac] && extraPublicChannels[ac].id === activeChannel) {
+						var canonical = getCanonicalPublicChannelId();
+						if (canonical && canonical !== activeChannel) activeChannel = canonical;
+						break;
+					}
+				}
+			}
 
 			var html = '';
-			function renderChannelSection(title, list) {
+			function renderChannelItem(channel, allowBurn) {
+				var isActive = channel.id === activeChannel;
+				var isPinned = isCanonicalPublicChannel(channel);
+				var displayName = channel.name;
+				var displayPrefix = channel.encrypted ? '🔒 ' : '★ ';
+				var displayLabel = displayPrefix + String(displayName || '');
+				var isBootstrap = channel.sdk === 'bootstrap';
+				var showAccept = isBootstrap && isConnectedServerOwner() && !channelAcceptPending;
+				var state = getOfficialChannelState(channel.id);
+				var canManage = !!(state && state.canManage);
+				var showBurn = !!(allowBurn && isOfficialChannel(channel) && canManage && !isPinned);
+				var isBurning = !!channelBurnPendingById[channel.id];
+				var ownerGold = !channel.encrypted && isConnectedServerOwner() ? ' owner-gold' : '';
+				html += '<div class="thunder-channel-item' + (isActive ? ' active' : '') + (isPinned ? ' pinned' : '') + ownerGold + '" data-channel="' + escapeHtml(channel.id) + '">'
+					+ '<span class="thunder-channel-main">'
+					+ '<span class="thunder-channel-name">' + escapeHtml(displayLabel) + '</span>'
+					+ '</span>';
+				if (showAccept) {
+					html += '<button class="thunder-channel-accept-btn" data-accept-channel="' + escapeHtml(channel.id) + '" title="Create #' + escapeHtml(displayName) + ' on-chain">Accept</button>';
+				} else if (isBootstrap && channelAcceptPending) {
+					html += '<span class="thunder-channel-accept-pending">...</span>';
+				} else if (showBurn) {
+					html += '<button class="thunder-channel-delete" data-burn-channel="' + escapeHtml(channel.id) + '"'
+						+ (isBurning ? ' disabled' : '')
+						+ ' title="Delete #' + escapeHtml(displayName) + ' for storage rebate">'
+						+ (isBurning ? '...' : '✕')
+						+ '</button>';
+				}
+				html += '</div>';
+			}
+			function renderChannelSection(title, list, allowBurn) {
 				html += '<div class="thunder-channel-group">';
 				html += '<div class="thunder-channel-group-title">' + escapeHtml(title) + '</div>';
 				if (!list.length) {
 					html += '<div class="thunder-sidebar-empty">No ' + escapeHtml(title.toLowerCase()) + ' channels</div>';
 				} else {
 					for (var j = 0; j < list.length; j++) {
-						var channel = list[j];
-						var isActive = channel.id === activeChannel;
-						var isPinned = isCanonicalPublicChannel(channel);
-						var displayName = channel.name;
-						var displayPrefix = channel.encrypted ? '🔒 ' : '★ ';
-						var displayLabel = displayPrefix + String(displayName || '');
-						var isBootstrap = channel.sdk === 'bootstrap';
-						var showAccept = isBootstrap && isConnectedServerOwner() && !channelAcceptPending;
-						var state = getOfficialChannelState(channel.id);
-						var canManage = !!(state && state.canManage);
-						var showBurn = !!(isOfficialChannel(channel) && canManage && !isPinned);
-						var isBurning = !!channelBurnPendingById[channel.id];
-						var ownerGold = !channel.encrypted && isConnectedServerOwner() ? ' owner-gold' : '';
-						html += '<div class="thunder-channel-item' + (isActive ? ' active' : '') + (isPinned ? ' pinned' : '') + ownerGold + '" data-channel="' + escapeHtml(channel.id) + '">'
-							+ '<span class="thunder-channel-main">'
-							+ '<span class="thunder-channel-name">' + escapeHtml(displayLabel) + '</span>'
-							+ '</span>';
-						if (showAccept) {
-							html += '<button class="thunder-channel-accept-btn" data-accept-channel="' + escapeHtml(channel.id) + '" title="Create #' + escapeHtml(displayName) + ' on-chain">Accept</button>';
-						} else if (isBootstrap && channelAcceptPending) {
-							html += '<span class="thunder-channel-accept-pending">...</span>';
-						} else if (showBurn) {
-							html += '<button class="thunder-channel-delete" data-burn-channel="' + escapeHtml(channel.id) + '"'
-								+ (isBurning ? ' disabled' : '')
-								+ ' title="Delete #' + escapeHtml(displayName) + ' for storage rebate">'
-								+ (isBurning ? '...' : '✕')
-								+ '</button>';
-						}
-						html += '</div>';
+						renderChannelItem(list[j], !!allowBurn);
 					}
 				}
 				html += '</div>';
 			}
 
-			renderChannelSection('Public', publicChannels);
-			renderChannelSection('Private', privateChannels);
+			renderChannelSection('Public', publicChannels, false);
+			if (extraPublicChannels.length) {
+				var ownerCanClean = isConnectedServerOwner();
+				html += '<div class="thunder-channel-group thunder-channel-group-extra">';
+				html += '<div class="thunder-extra-head">';
+				html += '<button class="thunder-extra-toggle" data-toggle-extra-public="' + (showExtraPublicChannels ? 'hide' : 'show') + '">'
+					+ (showExtraPublicChannels ? 'Hide extras' : 'Show extras')
+					+ ' (' + String(extraPublicChannels.length) + ')</button>';
+				if (ownerCanClean) {
+					html += '<button class="thunder-extra-clean" data-clean-extra-public="1">Burn extras</button>';
+				}
+				html += '</div>';
+				if (showExtraPublicChannels) {
+					for (var ep = 0; ep < extraPublicChannels.length; ep++) {
+						renderChannelItem(extraPublicChannels[ep], true);
+					}
+				} else {
+					html += '<div class="thunder-sidebar-empty">Hidden until expanded.</div>';
+				}
+				html += '</div>';
+			}
+			renderChannelSection('Private', privateChannels, true);
 
 			channelListEl.innerHTML = html;
 			updateDeleteAllButton();
+			updateResetLocalButton();
 		}
 
 		function getDeletableChannelIds() {
@@ -2299,6 +2747,67 @@ export function generateThunderJs(config: ThunderConfig): string {
 			deleteAllBtn.textContent = 'Delete All (' + String(deletable.length) + ')';
 		}
 
+		function updateResetLocalButton() {
+			if (!resetLocalBtn) return;
+			var hasMeta = false;
+			for (var metaKey in channelMetaById) {
+				if (Object.prototype.hasOwnProperty.call(channelMetaById, metaKey)) {
+					hasMeta = true;
+					break;
+				}
+			}
+			var hasDismissed = false;
+			for (var dismissKey in dismissedChannelIds) {
+				if (Object.prototype.hasOwnProperty.call(dismissedChannelIds, dismissKey)) {
+					hasDismissed = true;
+					break;
+				}
+			}
+			resetLocalBtn.disabled = !(hasMeta || hasDismissed);
+		}
+
+		async function resetLocalChannelStorage() {
+			if (!window.localStorage) {
+				addSystemMessage('Local storage is unavailable in this browser context.');
+				return;
+			}
+			var confirmed = window.confirm('Clear local Thunder channel cache for this browser? This only affects local labels and dismissed channels.');
+			if (!confirmed) return;
+			try {
+				var keysToRemove = [];
+				for (var i = 0; i < window.localStorage.length; i++) {
+					var key = window.localStorage.key(i);
+					if (!key) continue;
+					if (key.indexOf(CHANNEL_META_CACHE_KEY_PREFIX + ':') === 0) {
+						keysToRemove.push(key);
+						continue;
+					}
+					if (key.indexOf('thunder-dismissed:') === 0) {
+						keysToRemove.push(key);
+					}
+				}
+				for (var k = 0; k < keysToRemove.length; k++) {
+					window.localStorage.removeItem(keysToRemove[k]);
+				}
+			} catch (_e) {}
+
+			channelMetaById = {};
+			dismissedChannelIds = {};
+			officialChannelStateById = {};
+			channelMessages = {};
+			channelMembersByChannelId = {};
+			joinRequestsByChannelId = {};
+			linkedCandidatesByChannelId = {};
+			showExtraPublicChannels = false;
+			activeChannel = '';
+
+			loadStoredChannelMeta();
+			loadDismissedChannels();
+			updateResetLocalButton();
+			addSystemMessage('Local Thunder cache cleared. Reloading channels...');
+			await loadChannels();
+		}
+
 
 		function ensureActiveChannel() {
 			if (!channels.length) {
@@ -2306,9 +2815,18 @@ export function generateThunderJs(config: ThunderConfig): string {
 				return;
 			}
 			for (var i = 0; i < channels.length; i++) {
-				if (channels[i].id === activeChannel) return;
+				if (channels[i].id === activeChannel) {
+					if (showExtraPublicChannels) return;
+					if (isOfficialChannel(channels[i]) && !channels[i].encrypted && !isCanonicalPublicChannel(channels[i])) {
+						var canonicalId = getCanonicalPublicChannelId();
+						if (canonicalId && canonicalId !== activeChannel) {
+							activeChannel = canonicalId;
+						}
+					}
+					return;
+				}
 			}
-			var seededName = sanitizeSlug(firstChannelDefaultName || '');
+			var seededName = sanitizeSlug(normalizeName(CONFIG.name || '')) || sanitizeSlug(firstChannelDefaultName || '');
 			if (seededName) {
 				for (var s = 0; s < channels.length; s++) {
 					var seededChannelName = sanitizeSlug(channels[s] && channels[s].name ? channels[s].name : '');
@@ -2355,6 +2873,16 @@ export function generateThunderJs(config: ThunderConfig): string {
 					var showGear = !!(official && chState && chState.canManage);
 					gearWrap.style.display = showGear ? '' : 'none';
 					gearWrap.dataset.channelId = activeChannel || '';
+					var gearStormBtn = document.getElementById('thunder-gear-storm');
+					if (gearStormBtn) {
+						var activeOnChainId = chState && chState.channelId ? normalizeAddress(chState.channelId) : '';
+						var mappedOnChainId = normalizeAddress(stormMappedChannelId || '');
+						var isMapped = !!activeOnChainId && activeOnChainId === mappedOnChainId;
+						var showStormBtn = !!(showGear && !channel.encrypted && hasStormRegistryConfig());
+						gearStormBtn.style.display = showStormBtn ? '' : 'none';
+						gearStormBtn.textContent = isMapped ? 'Primary (current)' : 'Set primary';
+						gearStormBtn.disabled = isMapped;
+					}
 					var gearMenu = document.getElementById('thunder-channel-gear-menu');
 					if (gearMenu) gearMenu.style.display = 'none';
 				}
@@ -2479,7 +3007,17 @@ export function generateThunderJs(config: ThunderConfig): string {
 					}
 					membersHtml += '</div>';
 
-					var candidates = linkedCandidatesByChannelId[activeChannel] || [];
+					var rawCandidates = linkedCandidatesByChannelId[activeChannel] || [];
+					var pendingRequestAddrs = {};
+					for (var pra = 0; pra < pendingRequests.length; pra++) {
+						var praAddr = normalizeAddress(pendingRequests[pra].requesterAddress);
+						if (praAddr) pendingRequestAddrs[praAddr] = true;
+					}
+					var candidates = [];
+					for (var fc = 0; fc < rawCandidates.length; fc++) {
+						var fcAddr = normalizeAddress(rawCandidates[fc]);
+						if (fcAddr && !pendingRequestAddrs[fcAddr]) candidates.push(fcAddr);
+					}
 					if (candidates.length && isConnectedServerOwner()) {
 						membersHtml += '<div class="thunder-members-section">';
 						membersHtml += '<div class="thunder-members-title">Linked addresses (' + String(candidates.length) + ')</div>';
@@ -2539,8 +3077,17 @@ export function generateThunderJs(config: ThunderConfig): string {
 						return;
 					}
 					if (!channels.length && isConnectedServerOwner()) {
-						var suggestedName = sanitizeSlug(firstChannelDefaultName || '') || 'public';
+						var suggestedName = sanitizeSlug(normalizeName(CONFIG.name || '')) || sanitizeSlug(firstChannelDefaultName || '') || 'public';
 						messagesEl.innerHTML = '<div class="thunder-msg system">Create #' + escapeHtml(suggestedName) + ' as your first public channel.</div>';
+						return;
+					}
+					if (messagesInitialLoadPending) {
+						messagesEl.innerHTML = '<div class="thunder-loading">'
+							+ '<div class="thunder-loading-bolt">'
+							+ '<svg viewBox="0 0 32 48" fill="none"><path d="M18 2L4 22h10L12 46l16-24H18L20 2z" fill="url(#tbl)" stroke="rgba(250,204,21,0.6)" stroke-width="0.5"/><defs><linearGradient id="tbl" x1="14" y1="2" x2="18" y2="46"><stop offset="0%" stop-color="rgba(250,204,21,0.9)"/><stop offset="100%" stop-color="rgba(234,179,8,0.5)"/></linearGradient></defs></svg>'
+							+ '</div>'
+							+ '<span class="thunder-loading-text">channeling\u2026</span>'
+							+ '</div>';
 						return;
 					}
 					messagesEl.innerHTML = '<div class="thunder-msg system">No messages yet. Start the conversation.</div>';
@@ -2588,8 +3135,9 @@ export function generateThunderJs(config: ThunderConfig): string {
 				html += '</div>';
 			}
 
+			var wasNearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
 			messagesEl.innerHTML = html;
-			messagesEl.scrollTop = messagesEl.scrollHeight;
+			if (wasNearBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
 		}
 
 		function addSystemMessage(text) {
@@ -2669,7 +3217,10 @@ export function generateThunderJs(config: ThunderConfig): string {
 				console.warn('Failed to load channel join requests:', error);
 			} finally {
 				delete joinRequestLoadPendingByChannelId[activeChannel];
-				if (isOpen) renderMessages();
+				if (isOpen) {
+					renderMessages();
+					renderThreadState();
+				}
 			}
 		}
 
@@ -2862,52 +3413,39 @@ export function generateThunderJs(config: ThunderConfig): string {
 			return false;
 		}
 
-		async function ensureDefaultPublicChannel() {
-			var senderAddress = normalizeAddress(getAddress());
-			if (!senderAddress || !isConnectedServerOwner()) return false;
-			var autoCreateState = defaultPublicChannelAutoCreateByOwner[senderAddress];
-			if (!autoCreateState) {
-				autoCreateState = { inFlight: false, created: false };
-				defaultPublicChannelAutoCreateByOwner[senderAddress] = autoCreateState;
-			}
-			if (autoCreateState.inFlight || autoCreateState.created) return false;
-			autoCreateState.inFlight = true;
-
+		async function hasAnyOnChainChannelMembership(address, client) {
+			var owner = normalizeAddress(address);
+			if (!owner) return false;
+			var messagingClient = client || await ensureOfficialMessagingClient();
+			if (!messagingClient || typeof messagingClient.getChannelMemberships !== 'function') return false;
 			try {
-				var client = await ensureOfficialMessagingClient();
-				if (!client) return false;
-				var defaultName = sanitizeSlug(await resolveFirstChannelDefaultName()) || 'public';
-				var linkedMembers = await resolveLinkedTargetAddresses(senderAddress);
-				var createResult = await client.executeCreateChannelTransaction({
-					signer: officialMessagingSigner || createOfficialMessagingSigner(senderAddress),
-					initialMembers: linkedMembers.addresses,
+				var resp = await messagingClient.getChannelMemberships({
+					owner: owner,
+					limit: 1,
 				});
-				var channelId = String(createResult && createResult.channelId ? createResult.channelId : '');
-				if (!channelId) return false;
-				setStoredChannelMeta(channelId, defaultName, 'public');
-				autoCreateState.created = true;
-				return true;
-			} catch (error) {
-				console.warn('Default public channel auto-create failed:', error);
+				var memberships = resp && Array.isArray(resp.memberships) ? resp.memberships : [];
+				return memberships.length > 0;
+			} catch (_e) {
 				return false;
-			} finally {
-				autoCreateState.inFlight = false;
 			}
 		}
 
 		async function loadChannels() {
+			if (loadChannelsInFlight) return;
+			loadChannelsInFlight = true;
 			try {
 				await resolveFirstChannelDefaultName().catch(function() {});
 				var resolvedOwnerAddress = normalizeAddress(await resolveEffectiveOwnerAddress().catch(function() { return ''; }));
 				server.ownerAddress = resolvedOwnerAddress || null;
 				var officialChannels = await loadOfficialChannels();
 				channels = officialChannels;
-				var serverIdentityName = (isOwnerScope() && firstChannelDefaultName)
-					? firstChannelDefaultName
-					: sanitizeSlug(normalizeName(CONFIG.name || server.name || 'on-chain')) || 'on-chain';
-				var serverIdentityDisplay = (isOwnerScope() && firstChannelDefaultName)
-					? (firstChannelDefaultName + '.sui')
-					: (CONFIG.name ? (sanitizeSlug(normalizeName(CONFIG.name)) + '.sui') : 'On-chain');
+				var serverIdentityName = sanitizeSlug(normalizeName(CONFIG.name || ''))
+					|| ((isOwnerScope() && firstChannelDefaultName) ? firstChannelDefaultName : '')
+					|| sanitizeSlug(normalizeName(server.name || 'on-chain'))
+					|| 'on-chain';
+				var serverIdentityDisplay = CONFIG.name
+					? (sanitizeSlug(normalizeName(CONFIG.name)) + '.sui')
+					: ((isOwnerScope() && firstChannelDefaultName) ? (firstChannelDefaultName + '.sui') : 'On-chain');
 				server = {
 					id: 'on-chain',
 					name: serverIdentityName,
@@ -2919,14 +3457,20 @@ export function generateThunderJs(config: ThunderConfig): string {
 				ensureActiveChannel();
 				renderServerHeader();
 				renderChannelList();
+				messagesInitialLoadPending = true;
 				renderMessages();
 				applyComposerState();
-					if (activeChannel) {
-						await loadJoinRequestsForActiveChannel();
-						await loadMembersForActiveChannel();
-					}
 					if (activeChannel) await pollChannelMessages();
-				} catch (_e) {}
+					if (activeChannel) {
+						await loadJoinRequestsForActiveChannel().catch(function() {});
+						await loadMembersForActiveChannel().catch(function() {});
+					}
+				} catch (_e) {
+					messagesInitialLoadPending = false;
+					console.warn('[ski-chat] loadChannels failed:', _e);
+				} finally {
+					loadChannelsInFlight = false;
+				}
 			}
 
 		async function pollChannelMessages() {
@@ -2937,13 +3481,17 @@ export function generateThunderJs(config: ThunderConfig): string {
 				var state = getOfficialChannelState(activeChannel);
 				var client = await ensureOfficialMessagingClient();
 				var userAddress = normalizeAddress(getAddress());
-				if (!state || !client || !userAddress) return;
+				if (!state || !client || !userAddress) {
+					messagesInitialLoadPending = false;
+					return;
+				}
 				var result = await client.getChannelMessages({
 					channelId: state.channelId,
 					userAddress: userAddress,
 					limit: OFFICIAL_MESSAGE_LIMIT,
 					direction: 'backward',
 				});
+				messagesInitialLoadPending = false;
 				var sourceMessages = result && Array.isArray(result.messages) ? result.messages : [];
 				var mapped = [];
 				for (var i = 0; i < sourceMessages.length; i++) {
@@ -3011,7 +3559,11 @@ export function generateThunderJs(config: ThunderConfig): string {
 				renderMessages();
 				applyComposerState();
 			} catch (error) {
-				console.warn('Official channel poll failed:', error);
+				messagesInitialLoadPending = false;
+				console.warn('[ski-chat] poll failed for channel', activeChannel, error);
+				if (!channelMessages[activeChannel]) channelMessages[activeChannel] = [];
+				renderMessages();
+				applyComposerState();
 			}
 		}
 
@@ -3031,6 +3583,14 @@ export function generateThunderJs(config: ThunderConfig): string {
 		async function acceptChannel(channelName) {
 			if (channelAcceptPending) return;
 			if (!isConnectedServerOwner()) return;
+			if (hasPublicChannel(channels)) {
+				var existingId = getCanonicalPublicChannelId();
+				if (existingId) {
+					switchChannel(existingId);
+					addSystemMessage('Switched to existing public channel.');
+				}
+				return;
+			}
 			var senderAddress = normalizeAddress(getAddress());
 			if (!senderAddress) {
 				addSystemMessage('Connect wallet to accept channel.');
@@ -3045,12 +3605,20 @@ export function generateThunderJs(config: ThunderConfig): string {
 					addSystemMessage('On-chain messaging client is unavailable.');
 					return;
 				}
+				var hasExistingMembership = await hasAnyOnChainChannelMembership(senderAddress, client);
+				if (hasExistingMembership) {
+					await loadChannels();
+					var existingCanonical = getCanonicalPublicChannelId();
+					if (existingCanonical) switchChannel(existingCanonical);
+					addSystemMessage('Existing on-chain channel found. Switched to primary channel.');
+					return;
+				}
 				var linkedMembers = await resolveLinkedTargetAddresses(senderAddress);
 				var createResult = await client.executeCreateChannelTransaction({
 					signer: officialMessagingSigner || createOfficialMessagingSigner(senderAddress),
 					initialMembers: linkedMembers.addresses,
 				});
-				var channelId = String(createResult && createResult.channelId ? createResult.channelId : '');
+				var channelId = normalizeAddress(createResult && createResult.channelId ? createResult.channelId : '');
 				if (channelId) {
 					setStoredChannelMeta(channelId, cleanName, 'public');
 				}
@@ -3172,19 +3740,10 @@ export function generateThunderJs(config: ThunderConfig): string {
 			var label = sanitizeSlug(channel.name || cleanId) || cleanId;
 
 			if (!state || !state.channelId || !state.creatorCapId) {
-				if (!skipConfirm && !window.confirm('Dismiss #' + label + ' from the sidebar?')) {
-					return { ok: false, error: 'User cancelled.' };
+				if (!suppressFailureMessage) {
+					addSystemMessage('Cannot delete #' + label + ' on-chain because CreatorCap is unavailable. Reset local cache and retry.');
 				}
-				if (state && state.channelId) dismissChannelById(state.channelId);
-				removeStoredChannelMeta(state ? state.channelId : cleanId);
-				delete channelMessages[cleanId];
-				channels = channels.filter(function(c) { return c.id !== cleanId; });
-				delete officialChannelStateById[cleanId];
-				renderChannelList();
-				renderMessages();
-				applyComposerState();
-				if (!suppressSuccessMessage) addSystemMessage('Dismissed #' + label + ' from sidebar.');
-				return { ok: true, channelId: cleanId, channelLabel: label, dismissed: true };
+				return { ok: false, error: 'CreatorCap is unavailable for on-chain deletion.' };
 			}
 
 			var senderAddress = normalizeAddress(await ensureWalletSigningAddress());
@@ -3224,8 +3783,8 @@ export function generateThunderJs(config: ThunderConfig): string {
 					options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
 					forceSignBridge: true,
 				}));
+				await clearStormMappingIfChannel(state.channelId, senderAddress);
 
-				dismissChannelById(state.channelId);
 				removeStoredChannelMeta(state.channelId);
 				delete channelMessages[cleanId];
 				channels = channels.filter(function(c) { return c.id !== cleanId; });
@@ -3242,15 +3801,12 @@ export function generateThunderJs(config: ThunderConfig): string {
 				applyComposerState();
 				return { ok: true, channelId: cleanId, channelLabel: label, rebateMist: String(rebateMist) };
 			} catch (error) {
-				dismissChannelById(state.channelId);
-				channels = channels.filter(function(c) { return c.id !== cleanId; });
-				delete officialChannelStateById[cleanId];
 				var errText = String(error && error.message ? error.message : 'unknown error');
-				if (!suppressFailureMessage) addSystemMessage('On-chain delete failed for #' + label + ': ' + errText + '. Dismissed from sidebar.');
+				if (!suppressFailureMessage) addSystemMessage('On-chain delete failed for #' + label + ': ' + errText + '.');
 				renderChannelList();
 				renderMessages();
 				applyComposerState();
-				return { ok: false, channelId: cleanId, channelLabel: label, error: errText, dismissed: true };
+				return { ok: false, channelId: cleanId, channelLabel: label, error: errText };
 			} finally {
 				channelBurnPendingById[cleanId] = false;
 			}
@@ -3268,7 +3824,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 			}
 
 			var burnTargets = [];
-			var dismissOnly = [];
+			var undeletableTargets = [];
 			for (var i = 0; i < deletable.length; i++) {
 				var cid = deletable[i];
 				var state = getOfficialChannelState(cid);
@@ -3280,33 +3836,21 @@ export function generateThunderJs(config: ThunderConfig): string {
 				if (state && state.channelId && state.memberCapId && state.creatorCapId) {
 					burnTargets.push({ channelId: state.channelId, memberCapId: state.memberCapId, creatorCapId: state.creatorCapId, label: label, syntheticId: cid });
 				} else {
-					dismissOnly.push({ channelId: state ? state.channelId : '', label: label, syntheticId: cid });
+					undeletableTargets.push({ label: label, syntheticId: cid });
 				}
 			}
-
-			var totalCount = burnTargets.length + dismissOnly.length;
-			if (!window.confirm('Remove ' + String(totalCount) + ' extra channel' + (totalCount > 1 ? 's' : '') + ' from the sidebar?')) {
+			if (!burnTargets.length) {
+				addSystemMessage('No extra channels are currently deletable on-chain. Missing CreatorCap or MemberCap.');
 				return;
 			}
 
-			for (var d = 0; d < dismissOnly.length; d++) {
-				if (dismissOnly[d].channelId) dismissChannelById(dismissOnly[d].channelId);
-				removeStoredChannelMeta(dismissOnly[d].channelId || dismissOnly[d].syntheticId);
-				delete channelMessages[dismissOnly[d].syntheticId];
-				delete officialChannelStateById[dismissOnly[d].syntheticId];
+			var totalCount = burnTargets.length;
+			var confirmText = 'Burn ' + String(totalCount) + ' non-primary channel' + (totalCount > 1 ? 's' : '') + ' on-chain?';
+			confirmText += ' This does not touch your SuiNS NFT.';
+			if (undeletableTargets.length) {
+				confirmText += ' ' + String(undeletableTargets.length) + ' cannot be burned right now.';
 			}
-			channels = channels.filter(function(c) {
-				for (var dd = 0; dd < dismissOnly.length; dd++) {
-					if (c.id === dismissOnly[dd].syntheticId) return false;
-				}
-				return true;
-			});
-
-			if (!burnTargets.length) {
-				addSystemMessage('Dismissed ' + String(dismissOnly.length) + ' channel' + (dismissOnly.length > 1 ? 's' : '') + ' from sidebar.');
-				renderChannelList();
-				renderMessages();
-				applyComposerState();
+			if (!window.confirm(confirmText)) {
 				return;
 			}
 
@@ -3340,9 +3884,11 @@ export function generateThunderJs(config: ThunderConfig): string {
 					options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
 					forceSignBridge: true,
 				}));
+				for (var sc = 0; sc < burnTargets.length; sc++) {
+					await clearStormMappingIfChannel(burnTargets[sc].channelId, senderAddress);
+				}
 
 				for (var r = 0; r < burnTargets.length; r++) {
-					dismissChannelById(burnTargets[r].channelId);
 					removeStoredChannelMeta(burnTargets[r].channelId);
 					delete channelMessages[burnTargets[r].syntheticId];
 					delete officialChannelStateById[burnTargets[r].syntheticId];
@@ -3362,20 +3908,14 @@ export function generateThunderJs(config: ThunderConfig): string {
 				var burnLabels = [];
 				for (var lb = 0; lb < burnTargets.length; lb++) burnLabels.push('#' + burnTargets[lb].label);
 				addSystemMessage('Deleted ' + String(burnTargets.length) + ' on-chain (' + burnLabels.join(', ') + ').' + rebateText);
-				if (dismissOnly.length) addSystemMessage('Dismissed ' + String(dismissOnly.length) + ' more from sidebar.');
-			} catch (error) {
-				for (var fe = 0; fe < burnTargets.length; fe++) {
-					dismissChannelById(burnTargets[fe].channelId);
-					delete officialChannelStateById[burnTargets[fe].syntheticId];
+				if (undeletableTargets.length) {
+					var undeletableLabels = [];
+					for (var ul = 0; ul < undeletableTargets.length; ul++) undeletableLabels.push('#' + undeletableTargets[ul].label);
+					addSystemMessage('Skipped undeletable channels: ' + undeletableLabels.join(', ') + '.');
 				}
-				channels = channels.filter(function(c) {
-					for (var br2 = 0; br2 < burnTargets.length; br2++) {
-						if (c.id === burnTargets[br2].syntheticId) return false;
-					}
-					return true;
-				});
+			} catch (error) {
 				var errText = String(error && error.message ? error.message : 'unknown error');
-				addSystemMessage('On-chain delete failed: ' + errText + '. All channels dismissed from sidebar.');
+				addSystemMessage('On-chain delete failed: ' + errText + '. No channels were removed locally.');
 			} finally {
 				for (var fp = 0; fp < burnTargets.length; fp++) channelBurnPendingById[burnTargets[fp].syntheticId] = false;
 				renderChannelList();
@@ -3486,7 +4026,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 		async function refreshChannelEncryptedKey(client, state, senderAddress) {
 			if (!client || !state || !state.channelId || !senderAddress) return null;
 			var attempts = [];
-			var memberCapId = String(state.memberCapId || '').trim();
+			var memberCapId = normalizeAddress(state.memberCapId || '');
 			if (memberCapId) {
 				attempts.push({
 					channelIds: [state.channelId],
@@ -3510,6 +4050,165 @@ export function generateThunderJs(config: ThunderConfig): string {
 				}
 				return null;
 			}
+
+		function extractSealEncryptedBytes(value) {
+			if (!value) return new Uint8Array(0);
+			if (value.encryptedObject) return toUint8Array(value.encryptedObject);
+			if (value.encryptedBytes) return toUint8Array(value.encryptedBytes);
+			if (value.data) return toUint8Array(value.data);
+			return toUint8Array(value);
+		}
+
+		async function repairOfficialChannelEncryptionKey(state, senderAddress) {
+			if (!state || !state.channelId || !senderAddress) return null;
+			var keyEditorMemberCapId = String(state.keyEditorMemberCapId || '').trim();
+			if (!keyEditorMemberCapId) {
+				throw new Error('No eligible member cap available for key rotation.');
+			}
+			var runtime = officialMessagingRuntimeClient;
+			if (!runtime || !runtime.seal || typeof runtime.seal.encrypt !== 'function') {
+				throw new Error('Seal client is unavailable for channel key repair.');
+			}
+			var txMod = await ensureOfficialSuiTransactionSdk();
+			var TxCtor = txMod && (txMod.Transaction || txMod.TransactionBlock);
+			if (!TxCtor) throw new Error('Sui transaction builder module is unavailable.');
+
+			var channelIdBytes = hexToBytes(state.channelId);
+			if (!channelIdBytes.length) throw new Error('Invalid channel id for key repair.');
+			var nonce = randomBytes(12);
+			var dek = randomBytes(32);
+			var sealIdentity = bytesToHex(concatBytes([channelIdBytes, nonce]));
+			if (!sealIdentity) throw new Error('Failed to derive Seal identity bytes.');
+
+			var sealResult = await runtime.seal.encrypt({
+				threshold: Math.max(1, Number(officialSealThreshold || 2)),
+				packageId: getMessagingPackageId(),
+				id: sealIdentity,
+				data: dek,
+			});
+			var encryptedBytes = extractSealEncryptedBytes(sealResult);
+			if (!encryptedBytes.length) throw new Error('Seal encryption returned empty key bytes.');
+
+			var tx = new TxCtor();
+			if (typeof tx.setSenderIfNotSet === 'function') tx.setSenderIfNotSet(senderAddress);
+			if (typeof tx.setGasBudget === 'function') tx.setGasBudget(100000000);
+			tx.moveCall({
+				target: getMessagingPackageId() + '::channel::add_encrypted_key',
+				arguments: [
+					tx.object(state.channelId),
+					tx.object(keyEditorMemberCapId),
+					tx.pure.vector('u8', encryptedBytes),
+				],
+			});
+
+			var signer = officialMessagingSigner || createOfficialMessagingSigner(senderAddress);
+			await signer.signAndExecuteTransaction({
+				transaction: tx,
+				options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
+				forceSignBridge: true,
+				client: runtime,
+			});
+
+			var repaired = await refreshChannelEncryptedKey(officialMessagingClient, state, senderAddress);
+			if (!repaired) {
+				repaired = {
+					$kind: 'Encrypted',
+					encryptedBytes: encryptedBytes,
+					version: 1,
+				};
+			}
+			state.encryptedKey = repaired;
+			return repaired;
+		}
+
+		async function repairActiveChannelEncryptionKey() {
+			var channel = getActiveChannel();
+			if (!channel || !isOfficialChannel(channel)) {
+				addSystemMessage('Select an on-chain channel first.');
+				return;
+			}
+			if (!isConnectedServerOwner()) {
+				addSystemMessage('Only the owner wallet can repair channel keys.');
+				return;
+			}
+			var senderAddress = normalizeAddress(await ensureWalletSigningAddress());
+			if (!senderAddress) {
+				addSystemMessage('Reconnect wallet signer to repair channel key.');
+				return;
+			}
+			var state = getOfficialChannelState(activeChannel);
+			if (!state || !state.channelId) {
+				addSystemMessage('Channel state is unavailable.');
+				return;
+			}
+			try {
+				addSystemMessage('Repairing channel encryption key on-chain...');
+				await repairOfficialChannelEncryptionKey(state, senderAddress);
+				await loadChannels();
+				await pollChannelMessages();
+				addSystemMessage('Channel encryption key repaired.');
+			} catch (error) {
+				addSystemMessage('Channel key repair failed: ' + String(error && error.message ? error.message : 'unknown error'));
+			}
+		}
+
+		async function setStormPrimaryForActiveChannel() {
+			var channel = getActiveChannel();
+			if (!channel || !isOfficialChannel(channel)) {
+				addSystemMessage('Select an on-chain channel first.');
+				return;
+			}
+			if (!isConnectedServerOwner()) {
+				addSystemMessage('Only the owner wallet can set Storm primary.');
+				return;
+			}
+			if (!hasStormRegistryConfig()) {
+				addSystemMessage('Storm registry is not configured for this profile yet.');
+				return;
+			}
+			var state = getOfficialChannelState(activeChannel);
+			if (!state || !state.channelId) {
+				addSystemMessage('Channel state is unavailable.');
+				return;
+			}
+			var channelObjectId = normalizeAddress(state.channelId);
+			if (!channelObjectId) {
+				addSystemMessage('Active channel has invalid on-chain ID.');
+				return;
+			}
+			if (normalizeAddress(stormMappedChannelId) === channelObjectId) {
+				addSystemMessage('#' + sanitizeSlug(channel.name || activeChannel) + ' is already Storm primary.');
+				return;
+			}
+			var senderAddress = normalizeAddress(await ensureWalletSigningAddress());
+			if (!senderAddress) {
+				addSystemMessage('Reconnect wallet signer to update Storm primary.');
+				return;
+			}
+			try {
+				var txMod = await ensureOfficialSuiTransactionSdk();
+				var TxCtor = txMod && (txMod.Transaction || txMod.TransactionBlock);
+				if (!TxCtor) throw new Error('Sui transaction builder module is unavailable.');
+				var tx = new TxCtor();
+				if (typeof tx.setSenderIfNotSet === 'function') tx.setSenderIfNotSet(senderAddress);
+				if (typeof tx.setGasBudget === 'function') tx.setGasBudget(70000000);
+				var appended = await appendStormSetChannelMoveCall(tx, channelObjectId, officialMessagingRuntimeClient);
+				if (!appended) throw new Error('Storm registry setup is unavailable in this session.');
+				var signer = officialMessagingSigner || createOfficialMessagingSigner(senderAddress);
+				await signer.signAndExecuteTransaction({
+					transaction: tx,
+					options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
+					forceSignBridge: true,
+				});
+				stormMappedChannelId = channelObjectId;
+				await loadChannels();
+				var canonicalId = getCanonicalPublicChannelId();
+				if (canonicalId) switchChannel(canonicalId);
+				addSystemMessage('Storm primary set to #' + sanitizeSlug(channel.name || activeChannel) + '.');
+			} catch (error) {
+				addSystemMessage('Failed to set Storm primary: ' + String(error && error.message ? error.message : 'unknown error'));
+			}
+		}
 
 			async function loadMembersForActiveChannel() {
 				if (!activeChannel) return;
@@ -3553,7 +4252,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 						mapped.push({
 							address: memberAddress,
 							primaryName: primaryName || '',
-							memberCapId: String(item.memberCapId || item.member_cap_id || '').trim(),
+							memberCapId: normalizeAddress(item.memberCapId || item.member_cap_id || ''),
 						});
 					}
 					var ownerAddress = getConnectedOwnerAddress();
@@ -3738,6 +4437,88 @@ export function generateThunderJs(config: ThunderConfig): string {
 				}
 			}
 
+		async function createBootstrapChannelAndSend(client, senderAddress, cleanName, outboundMessage, initialMembers) {
+			if (!client || typeof client.createChannelFlow !== 'function' || typeof client.sendMessage !== 'function') {
+				return null;
+			}
+			var signer = officialMessagingSigner || createOfficialMessagingSigner(senderAddress);
+			var flow = await client.createChannelFlow({
+				creatorAddress: senderAddress,
+				initialMemberAddresses: Array.isArray(initialMembers) ? initialMembers : [],
+			});
+			var createTx = flow.build();
+			var createRaw = await signer.signAndExecuteTransaction({
+				transaction: createTx,
+				options: {
+					showEffects: true,
+					showObjectChanges: true,
+					showRawEffects: true,
+				},
+				forceSignBridge: true,
+				client: client,
+			});
+			var createResult = unwrapTxResult(createRaw);
+			var createDigest = String(
+				(createResult && (
+					createResult.digest
+					|| createResult.transactionDigest
+					|| createResult.txDigest
+				)) || '',
+			).trim();
+			if (!createDigest) {
+				throw new Error('Create channel transaction digest was unavailable.');
+			}
+			var generatedCaps = await flow.getGeneratedCaps({ digest: createDigest });
+			var attachTx = await flow.generateAndAttachEncryptionKey();
+			var generatedKey = flow.getGeneratedEncryptionKey();
+			var channelId = normalizeAddress(
+				(generatedKey && generatedKey.channelId)
+				|| (generatedCaps && generatedCaps.creatorCap && generatedCaps.creatorCap.channel_id)
+				|| '',
+			);
+			var memberCapId = normalizeAddress(
+				generatedCaps && generatedCaps.creatorMemberCap && generatedCaps.creatorMemberCap.id
+					? (generatedCaps.creatorMemberCap.id.id || generatedCaps.creatorMemberCap.id)
+					: '',
+			);
+			var encryptedBytes = toUint8Array(generatedKey && generatedKey.encryptedKeyBytes);
+			if (!channelId || !memberCapId || !encryptedBytes.length) {
+				throw new Error('Failed to finalize bootstrap channel capabilities.');
+			}
+			var encryptedKey = {
+				$kind: 'Encrypted',
+				encryptedBytes: encryptedBytes,
+				version: 1,
+			};
+			var sendBuilder = await client.sendMessage(channelId, memberCapId, senderAddress, outboundMessage, encryptedKey);
+			if (typeof sendBuilder !== 'function') {
+				throw new Error('Messaging SDK did not return a send-message builder.');
+			}
+			await sendBuilder(attachTx);
+			await appendStormSetChannelMoveCall(attachTx, channelId, officialMessagingRuntimeClient);
+			if (attachTx && typeof attachTx.setGasBudget === 'function') {
+				attachTx.setGasBudget(100000000);
+			}
+			var finalizeRaw = await signer.signAndExecuteTransaction({
+				transaction: attachTx,
+				options: {
+					showEffects: true,
+					showObjectChanges: true,
+					showRawEffects: true,
+				},
+				forceSignBridge: true,
+				client: client,
+			});
+			unwrapTxResult(finalizeRaw);
+			stormMappedChannelId = normalizeAddress(channelId);
+			setStoredChannelMeta(channelId, cleanName, 'public');
+			return {
+				channelId: channelId,
+				memberCapId: memberCapId,
+				encryptedKey: encryptedKey,
+			};
+		}
+
 		async function send() {
 			var text = String(inputEl.value || '').trim();
 			if (!text || isSending || mutedState.server || mutedState.channel) return;
@@ -3756,9 +4537,20 @@ export function generateThunderJs(config: ThunderConfig): string {
 			applyComposerState();
 
 			try {
+				var authorName = '';
+				var selectedAuthor = sanitizeSlug(normalizeName(selectedSenderName || ''));
+				if (selectedAuthor && senderNameOptions.indexOf(selectedAuthor) !== -1) {
+					authorName = selectedAuthor;
+				} else {
+					var primaryAuthor = sanitizeSlug(normalizeName(getPrimaryName() || ''));
+					if (primaryAuthor && senderNameOptions.indexOf(primaryAuthor) !== -1) {
+						authorName = primaryAuthor;
+					}
+				}
+				var outboundMessage = buildSkiMessagePayload(text, authorName);
 				var channel = getActiveChannel();
 				if (isOfficialChannel(channel) && !channel.encrypted && !isCanonicalPublicChannel(channel)) {
-					throw new Error('Duplicate public channel detected. Burn this channel from the sidebar before sending.');
+					throw new Error('This channel is not primary. Burn extras and keep one canonical channel.');
 				}
 				if (!isOfficialChannel(channel)) {
 					var bootstrapName = sanitizeSlug((channel && channel.name) || activeChannel || '') || 'public';
@@ -3766,17 +4558,37 @@ export function generateThunderJs(config: ThunderConfig): string {
 						if (!isConnectedServerOwner()) {
 							throw new Error('This wallet is not a member of #' + bootstrapName + ' yet. Owner must create the channel or sync linked members.');
 						}
-						var createdFromBootstrap = await ensureDefaultPublicChannel();
-						if (createdFromBootstrap) {
-							await loadChannels();
-							for (var i = 0; i < channels.length; i++) {
-								var nextName = sanitizeSlug(channels[i] && channels[i].name ? channels[i].name : '');
-								if (nextName === bootstrapName && !channels[i].encrypted) {
-									activeChannel = channels[i].id;
-									break;
-								}
+						var bootstrapClient = await ensureOfficialMessagingClient();
+						if (bootstrapClient && typeof bootstrapClient.createChannelFlow === 'function' && typeof bootstrapClient.sendMessage === 'function') {
+							var existingMembership = await hasAnyOnChainChannelMembership(senderAddress, bootstrapClient);
+							if (existingMembership) {
+								await loadChannels();
+								var existingPublic = getCanonicalPublicChannelId();
+								if (existingPublic) activeChannel = existingPublic;
+								channel = getActiveChannel();
 							}
-							channel = getActiveChannel();
+						}
+						if (bootstrapClient && typeof bootstrapClient.createChannelFlow === 'function' && typeof bootstrapClient.sendMessage === 'function' && (!channel || !isOfficialChannel(channel))) {
+							var linkedMembers = await resolveLinkedTargetAddresses(senderAddress);
+							var bootstrapResult = await createBootstrapChannelAndSend(
+								bootstrapClient,
+								senderAddress,
+								bootstrapName,
+								outboundMessage,
+								linkedMembers.addresses,
+							);
+							if (!bootstrapResult || !bootstrapResult.channelId) {
+								throw new Error('Approve channel creation to open #' + bootstrapName);
+							}
+							await loadChannels();
+							var bootstrapSyntheticId = findSyntheticChannelIdByObjectId(bootstrapResult.channelId);
+							if (bootstrapSyntheticId) {
+								activeChannel = bootstrapSyntheticId;
+							}
+							inputEl.value = '';
+							inputEl.style.height = 'auto';
+							await pollChannelMessages();
+							return;
 						}
 						if (!isOfficialChannel(channel)) {
 							throw new Error('Approve channel creation to open #' + bootstrapName);
@@ -3788,58 +4600,24 @@ export function generateThunderJs(config: ThunderConfig): string {
 
 				var client = await ensureOfficialMessagingClient();
 				var state = getOfficialChannelState(activeChannel);
-					if (!client || !state) {
-						throw new Error('Official SDK channel is not ready for sending');
-					}
-					if (!state.encryptedKey) {
-						var initialKey = await refreshChannelEncryptedKey(client, state, senderAddress);
-						if (initialKey) state.encryptedKey = initialKey;
-					}
-					if (!state.encryptedKey) {
-						if (isConnectedServerOwner() && isCanonicalPublicChannel(channel)) {
-							addSystemMessage('Encryption key missing on #' + sanitizeSlug(channel.name || '') + '. Recreating channel...');
-							dismissChannelById(state.channelId);
-							removeStoredChannelMeta(state.channelId);
-							delete officialChannelStateById[activeChannel];
-							channels = channels.filter(function(c) { return c.id !== activeChannel; });
-							var ownerAddr = normalizeAddress(getAddress());
-							if (ownerAddr) delete defaultPublicChannelAutoCreateByOwner[ownerAddr];
-							var recreated = await ensureDefaultPublicChannel();
-							if (recreated) {
-								await loadChannels();
-								ensureActiveChannel();
-								renderChannelList();
-								renderMessages();
-								addSystemMessage('Channel recreated. Try sending again.');
-							} else {
-								renderChannelList();
-								renderMessages();
-								addSystemMessage('Channel recreation failed. Approve the transaction to create a new channel.');
-							}
-							applyComposerState();
-							return;
-						}
-						throw new Error('Channel encryption key unavailable for this channel. Select another channel or recreate it once.');
-					}
-					var authorName = '';
-				var selectedAuthor = sanitizeSlug(normalizeName(selectedSenderName || ''));
-				if (selectedAuthor && senderNameOptions.indexOf(selectedAuthor) !== -1) {
-					authorName = selectedAuthor;
-				} else {
-					var primaryAuthor = sanitizeSlug(normalizeName(getPrimaryName() || ''));
-					if (primaryAuthor && senderNameOptions.indexOf(primaryAuthor) !== -1) {
-						authorName = primaryAuthor;
-					}
+				if (!client || !state) {
+					throw new Error('Official SDK channel is not ready for sending');
 				}
-				var outboundMessage = buildSkiMessagePayload(text, authorName);
+				if (!state.encryptedKey) {
+					var initialKey = await refreshChannelEncryptedKey(client, state, senderAddress);
+					if (initialKey) state.encryptedKey = initialKey;
+				}
+				if (!state.encryptedKey) {
+					throw new Error('Encryption key unavailable for #' + sanitizeSlug(channel.name || '') + '. Use channel settings -> Repair key, or clean up and recreate the channel.');
+				}
 				var sendInput = {
-						signer: officialMessagingSigner || createOfficialMessagingSigner(senderAddress),
-						channelId: state.channelId,
-						memberCapId: state.memberCapId,
-						message: outboundMessage,
-					};
-					sendInput.encryptedKey = state.encryptedKey;
-					await client.executeSendMessageTransaction(sendInput);
+					signer: officialMessagingSigner || createOfficialMessagingSigner(senderAddress),
+					channelId: state.channelId,
+					memberCapId: state.memberCapId,
+					message: outboundMessage,
+				};
+				sendInput.encryptedKey = state.encryptedKey;
+				await client.executeSendMessageTransaction(sendInput);
 				inputEl.value = '';
 				inputEl.style.height = 'auto';
 				await pollChannelMessages();
@@ -3856,7 +4634,11 @@ export function generateThunderJs(config: ThunderConfig): string {
 					}
 				}
 				console.error('[send] error:', err);
-				if (isLocalSendErrorMessage(errText)) {
+				var isObjectNotFound = errText.indexOf('not found') !== -1 || errText.indexOf('ObjectNotFound') !== -1;
+				if (isObjectNotFound) {
+					addSystemMessage('Channel state is stale. Reloading channels...');
+					await loadChannels();
+				} else if (isLocalSendErrorMessage(errText)) {
 					addSystemMessage(errText);
 				} else {
 					addSystemMessage('Send failed: ' + errText);
@@ -3868,12 +4650,68 @@ export function generateThunderJs(config: ThunderConfig): string {
 			}
 		}
 
+		function thunderRumble() {
+			try {
+				var ac = new (window.AudioContext || window.webkitAudioContext)();
+				var now = ac.currentTime;
+				var dur = 0.35;
+				var gain = ac.createGain();
+				gain.gain.setValueAtTime(0.12, now);
+				gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+				gain.connect(ac.destination);
+				var osc = ac.createOscillator();
+				osc.type = 'sine';
+				osc.frequency.setValueAtTime(55, now);
+				osc.frequency.exponentialRampToValueAtTime(28, now + dur);
+				osc.connect(gain);
+				osc.start(now);
+				osc.stop(now + dur);
+				var noise = ac.createBufferSource();
+				var nBuf = ac.createBuffer(1, ac.sampleRate * dur | 0, ac.sampleRate);
+				var nData = nBuf.getChannelData(0);
+				for (var i = 0; i < nData.length; i++) nData[i] = (Math.random() * 2 - 1) * 0.3;
+				noise.buffer = nBuf;
+				var nGain = ac.createGain();
+				nGain.gain.setValueAtTime(0.06, now);
+				nGain.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.7);
+				var lp = ac.createBiquadFilter();
+				lp.type = 'lowpass';
+				lp.frequency.setValueAtTime(120, now);
+				lp.frequency.exponentialRampToValueAtTime(40, now + dur);
+				noise.connect(lp);
+				lp.connect(nGain);
+				nGain.connect(ac.destination);
+				noise.start(now);
+				noise.stop(now + dur);
+				setTimeout(function() { ac.close(); }, (dur + 0.5) * 1000);
+			} catch (_) {}
+		}
+
+		function fireShockwave() {
+			var sw = document.getElementById('thunder-shockwave');
+			if (!sw) return;
+			sw.classList.remove('fire');
+			void sw.offsetWidth;
+			sw.classList.add('fire');
+		}
+
 		function openPanel() {
 			isOpen = true;
 			panel.classList.add('open');
 			backdrop.classList.add('open');
-			bubble.style.display = 'none';
+			bubble.classList.add('open');
 			if (document.body) document.body.classList.add('thunder-open');
+			if (messagesEl && !messagesEl.hasChildNodes()) {
+				messagesEl.innerHTML = '<div class="thunder-loading">'
+					+ '<div class="thunder-loading-orbs">'
+					+ '<div class="thunder-loading-orb"></div>'
+					+ '<div class="thunder-loading-orb"></div>'
+					+ '<div class="thunder-loading-orb"></div>'
+					+ '<div class="thunder-loading-center"></div>'
+					+ '</div>'
+					+ '<span class="thunder-loading-text">tuning in\u2026</span>'
+					+ '</div>';
+			}
 			renderComposerIdentity();
 			refreshSenderNameOptions();
 			ensureWalletSigningAddress().then(function() {
@@ -3886,7 +4724,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 			}).catch(function() {});
 			loadChannels();
 			stopPolling();
-			pollTimer = setInterval(pollChannelMessages, POLL_INTERVAL);
+			pollTimer = setInterval(function() { pollChannelMessages(); pollMembersTab(); }, POLL_INTERVAL);
 			applyComposerState();
 			inputEl.focus();
 		}
@@ -3895,9 +4733,17 @@ export function generateThunderJs(config: ThunderConfig): string {
 			isOpen = false;
 			panel.classList.remove('open');
 			backdrop.classList.remove('open');
-			bubble.style.display = 'flex';
+			bubble.classList.remove('open');
 			if (document.body) document.body.classList.remove('thunder-open');
 			stopPolling();
+		}
+
+		async function pollMembersTab() {
+			if (!isOpen || !activeChannel) return;
+			if (activeThreadTab !== 'members') return;
+			await loadJoinRequestsForActiveChannel();
+			await loadMembersForActiveChannel();
+			renderThreadState();
 		}
 
 		function stopPolling() {
@@ -3906,7 +4752,19 @@ export function generateThunderJs(config: ThunderConfig): string {
 			pollTimer = null;
 		}
 
-		bubble.addEventListener('click', openPanel);
+		bubble.addEventListener('click', function() {
+			if (isOpen) { closePanel(); return; }
+			var connected = !!getAddress();
+			fireShockwave();
+			thunderRumble();
+			if (connected) { openPanel(); return; }
+			var walletModalOpen = document.body && document.body.classList.contains('wk-modal-open');
+			if (walletModalOpen) {
+				if (typeof SuiWalletKit !== 'undefined' && SuiWalletKit.closeModal) SuiWalletKit.closeModal();
+			} else {
+				if (typeof SuiWalletKit !== 'undefined' && SuiWalletKit.openModal) SuiWalletKit.openModal();
+			}
+		});
 		if (brandIconEl) {
 			brandIconEl.addEventListener('click', function(event) {
 				event.preventDefault();
@@ -3918,6 +4776,13 @@ export function generateThunderJs(config: ThunderConfig): string {
 				event.preventDefault();
 				event.stopPropagation();
 				deleteAllExtraChannels();
+			});
+		}
+		if (resetLocalBtn) {
+			resetLocalBtn.addEventListener('click', function(event) {
+				event.preventDefault();
+				event.stopPropagation();
+				resetLocalChannelStorage();
 			});
 		}
 				closeBtn.addEventListener('click', closePanel);
@@ -3976,6 +4841,19 @@ export function generateThunderJs(config: ThunderConfig): string {
 			channelListEl.addEventListener('click', function(event) {
 				var target = event.target;
 				if (!(target instanceof Element)) return;
+			var toggleExtraBtn = target.closest('[data-toggle-extra-public]');
+			if (toggleExtraBtn) {
+				event.stopPropagation();
+				showExtraPublicChannels = !showExtraPublicChannels;
+				renderChannelList();
+				return;
+			}
+			var cleanExtraBtn = target.closest('[data-clean-extra-public]');
+			if (cleanExtraBtn) {
+				event.stopPropagation();
+				deleteAllExtraChannels();
+				return;
+			}
 			var acceptBtn = target.closest('[data-accept-channel]');
 			if (acceptBtn) {
 				event.stopPropagation();
@@ -4025,11 +4903,21 @@ export function generateThunderJs(config: ThunderConfig): string {
 				}
 			});
 			var gearSync = document.getElementById('thunder-gear-sync');
+			var gearStorm = document.getElementById('thunder-gear-storm');
+			var gearRepair = document.getElementById('thunder-gear-repair');
 			var gearRename = document.getElementById('thunder-gear-rename');
 			var gearPurge = document.getElementById('thunder-gear-purge');
 			if (gearSync) gearSync.addEventListener('click', function() {
 				gearMenu.style.display = 'none';
 				syncLinkedMembersToActiveChannel(activeChannel || '');
+			});
+			if (gearStorm) gearStorm.addEventListener('click', function() {
+				gearMenu.style.display = 'none';
+				setStormPrimaryForActiveChannel();
+			});
+			if (gearRepair) gearRepair.addEventListener('click', function() {
+				gearMenu.style.display = 'none';
+				repairActiveChannelEncryptionKey();
 			});
 			if (gearRename) gearRename.addEventListener('click', function() {
 				gearMenu.style.display = 'none';
@@ -4121,8 +5009,12 @@ export function generateThunderJs(config: ThunderConfig): string {
 				var nextAddress = normalizeAddress(getAddress());
 					if (nextAddress !== officialMessagingAddress) {
 						officialMessagingClient = null;
+						officialMessagingRuntimeClient = null;
 						officialMessagingSigner = null;
 						officialMessagingAddress = '';
+						officialStormConfig = null;
+						stormMappedChannelId = '';
+						stormNftType = '';
 						officialChannelStateById = {};
 							officialChannelCount = 0;
 							joinRequestsByChannelId = {};
@@ -4135,7 +5027,6 @@ export function generateThunderJs(config: ThunderConfig): string {
 							activeThreadTab = 'chat';
 							threadStateText = '';
 							threadStateWarn = false;
-							defaultPublicChannelAutoCreateByOwner = {};
 							effectiveOwnerAddress = normalizeAddress(CONFIG.ownerAddress);
 							effectiveOwnerAddressResolved = false;
 							effectiveOwnerAddressPromise = null;

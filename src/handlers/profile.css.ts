@@ -138,25 +138,28 @@ export const profileStyles = `
 			gap: 10px;
 		}
 		.wallet-profile-btn {
-			min-height: 38px;
+			min-height: 32px;
 			border-radius: 10px;
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
-			background: transparent;
+			background: rgba(0, 0, 0, 0.92);
 			border: 1.5px solid rgba(255, 255, 255, 0.7);
 			cursor: pointer;
 			transition: all 0.2s ease;
-			padding: 6px 10px;
+			padding: 4px 10px;
 			box-shadow: 0 4px 18px rgba(2, 6, 23, 0.36);
+			forced-color-adjust: none;
 		}
-		.ski-logo-text {
-			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-			font-size: 15px;
-			font-weight: 800;
-			letter-spacing: 0.5px;
-			color: #fff;
-			-webkit-text-fill-color: #fff;
+		.wallet-profile-logo {
+			display: block;
+			width: 92px;
+			height: 24px;
+			object-fit: contain;
+			object-position: center;
+			filter: none !important;
+			-webkit-filter: none !important;
+			forced-color-adjust: none;
 		}
 		.wallet-profile-btn:hover {
 			background: rgba(255, 255, 255, 0.08);
@@ -165,13 +168,12 @@ export const profileStyles = `
 			box-shadow: 0 8px 22px rgba(2, 6, 23, 0.5), 0 0 18px rgba(255, 255, 255, 0.12);
 		}
 		.wallet-widget.has-black-diamond .wallet-profile-btn {
-			background: transparent;
+			background: rgba(0, 0, 0, 0.92);
 			border-color: rgba(255, 255, 255, 0.7);
 			box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
 		}
-		.wallet-widget.has-black-diamond .wallet-profile-btn .ski-logo-text {
-			color: #fff;
-			-webkit-text-fill-color: #fff;
+		.wallet-widget.has-black-diamond .wallet-profile-btn .wallet-profile-logo {
+			filter: none;
 		}
 		.wallet-widget.has-black-diamond .wallet-profile-btn:hover {
 			background: rgba(255, 255, 255, 0.08);
@@ -11293,51 +11295,52 @@ export const profileStyles = `
 		#crypto-tracker .tracker-sep {
 			color: var(--text-dim);
 		}
-/* Keep the fixed bottom footer compact on phones */
 @media (max-width: 600px) {
 	body {
-		padding-bottom: 56px;
+		padding-bottom: 74px;
 	}
 	#crypto-tracker {
 		flex-direction: row !important;
 		align-items: center !important;
-		justify-content: center !important;
+		justify-content: flex-start !important;
 		gap: 0 !important;
-		height: 36px !important;
-		min-height: 36px !important;
-		max-height: 36px !important;
-		padding: 0 12px !important;
+		height: auto !important;
+		min-height: 40px !important;
+		max-height: none !important;
+		padding: 8px 12px calc(8px + env(safe-area-inset-bottom)) !important;
 		font-size: 0.72rem !important;
 		line-height: 1 !important;
 		left: 0 !important;
 		right: 0 !important;
 		width: 100% !important;
 		max-width: 100vw !important;
-		overflow: hidden;
+		overflow-x: auto !important;
+		overflow-y: hidden !important;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+	}
+	#crypto-tracker::-webkit-scrollbar {
+		display: none;
 	}
 	#crypto-tracker .tracker-line {
 		display: inline-flex;
 		flex-direction: row;
 		align-items: center;
-		justify-content: center;
-		gap: 0;
-		width: auto;
-		max-width: 100%;
-	}
-	#crypto-tracker .tracker-line > .tracker-sep,
-	#crypto-tracker .tracker-built-on {
-		display: none !important;
+		justify-content: flex-start;
+		gap: 8px;
+		width: max-content;
+		min-width: max-content;
+		max-width: none;
+		white-space: nowrap;
 	}
 }
 @media (max-width: 380px) {
 	body {
-		padding-bottom: 52px;
+		padding-bottom: 70px;
 	}
 	#crypto-tracker {
-		height: 34px !important;
-		min-height: 34px !important;
-		max-height: 34px !important;
-		padding: 0 10px !important;
+		min-height: 38px !important;
+		padding: 7px 10px calc(7px + env(safe-area-inset-bottom)) !important;
 		font-size: 0.68rem !important;
 	}
 }

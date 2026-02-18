@@ -4,29 +4,56 @@ export function generateThunderCss(): string {
 			position: fixed;
 			bottom: 24px;
 			right: 24px;
-			width: 52px;
-			height: 52px;
+			width: 56px;
+			height: 56px;
 			padding: 0;
-			border-radius: 14px;
-			border: 1px solid rgba(96, 165, 250, 0.45);
-			background: radial-gradient(circle at 30% 20%, #2f86ff, #0f4fe2 62%, #0a2f87 100%);
-			color: #fff;
+			border-radius: 16px;
+			border: none;
+			background: transparent;
 			cursor: pointer;
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			box-shadow: 0 10px 36px rgba(15, 79, 226, 0.45), 0 0 0 1px rgba(96, 165, 250, 0.12);
+			box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 180, 50, 0.15);
 			transition: transform 0.16s ease, box-shadow 0.16s ease;
 			z-index: 20040;
+			overflow: visible;
 		}
 		#thunder-bubble:hover {
-			transform: translateY(-1px) scale(1.03);
-			box-shadow: 0 14px 44px rgba(15, 79, 226, 0.5), 0 0 0 1px rgba(96, 165, 250, 0.18);
+			transform: translateY(-2px) scale(1.06);
+			box-shadow: 0 12px 36px rgba(230, 160, 30, 0.35), 0 0 0 1px rgba(255, 200, 80, 0.25);
 		}
-		#thunder-bubble svg {
-			width: 22px;
-			height: 22px;
-			flex-shrink: 0;
+		#thunder-bubble img {
+			width: 100%;
+			height: 100%;
+			border-radius: 16px;
+			object-fit: cover;
+			pointer-events: none;
+		}
+		#thunder-bubble.open {
+			box-shadow: 0 4px 18px rgba(230, 160, 30, 0.25), 0 0 0 2px rgba(255, 180, 50, 0.4);
+			z-index: 20043;
+		}
+		.thunder-shockwave {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			width: 56px;
+			height: 56px;
+			margin-top: -28px;
+			margin-left: -28px;
+			border-radius: 50%;
+			border: 2px solid rgba(255, 190, 60, 0.7);
+			opacity: 0;
+			pointer-events: none;
+			transform: scale(1);
+		}
+		.thunder-shockwave.fire {
+			animation: thunder-wave 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+		}
+		@keyframes thunder-wave {
+			0% { transform: scale(1); opacity: 0.8; border-color: rgba(255, 190, 60, 0.8); }
+			100% { transform: scale(3.5); opacity: 0; border-color: rgba(255, 140, 20, 0); }
 		}
 
 		#thunder-backdrop {
@@ -195,6 +222,33 @@ export function generateThunderCss(): string {
 		.thunder-sidebar-title-row .thunder-sidebar-title {
 			padding: 0 4px;
 		}
+		.thunder-sidebar-title-actions {
+			display: inline-flex;
+			align-items: center;
+			justify-content: flex-end;
+			flex-wrap: wrap;
+			gap: 6px;
+		}
+		.thunder-sidebar-reset-btn {
+			border: 1px solid rgba(59, 130, 246, 0.38);
+			background: rgba(30, 58, 138, 0.22);
+			color: #bfdbfe;
+			font-size: 9px;
+			font-weight: 700;
+			padding: 2px 6px;
+			border-radius: 6px;
+			cursor: pointer;
+			white-space: nowrap;
+		}
+		.thunder-sidebar-reset-btn:hover {
+			border-color: rgba(96, 165, 250, 0.6);
+			background: rgba(30, 64, 175, 0.34);
+			color: #dbeafe;
+		}
+		.thunder-sidebar-reset-btn[disabled] {
+			opacity: 0.45;
+			cursor: not-allowed;
+		}
 		.thunder-sidebar-delete-all-btn {
 			border: 1px solid rgba(239, 68, 68, 0.4);
 			background: rgba(127, 29, 29, 0.25);
@@ -277,6 +331,45 @@ export function generateThunderCss(): string {
 		}
 		.thunder-channel-group + .thunder-channel-group {
 			margin-top: 10px;
+		}
+		.thunder-channel-group-extra {
+			border: 1px solid rgba(148, 163, 184, 0.14);
+			border-radius: 8px;
+			padding: 6px;
+			margin-top: 8px;
+			background: rgba(15, 23, 42, 0.25);
+		}
+		.thunder-extra-head {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			margin-bottom: 4px;
+		}
+		.thunder-extra-toggle,
+		.thunder-extra-clean {
+			border: 1px solid rgba(148, 163, 184, 0.32);
+			background: rgba(15, 23, 42, 0.56);
+			color: #cbd5e1;
+			font-size: 10px;
+			font-weight: 700;
+			padding: 2px 6px;
+			border-radius: 6px;
+			cursor: pointer;
+			white-space: nowrap;
+		}
+		.thunder-extra-toggle:hover {
+			border-color: rgba(147, 197, 253, 0.48);
+			color: #e2e8f0;
+		}
+		.thunder-extra-clean {
+			border-color: rgba(239, 68, 68, 0.4);
+			background: rgba(127, 29, 29, 0.28);
+			color: #fca5a5;
+		}
+		.thunder-extra-clean:hover {
+			border-color: rgba(239, 68, 68, 0.62);
+			background: rgba(153, 27, 27, 0.4);
+			color: #fee2e2;
 		}
 		.thunder-channel-group-title {
 			font-size: 10px;
@@ -649,16 +742,16 @@ export function generateThunderCss(): string {
 		}
 		.thunder-msg.user {
 			align-self: flex-end;
-			background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 58%, #1e40af 100%);
-			color: #f8fafc;
-			border-color: rgba(96, 165, 250, 0.45);
+			background: linear-gradient(135deg, rgba(34, 197, 94, 0.24) 0%, rgba(22, 163, 74, 0.18) 100%);
+			color: #dcfce7;
+			border-color: rgba(74, 222, 128, 0.38);
 			border-bottom-right-radius: 4px;
-			box-shadow: 0 9px 24px rgba(29, 78, 216, 0.3), inset 0 1px 0 rgba(219, 234, 254, 0.16);
+			box-shadow: 0 7px 18px rgba(34, 197, 94, 0.14), inset 0 1px 0 rgba(187, 247, 208, 0.12);
 		}
 		.thunder-msg.user.owner {
-			background: linear-gradient(135deg, rgba(139, 92, 246, 0.38) 0%, rgba(124, 58, 237, 0.32) 100%);
-			border-color: rgba(192, 132, 252, 0.44);
-			box-shadow: 0 7px 18px rgba(124, 58, 237, 0.24), inset 0 1px 0 rgba(250, 245, 255, 0.16);
+			background: linear-gradient(135deg, rgba(34, 197, 94, 0.28) 0%, rgba(22, 163, 74, 0.22) 100%);
+			border-color: rgba(74, 222, 128, 0.42);
+			box-shadow: 0 7px 18px rgba(34, 197, 94, 0.18), inset 0 1px 0 rgba(187, 247, 208, 0.14);
 		}
 		.thunder-msg.owner-primary,
 		.thunder-msg.user.owner.owner-primary {
@@ -668,10 +761,11 @@ export function generateThunderCss(): string {
 		}
 		.thunder-msg.peer {
 			align-self: flex-start;
-			background: linear-gradient(180deg, rgba(30, 41, 59, 0.74) 0%, rgba(15, 23, 42, 0.78) 100%);
-			color: #e2e8f0;
+			background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 58%, #1e40af 100%);
+			color: #f8fafc;
+			border-color: rgba(96, 165, 250, 0.45);
 			border-bottom-left-radius: 4px;
-			box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.16);
+			box-shadow: 0 9px 24px rgba(29, 78, 216, 0.3), inset 0 1px 0 rgba(219, 234, 254, 0.16);
 		}
 		.thunder-msg.system {
 			align-self: center;
@@ -724,11 +818,19 @@ export function generateThunderCss(): string {
 		}
 		.thunder-msg.user .thunder-msg-sender,
 		.thunder-msg.user .thunder-msg-time {
-			color: rgba(226, 232, 240, 0.85);
+			color: #86efac;
 		}
 		.thunder-msg.user.owner .thunder-msg-sender,
 		.thunder-msg.user.owner .thunder-msg-time {
-			color: rgba(250, 245, 255, 0.9);
+			color: #86efac;
+		}
+		.thunder-msg.user .thunder-msg-sender-link:hover {
+			color: #bbf7d0;
+			text-shadow: 0 0 10px rgba(74, 222, 128, 0.32);
+		}
+		.thunder-msg.peer .thunder-msg-sender,
+		.thunder-msg.peer .thunder-msg-time {
+			color: rgba(226, 232, 240, 0.85);
 		}
 		.thunder-msg.owner-primary .thunder-msg-sender,
 		.thunder-msg.owner-primary .thunder-msg-time,
@@ -741,14 +843,13 @@ export function generateThunderCss(): string {
 			color: #fef08a;
 			text-shadow: 0 0 10px rgba(250, 204, 21, 0.32);
 		}
-		.thunder-msg.owner-linked,
-		.thunder-msg.user.owner-linked {
+		.thunder-msg.peer.owner-linked {
 			background: linear-gradient(135deg, rgba(139, 92, 246, 0.38) 0%, rgba(124, 58, 237, 0.32) 100%);
 			border-color: rgba(192, 132, 252, 0.44);
 			box-shadow: 0 7px 18px rgba(124, 58, 237, 0.24), inset 0 1px 0 rgba(250, 245, 255, 0.16);
 		}
-		.thunder-msg.owner-linked .thunder-msg-sender,
-		.thunder-msg.owner-linked .thunder-msg-time {
+		.thunder-msg.peer.owner-linked .thunder-msg-sender,
+		.thunder-msg.peer.owner-linked .thunder-msg-time {
 			color: rgba(250, 245, 255, 0.9);
 		}
 		.thunder-msg-actions {
@@ -1136,8 +1237,7 @@ export function generateThunderCss(): string {
 		}
 
 		body.wk-modal-open #thunder-backdrop,
-		body.wk-modal-open #thunder-panel,
-		body.wk-modal-open #thunder-bubble {
+		body.wk-modal-open #thunder-panel {
 			display: none !important;
 		}
 
@@ -1165,6 +1265,77 @@ export function generateThunderCss(): string {
 				width: 132px;
 				min-width: 132px;
 			}
+		}
+		.thunder-loading {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 16px;
+			height: 100%;
+			min-height: 120px;
+			opacity: 0;
+			animation: thunder-load-fadein 0.4s ease 0.1s forwards;
+		}
+		@keyframes thunder-load-fadein {
+			to { opacity: 1; }
+		}
+		.thunder-loading-orbs {
+			position: relative;
+			width: 56px;
+			height: 56px;
+		}
+		.thunder-loading-orb {
+			position: absolute;
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			background: rgba(96, 165, 250, 0.7);
+			box-shadow: 0 0 12px rgba(96, 165, 250, 0.4);
+			animation: thunder-orbit 2.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+		}
+		.thunder-loading-orb:nth-child(1) {
+			animation-delay: 0s;
+			background: rgba(96, 165, 250, 0.8);
+		}
+		.thunder-loading-orb:nth-child(2) {
+			animation-delay: -0.8s;
+			background: rgba(139, 92, 246, 0.7);
+			box-shadow: 0 0 12px rgba(139, 92, 246, 0.4);
+		}
+		.thunder-loading-orb:nth-child(3) {
+			animation-delay: -1.6s;
+			background: rgba(74, 222, 128, 0.7);
+			box-shadow: 0 0 12px rgba(74, 222, 128, 0.4);
+		}
+		@keyframes thunder-orbit {
+			0% { top: 0; left: 50%; transform: translate(-50%, 0) scale(0.8); opacity: 0.4; }
+			25% { top: 50%; left: 100%; transform: translate(-100%, -50%) scale(1); opacity: 1; }
+			50% { top: 100%; left: 50%; transform: translate(-50%, -100%) scale(0.8); opacity: 0.4; }
+			75% { top: 50%; left: 0; transform: translate(0, -50%) scale(1); opacity: 1; }
+			100% { top: 0; left: 50%; transform: translate(-50%, 0) scale(0.8); opacity: 0.4; }
+		}
+		.thunder-loading-center {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			width: 20px;
+			height: 20px;
+			border-radius: 50%;
+			background: radial-gradient(circle, rgba(96, 165, 250, 0.2) 0%, transparent 70%);
+			animation: thunder-center-pulse 2.4s ease-in-out infinite;
+		}
+		@keyframes thunder-center-pulse {
+			0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+			50% { transform: translate(-50%, -50%) scale(1.8); opacity: 0.15; }
+		}
+		.thunder-loading-text {
+			color: #64748b;
+			font-size: 10px;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			font-family: 'JetBrains Mono', monospace;
 		}
 	`
 }

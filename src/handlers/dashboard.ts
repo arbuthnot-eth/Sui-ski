@@ -939,32 +939,6 @@ export function generateDashboardPage(env: Env): string {
 		}
 
 		${generateWalletUiCss()}
-		.wk-widget-btn {
-			padding: 10px 16px;
-			background: #0c0c12;
-			border: 1px solid rgba(255,255,255,0.08);
-			border-radius: 14px;
-			color: #71717a;
-			font-size: 0.82rem;
-			font-weight: 500;
-			box-shadow: 0 4px 24px rgba(0,0,0,0.6), 0 0 40px rgba(96,165,250,0.08);
-			font-family: 'Inter', system-ui, -apple-system, sans-serif;
-		}
-		.wk-widget-btn:hover { border-color: rgba(96,165,250,0.4); color: #e4e4e7; }
-		.wk-widget-btn.connected {
-			background: linear-gradient(135deg, rgba(96,165,250,0.15), rgba(139,92,246,0.15));
-			border-color: rgba(96,165,250,0.3);
-			color: #60a5fa;
-		}
-		.wk-dropdown {
-			background: #0c0c12;
-			border: 1px solid rgba(255,255,255,0.08);
-			border-radius: 14px;
-			box-shadow: 0 12px 48px rgba(0,0,0,0.7);
-		}
-		.wk-modal { background: #0c0c12; border-radius: 20px; }
-		.wk-modal-header { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-		.wk-wallet-item { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
 	</style>
 </head>
 <body>

@@ -16,8 +16,6 @@ import { generateEmbedProfilePage, generateProfilePage } from './handlers/profil
 import { handleBuildRegisterTx, handleRegistrationSubmission } from './handlers/register2'
 import { generateSkiPage } from './handlers/ski'
 import { generateSkiSignPage } from './handlers/ski-sign'
-import { agentSubnameCapRoutes, subnameCapRoutes } from './handlers/subnamecap'
-import { generateSubnameCapPage } from './handlers/subnamecap-ui'
 import { vaultRoutes } from './handlers/vault'
 import {
 	handleWalletChallenge,
@@ -25,13 +23,18 @@ import {
 	handleWalletConnect,
 	handleWalletDisconnect,
 } from './handlers/wallet-api'
-import { x402ChatRoutes } from './handlers/x402-chat'
+import { thunderRoutes } from './handlers/thunder'
 import { x402RegisterRoutes } from './handlers/x402-register'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { handleRPCRequest } from './resolvers/rpc'
 import { resolveSuiNS } from './resolvers/suins'
 import type { Env, ParsedSubdomain, SuiNSRecord } from './types'
-import { generateDotSkiPngBytes, generateSuiIconSvg } from './utils/media-pack'
+import {
+	generateDotSkiPngBytes,
+	generateSkiLogoSvg,
+	generateSuiIconSvg,
+	generateThunderIconBytes,
+} from './utils/media-pack'
 import {
 	generateBrandOgPng,
 	generateBrandOgSvg,
@@ -203,11 +206,6 @@ app.use('*', async (c, next) => {
 
 app.all('/api/events/*', async (c) => handleAuthenticatedEvents(c.req.raw, c.get('env')))
 app.all('/api/app/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
-app.use('/api/agents/subnamecap/*', async (c, next) => {
-	if (c.get('parsed').type !== 'root') return c.notFound()
-	await next()
-})
-app.route('/api/agents/subnamecap', agentSubnameCapRoutes)
 app.use('/api/agents/grace-vault/*', async (c, next) => {
 	if (c.get('parsed').type !== 'root') return c.notFound()
 	await next()
@@ -218,15 +216,15 @@ app.use('/api/agents/x402-register/*', async (c, next) => {
 	await next()
 })
 app.route('/api/agents/x402-register', x402RegisterRoutes)
-app.use('/api/x402-chat', async (c, next) => {
+app.use('/api/thunder', async (c, next) => {
 	if (c.get('parsed').type !== 'root') return c.notFound()
 	await next()
 })
-app.use('/api/x402-chat/*', async (c, next) => {
+app.use('/api/thunder/*', async (c, next) => {
 	if (c.get('parsed').type !== 'root') return c.notFound()
 	await next()
 })
-app.route('/api/x402-chat', x402ChatRoutes)
+app.route('/api/thunder', thunderRoutes)
 app.all('/api/agents/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.all('/api/ika/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.all('/api/llm/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
@@ -234,7 +232,6 @@ app.all('/api/messaging/*', async (c) =>
 	handleMessagingApi(c.req.raw, c.get('env'), new URL(c.req.url)),
 )
 
-app.route('/api/subnamecap', subnameCapRoutes)
 app.route('/api/vault', vaultRoutes)
 app.route('/api', apiRoutes)
 
@@ -249,12 +246,28 @@ app.get(
 	() => new Response(generateSuiIconSvg(), { headers: SVG_HEADERS }),
 )
 
+app.get(
+	'/media-pack/skilogo.svg',
+	() => new Response(generateSkiLogoSvg(), { headers: SVG_HEADERS }),
+)
+
 const PNG_HEADERS = { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800' }
 
 app.get(
 	'/media-pack/dotSKI.png',
 	() =>
 		new Response(generateDotSkiPngBytes(), {
+			headers: {
+				'Content-Type': 'image/webp',
+				'Cache-Control': 'public, max-age=604800',
+			},
+		}),
+)
+
+app.get(
+	'/media-pack/ThunderIcon.png',
+	() =>
+		new Response(generateThunderIconBytes(), {
 			headers: {
 				'Content-Type': 'image/webp',
 				'Cache-Control': 'public, max-age=604800',
@@ -304,11 +317,6 @@ app.get('/cancel-bid', async (c) => {
 	return htmlResponse(generateCancelBidPage(env, bidId), 200, {
 		'Cache-Control': 'no-store',
 	})
-})
-
-app.get('/subnamecap', async (c) => {
-	if (c.get('parsed').type !== 'root') return c.notFound()
-	return htmlResponse(generateSubnameCapPage(c.get('env')))
 })
 
 app.get('/cloudflare', async (c) => {

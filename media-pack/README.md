@@ -19,6 +19,10 @@ Reusable brand assets for engineering, design, and social previews.
 - `sui-ski-logo-vertical.png`
   - Pre-rendered PNG of the vertical lockup (1024px wide).
 
+- `skilogo.svg`
+  - Silver/white wallet-widget mark (mountain + wave).
+  - Used by the wallet key-in modal header.
+
 - `tradeport-logo-icon.svg`
   - TradePort logo icon source file.
   - Source URL: `https://www.tradeport.xyz/logo-icon.svg`.

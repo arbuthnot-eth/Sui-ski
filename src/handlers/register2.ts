@@ -776,41 +776,6 @@ export function generateRegistrationPage(
 				.layout-grid { grid-template-columns: 1fr; }
 			}
 		${generateWalletUiCss()}
-		#wk-widget .wk-widget-btn,
-		#wk-widget > div > button {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			padding: 10px 16px;
-			background: rgba(13, 10, 5, 0.94);
-			backdrop-filter: blur(16px);
-			-webkit-backdrop-filter: blur(16px);
-			border: 1px solid rgba(120, 130, 155, 0.28);
-			border-radius: 10px;
-			color: #d0d4e0;
-			font-size: 0.82rem;
-			font-weight: 600;
-			cursor: pointer;
-			transition: all 0.3s ease;
-			box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
-		}
-		#wk-widget .wk-widget-btn:hover,
-		#wk-widget > div > button:hover {
-			border-color: rgba(140, 150, 175, 0.5);
-			color: #fff;
-			transform: translateY(-1px);
-			box-shadow: 0 14px 32px rgba(0, 0, 0, 0.48), 0 0 20px rgba(0, 0, 0, 0.2);
-		}
-		#wk-widget .wk-widget-btn.connected,
-		#wk-widget > div > button.connected {
-			background: linear-gradient(135deg, rgba(10, 10, 18, 0.3), rgba(18, 18, 28, 0.3));
-			border-color: rgba(120, 130, 155, 0.38);
-		}
-		#wk-widget .wk-widget-btn.session-only,
-		#wk-widget > div > button.session-only {
-			border-style: dashed;
-			background: linear-gradient(135deg, rgba(10, 10, 18, 0.25), rgba(18, 18, 28, 0.25));
-		}
 	</style>
 </head>
 <body data-register-flow="${registerFlow}">
@@ -846,6 +811,8 @@ export function generateRegistrationPage(
 				<a href="https://moveregistry.com/docs" target="_blank" rel="noopener">MVR</a>
 				<span class="tracker-sep">\u00b7</span>
 				<a href="https://docs.sui.io/standards/deepbook" target="_blank" rel="noopener">DeepBook</a>
+				<span class="tracker-sep">\u00b7</span>
+				<a href="https://www.tradeport.xyz/docs" target="_blank" rel="noopener">Tradeport</a>
 				<span class="tracker-sep">\u00b7</span>
 				<a href="https://docs.wal.app" target="_blank" rel="noopener">Walrus</a>
 				<span class="tracker-sep">\u00b7</span>
@@ -891,7 +858,11 @@ export function generateRegistrationPage(
 		${generateWalletSessionJs()}
 		${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
 		${generateWalletTxJs()}
-		${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onRegisterWalletConnected', onDisconnect: 'onRegisterWalletDisconnected' })}
+		${generateWalletUiJs({
+			showPrimaryName: true,
+			onConnect: 'onRegisterWalletConnected',
+			onDisconnect: 'onRegisterWalletDisconnected',
+		})}
 
 		const NAME = ${serializeJson(cleanName)}
 		const NETWORK = ${serializeJson(network)}

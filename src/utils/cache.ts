@@ -8,7 +8,7 @@ export interface CacheEntry<T> {
 }
 
 const memCache = new Map<string, CacheEntry<unknown>>()
-const MEM_CACHE_MAX_SIZE = 100
+const MEM_CACHE_MAX_SIZE = 250
 
 function memGet<T>(key: string): T | null {
 	const entry = memCache.get(key) as CacheEntry<T> | undefined

@@ -773,6 +773,7 @@ html.wk-modal-open, body.wk-modal-open { overflow: hidden !important; }
 	-webkit-backdrop-filter: blur(8px);
 	box-shadow: 0 4px 18px rgba(2, 6, 23, 0.36);
 	transition: background 0.16s, border-color 0.16s, transform 0.16s, box-shadow 0.16s;
+	forced-color-adjust: none;
 }
 .wk-widget-btn:hover {
 	background: rgba(96,165,250,0.12);
@@ -781,8 +782,8 @@ html.wk-modal-open, body.wk-modal-open { overflow: hidden !important; }
 	box-shadow: 0 8px 22px rgba(30, 64, 175, 0.22);
 }
 .wk-widget-btn:not(.connected) {
-	background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(200,210,255,0.08));
-	border-color: rgba(255,255,255,0.22);
+	background: linear-gradient(135deg, rgba(5,8,14,0.96), rgba(10,14,24,0.92));
+	border-color: rgba(255,255,255,0.38);
 	color: #fff;
 	font-size: 1rem;
 	font-weight: 700;
@@ -791,13 +792,18 @@ html.wk-modal-open, body.wk-modal-open { overflow: hidden !important; }
 	letter-spacing: 0;
 	line-height: 0;
 	text-shadow: none;
-	box-shadow: 0 4px 20px rgba(2,6,23,0.4), 0 0 20px rgba(255,255,255,0.1);
+	box-shadow: 0 4px 20px rgba(2,6,23,0.52), 0 0 20px rgba(255,255,255,0.08);
 }
 .wk-widget-btn .wk-widget-brand-logo {
 	width: 80px;
 	height: auto;
 	display: block;
 	max-width: 100%;
+	background: #000;
+	border-radius: 6px;
+	filter: none !important;
+	-webkit-filter: none !important;
+	forced-color-adjust: none;
 }
 .wk-widget-btn.connected {
 	background: linear-gradient(135deg, rgba(8,8,14,0.72), rgba(16,16,24,0.68));
@@ -829,6 +835,9 @@ html.wk-modal-open, body.wk-modal-open { overflow: hidden !important; }
 	height: 18px;
 	border-radius: 5px;
 	flex-shrink: 0;
+	filter: none !important;
+	-webkit-filter: none !important;
+	forced-color-adjust: none;
 }
 .wk-widget-btn.connected .wk-waap-badge {
 	width: 18px;
@@ -846,6 +855,9 @@ html.wk-modal-open, body.wk-modal-open { overflow: hidden !important; }
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
+	filter: none !important;
+	-webkit-filter: none !important;
+	forced-color-adjust: none;
 }
 .wk-widget-btn.connected .wk-widget-label-wrap {
 	min-width: 0;
@@ -1414,7 +1426,7 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	      var key = __wkNormalizeWaaPMethod(method);
 	      if (!key) return '';
 	      if (key === 'x') {
-	        return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true"><rect x="2.4" y="2.4" width="19.2" height="19.2" rx="4.8" fill="#020617"/><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" fill="#e2e8f0"/></svg>';
+	        return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true"><rect x="2.4" y="2.4" width="19.2" height="19.2" rx="4.8" fill="#000000"/><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" fill="#ffffff"/></svg>';
 	      }
 	      return __wkSocialIcons[key]
 	        ? __wkSocialIcons[key].replace(/width="\\d+"/, 'width="18"').replace(/height="\\d+"/, 'height="18"').replace(/fill="[^"]*"/, 'fill="#e2e8f0"')
@@ -1574,10 +1586,41 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	      __wkPendingWaaPMethod = '';
 	    }
 
+	    function __wkMethodFromWaaPLabel(label) {
+	      var raw = String(label || '').trim().toLowerCase();
+	      if (!raw) return '';
+	      if (raw === 'x' || raw === 'twitter' || raw.indexOf(' x ') !== -1 || raw.indexOf('twitter') !== -1) return 'x';
+	      if (raw.indexOf('google') !== -1 || raw.indexOf('gmail') !== -1) return 'google';
+	      if (raw.indexOf('discord') !== -1) return 'discord';
+	      if (raw.indexOf('coinbase') !== -1) return 'coinbase';
+	      if (raw.indexOf('email') !== -1 || raw.indexOf('mail') !== -1) return 'email';
+	      if (raw.indexOf('phone') !== -1 || raw.indexOf('sms') !== -1) return 'phone';
+	      return '';
+	    }
+
+	    function __wkResolveWaaPMethod(conn) {
+	      if (!conn || !conn.address) return __wkPendingWaaPMethod || '';
+	      var method = __wkGetWaaPMethodForAddress(conn.address) || __wkPendingWaaPMethod;
+	      if (method) return method;
+	      var liveLabel = (conn.account && typeof conn.account.label === 'string') ? conn.account.label : '';
+	      method = __wkMethodFromWaaPLabel(liveLabel);
+	      if (method) {
+	        __wkSaveWaaPMethodForAddress(conn.address, method);
+	        return method;
+	      }
+	      var savedLabel = __wkGetWaaPLabelForAddress(conn.address);
+	      method = __wkMethodFromWaaPLabel(savedLabel);
+	      if (method) {
+	        __wkSaveWaaPMethodForAddress(conn.address, method);
+	        return method;
+	      }
+	      return '';
+	    }
+
 	    function __wkGetWaaPConnectionHint(conn) {
 	      var walletName = __wkGetConnectionWalletName(conn).trim().toLowerCase();
 	      if (walletName !== 'waap') return '';
-	      var method = __wkGetWaaPMethodForAddress(conn && conn.address ? conn.address : '') || __wkPendingWaaPMethod;
+	      var method = __wkResolveWaaPMethod(conn);
 	      var methodLabel = method ? (__wkWaaPMethodLabels[method] || '') : '';
 	      return methodLabel ? ('WaaP via ' + methodLabel) : 'WaaP connected';
 	    }
@@ -2648,6 +2691,8 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	          : __wkEscapeHtml(label);
 	        var walletIcon = conn.wallet && conn.wallet.icon ? conn.wallet.icon : '';
 	        var connectionHint = __wkGetWaaPConnectionHint(conn);
+	        var waapMethod = connectionHint ? __wkResolveWaaPMethod(conn) : '';
+	        var methodSvg = (connectionHint && waapMethod) ? __wkWidgetMethodIconSvg(waapMethod) : '';
 	        var balanceLine = '';
 	        if (__wkPortfolioData) {
 	          var suiSummary = __wkFormatBalance(__wkPortfolioData.totalSui);
@@ -2667,22 +2712,16 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	        var labelMarkup = '<span class="wk-widget-label-wrap"><span class="wk-widget-title">' + safeLabel + '</span></span>';
 	        var nextBtnMarkup = '';
 	        var waapBadge = connectionHint ? '<img src="' + __wkWaaPIcon + '" class="wk-widget-icon wk-waap-badge" alt="WaaP" onerror="this.style.display=\\'none\\'">' : '';
-	        if (walletIcon) {
-	          nextBtnMarkup = waapBadge + '<img src="' + walletIcon + '" class="wk-widget-icon" alt="" onerror="this.style.display=\\'none\\'">' + labelMarkup + balanceLine;
-	        } else if (conn.status === 'session') {
-	          var waapMethod = connectionHint ? (__wkGetWaaPMethodForAddress(conn.address || '') || __wkPendingWaaPMethod) : '';
-		          if (connectionHint && waapMethod) {
-		            var methodSvg = __wkWidgetMethodIconSvg(waapMethod);
-	            if (methodSvg) {
-	              nextBtnMarkup = waapBadge + '<span class="wk-widget-icon-fallback">' + methodSvg + '</span>' + labelMarkup + balanceLine;
-	            } else {
-	              nextBtnMarkup = '<img src="' + __wkWaaPIcon + '" class="wk-widget-icon" alt="" onerror="this.style.display=\\'none\\'">' + labelMarkup + balanceLine;
-	            }
-	          } else if (connectionHint) {
-	            nextBtnMarkup = '<img src="' + __wkWaaPIcon + '" class="wk-widget-icon" alt="" onerror="this.style.display=\\'none\\'">' + labelMarkup + balanceLine;
+	        if (connectionHint) {
+	          if (methodSvg) {
+	            nextBtnMarkup = waapBadge + '<span class="wk-widget-icon-fallback">' + methodSvg + '</span>' + labelMarkup + balanceLine;
 	          } else {
-	            nextBtnMarkup = '<span class="wk-widget-icon-fallback"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>' + labelMarkup + balanceLine;
+	            nextBtnMarkup = waapBadge + labelMarkup + balanceLine;
 	          }
+	        } else if (walletIcon) {
+	          nextBtnMarkup = '<img src="' + walletIcon + '" class="wk-widget-icon" alt="" onerror="this.style.display=\\'none\\'">' + labelMarkup + balanceLine;
+	        } else if (conn.status === 'session') {
+	          nextBtnMarkup = '<span class="wk-widget-icon-fallback"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>' + labelMarkup + balanceLine;
 	        } else {
 	          nextBtnMarkup = labelMarkup + balanceLine;
 	        }

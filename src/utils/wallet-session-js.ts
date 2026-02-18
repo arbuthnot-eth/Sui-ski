@@ -7,16 +7,17 @@ export function generateWalletSessionJs(): string {
     const __WALLET_NAME_KEY = '${WALLET_NAME_KEY}';
 
     function connectWalletSession(walletName, address) {
-      if (!walletName || !address) return;
+      if (!walletName || !address) return Promise.resolve(false);
       localStorage.setItem(__WALLET_NAME_KEY, walletName);
-      fetch('/api/wallet/connect', {
+      return fetch('/api/wallet/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address: address, walletName: walletName }),
         credentials: 'include',
       }).then(function(r) { return r.json(); }).then(function(data) {
         if (data.sessionId) localStorage.setItem(__SESSION_KEY, data.sessionId);
-      }).catch(function() {});
+        return true;
+      }).catch(function() { return false; });
     }
 
     function __skiReadCookie(name) {

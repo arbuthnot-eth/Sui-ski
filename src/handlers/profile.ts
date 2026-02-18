@@ -2,12 +2,12 @@ import type { Env, SuiNSRecord } from '../types'
 import { generateLogoSvg, getDefaultOgImageUrl, getProfileOgImageUrl } from '../utils/og-image'
 import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import { normalizeMediaUrl, renderSocialMeta } from '../utils/social'
+import { generateThunderCss } from '../utils/thunder-css'
+import { generateThunderJs } from '../utils/thunder-js'
 import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
-import { generateMessagingChatCss } from '../utils/x402-chat-css'
-import { generateMessagingChatJs } from '../utils/x402-chat-js'
 import { generateZkSendCss, generateZkSendJs } from '../utils/zksend-js'
 import { profileStyles } from './profile.css'
 
@@ -50,6 +50,12 @@ const TRADEPORT_LOGO_ICON_SVG = `<svg width="99" height="61" viewBox="0 0 99 61"
 </svg>`
 
 const TRADEPORT_LOGO_ICON_DATA_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(TRADEPORT_LOGO_ICON_SVG)}`
+const PROFILE_WALLET_BUTTON_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="380" height="118" viewBox="0 0 380 118" fill="none" role="img" aria-label=".SKI">
+<rect width="380" height="118" fill="#000"/>
+<rect x="4" y="4" width="110" height="110" rx="18" fill="#177EC7" stroke="#fff" stroke-width="8"/>
+<text x="138" y="96" fill="#fff" font-family="Arial Black, Inter, system-ui, sans-serif" font-size="130" font-weight="900" letter-spacing="0">SKI</text>
+</svg>`
+const PROFILE_WALLET_BUTTON_LOGO_DATA_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PROFILE_WALLET_BUTTON_LOGO_SVG)}`
 
 /**
  * Generate sui.ski themed SuiNS profile page HTML
@@ -177,7 +183,7 @@ ${generateZkSendCss()}</style>
 	<div class="wallet-widget" id="wallet-widget">
 		<div id="wk-widget"></div>
 		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile" style="display:none">
-			<span class="ski-logo-text">.SKI</span>
+			<img class="wallet-profile-logo" src="${PROFILE_WALLET_BUTTON_LOGO_DATA_URL}" alt=".SKI" draggable="false">
 		</button>
 	</div>
 
@@ -1184,13 +1190,23 @@ ${generateZkSendCss()}</style>
 			let pendingBidAmount = null;
 
 		var __lastVaultAddress = null;
+		var __initialConnectionFired = false;
 		SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
+			var previousAddress = connectedAddress || '';
 			connectedWallet = conn.wallet;
 			connectedAccount = conn.account;
 			connectedAddress = conn.address;
 			connectedWalletName = conn.wallet ? conn.wallet.name : null;
 			connectedPrimaryName = conn.primaryName;
 			updateWalletProfileButton();
+
+			var normalizedPrev = String(previousAddress || '').trim().toLowerCase();
+			var normalizedNext = String(connectedAddress || '').trim().toLowerCase();
+			if (__initialConnectionFired && normalizedPrev && normalizedNext && normalizedNext !== normalizedPrev) {
+				window.location.reload();
+				return;
+			}
+			__initialConnectionFired = true;
 
 			if (connectedAddress) {
 				if (connectedAddress !== __lastVaultAddress) {
@@ -5181,21 +5197,36 @@ ${generateZkSendCss()}</style>
 		updateEditButton();
 
 		window.onProfileWalletConnected = function() {
-			checkEditPermission();
-			updateUIForWallet();
-			updateGlobalWalletWidget();
-			updateWalletProfileButton();
-			var conn = SuiWalletKit.$connection.value;
-			if (conn && conn.address) resolveWalletName(conn.address);
+			setTimeout(function() {
+				var conn = SuiWalletKit.$connection.value;
+				if (conn) {
+					connectedWallet = conn.wallet;
+					connectedAccount = conn.account;
+					connectedAddress = conn.address;
+					connectedWalletName = conn.wallet ? conn.wallet.name : null;
+					connectedPrimaryName = conn.primaryName;
+				}
+				checkEditPermission();
+				updateUIForWallet();
+				updateGlobalWalletWidget();
+				updateWalletProfileButton();
+				if (conn && conn.address) resolveWalletName(conn.address);
+			}, 0);
 		};
 
 		window.onProfileWalletDisconnected = function() {
-			canEdit = false;
-			connectedPrimaryName = null;
-			updateEditButton();
-			updateUIForWallet();
-			updateGlobalWalletWidget();
-			updateWalletProfileButton();
+			setTimeout(function() {
+				connectedWallet = null;
+				connectedAccount = null;
+				connectedAddress = null;
+				connectedWalletName = null;
+				canEdit = false;
+				connectedPrimaryName = null;
+				updateEditButton();
+				updateUIForWallet();
+				updateGlobalWalletWidget();
+				updateWalletProfileButton();
+			}, 0);
 		};
 
 		${generateSharedWalletMountJs({
@@ -7344,7 +7375,7 @@ ${generateZkSendCss()}</style>
 			const withoutWallet = stripped.endsWith(' wallet')
 				? stripped.slice(0, -7).trim()
 				: stripped;
-			return withoutWallet.replace(/s+/g, '');
+			return withoutWallet.replace(/\s+/g, '');
 		}
 
 		function walletNamesMatchForReconnect(left, right) {
@@ -12286,7 +12317,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 	<!-- Footer Tracker -->
 	<div id="crypto-tracker" style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(10px); border-top: 1px solid rgba(96, 165, 250, 0.2); padding: 12px 20px; display: flex; justify-content: center; gap: 16px; flex-wrap: nowrap; z-index: 1000; font-size: 0.875rem; align-items: center; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
 		<span class="tracker-line" style="white-space: nowrap;">
-			<span style="color: #c7d2fe; font-weight: 500;">SUI: <span id="sui-price" style="color: #60a5fa; font-weight: 600;">$--</span></span>
+			<span style="color: #c7d2fe; font-weight: 500; display: inline-flex; align-items: center; gap: 3px;"><img src="/media-pack/SuiIcon.svg" alt="SUI" style="width: 0.85em; height: 1.05em; display: inline-block; vertical-align: middle;"><span id="sui-price" style="color: #60a5fa; font-weight: 600;">$--</span></span>
 			<span class="tracker-sep">·</span>
 			<span class="tracker-built-on">
 				Built on
@@ -12296,9 +12327,11 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				<span class="tracker-sep">\u00b7</span>
 				<a href="https://moveregistry.com/docs" target="_blank" rel="noopener">MVR</a>
 				<span class="tracker-sep">\u00b7</span>
-				<a href="https://docs.sui.io/standards/deepbook" target="_blank" rel="noopener">DeepBook</a>
-				<span class="tracker-sep">\u00b7</span>
-				<a href="https://docs.wal.app" target="_blank" rel="noopener">Walrus</a>
+					<a href="https://docs.sui.io/standards/deepbook" target="_blank" rel="noopener">DeepBook</a>
+					<span class="tracker-sep">\u00b7</span>
+					<a href="https://www.tradeport.xyz/docs" target="_blank" rel="noopener">Tradeport</a>
+					<span class="tracker-sep">\u00b7</span>
+					<a href="https://docs.wal.app" target="_blank" rel="noopener">Walrus</a>
 				<span class="tracker-sep">\u00b7</span>
 				<a href="https://seal-docs.wal.app" target="_blank" rel="noopener">Seal</a>
 				<span class="tracker-sep">\u00b7</span>
@@ -13363,9 +13396,9 @@ const ENABLE_BOUNTIES = false;
 
 		</script>
 
-	<style>${generateMessagingChatCss()}</style>
-	<div id="messaging-chat-root"></div>
-	<script>${generateMessagingChatJs({ page: 'profile', name: cleanName, address: record.address, ownerAddress: record.ownerAddress, expirationMs: expiresMs, linkedNames: undefined, serverScope: 'owner', network: network })}</script>
+	<style>${generateThunderCss()}</style>
+	<div id="thunder-root"></div>
+	<script>${generateThunderJs({ page: 'profile', name: cleanName, address: record.address, ownerAddress: record.ownerAddress, nftId: record.nftId, expirationMs: expiresMs, linkedNames: undefined, serverScope: 'owner', network: network })}</script>
 
 </body>
 </html>`

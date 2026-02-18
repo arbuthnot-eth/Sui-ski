@@ -2,11 +2,11 @@ import { Hono } from 'hono'
 import type {
 	Env,
 	ThunderContext,
+	ThunderDiceCommit,
+	ThunderDiceReveal,
 	ThunderRequest,
 	ThunderResponse,
 	ThunderTab,
-	ThunderDiceCommit,
-	ThunderDiceReveal,
 } from '../types'
 import { cacheKey, getCached, setCache } from '../utils/cache'
 import { fetchMultichainPaymentRequirements, resolveX402Providers } from '../utils/x402-middleware'
@@ -23,7 +23,8 @@ const MAX_MESSAGE_LENGTH = 2000
 const DICE_COMMIT_TTL_SECONDS = 300
 const DICE_EMOJI = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
 const OFFICIAL_MESSAGING_SDK_VERSION = '0.4.0'
-const OFFICIAL_MESSAGING_SDK_URL = 'https://esm.sh/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.3-2026-02-16/packages/messaging'
+const OFFICIAL_MESSAGING_SDK_URL =
+	'https://esm.sh/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.3-2026-02-16/packages/messaging'
 const AGENT_DISPATCH_ALLOWLIST: Record<string, Set<string>> = {
 	'x402-register': new Set(['info', 'quote', 'register', 'status', 'sweep']),
 	'grace-vault': new Set(['info', 'build-create', 'build-execute', 'status']),
@@ -870,7 +871,7 @@ thunderRoutes.post('/channels', async (c) => {
 		error: 'Use client-side @mysten/messaging SDK',
 		code: 'CLIENT_SIDE_ONLY',
 		note: 'Channel creation happens on-chain via the SDK.',
-		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+		sdk: OFFICIAL_MESSAGING_SDK_URL,
 	})
 })
 
@@ -879,7 +880,7 @@ thunderRoutes.delete('/channels/:id', async (c) => {
 		error: 'Use client-side @mysten/messaging SDK',
 		code: 'CLIENT_SIDE_ONLY',
 		note: 'Channel management happens on-chain via the SDK.',
-		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+		sdk: OFFICIAL_MESSAGING_SDK_URL,
 	})
 })
 
@@ -888,7 +889,7 @@ thunderRoutes.post('/channels/:id/mute', async (c) => {
 		error: 'Use client-side @mysten/messaging SDK',
 		code: 'CLIENT_SIDE_ONLY',
 		note: 'Moderation happens on-chain via the SDK.',
-		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+		sdk: OFFICIAL_MESSAGING_SDK_URL,
 	})
 })
 
@@ -897,7 +898,7 @@ thunderRoutes.get('/channels/:id/messages', async (c) => {
 		error: 'Use client-side @mysten/messaging SDK',
 		code: 'CLIENT_SIDE_ONLY',
 		note: 'Messages are stored on Walrus and resolved on-chain.',
-		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+		sdk: OFFICIAL_MESSAGING_SDK_URL,
 	})
 })
 
@@ -906,7 +907,7 @@ thunderRoutes.delete('/channels/:id/messages/:messageId', async (c) => {
 		error: 'Use client-side @mysten/messaging SDK',
 		code: 'CLIENT_SIDE_ONLY',
 		note: 'Message management happens on-chain via the SDK.',
-		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+		sdk: OFFICIAL_MESSAGING_SDK_URL,
 	})
 })
 
@@ -915,7 +916,7 @@ thunderRoutes.post('/channels/:id/messages', async (c) => {
 		error: 'Use client-side @mysten/messaging SDK',
 		code: 'CLIENT_SIDE_ONLY',
 		note: 'Messages are encrypted with Seal and stored on Walrus. Send client-side.',
-		sdk: 'https://cdn.jsdelivr.net/npm/@mysten/messaging@0.3.0/+esm',
+		sdk: OFFICIAL_MESSAGING_SDK_URL,
 	})
 })
 

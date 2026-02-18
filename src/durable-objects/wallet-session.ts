@@ -26,6 +26,20 @@ interface CountRow {
 	count: number
 }
 
+interface JoinRequestRow {
+	[key: string]: SqlStorageValue
+	id: string
+	server_name: string
+	channel_slug: string
+	requester_address: string
+	requester_name: string | null
+	status: string
+	created_at: number
+	resolved_at: number | null
+}
+
+const JOIN_REQUEST_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000
+
 export class WalletSession extends DurableObject<Env> {
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env)
@@ -62,6 +76,25 @@ export class WalletSession extends DurableObject<Env> {
 			`)
 			this.ctx.storage.sql.exec(
 				'CREATE INDEX IF NOT EXISTS idx_rate_ip ON rate_limits(ip, created_at)',
+			)
+
+			this.ctx.storage.sql.exec(`
+				CREATE TABLE IF NOT EXISTS join_requests (
+					id TEXT PRIMARY KEY,
+					server_name TEXT NOT NULL,
+					channel_slug TEXT NOT NULL,
+					requester_address TEXT NOT NULL,
+					requester_name TEXT,
+					status TEXT NOT NULL DEFAULT 'pending',
+					created_at INTEGER NOT NULL,
+					resolved_at INTEGER
+				)
+			`)
+			this.ctx.storage.sql.exec(
+				'CREATE INDEX IF NOT EXISTS idx_jr_channel ON join_requests(server_name, channel_slug, status)',
+			)
+			this.ctx.storage.sql.exec(
+				'CREATE INDEX IF NOT EXISTS idx_jr_requester ON join_requests(requester_address, status)',
 			)
 		})
 	}
@@ -207,6 +240,75 @@ export class WalletSession extends DurableObject<Env> {
 		return result.rowsWritten > 0
 	}
 
+	async listJoinRequests(
+		serverName: string,
+		channelSlug: string,
+	): Promise<Array<{ id: string; channelSlug: string; requesterAddress: string; requesterName: string | null; status: string; createdAt: number }>> {
+		const result = this.ctx.storage.sql.exec<JoinRequestRow>(
+			'SELECT * FROM join_requests WHERE server_name = ? AND channel_slug = ? AND status = ?',
+			serverName,
+			channelSlug,
+			'pending',
+		)
+		return result.toArray().map((row) => ({
+			id: row.id,
+			channelSlug: row.channel_slug,
+			requesterAddress: row.requester_address,
+			requesterName: row.requester_name,
+			status: row.status,
+			createdAt: row.created_at,
+		}))
+	}
+
+	async createJoinRequest(
+		serverName: string,
+		channelSlug: string,
+		requesterAddress: string,
+		requesterName?: string,
+	): Promise<{ id: string; duplicate: boolean }> {
+		const existing = this.ctx.storage.sql.exec<JoinRequestRow>(
+			'SELECT id FROM join_requests WHERE server_name = ? AND channel_slug = ? AND requester_address = ? AND status = ?',
+			serverName,
+			channelSlug,
+			requesterAddress,
+			'pending',
+		)
+		const rows = existing.toArray()
+		if (rows.length > 0) {
+			return { id: rows[0].id, duplicate: true }
+		}
+
+		const id = `jr_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`
+		this.ctx.storage.sql.exec(
+			'INSERT INTO join_requests (id, server_name, channel_slug, requester_address, requester_name, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+			id,
+			serverName,
+			channelSlug,
+			requesterAddress,
+			requesterName || null,
+			'pending',
+			Date.now(),
+		)
+		await this.scheduleCleanup()
+		return { id, duplicate: false }
+	}
+
+	async deleteJoinRequest(id: string): Promise<boolean> {
+		const result = this.ctx.storage.sql.exec('DELETE FROM join_requests WHERE id = ?', id)
+		return result.rowsWritten > 0
+	}
+
+	async approveJoinRequest(id: string): Promise<boolean> {
+		const result = this.ctx.storage.sql.exec(
+			'UPDATE join_requests SET status = ?, resolved_at = ? WHERE id = ? AND status = ?',
+			'approved',
+			Date.now(),
+			id,
+			'pending',
+		)
+		return result.rowsWritten > 0
+	}
+
 	private async scheduleCleanup(): Promise<void> {
 		const currentAlarm = await this.ctx.storage.getAlarm()
 		if (currentAlarm === null) {
@@ -221,6 +323,10 @@ export class WalletSession extends DurableObject<Env> {
 		this.ctx.storage.sql.exec(
 			'DELETE FROM rate_limits WHERE created_at < ?',
 			now - RATE_LIMIT_WINDOW_MS,
+		)
+		this.ctx.storage.sql.exec(
+			'DELETE FROM join_requests WHERE created_at < ?',
+			now - JOIN_REQUEST_EXPIRY_MS,
 		)
 		await this.ctx.storage.setAlarm(Date.now() + 60 * 60 * 1000)
 	}

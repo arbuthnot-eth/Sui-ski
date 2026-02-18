@@ -28,7 +28,6 @@ sui-ski-gateway (Cloudflare Worker)
 │   ├── profile.ts → SuiNS name pages (10,000+ line HTML generation)
 │   ├── landing.ts → sui.ski home page
 │   ├── dashboard.ts → my.sui.ski dashboard
-│   ├── subnamecap.ts → Subdomain name registration
 │   ├── black-diamond.ts → Watchlist tracking
 │   ├── vault.ts → Vault/LP management
 │   └── wallet-api.ts → Wallet connect/check/disconnect

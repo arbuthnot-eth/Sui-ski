@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-Instructions for AI assistants working on this codebase.
-
 ## The Garbage Goobler
 
 You are a garbage goobler. You love to eat dead code and squash bugs. Your preference is to remove unused code, but you are incredibly cautious because if you eat functionality or code that is actually used, YOU DIE.
@@ -14,1091 +12,246 @@ You are a garbage goobler. You love to eat dead code and squash bugs. Your prefe
 5. Type-only exports are safe to remove if the type is never imported
 6. After removing code, run `npx wrangler deploy` to verify bundle still works
 
-## Progress Notes
+---
 
-### 2026-02-14
-- Began migration of the profile/landing chat widget toward messaging-first naming.
-- Introduced `generateMessagingChatCss` / `generateMessagingChatJs` as primary exports and retained legacy aliases for compatibility.
-- Updated chat mount points in page handlers to `messaging-chat-root`, with runtime fallback to the legacy root ID.
-- Current state keeps all existing moderation and channel management behavior while reducing x402-specific naming on the page integration path.
-- Implemented `/cloudflare` as a dedicated searchable grace-period radar UI for SuiNS listings.
-- Upgraded `/api/expiring-listings` to support server-side search/filter mode (`grace`, `expiring`, `all`) and added grace-specific timing fields for queryable ranking.
-- Updated expiration filtering to exclude listings beyond the 30-day grace boundary.
-- Added weighted ranking controls for grace mode (`graceWeight`, `priceWeight`) and surfaced a priority score per result row.
-- Added quick preset actions to `/cloudflare` for common strategies and persisted preset selection in URL parameters.
-- Added `/grace` endpoint and default timestamp cutoff (`1716660606618`) to constrain results to newer TradePort activity and matching SuiNS expirations.
-- Added UX fallback for zero-grace states: `/grace` now auto-shows expiring-soon names with a notice when no current grace entries are found.
-- Updated TradePort ingestion filtering to use `expires_at` for listing-time qualification (instead of `block_time`) to match SDK semantics.
-- Added anti-stale handling for grace data fetches by setting `no-store` API cache headers and adding a client cache-busting request parameter.
-- Added automatic fallback to `block_time` when `expires_at` GraphQL projection is unavailable, and exposed `queryVariant` + GraphQL error summary in debug output.
-- Added RPC provider augmentation for targeted search terms so names can appear in grace queries even when TradePort listing data does not contain them.
+## What is Sui-ski
 
-### 2026-02-15
-- Wired the chat widget to initialize the official Sui Stack Messaging SDK client (`@mysten/messaging@0.3.0`) with live Seal/Walrus config from `/api/app/subscriptions/config`.
-- Added hybrid channel transport in the widget: on-chain channels use official SDK read/send methods, while existing server-backed channels keep moderation and channel-control behavior.
-- Extended `/api/app/subscriptions/config` with SDK bootstrap details (`seal.rpcUrl`, `sdk.messagingVersion`, `sdk.messagingPackageConfig`) and network-aware Walrus defaults for mainnet/testnet.
-- Fixed widget ergonomics by hiding the page wallet widget while chat is open and switching chat visual markers to square styling for consistency.
-- Activated x402 chat API surface by mounting `/api/x402-chat/*` in the worker router.
-- Added x402 chat integration manifest endpoint (`/api/x402-chat/integrations`) for messaging SDK + WebMCP + x402-aware agent routing metadata.
-- Added WebMCP proxy bridge endpoints (`/api/x402-chat/webmcp` and `/api/x402-chat/webmcp/*`) with payment-header passthrough.
-- Added x402 chat agent bridge endpoints for allowlisted dispatch + MCP tool execution (`/api/x402-chat/agents/dispatch`, `/api/x402-chat/agents/webmcp/tool`).
+Cloudflare Worker gateway for the Sui blockchain. Resolves wildcard subdomains (`*.sui.ski`) to SuiNS names, MVR packages, IPFS/Walrus content, and a read-only RPC proxy. Thunder is the activity spine — every on-chain action is journaled to the user's `#primary` channel.
 
 ---
 
-## Project Overview
+## Thunder
 
-**Sui-ski**: Cloudflare Worker gateway for the Sui blockchain ecosystem. Resolves wildcard subdomains (`*.sui.ski`) to route requests to SuiNS names, Move Registry packages, decentralized content (IPFS/Walrus), and a read-only RPC proxy.
+Thunder is the structured activity journal for every `.SKI` user. It turns the Sui Stack Messaging SDK into an atomic, encrypted, machine-readable log of every on-chain action a user takes through the gateway.
 
-**Directory Structure:**
+### #primary Channel
+
+Every SuiNS name gets exactly one `#primary` channel — an on-chain Sui Stack Messaging channel (shared object) that serves as the user's activity journal.
+
+| Property | Value |
+| -------- | ----- |
+| Ownership | Owner holds `CreatorCap` + `MemberCap` with all permissions |
+| Encryption | Seal-encrypted; only owner can read by default |
+| Write access | Owner-only (journal mode — no replies, no conversation) |
+| Read access | Invited members can read but not write |
+| Storage | Channel ID + MemberCap ID stored in wallet session (KV + cookie) |
+| Package | Sui Stack Messaging mainnet: `0x74e34e2e4a2ba60d935db245c0ed93070bbbe23bf1558ae5c6a2a8590c8ad470` |
+
+The `#primary` channel is **write-only by owner**. It is a structured, machine-parseable activity log. AI agents can read it to understand user activity. Invited members observe but never write.
+
+### .SKI → Thunder Bootstrap
+
+First `.SKI` key-in triggers `#primary` channel creation:
+
+1. Connect wallet → sign challenge → verify signature
+2. Check for existing `#primary` channel in session
+3. If none exists, build creation PTB:
+   - `channel::new()` → `channel::share()` → transfer caps → attach encryption key → send genesis message
+4. Requires 2 transactions: create channel + attach Seal encryption key
+5. Subsequent `.SKI` sessions skip creation, load existing `channelId`/`memberCapId` from session
+
+### Action Messages (WebMCP Format)
+
+Every Thunder message uses the MCP `tools/call` envelope with `sui:` namespace:
+
+```typescript
+interface ThunderAction {
+  v: 1
+  method: 'tools/call'
+  tool: string              // "sui:register", "sui:transfer", "sui:swap", etc.
+  input: Record<string, unknown>
+  origin: string            // subdomain that initiated (e.g., "alice.sui.ski")
+}
+```
+
+The message is serialized to bytes, encrypted with the channel's DEK, and passed to `channel::send_message()` as ciphertext within the same PTB as the action.
+
+**Message Catalog:**
+
+| Tool | Trigger | Key Input Fields |
+| ---- | ------- | ---------------- |
+| `sui:register` | SuiNS registration | name, years, paymentMethod |
+| `sui:transfer` | Object transfer | objectId, recipient |
+| `sui:swap` | DeepBook swap | fromCoin, toCoin, amount |
+| `sui:stake` | Validator staking | validator, amount |
+| `sui:ski` | First key-in | name, address |
+| `sui:message` | Direct message send | channel, recipient |
+
+### PTB Composition Rules
+
+1. Every PTB built by `ski-sign.ts` MUST include a Thunder `send_message` call
+2. The Thunder message is appended as the **last** MoveCall in the PTB
+3. If the user has no `#primary` channel yet (first action), the PTB creates the channel instead
+4. Gas budget accounts for the extra message call (~0.001 SUI overhead)
+5. Action and log are **atomic** — both succeed or both fail
+
+The composer function signature (to be implemented in `src/utils/thunder.ts`):
+
+```typescript
+appendThunderMessage(tx: Transaction, channelId: string, memberCapId: string, action: ThunderAction): void
+```
+
+---
+
+## Directory Structure
 
 ```
 src/
-├── index.ts                 # Worker entry point, Hono router
-├── types.ts                 # Shared TypeScript types (Env, SuiNSRecord, etc.)
+├── index.ts                 # Worker entry, Hono router
+├── types.ts                 # Shared types (Env, SuiNSRecord, etc.)
 ├── handlers/
-│   ├── landing.ts           # Root domain handler, /api/* routes
-│   ├── profile.ts           # SuiNS profile pages (14KB CSS-in-JS)
-│   ├── profile.css.ts       # Profile page CSS generation
-│   ├── app.ts               # Messaging/chat WebSocket and REST APIs
-│   ├── dashboard.ts         # My Names dashboard at my.sui.ski
-│   ├── mcp.ts               # MCP server for AI tools (uses zod)
-│   ├── register2.ts         # Domain registration transaction builder
-│   ├── subnamecap.ts        # Subdomain capability management
-│   ├── subnamecap-ui.ts     # Subnamecap web UI
-│   ├── vault.ts             # Grace vault operations
-│   ├── x402-chat.ts         # x402 chat API routes
-│   ├── x402-register.ts     # x402-paid registration routes
-│   └── ski.ts, ski-sign.ts  # Sui Key-In pages
-├── resolvers/
-│   ├── suins.ts             # SuiNS resolution (gRPC-Web + JSON-RPC fallback)
-│   ├── mvr.ts               # Move Registry package lookup
-│   ├── content.ts           # IPFS gateway + Walrus blob fetching
-│   └── rpc.ts               # JSON-RPC proxy (read-only methods only)
+│   ├── landing.ts           # Root domain, /api/* routes
+│   ├── profile.ts           # SuiNS profile pages + Thunder activity feed
+│   ├── app.ts               # Messaging/chat WebSocket + REST APIs
+│   ├── ski.ts, ski-sign.ts  # .SKI key-in + Thunder bootstrap
+│   ├── thunder.ts           # Thunder API routes (reads #primary)
+│   ├── dashboard.ts         # my.sui.ski names management
+│   └── mcp.ts               # MCP server for AI tools
+├── resolvers/               # SuiNS, MVR, IPFS/Walrus, RPC proxy
 ├── utils/
-│   ├── subdomain.ts         # Subdomain parsing logic
-│   ├── cache.ts             # KV-backed caching utilities
-│   ├── response.ts          # HTTP response helpers
-│   ├── swap-transactions.ts # DeepBook swap + SuiNS registration (1200 lines)
-│   ├── ns-price.ts          # NS token pricing via DeepBook pools
-│   ├── pricing.ts           # SuiNS registration pricing calculator
-│   ├── wallet-*.ts          # Wallet connection UI/JS generation
-│   ├── x402-*.ts            # x402 payment protocol utilities
-│   └── mmr.ts               # Merkle Mountain Range (for authenticated events)
+│   ├── thunder.ts           # (NEW) Thunder message builder + PTB composer
+│   ├── swap-transactions.ts # DeepBook swap + registration PTBs
+│   ├── ns-price.ts          # NS token pricing via DeepBook
+│   ├── pricing.ts           # SuiNS registration pricing
+│   └── wallet-*.ts          # Wallet connection UI/JS
 ├── durable-objects/
-│   └── wallet-session.ts    # WalletSession Durable Object
-├── workers/
-│   └── grace-period-monitor.ts # Scheduled grace period monitor (UNUSED)
+│   └── wallet-session.ts    # WalletSession DO (stores channelId, memberCapId)
 └── client/
-    └── wallet-session.ts    # Client-side wallet session helper
-
-scripts/              # NOT bundled in worker
-├── extract-suins-object.ts
-├── setup-ika-dwallet.ts
-└── ...
-
-proxy/                # Separate worker for name lookups
-workers/x402-multichain/  # Separate worker for multi-chain x402
+    └── wallet-session.ts    # Client-side session helper
 ```
 
 ---
 
-## Agent Behavior
+## Deployment
 
-How to approach tasks in this codebase.
+**Use `npx wrangler deploy` NOT `bun run deploy`.** The `bun run deploy` command fails with auth token errors.
 
-### Task Execution
-
-1. **Understand first** - Read relevant files before making changes
-2. **Verify assumptions** - Check existing patterns in the codebase
-3. **Incremental changes** - Small, testable changes over large refactors
-4. **Validate after changes** - Run build and tests before completing
-
-### Decision Framework
-
-**Ask for clarification when:**
-
-- Requirements are ambiguous
-- Multiple valid approaches exist with significant tradeoffs
-- Changes affect public APIs or interfaces
-- Unsure about business logic intent
-
-**Proceed autonomously when:**
-
-- Task is well-defined
-- Following established codebase patterns
-- Changes are easily reversible
-- Standard refactoring or bug fixes
-
-### Change Principles
-
-1. **Minimize blast radius** - Touch only what's necessary
-2. **Preserve patterns** - Match existing code style and architecture
-3. **No surprise dependencies** - Discuss before adding new packages
-4. **Single responsibility** - One logical change per commit
-
----
-
-## Universal Rules
-
-These rules apply to ALL code in this project.
-
-### Code Quality
-
-1. **No comments** - Code must be self-documenting through clear naming
-2. **No TODOs/FIXMEs** - Complete implementations before committing
-3. **No dead code** - Delete unused code; git has history
-4. **No magic values** - Use named constants
-5. **No ignored errors** - Handle or propagate every error
-6. **No re-exports** - Use `export` directly on declarations
-
-### Implementation Standards
-
-Write optimal code on the first attempt. These patterns are non-negotiable.
-
-1. **Bitwise for byte conversion** - No string intermediates
-
-   ```typescript
-   // ✓ Direct bitwise (little-endian bytes to bigint)
-   let result = 0n;
-   for (let i = bytes.length - 1; i >= 0; i--) {
-     result = (result << 8n) | BigInt(bytes[i]);
-   }
-
-   // ✗ String intermediates
-   const hex = bytes.map(b => b.toString(16).padStart(2, '0')).join('');
-   return BigInt('0x' + hex);
-   ```
-
-2. **Single-pass algorithms** - One iteration, not chained methods
-
-   ```typescript
-   // ✓ Single pass
-   let sum = 0;
-   for (const x of arr) sum += x * 2;
-
-   // ✗ Multiple passes
-   arr.map(x => x * 2).reduce((a, b) => a + b, 0);
-   ```
-
-3. **Parallel when independent** - Don't await sequentially
-
-   ```typescript
-   // ✓ Parallel
-   const [a, b, c] = await Promise.all([fetchA(), fetchB(), fetchC()]);
-
-   // ✗ Sequential when independent
-   const a = await fetchA();
-   const b = await fetchB();
-   const c = await fetchC();
-   ```
-
-4. **Pre-compute constants** - Move computation out of hot paths
-
-   ```typescript
-   // ✓ Compute once
-   const VALIDATOR = buildValidator();
-   const validate = (data: Data) => VALIDATOR.check(data);
-
-   // ✗ Recompute every call
-   const validate = (data: Data) => buildValidator().check(data);
-   ```
-
-5. **Uint8Array for binary** - `number[]` only at serialization boundaries
-
-   ```typescript
-   // ✓ Internal binary storage
-   readonly #bytes: Uint8Array;
-
-   // ✗ Array for internal binary
-   readonly #bytes: number[];
-   ```
-
-6. **Actionable errors** - Include what failed AND what's expected
-
-   ```typescript
-   // ✓ Actionable
-   invariant(bytes.length === 32, `Expected 32 bytes, got ${bytes.length}`);
-
-   // ✗ Vague
-   invariant(bytes.length === 32, 'Invalid length');
-   ```
-
-7. **Fail fast** - Validate inputs at function entry
-
-   ```typescript
-   // ✓ Validate upfront
-   const process = (order: Order) => {
-     invariant(order.items.length > 0, 'Order must have items');
-     invariant(order.total > 0, 'Total must be positive');
-     // ... logic
-   };
-   ```
-
-8. **Typed errors** - Structured errors, not ad-hoc strings
-
-   ```typescript
-   // ✓ Typed
-   class ValidationError extends Error {
-     constructor(public field: string, public reason: string) {
-       super(`${field}: ${reason}`);
-     }
-   }
-
-   // ✗ String errors
-   throw new Error('validation failed');
-   ```
-
-### Naming Conventions
-
-| Type       | Convention    | Example                      |
-| ---------- | ------------- | ---------------------------- |
-| Constants  | `UPPER_SNAKE` | `MAX_RETRIES`, `API_TIMEOUT` |
-| Functions  | `camelCase`   | `fetchUser`, `parseResponse` |
-| Types      | `PascalCase`  | `UserProfile`, `ApiResponse` |
-| Variables  | `camelCase`   | `userName`, `isValid`        |
-| Files      | `kebab-case`  | `user-profile.ts`            |
-| Test files | source + `.test` | `user-profile.test.ts`    |
-
-### Security
-
-1. **Validate inputs** - At system boundaries
-2. **No hardcoded secrets** - Use environment variables
-3. **Defensive copies** - Return `new Uint8Array(this.#bytes)`, not `this.#bytes`
-4. **Bounds checking** - Use `bigint` for large numbers, validate ranges
-
----
-
-## Anti-Patterns
-
-Patterns to actively avoid.
-
-### Universal
-
-- ❌ Catching errors without handling or re-throwing
-- ❌ Mutable state in module scope
-- ❌ `console.log` in production (use structured logging)
-- ❌ Mixing concerns in single functions
-
-### TypeScript
-
-- ❌ `as any` or `@ts-ignore` to bypass type errors
-- ❌ `export { x }` at end of file (export inline instead)
-- ❌ Optional chaining without handling undefined case
-- ❌ Non-null assertion `!` without invariant
-
----
-
-## Testing Philosophy
-
-### Principles
-
-1. **One assertion per test** - Multiple focused tests over one large test
-2. **Descriptive names** - `test_withdraw_fails_when_balance_insufficient`
-3. **AAA pattern** - Arrange, Act, Assert
-4. **Test behavior, not implementation** - Focus on inputs and outputs
-
-### What to Test
-
-| Priority | What                                       |
-| -------- | ------------------------------------------ |
-| Always   | Public APIs, edge cases, error conditions  |
-| Usually  | Complex private helpers, state transitions |
-| Never    | Trivial getters, framework internals       |
-
----
-
-## TypeScript
-
-### Commands
+**Deploy after every change.** Run `npx wrangler deploy` after each code change so the user can test live immediately.
 
 ```bash
-bun install               # Install dependencies
-bun run dev               # Development server (Wrangler dev with hot reload)
-bun test                  # Run tests
-bun test --watch          # Watch mode
-bun test src/index.test.ts  # Single file
-bun run typecheck         # Type checking only
-bun run lint              # Check for issues (Biome)
-bun run lint:fix          # Auto-fix issues
-bun run format            # Format code
-bun run deploy            # Deploy to Cloudflare
-bun run tail              # Stream live logs
+npx wrangler deploy           # Deploy (MANDATORY after changes)
+bun run dev                   # Local dev server
+bun test                      # Run tests
+bun run typecheck             # Type checking
+bun run lint                  # Biome linter
 ```
 
-### Type Naming
+---
 
-| Pattern             | Suffix            | Example                       |
-| ------------------- | ----------------- | ----------------------------- |
-| Constructor args    | `ConstructorArgs` | `ClientConstructorArgs`       |
-| Method args         | `Args`            | `FetchUserArgs`               |
-| External API shapes | `Raw`             | `UserRaw`, `OrderResponseRaw` |
-| Internal types      | (none)            | `User`, `Order`               |
-| Events              | (past tense)      | `UserCreated`, `OrderPlaced`  |
-| Configuration       | `Config`          | `ApiConfig`                   |
-| Options             | `Options`         | `FetchOptions`                |
+## Code Standards
 
-### Class Pattern
+### Rules
 
-```typescript
-import invariant from 'tiny-invariant';
-import { API_URL, TIMEOUT_MS } from './constants';
-import type { ConstructorArgs, FetchUserArgs, User, UserRaw } from './client.types';
+| Rule | Detail |
+| ---- | ------ |
+| No comments | Code is self-documenting through clear naming |
+| No dead code | Delete unused code; git has history |
+| No magic values | Named constants at module level |
+| No ignored errors | Handle or propagate every error |
+| Fail fast | Validate inputs at function entry with `invariant` |
 
-export class ApiClient {
-  static parseUser(raw: UserRaw): User {
-    return {
-      id: raw.id,
-      name: raw.user_name,
-      createdAt: new Date(raw.created_at),
-    };
-  }
+### Patterns
 
-  readonly #baseUrl: string;
-  readonly #timeout: number;
+- **Parallel async** — `Promise.all` for independent operations, never sequential `await`
+- **Single-pass** — one iteration, not chained `.map().filter().reduce()`
+- **Bitwise byte conversion** — no string intermediates
+- **Pre-compute constants** — computation out of hot paths
+- **Uint8Array** — for all internal binary data
+- **Actionable errors** — include what failed AND what's expected
 
-  constructor({ baseUrl = API_URL, timeout = TIMEOUT_MS }: ConstructorArgs = {}) {
-    this.#baseUrl = baseUrl;
-    this.#timeout = timeout;
-  }
+### Naming
 
-  async fetchUser({ userId }: FetchUserArgs): Promise<User> {
-    const response = await fetch(`${this.#baseUrl}/users/${userId}`, {
-      signal: AbortSignal.timeout(this.#timeout),
-    });
-    invariant(response.ok, `Fetch failed: ${response.status}`);
-    return ApiClient.parseUser(await response.json());
-  }
-}
-```
+| Type | Convention | Example |
+| ---- | ---------- | ------- |
+| Constants | `UPPER_SNAKE` | `MAX_RETRIES` |
+| Functions | `camelCase` | `fetchUser` |
+| Types | `PascalCase` | `UserProfile` |
+| Variables | `camelCase` | `userName` |
+| Files | `kebab-case` | `user-profile.ts` |
 
-### Value Object Pattern
+### Anti-Patterns
 
-```typescript
-export class Address {
-  static readonly LENGTH = 32;
-  static readonly ZERO = new Address(new Uint8Array(Address.LENGTH));
-
-  static fromHex(hex: string): Address {
-    const normalized = hex.startsWith('0x') ? hex.slice(2) : hex;
-    invariant(normalized.length === Address.LENGTH * 2, `Invalid hex length: ${normalized.length}`);
-    const bytes = new Uint8Array(Address.LENGTH);
-    for (let i = 0; i < Address.LENGTH; i++) {
-      bytes[i] = parseInt(normalized.slice(i * 2, i * 2 + 2), 16);
-    }
-    return new Address(bytes);
-  }
-
-  readonly #bytes: Uint8Array;
-
-  constructor(bytes: Uint8Array) {
-    invariant(bytes.length === Address.LENGTH, `Expected ${Address.LENGTH} bytes, got ${bytes.length}`);
-    this.#bytes = bytes;
-  }
-
-  equals(other: Address): boolean {
-    return this.#bytes.every((b, i) => b === other.#bytes[i]);
-  }
-
-  toBytes(): Uint8Array {
-    return new Uint8Array(this.#bytes);
-  }
-
-  toHex(): string {
-    return '0x' + Array.from(this.#bytes, b => b.toString(16).padStart(2, '0')).join('');
-  }
-
-  toString(): string {
-    return this.toHex();
-  }
-
-  toJSON(): string {
-    return this.toHex();
-  }
-}
-```
-
-### Import Order
-
-```typescript
-// 1. Node builtins
-import { readFileSync } from 'fs';
-
-// 2. External packages (alphabetized)
-import axios from 'axios';
-import invariant from 'tiny-invariant';
-
-// 3. Internal imports (alphabetized)
-import { API_URL } from './constants';
-import type { User } from './types';
-```
-
-### Recommended Packages
-
-| Package          | Purpose            |
-| ---------------- | ------------------ |
-| `tiny-invariant` | Runtime assertions |
-| `zod`            | Schema validation  |
-| `ky`             | HTTP client        |
-| `vitest`         | Testing            |
+- `as any` or `@ts-ignore` — use proper types
+- `export { x }` at end of file — export inline
+- `console.log` in production — use structured logging
+- Catching errors without handling or re-throwing
+- Mutable state in module scope
 
 ---
 
 ## Git Conventions
 
-### Commit Format
-
 ```
 emoji type(scope): subject
 ```
 
-### Types
+| Emoji | Type | Use For |
+| ----- | ---- | ------- |
+| ✨ | feat | New feature |
+| 🐛 | fix | Bug fix |
+| 📝 | docs | Documentation |
+| ♻️ | refactor | Code restructure |
+| ⚡ | perf | Performance |
+| ✅ | test | Tests |
+| 📦 | build | Build/dependencies |
+| 🔧 | chore | Maintenance |
 
-| Emoji | Type     | Use For            |
-| ----- | -------- | ------------------ |
-| ✨    | feat     | New feature        |
-| 🐛    | fix      | Bug fix            |
-| 📝    | docs     | Documentation      |
-| ♻️    | refactor | Code restructure   |
-| ⚡    | perf     | Performance        |
-| ✅    | test     | Tests              |
-| 📦    | build    | Build/dependencies |
-| 🔧    | chore    | Maintenance        |
-
-### Examples
-
-```
-✨ feat(auth): add OAuth2 login
-🐛 fix(api): handle null response
-♻️ refactor(db): extract connection pool
-📦 build(deps): update axios to 1.7.0
-```
-
-### Rules
-
-- Lowercase subject
-- No period at end
-- One logical change per commit
+Lowercase subject, no period, one logical change per commit.
 
 ---
 
-## Pre-Commit Checklist
+## Key Constants
 
-- [ ] `bun run typecheck` passes
-- [ ] `bun run lint` passes (zero warnings)
-- [ ] `bun test` passes
-- [ ] No `any` or `@ts-ignore`
-- [ ] Commit message follows format
-- [ ] Single logical change
-- [ ] No secrets committed
+### Token Decimals (Critical)
 
----
+| Token | Decimals | Conversion |
+| ----- | -------- | ---------- |
+| NS | 6 | `nsTokens * 1e6 = nsMist` |
+| SUI | 9 | `suiAmount * 1e9 = suiMist` |
 
-## Project Configuration
-
-### Environment Variables
-
-`wrangler.toml` defines:
-
-```bash
-SUI_NETWORK=mainnet|testnet|devnet
-SUI_RPC_URL=                        # Sui fullnode endpoint
-WALRUS_NETWORK=                     # Walrus network
-CACHE=                              # KV namespace binding
-```
-
-Use `env.dev` for testnet development.
-
-### Key Dependencies
-
-| Package              | Purpose                    |
-| -------------------- | -------------------------- |
-| `@mysten/sui`        | Sui TypeScript SDK         |
-| `@mysten/suins`      | SuiNS client               |
-| `@mysten/walrus`     | Walrus blob storage client |
-| `@mysten/messaging`  | Sui Stack Messaging SDK    |
-| `wrangler`           | Cloudflare Workers CLI     |
-
-### Local SDK: Sui Stack Messaging
-
-**Path:** `/home/brandon/Dev/Contributor/sui-stack-messaging-sdk`
-
-Local fork of `@mysten/messaging` for customization and mainnet support:
-- Updated to `@mysten/sui@^2.4.0`
-- Built at `packages/messaging/dist/`
-
-**Architecture:** Client-side only. Server serves static assets + config, all messaging operations go direct to Sui RPC + Walrus.
-
----
-
-## Subdomain Routing
-
-The gateway parses hostnames to determine routing:
-
-| Pattern                        | Route Type | Example               |
-| ------------------------------ | ---------- | --------------------- |
-| `sui.ski`                      | root       | Landing page          |
-| `rpc.sui.ski`                  | rpc        | JSON-RPC proxy        |
-| `{name}.sui.ski`               | suins      | SuiNS resolution      |
-| `{pkg}--{name}.sui.ski`        | mvr        | MVR package           |
-| `{pkg}--{name}--v{n}.sui.ski`  | mvr        | MVR package version   |
-| `ipfs-{cid}.sui.ski`           | content    | Direct IPFS           |
-| `walrus-{blobId}.sui.ski`      | content    | Direct Walrus         |
-
----
-
-## SuiNS Integration
-
-[SuiNS (Sui Name Service)](https://docs.suins.io/developer) is a decentralized naming service on the Sui blockchain that enables users to replace complex wallet addresses with human-readable names.
-
-### Resolution Types
-
-SuiNS supports two types of resolution:
-
-- **Lookup:** A name can point to an address or an object (target address). This allows you to resolve a name like `example.sui` to its target address.
-- **Reverse lookup:** An address can have a default name. This allows you to find the name associated with a particular address.
-
-### Address Types
-
-Lookups work with different types of addresses:
-
-- **Target address:** The address that a SuiNS name resolves to. For example, `example.sui` might point to `0x2`, making `0x2` the target address for `example.sui`. Lookup resolution retrieves this information.
-- **Default address:** The SuiNS name that the owner of a particular address has selected to represent that address. For example, if you own `0x2` you can make `example.sui` its default address. The owner must sign and execute a set default transaction to establish this connection. The default address resets anytime the target address changes. Reverse lookup resolution retrieves this name.
-
-### SuiNS NFT Ownership
-
-Do not use ownership of a SuiNS NFT as a resolution method. An NFT is used as the key (capability) to change the target address, but should not be used to identify any name with an address.
-
-SuiNS NFT ownership allows any address to be set as the target address. So, the `example.sui` address used in the previous section can point to any address, not just `0x2`. Consequently, when you want to display default addresses, you should trust the default address over target address because it is guaranteed on chain.
-
-### Active Constants
-
-**Mainnet:**
-- SuiNS Core V3: `0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5`
-- SuiNS Core V2: `0xb7004c7914308557f7afbaf0dca8dd258e18e306cb7a45b28019f3d0a693f162`
-- SuiNS Core V1: `0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0`
-- SuiNS Core Object: `0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871`
-
-**Testnet:**
-- SuiNS Core: `0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93`
-- SuiNS Core Object: `0x300369e8909b9a6464da265b9a5a9ab6fe2158a040e84e808628cde7a07ee5a3`
-
-For the complete list of active packages and objects, see the [SuiNS Developer Documentation](https://docs.suins.io/developer#addresses).
-
-### Integration Methods
-
-- **Off-chain resolution:** Use available Sui API endpoints (JSON-RPC or GraphQL). For GraphQL's default name resolution, use the `defaultSuinsName` field.
-- **On-chain resolution:** Use the SuiNS core package. Add the appropriate dependency in your `Move.toml` file depending on which network you are targeting.
-
----
-
-## RPC Proxy Security
-
-The RPC proxy at `rpc.sui.ski` only allows read-only methods. Write operations (`sui_executeTransactionBlock`, etc.) are blocked. Rate limiting is 100 requests/minute per IP.
-
----
-
-## MVR Registry Integration
-
-[Move Registry (MVR)](https://www.moveregistry.com/apps) provides uniform naming for Sui packages. Reference packages and types by name in PTBs; MVR resolves addresses across networks. Supports Mainnet and Testnet.
-
-**Name Format:** `@{suins_name}/{package_name}` or `{suins_name}.sui/{package_name}`
-- With version: `@myname/mypackage/2` (resolves to specific on-chain version)
-- Without version: defaults to latest
-
-**Design:**
-- `PackageInfo` registration: exists independently per network (metadata + ownership proof)
-- MVR registration: single source of truth on Mainnet only
-
-**Registration Flow:**
-1. Register `PackageInfo` object when publishing (once per network)
-2. Register application using SuiNS name
-3. Associate application with `PackageInfo`:
-   - Mainnet: full `PackageInfo` object (complete mapping)
-   - Other networks: `PackageInfo` object ID (pointer only)
-
-**Source Code:**
-- [MVR CLI & Web App](https://github.com/MystenLabs/mvr)
-- [MVR GraphQL](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/src/types/move_registry)
-- [TypeScript SDK Plugin](https://github.com/MystenLabs/ts-sdks/tree/main/packages/typescript/src/transactions/plugins/NamedPackagesPlugin.ts)
-
-**Gateway Subdomain Patterns:**
-- `core--suifrens.sui.ski` → `@suifrens/core`
-- `nft--myname--v2.sui.ski` → `@myname/nft/2`
-
-**Management UI** (`/mvr`):
-- Web interface for package registration, versioning, and metadata updates
-- Generate unsigned transactions for offline signing
-- Browse and search packages
-
-**API Endpoints**:
-- `POST /api/mvr/register` - Register new package
-- `POST /api/mvr/publish-version` - Publish new version
-- `POST /api/mvr/update-metadata` - Update package metadata
-- `POST /api/mvr/transfer` - Transfer package ownership
-- `GET /api/mvr/packages/{suinsName}` - List packages for a SuiNS name
-- `GET /api/mvr/search?q={query}` - Search packages
-
-See `docs/MVR_IMPROVEMENTS.md` for detailed documentation.
-
-### MVR TypeScript SDK
-
-The `namedPackagesPlugin` from `@mysten/sui` (v1.25.0+) streamlines PTB construction by resolving MVR names to addresses with runtime caching.
-
-**Public Endpoints:**
-- Mainnet: `https://mainnet.mvr.mystenlabs.com`
-- Testnet: `https://testnet.mvr.mystenlabs.com`
-
-**Global Registration:**
+When calculating SUI needed to buy NS tokens:
 ```typescript
-import { namedPackagesPlugin, Transaction } from '@mysten/sui/transactions';
-
-const plugin = namedPackagesPlugin({ url: 'https://mainnet.mvr.mystenlabs.com' });
-Transaction.registerGlobalSerializationPlugin('namedPackagesPlugin', plugin);
+const nsTokens = Number(nsMist) / 1e6;
+const suiMist = BigInt(Math.ceil(nsTokens * suiPerNs * 1e9));
 ```
 
-**Per-Transaction Registration:**
-```typescript
-const mainnetPlugin = namedPackagesPlugin({
-  url: 'https://mainnet.mvr.mystenlabs.com'
-});
-const transaction = new Transaction();
-transaction.addSerializationPlugin(mainnetPlugin);
-```
+### Package Addresses
 
-**With Overrides (local dev/custom caching):**
-```typescript
-const overrides = {
-  packages: { '@suifrens/accessories': '0xe177...' },
-  types: { '@suifrens/core::suifren::SuiFren': '0x8894...' }
-};
-const plugin = namedPackagesPlugin({ url: '<endpoint>', overrides });
-```
+| Package | Mainnet ID |
+| ------- | ---------- |
+| Sui Stack Messaging | `0x74e34e2e4a2ba60d935db245c0ed93070bbbe23bf1558ae5c6a2a8590c8ad470` |
+| SuiNS Core V3 | `0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5` |
+| SuiNS Core Object | `0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871` |
+| Seal (mainnet vault) | `0xfabfc63a1d67c37d9c0250bc3efeb96a3c56fb20b9a6d92e3b89dd151f54af5c` |
+| Seal Core (mainnet) | `0xcb83a248bda5f7a0a431e6bf9e96d184e604130ec5218696e3f1211113b447b7` |
+| Decay Auction | `0x10dbff33383bdb68d0bbf6aadeed5e2d3911c45b03664130ebb16437954a2f40` |
 
-**Alternative:** Consider `@mysten/mvr-static` for build-time static resolution (better performance, no runtime API calls).
+### Subdomain Routing
 
-### MVR CLI
-
-Command-line tool for managing Move project dependencies with the Move Registry.
-
-**Installation:**
-```bash
-cargo install --locked --git https://github.com/mystenlabs/mvr --branch release mvr
-```
-
-**Adding Dependencies:**
-```bash
-mvr add <package_name> --network <mainnet|testnet>
-```
-
-This updates `Move.toml`:
-```toml
-[dependencies]
-app = { r.mvr = "@mvr/app" }
-
-[r.mvr]
-network = "mainnet"
-```
-
-**Building:** Standard `sui move build` automatically invokes MVR dependency resolution.
-
-**Verify Installation:** `mvr --help`
-
-### MVR Names & Applications
-
-Managing applications involves four operations:
-
-1. **Create Application**: Register with SuiNS name + package name. Returns `appCap` for subsequent operations.
-
-2. **Set Metadata** (strongly recommended):
-   - `description`, `icon_url`, `documentation_url`, `homepage_url`, `contact`
-
-3. **Mainnet Package Attachment**: Links `PackageInfo` to application permanently (cannot be detached).
-
-4. **Non-Mainnet Attachment**: Attaches pointers (not strict bindings). Can update by unsetting then resetting the network.
-
-### MVR Package Metadata
-
-Create a `PackageInfo` object when first deploying (once per network) as the source of truth for package metadata.
-
-**Create PackageInfo:**
-```typescript
-const packageInfo = transaction.moveCall({
-  target: `@mvr/metadata::package_info::new`,
-  arguments: [transaction.object('<UpgradeCap>')],
-});
-
-const display = transaction.moveCall({
-  target: `@mvr/metadata::display::default`,
-  arguments: [transaction.pure.string('<package display name>')],
-});
-
-transaction.moveCall({
-  target: `@mvr/metadata::package_info::set_display`,
-  arguments: [transaction.object(packageInfo), display],
-});
-
-transaction.moveCall({
-  target: `@mvr/metadata::package_info::set_metadata`,
-  arguments: [
-    transaction.object(packageInfo),
-    transaction.pure.string('default'),
-    transaction.pure.string('<MVR name>'),  // e.g., @suins/core
-  ],
-});
-
-transaction.moveCall({
-  target: `@mvr/metadata::package_info::transfer`,
-  arguments: [transaction.object(packageInfo), transaction.pure.address('<safe address>')],
-});
-```
-
-**Reverse Resolution** (lookup MVR name from package ID):
-```bash
-curl -X POST 'https://mainnet.mvr.mystenlabs.com/v1/reverse-resolution/bulk' \
-  -H 'Content-Type: application/json' \
-  -d '{"package_ids": ["0x00c2f85e07..."]}'
-```
-
-**Add Source Code Info:**
-```typescript
-const git = transaction.moveCall({
-  target: `@mvr/metadata::git::new`,
-  arguments: [
-    transaction.pure.string('<repo URL>'),
-    transaction.pure.string('<subdirectory>'),
-    transaction.pure.string('<commit hash or tag>'),
-  ],
-});
-
-transaction.moveCall({
-  target: `@mvr/metadata::package_info::set_git_versioning`,
-  arguments: [
-    transaction.object('<PackageInfo>'),
-    transaction.pure.u64('<version number>'),
-    git,
-  ],
-});
-```
-
-**Update Source:** Call `unset_git_versioning` first, then `set_git_versioning` with new info.
-
-**Transfer:** Use `@mvr/metadata::package_info::transfer`. No public transfers (ensures indexability).
-
-### MVR Maintainer Practices
-
-Best practices for maintaining packages in the Move Registry:
-
-1. **Automated Address Management**: Use Sui's automated address management when publishing/upgrading. Commit and tag changes after configuration.
-
-2. **Network-Specific Dependencies**: Switch `Sui` dependency to correct network (testnet/mainnet). Starting with Sui v1.45, system dependencies are auto-managed and should be removed from `Move.toml`.
-
-3. **Release Tagging**: Use `<network>/<version>` format (e.g., `mainnet/v1`). Update `PackageInfo` source origin with commit SHA or tag reference.
-
-4. **Package Naming**: In multi-package repos, prefix package names with project identifier (e.g., `mvr_utils` not `utils`) to avoid conflicts and improve discoverability.
+| Pattern | Route |
+| ------- | ----- |
+| `sui.ski` | Landing page |
+| `rpc.sui.ski` | Read-only RPC proxy |
+| `{name}.sui.ski` | SuiNS profile + Thunder feed |
+| `{pkg}--{name}.sui.ski` | MVR package |
+| `ipfs-{cid}.sui.ski` | IPFS content |
+| `walrus-{blobId}.sui.ski` | Walrus blob |
+| `my.sui.ski` | Names dashboard |
+| `app.sui.ski` | Messaging app |
 
 ---
 
-## Sui Client Architecture (@mysten/sui v2.x)
+## SDK References
 
-**JSON-RPC is deprecated — migrate to GraphQL by April 2026.**
+**Sui Stack Messaging SDK (local fork):**
+`/home/brandon/Dev/Contributor/sui-stack-messaging-sdk` — built at `packages/messaging/dist/`. Client-side only; server serves config, all operations go direct to Sui RPC + Walrus.
 
-When loading the Sui SDK from CDN for browser use:
-- `@mysten/sui/client` exports only the **abstract** `CoreClient` — DO NOT instantiate
-- `@mysten/sui/graphql` exports `SuiGraphQLClient` (preferred, extends `BaseClient`)
-- `@mysten/sui/jsonRpc` exports `SuiJsonRpcClient` (legacy, extends `BaseClient`)
+**CDN manifest:** `https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v2-2026-02-16/cdn/messaging-mainnet.json`
 
-Both concrete clients have:
-- `.core` property → concrete `CoreClient` subclass with `listOwnedObjects`, `getObjects`, etc.
-- `.$extend()` for composing with Seal, Messaging, and other extensions
+**Sui Client (v2.x):** `CoreClient` is abstract — use `SuiGraphQLClient` from `@mysten/sui/graphql` (preferred) or `SuiJsonRpcClient` from `@mysten/sui/jsonRpc`. JSON-RPC deprecated April 2026.
 
-**GraphQL Endpoints:**
-- Mainnet: `https://graphql-beta.mainnet.sui.io`
-- Testnet: `https://graphql-beta.testnet.sui.io`
-- Devnet: `https://graphql-beta.devnet.sui.io`
+**Seal:** Every app deploys its own `seal_approve` Move contract. See `docs/SEAL_UPGRADE_GUIDE.md`.
 
----
+**SuiNS:** Resolution via gRPC-Web (primary) + JSON-RPC fallback. See [docs.suins.io/developer](https://docs.suins.io/developer).
 
-## Sui Transaction Building
-
-This project uses the `Transaction` class from `@mysten/sui/transactions`:
-
-```typescript
-import { Transaction } from '@mysten/sui/transactions';
-
-const tx = new Transaction();
-const [coin] = tx.splitCoins(tx.gas, [100]);
-tx.transferObjects([coin], '0xRecipientAddress');
-```
-
-See `docs/SUI_TRANSACTION_BUILDING.md` for comprehensive documentation.
-
----
-
-## Seal Decentralized Secrets Management
-
-[Seal](https://github.com/MystenLabs/seal) is a decentralized secrets management (DSM) service for encrypting sensitive data stored on Walrus or other on/off-chain storage, with access controlled by onchain policies on Sui.
-
-### Architecture
-
-Seal uses **Identity-Based Encryption (IBE)** with a two-component design:
-
-1. **Onchain Access Policies (Sui Move)**: Packages control IBE identity subdomains prefixed with their package ID (`[PkgId]*`), defining authorization through `seal_approve` functions
-2. **Offchain Key Servers**: Independent services each holding an IBE master secret key, deriving keys only when onchain policies approve requests
-
-### Cryptographic Primitives
-
-| Component | Implementation |
-| --------- | -------------- |
-| IBE Scheme | Boneh-Franklin with BLS12-381 |
-| Symmetric (browser) | AES-256-GCM |
-| Symmetric (onchain) | HMAC-based CTR mode |
-| Threshold | t-out-of-n across key servers |
-
-### SDK Usage
-
-```typescript
-import { SealClient, SessionKey } from '@mysten/seal';
-import { fromHEX } from '@mysten/bcs';
-
-const client = new SealClient({
-  suiClient,
-  serverConfigs: serverObjectIds.map((id) => ({ objectId: id, weight: 1 })),
-  verifyKeyServers: true,
-});
-
-const { encryptedObject, key } = await client.encrypt({
-  threshold: 2,
-  packageId: fromHEX(packageId),
-  id: fromHEX(policyId),
-  data: plaintext,
-});
-
-const sessionKey = await SessionKey.create({
-  address: suiAddress,
-  packageId: fromHEX(packageId),
-  ttlMin: 10,
-  suiClient,
-});
-
-const tx = new Transaction();
-tx.moveCall({
-  target: `${packageId}::module::seal_approve`,
-  arguments: [tx.pure.vector('u8', fromHEX(policyId))],
-});
-
-const decrypted = await client.decrypt({
-  data: encryptedObject,
-  sessionKey,
-  txBytes: await tx.build({ client: suiClient }),
-});
-```
-
-### Move Access Control
-
-Define `seal_approve` entry functions to control decryption access:
-
-```move
-module example::access;
-
-public entry fun seal_approve(id: vector<u8>, ctx: &TxContext) {
-    let caller = ctx.sender();
-    assert!(is_authorized(caller, id), ENotAuthorized);
-}
-```
-
-**Requirements:**
-- First parameter: requested identity (excluding package ID prefix)
-- Must abort if access denied (no return value)
-- Side-effect free (cannot modify onchain state)
-- Use non-public entry functions for versioning flexibility
-
-### Access Control Patterns
-
-| Pattern | Use Case |
-| ------- | -------- |
-| **Allowlist** | Share with defined group; membership changes affect future decryptions |
-| **Subscription** | Time-limited access with passes; no re-encryption needed |
-| **Time-Locked** | Auto-unlock at specific time; useful for auctions, coordinated reveals |
-| **NFT/Owned** | Single owner controls access; transfer changes custody |
-
-### Security Considerations
-
-- **Threshold misconfiguration** can cause permanent data loss if too many key servers become unavailable
-- **Key server trust** is critical; vet providers and establish SLAs
-- **Decryption keys** are exposed client-side; no onchain audit trail of key delivery
-- **Envelope encryption** recommended for large/sensitive data: encrypt with symmetric key, use Seal to manage that key
-
-### Best Practices
-
-1. Use envelope encryption for large payloads
-2. Vet key server providers with business agreements
-3. Implement audit logging for key access events
-4. Avoid access policies relying on frequently changing state (full nodes may observe different chain versions)
-
----
-
-## Nautilus TEE Framework
-
-[Nautilus](https://github.com/MystenLabs/nautilus) enables verifiable offchain computation using Trusted Execution Environments (TEEs). Mainnet launch: June 5, 2025.
-
-### Architecture
-
-Two integrated components:
-1. **Offchain Server (TEE)**: Runs inside AWS Nitro Enclave, handles user inputs, scheduled tasks, and private computation
-2. **Onchain Contract (Move)**: Verifies TEE attestations before accepting computation results
-
-### Attestation Flow
-
-1. Deploy offchain server to self-managed TEE
-2. TEE generates cryptographic attestation (proves execution environment integrity)
-3. Submit computation result + attestation to Sui
-4. Move contract verifies attestation against provider's root of trust
-5. Accept output only if attestation valid
-
-### Nautilus + Seal Integration
-
-Solves the problem of TEEs losing secrets on restart/migration:
-- Seal stores long-term encryption keys
-- Seal grants key access only to properly attested TEEs
-- Nautilus handles computation over encrypted data
-- Seal controls who can decrypt results
-
-### Use Cases
-
-- Private AI model inference
-- Federated learning coordination
-- ZK-ML proof generation
-- High-cost offchain computation
-
----
-
-## Walrus Decentralized Storage
-
-[Walrus](https://docs.wal.app) is a decentralized blob storage network using Red Stuff 2D erasure coding. Mainnet launch: March 25, 2025. Whitepaper v2.0: April 2025.
-
-### Red Stuff Encoding
-
-1. Original blob organized into a data matrix (rows × columns)
-2. **Primary encoding**: Columns erasure-coded independently
-3. **Secondary encoding**: Rows erasure-coded independently
-4. Each storage node receives one primary + one secondary sliver (3f+1 total pairs)
-
-### Certification Flow
-
-1. Client encodes blob into slivers
-2. Distribute slivers to storage nodes
-3. Collect signed acknowledgments (2/3 quorum required)
-4. Form "write certificate"
-5. Publish certificate on Sui as Proof of Availability (PoA)
-
-### Key Properties
-
-| Property | Value |
-| -------- | ----- |
-| Storage overhead | 4-5x (vs 3x simple replication) |
-| Recovery threshold | 1/3 of slivers |
-| Fault tolerance | 2/3 node failures |
-| Recovery bandwidth | Proportional to sliver size (not blob size) |
-| Token | WAL (delegated proof-of-stake) |
-
-### Components
-
-**Sui Layer (metadata):**
-- **System Object**: Shared object tracking current storage node committee (ID in `client_config.yaml`)
-- **Storage Resources**: Objects representing available storage capacity
-- **Blob Resources**: Objects for blobs undergoing registration/certification
-- **Events**: Emitted when Walrus objects change state
-
-**Walrus Services:**
-- **Client Binary**: CLI, JSON API, and HTTP API interfaces
-- **Aggregator**: HTTP-based blob retrieval service
-- **Publisher**: Blob storage operations service
-- **Storage Nodes**: Decentralized infrastructure layer
-
-**Typical Integration:** End users interact via aggregators/publishers (HTTP), avoiding local binary deployment.
-
----
-
-## Cloudflare DNS Setup
-
-Required DNS records:
-1. `A` record: `*` → `192.0.2.0` (proxied) - dummy IP for Worker routing
-2. `A` record: `@` → `192.0.2.0` (proxied) - root domain
-3. Worker route: `*.sui.ski/*` → `sui-ski-gateway`
-4. Worker route: `sui.ski/*` → `sui-ski-gateway`
-
----
-
-## Sui Stack System Diagram
-
-For a comprehensive visual reference of the complete Sui ecosystem architecture, see `docs/SUI_STACK_SYSTEM_DIAGRAM.md`. This includes:
-
-- High-level architecture diagrams
-- Component deep dives (Sui Core, SuiNS, MVR, Walrus, Seal, Nautilus)
-- Data flow diagrams (transaction lifecycle, content resolution)
-- Integration patterns for full-stack dApps
-- Network topology and SDK reference
-- Performance benchmarks (Mysticeti v2)
-- 2026 roadmap highlights (Remora horizontal scaling, protocol-level privacy)
-
----
-
-## Progress Notes (2026-02-15)
-
-- Simplified `/grace` into a plain table-first experience focused on expiring SuiNS registrations.
-- Removed weighted ranking/dashboard controls from `/grace` and switched data source to `/api/grace-feed`.
-- Updated `/api/grace-feed` to support `status=all|expiring|grace`.
-- Added grace-lifecycle fields in API output:
-  - `expired`
-  - `inGracePeriod`
-  - `daysSinceExpiry`
-  - `daysUntilGraceEnds`
-- Increased default grace feed window from `90` days to `3650` days.
-- Added cache snapshotting for tracked registrations so new/known names persist between refresh windows.
-- Added SuiNS RPC lookup fallback for direct searched names (e.g. `usd.sui.ski`) when indexer rows are missing.
-- Deployed after each change with `npx wrangler deploy` per project instructions.
-
----
-
-## Sui Stack Messaging SDK - Mainnet Deployment (v0.4.0 CDN)
-
-### Mainnet Package
-
-- **Package ID:** `0x74e34e2e4a2ba60d935db245c0ed93070bbbe23bf1558ae5c6a2a8590c8ad470`
-- **Deployer:** `0x3db42086e9271787046859d60af7933fa7ea70148df37c9fd693195533eabb57`
-- **Tx digest:** `E551CSSGWQsXChSCFQPR7BNMWWQv7TB7KYV2iyZkxVyz`
-- **Upgrade cap:** `0x1829ea7b90624dc019fd4df90e58bc092da03117f11ff585af958f0fb074d324`
-
-### CDN Manifest
-
-- **Git tag:** `mainnet-messaging-v2-2026-02-16`
-- **Manifest commit:** `e7280c8`
-- **Manifest path:** `cdn/messaging-mainnet.json` (in `sui-stack-messaging-sdk` repo)
-- **jsDelivr:** `https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v2-2026-02-16/cdn/messaging-mainnet.json`
-- **Raw GitHub:** `https://raw.githubusercontent.com/arbuthnot-eth/sui-stack-messaging-sdk/mainnet-messaging-v2-2026-02-16/cdn/messaging-mainnet.json`
-
-### Runtime Usage
-
-Fetch the CDN manifest at startup, read `packageId`, and inject into the SDK:
-
-```typescript
-const manifest = await fetch(
-  'https://cdn.jsdelivr.net/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v2-2026-02-16/cdn/messaging-mainnet.json'
-).then(r => r.json());
-
-const client = new SuiStackMessagingClient({
-  suiClient,
-  storage,
-  packageConfig: {
-    packageId: manifest.packageId,
-  },
-});
-```
-
-### Local Metadata
-
-Updated after upgrade:
-- `move/sui_stack_messaging/Published.toml:7` (package ID)
-- `move/sui_stack_messaging/Published.toml:9` (version)
-
-Note: default constants in `packages/messaging/src/constants.ts:6` still reference an older fallback ID.
+**MVR:** See `docs/MVR_IMPROVEMENTS.md`. SDK plugin: `namedPackagesPlugin` from `@mysten/sui/transactions`.

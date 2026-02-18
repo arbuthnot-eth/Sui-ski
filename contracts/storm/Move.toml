@@ -1,0 +1,10 @@
+[package]
+name = "storm"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["sui.ski"]
+
+[dependencies]
+
+[addresses]
+storm = "0x0"
