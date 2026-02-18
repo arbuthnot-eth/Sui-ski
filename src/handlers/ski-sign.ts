@@ -98,15 +98,207 @@ function __resolveSigningAccount(conn, expectedSender) {
 }
 
 function __normalizeWalletName(name) {
-	return String(name || '').trim().toLowerCase();
+	var normalized = String(name || '').trim().toLowerCase();
+	if (!normalized) return '';
+	normalized = normalized.replace(/[^a-z0-9]+/g, ' ').trim();
+	if (!normalized) return '';
+	if (normalized.slice(-7) === ' wallet') {
+		normalized = normalized.slice(0, -7).trim();
+	}
+	return normalized.replace(/\s+/g, '');
+}
+
+var __walletAliasGroups = [
+	['slush', 'sui', 'suiwallet', 'slushwallet', 'mystenwallet'],
+	['suiet', 'suietwallet'],
+	['phantom', 'phantomwallet'],
+	['backpack', 'backpackwallet'],
+];
+
+function __walletAliasMatch(leftKey, rightKey) {
+	for (var g = 0; g < __walletAliasGroups.length; g++) {
+		var group = __walletAliasGroups[g];
+		var hasLeft = false;
+		var hasRight = false;
+		for (var i = 0; i < group.length; i++) {
+			if (group[i] === leftKey) hasLeft = true;
+			if (group[i] === rightKey) hasRight = true;
+		}
+		if (hasLeft && hasRight) return true;
+	}
+	return false;
 }
 
 function __walletNamesMatch(left, right) {
-	var leftName = __normalizeWalletName(left);
-	var rightName = __normalizeWalletName(right);
-	if (!leftName || !rightName) return false;
-	if (leftName === rightName) return true;
-	return leftName.indexOf(rightName) !== -1 || rightName.indexOf(leftName) !== -1;
+	var leftKey = __normalizeWalletName(left);
+	var rightKey = __normalizeWalletName(right);
+	if (!leftKey || !rightKey) return false;
+	if (leftKey === rightKey) return true;
+	if (__walletAliasMatch(leftKey, rightKey)) return true;
+	if (leftKey.length >= 5 && rightKey.length >= 5) {
+		return leftKey.indexOf(rightKey) !== -1 || rightKey.indexOf(leftKey) !== -1;
+	}
+	return false;
+}
+
+function __serializeBridgeWallet(wallet) {
+	if (!wallet || typeof wallet !== 'object') return null;
+	var name = wallet.name ? String(wallet.name) : '';
+	if (!name) return null;
+	var icon = '';
+	try { if (wallet.icon) icon = String(wallet.icon); } catch (_e) {}
+	return {
+		name: name,
+		icon: icon,
+		__isPasskey: !!wallet.__isPasskey,
+	};
+}
+
+var __bridgeWalletCache = {};
+var __bridgeWalletOrder = [];
+var __lastPreferredConnectError = '';
+
+function __getBridgeWalletCandidates() {
+	var wallets = [];
+	try {
+		wallets = SuiWalletKit.getSuiWallets();
+	} catch (_e) {}
+	if (!Array.isArray(wallets) || wallets.length === 0) {
+		wallets = SuiWalletKit.$wallets.value || [];
+	}
+	return Array.isArray(wallets) ? wallets : [];
+}
+
+function __getBridgeWalletList(walletsInput) {
+	var wallets = Array.isArray(walletsInput) ? walletsInput : __getBridgeWalletCandidates();
+	var byKey = {};
+	var order = [];
+	for (var i = 0; i < wallets.length; i++) {
+		var serialized = __serializeBridgeWallet(wallets[i]);
+		if (!serialized) continue;
+		var key = __normalizeWalletName(serialized.name);
+		if (!key) key = 'wallet-' + i;
+		var existing = byKey[key];
+		if (!existing) {
+			byKey[key] = serialized;
+			order.push(key);
+			continue;
+		}
+		if (!existing.icon && serialized.icon) {
+			existing.icon = serialized.icon;
+		}
+		if (existing.__isPasskey && !serialized.__isPasskey) {
+			existing.__isPasskey = false;
+		}
+	}
+	var result = [];
+	for (var o = 0; o < order.length; o++) {
+		if (byKey[order[o]]) result.push(byKey[order[o]]);
+	}
+	return result;
+}
+
+function __mergeBridgeWalletCache(wallets) {
+	var list = Array.isArray(wallets) ? wallets : [];
+	for (var i = 0; i < list.length; i++) {
+		var wallet = list[i];
+		if (!wallet || !wallet.name) continue;
+		var key = __normalizeWalletName(wallet.name);
+		if (!key) key = 'wallet-' + i;
+		var existing = __bridgeWalletCache[key];
+		if (!existing) {
+			__bridgeWalletCache[key] = {
+				name: String(wallet.name),
+				icon: wallet.icon ? String(wallet.icon) : '',
+				__isPasskey: !!wallet.__isPasskey,
+			};
+			__bridgeWalletOrder.push(key);
+			continue;
+		}
+		if (!existing.icon && wallet.icon) existing.icon = String(wallet.icon);
+		if (existing.__isPasskey && !wallet.__isPasskey) existing.__isPasskey = false;
+	}
+	var snapshot = [];
+	for (var j = 0; j < __bridgeWalletOrder.length; j++) {
+		var cacheKey = __bridgeWalletOrder[j];
+		if (__bridgeWalletCache[cacheKey]) snapshot.push(__bridgeWalletCache[cacheKey]);
+	}
+	return snapshot;
+}
+
+function __mergeBridgeWalletHints(walletHints) {
+	var normalizedHints = __getBridgeWalletList(Array.isArray(walletHints) ? walletHints : []);
+	if (normalizedHints.length === 0) {
+		return __mergeBridgeWalletCache([]);
+	}
+	return __mergeBridgeWalletCache(normalizedHints);
+}
+
+function __bridgeWalletListSignature(wallets) {
+	var list = Array.isArray(wallets) ? wallets : [];
+	var parts = [];
+	for (var i = 0; i < list.length; i++) {
+		var wallet = list[i];
+		if (!wallet || !wallet.name) continue;
+		parts.push(
+			__normalizeWalletName(wallet.name)
+			+ '|' + String(wallet.icon || '')
+			+ '|' + (wallet.__isPasskey ? '1' : '0')
+		);
+	}
+	return parts.join(',');
+}
+
+function __sleep(ms) {
+	return new Promise(function(resolve) { setTimeout(resolve, ms); });
+}
+
+async function __collectBridgeWalletCandidates() {
+	var cachedBefore = __mergeBridgeWalletCache([]);
+	try { await SuiWalletKit.detectWallets(); } catch (_e) {}
+	if (window.__wkWaaPLoading) {
+		try { await window.__wkWaaPLoading; } catch (_e) {}
+	}
+	var best = __getBridgeWalletCandidates();
+	var bestLen = best.length;
+	var lastSig = __bridgeWalletListSignature(__getBridgeWalletList(best));
+	var stableTicks = 0;
+	var startedAt = Date.now();
+	var minScanMs = bestLen <= 2 ? 2200 : 1200;
+	if (cachedBefore.length === 0 && minScanMs < 1600) {
+		minScanMs = 1600;
+	}
+	var maxScanMs = bestLen <= 2 ? 4200 : 2400;
+	var deadline = startedAt + maxScanMs;
+	while (Date.now() < deadline) {
+		await __sleep(220);
+		try { await SuiWalletKit.detectWallets(); } catch (_e) {}
+		var next = __getBridgeWalletCandidates();
+		if (next.length > bestLen) {
+			best = next;
+			bestLen = next.length;
+		}
+		var sig = __bridgeWalletListSignature(__getBridgeWalletList(next));
+		if (sig === lastSig) {
+			stableTicks++;
+		} else {
+			stableTicks = 0;
+			lastSig = sig;
+		}
+		var elapsed = Date.now() - startedAt;
+		if (next.length > 0 && stableTicks >= 3 && elapsed >= minScanMs) {
+			if (next.length >= bestLen) best = next;
+			break;
+		}
+	}
+	return best;
+}
+
+async function __collectBridgeWalletList(walletHints) {
+	__mergeBridgeWalletHints(walletHints);
+	var wallets = await __collectBridgeWalletCandidates();
+	var current = __getBridgeWalletList(wallets);
+	return __mergeBridgeWalletCache(current);
 }
 
 function __readSessionWallet() {
@@ -167,9 +359,11 @@ function __walletHasAddress(wallet, targetAddress) {
 	return false;
 }
 
-async function __ensureWalletConnection(preferredWalletName, expectedSender, allowHistoryFallback) {
+async function __ensureWalletConnection(preferredWalletName, expectedSender, allowHistoryFallback, walletHints) {
+	__lastPreferredConnectError = '';
 	var normalizedSender = __normalizeAddress(expectedSender);
 	var allowHistory = allowHistoryFallback !== false;
+	__mergeBridgeWalletHints(walletHints);
 	var conn = SuiWalletKit.$connection.value || null;
 	var targetWalletName = preferredWalletName || '';
 	if (conn && conn.wallet) {
@@ -236,6 +430,7 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender, all
 
 	if (!match && preferredWalletName) {
 		console.warn('[SignBridge] Preferred wallet not available:', preferredWalletName);
+		__lastPreferredConnectError = 'Selected wallet not available: ' + preferredWalletName;
 		return null;
 	}
 
@@ -254,6 +449,7 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender, all
 	try {
 		await SuiWalletKit.connect(match);
 	} catch (_e) {
+		__lastPreferredConnectError = (_e && _e.message) ? String(_e.message) : 'Connection failed';
 		if (preferredWalletName) return null;
 		return SuiWalletKit.$connection.value || conn;
 	}
@@ -283,9 +479,16 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender, all
 }
 
 function __notifyReady() {
-	if (__signReady || !window.parent || window.parent === window) return;
+	if (__signReady) return;
 	__signReady = true;
-	window.parent.postMessage({ type: 'ski:ready' }, '*');
+	if (window.parent && window.parent !== window) {
+		window.parent.postMessage({ type: 'ski:ready' }, '*');
+	}
+	if (window.opener && window.opener !== window) {
+		try {
+			window.opener.postMessage({ type: 'ski:ready' }, '*');
+		} catch (_e) {}
+	}
 }
 
 function __isAllowedOrigin(origin) {
@@ -939,6 +1142,7 @@ window.addEventListener('message', function(e) {
 	var execOptions = e.data.options || {};
 	var expectedSender = e.data.sender || '';
 	var preferredWalletName = e.data.walletName || '';
+	var walletHints = Array.isArray(e.data.walletHints) ? e.data.walletHints : [];
 	if (!txData || !requestId) return;
 
 	(async function() {
@@ -981,7 +1185,7 @@ window.addEventListener('message', function(e) {
 				tx.setSenderIfNotSet(resolvedSender);
 			}
 
-			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false);
+			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false, walletHints);
 			if (!conn || !conn.wallet) throw new Error('Wallet not connected in sign bridge');
 			if (
 				preferredWalletName
@@ -1101,6 +1305,7 @@ window.addEventListener('message', function(e) {
 	var requestId = e.data.requestId;
 	var expectedSender = e.data.sender || '';
 	var preferredWalletName = e.data.walletName || '';
+	var walletHints = Array.isArray(e.data.walletHints) ? e.data.walletHints : [];
 	if (!messageB64 || !requestId) return;
 
 	(async function() {
@@ -1109,7 +1314,7 @@ window.addEventListener('message', function(e) {
 			if (!messageBytes || !messageBytes.length) throw new Error('Invalid message payload');
 			console.log('[SignBridge] sign-message: bytes=' + messageBytes.length + ', sender=' + expectedSender + ', wallet=' + preferredWalletName);
 			var resolvedSender = __normalizeAddress(expectedSender);
-			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false);
+			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false, walletHints);
 			if (!conn || !conn.wallet) throw new Error('Wallet not connected in sign bridge');
 			console.log('[SignBridge] sign-message conn: wallet=' + (conn.wallet && conn.wallet.name) + ', status=' + conn.status + ', accounts=' + (conn.wallet && conn.wallet.accounts ? conn.wallet.accounts.length : 'N/A'));
 			if (
@@ -1202,9 +1407,11 @@ window.addEventListener('message', function(e) {
 	var requestId = e.data.requestId;
 	if (!requestId) return;
 	var preferredWallet = e.data.walletName || '';
+	var walletHints = Array.isArray(e.data.walletHints) ? e.data.walletHints : [];
 
 	(async function() {
 		try {
+			__mergeBridgeWalletHints(walletHints);
 			var existing = SuiWalletKit.$connection.value;
 			if (existing && existing.wallet && existing.address) {
 				if (!preferredWallet || __walletNamesMatch(existing.wallet.name, preferredWallet)) {
@@ -1218,8 +1425,8 @@ window.addEventListener('message', function(e) {
 					return;
 				}
 			}
-			var conn = await __ensureWalletConnection(preferredWallet, '', true);
-			if (conn && conn.wallet && conn.address) {
+				var conn = await __ensureWalletConnection(preferredWallet, '', true, walletHints);
+				if (conn && conn.wallet && conn.address) {
 				__saveWalletToHistory(conn.wallet.name || '', conn.address);
 				e.source.postMessage({
 					type: 'ski:connected',
@@ -1227,10 +1434,12 @@ window.addEventListener('message', function(e) {
 					address: conn.address,
 					walletName: conn.wallet.name || ''
 				}, e.origin);
-				return;
-			}
-			await SuiWalletKit.detectWallets();
-			var wallets = SuiWalletKit.getSuiWallets();
+					return;
+				}
+				if (preferredWallet) {
+					throw new Error(__lastPreferredConnectError || ('Failed to connect selected wallet: ' + preferredWallet));
+				}
+				var wallets = await __collectBridgeWalletCandidates();
 			if (!wallets || wallets.length === 0) {
 				throw new Error('No Sui wallets detected');
 			}
@@ -1288,6 +1497,37 @@ window.addEventListener('message', function(e) {
 
 window.addEventListener('message', function(e) {
 	if (!__isAllowedOrigin(e.origin)) return;
+	if (!e.data || e.data.type !== 'ski:wallet-hints') return;
+	__mergeBridgeWalletHints(e.data.wallets);
+});
+
+window.addEventListener('message', function(e) {
+	if (!__isAllowedOrigin(e.origin)) return;
+	if (!e.data || e.data.type !== 'ski:wallets') return;
+
+	var requestId = e.data.requestId;
+	var walletHints = Array.isArray(e.data.walletHints) ? e.data.walletHints : [];
+	if (!requestId) return;
+
+	(async function() {
+		try {
+			e.source.postMessage({
+				type: 'ski:wallets-result',
+				requestId: requestId,
+				wallets: await __collectBridgeWalletList(walletHints),
+			}, e.origin);
+		} catch (err) {
+			e.source.postMessage({
+				type: 'ski:wallets-error',
+				requestId: requestId,
+				error: (err && err.message) || 'Wallet discovery failed',
+			}, e.origin);
+		}
+	})();
+});
+
+window.addEventListener('message', function(e) {
+	if (!__isAllowedOrigin(e.origin)) return;
 	if (!e.data || e.data.type !== 'ski:wallet-history') return;
 	var requestId = e.data.requestId;
 	if (!requestId) return;
@@ -1320,12 +1560,127 @@ ${generateWalletUiJs({ onConnect: '__onBridgeModalConnect', onDisconnect: '' })}
 var __modalRequestId = '';
 var __modalSource = null;
 var __modalOrigin = '';
+var __handoffMode = '';
+var __handoffWalletName = '';
+var __handoffReturnUrl = '';
+var __handoffReason = '';
+var __handoffActive = false;
+
+function __isAllowedHandoffReturnUrl(urlValue) {
+	try {
+		var parsed = new URL(String(urlValue || ''));
+		if (parsed.protocol !== 'https:') return false;
+		var host = parsed.hostname || '';
+		return host !== 'sui.ski' && host.endsWith('.sui.ski');
+	} catch (_e) {
+		return false;
+	}
+}
+
+function __readConnectHandoffState() {
+	try {
+		if (window.top !== window) return;
+		var params = new URLSearchParams(window.location.search || '');
+		if (params.get('bridge') !== 'handoff') return;
+		if (params.get('mode') !== 'connect') return;
+		var returnUrl = params.get('returnUrl') || '';
+		if (!__isAllowedHandoffReturnUrl(returnUrl)) return;
+		__handoffMode = 'connect';
+		__handoffActive = true;
+		__handoffReturnUrl = returnUrl;
+		__handoffWalletName = params.get('walletName') || '';
+		__handoffReason = params.get('reason') || '';
+	} catch (_e) {}
+}
+
+function __handoffNeedsUserGesture() {
+	if (!__handoffActive || __handoffMode !== 'connect') return false;
+	var reason = String(__handoffReason || '').toLowerCase();
+	if (
+		reason.indexOf('wallet_requires_top_frame_gesture') !== -1
+		|| reason.indexOf('top_frame') !== -1
+		|| reason.indexOf('popup') !== -1
+		|| reason.indexOf('open new window') !== -1
+	) {
+		return true;
+	}
+	var walletKey = __normalizeWalletName(__handoffWalletName || '');
+	return (
+		walletKey === 'slush'
+		|| walletKey === 'slushwallet'
+		|| walletKey === 'sui'
+		|| walletKey === 'suiwallet'
+		|| walletKey === 'mystenwallet'
+	);
+}
+
+function __finishConnectHandoff(address, walletName, errorMessage) {
+	if (!__handoffActive || __handoffMode !== 'connect' || !__handoffReturnUrl) return false;
+	try {
+		var backUrl = new URL(__handoffReturnUrl);
+		backUrl.searchParams.set('ski_bridge_return', '1');
+		if (address) backUrl.searchParams.set('ski_bridge_wallet_address', String(address));
+		if (walletName) backUrl.searchParams.set('ski_bridge_wallet_name', String(walletName));
+		if (errorMessage) backUrl.searchParams.set('ski_bridge_error', String(errorMessage));
+		window.location.replace(backUrl.toString());
+		return true;
+	} catch (_e) {
+		return false;
+	}
+}
+
+async function __startConnectHandoff() {
+	if (!__handoffActive || __handoffMode !== 'connect') return;
+	if (__handoffNeedsUserGesture()) {
+		SuiWalletKit.openModal();
+		return;
+	}
+	var conn = null;
+	try {
+		conn = await __ensureWalletConnection(__handoffWalletName, '', true, []);
+	} catch (_e) {
+		conn = null;
+	}
+	if (conn && conn.address) {
+		var connectedName = (conn.wallet && conn.wallet.name) || __handoffWalletName || '';
+		__saveWalletToHistory(connectedName, conn.address);
+		if (__finishConnectHandoff(conn.address, connectedName, '')) return;
+	}
+
+	if (__handoffWalletName) {
+		try {
+			var wallets = await __collectBridgeWalletCandidates();
+			var target = null;
+			for (var i = 0; i < wallets.length; i++) {
+				if (__walletNamesMatch(wallets[i] && wallets[i].name, __handoffWalletName)) {
+					target = wallets[i];
+					break;
+				}
+			}
+			if (target) {
+				await SuiWalletKit.connect(target);
+				conn = SuiWalletKit.$connection.value;
+				if (conn && conn.address) {
+					var targetName = (conn.wallet && conn.wallet.name) || target.name || __handoffWalletName;
+					__saveWalletToHistory(targetName, conn.address);
+					if (__finishConnectHandoff(conn.address, targetName, '')) return;
+				}
+			}
+		} catch (_e) {}
+	}
+
+	SuiWalletKit.openModal();
+}
 
 window.__onBridgeModalConnect = function() {
 	var conn = SuiWalletKit.$connection.value;
-	if (!conn || !conn.address || !__modalRequestId) return;
+	if (!conn || !conn.address) return;
 	var walletName = (conn.wallet && conn.wallet.name) || '';
 	__saveWalletToHistory(walletName, conn.address);
+	if (__handoffActive && __handoffMode === 'connect') {
+		if (__finishConnectHandoff(conn.address, walletName, '')) return;
+	}
+	if (!__modalRequestId) return;
 	if (__modalSource) {
 		__modalSource.postMessage({
 			type: 'ski:connected',
@@ -1344,6 +1699,12 @@ SuiWalletKit.renderModal('wk-modal');
 var __origCloseModal = SuiWalletKit.closeModal;
 SuiWalletKit.closeModal = function() {
 	__origCloseModal();
+	if (__handoffActive && __handoffMode === 'connect') {
+		var handoffConn = SuiWalletKit.$connection.value;
+		if (!handoffConn || handoffConn.status === 'disconnected' || !handoffConn.address) {
+			if (__finishConnectHandoff('', '', 'Connection cancelled')) return;
+		}
+	}
 	if (__modalRequestId && __modalSource) {
 		var conn = SuiWalletKit.$connection.value;
 		if (!conn || conn.status === 'disconnected' || !conn.address) {
@@ -1360,12 +1721,20 @@ SuiWalletKit.closeModal = function() {
 
 window.addEventListener('message', function(e) {
 	if (!__isAllowedOrigin(e.origin)) return;
+	if (!e.data || e.data.type !== 'ski:ping') return;
+	e.source.postMessage({ type: 'ski:ready' }, e.origin);
+});
+
+window.addEventListener('message', function(e) {
+	if (!__isAllowedOrigin(e.origin)) return;
 	if (!e.data || e.data.type !== 'ski:open-modal') return;
 	__modalRequestId = e.data.requestId || '';
 	__modalSource = e.source;
 	__modalOrigin = e.origin;
 	SuiWalletKit.openModal();
 });
+
+__readConnectHandoffState();
 
 async function __loadWalletStandard() {
 	var urls = [
@@ -1383,12 +1752,28 @@ async function __loadWalletStandard() {
 	return false;
 }
 
-__loadWalletStandard().then(function() {
+async function __registerSlushWallet() {
+	try {
+		var mod = await import('https://esm.sh/@mysten/slush-wallet@1.0.2');
+		if (mod && typeof mod.registerSlushWallet === 'function') {
+			mod.registerSlushWallet('.SKI');
+		}
+	} catch (_e) {}
+}
+
+Promise.all([__loadWalletStandard(), __registerSlushWallet()]).then(function() {
 	return SuiWalletKit.detectWallets();
 }).catch(function() {
 	return null;
 }).then(function() {
 	return __getTransactionClass();
+}).catch(function() {
+	return null;
+}).then(function() {
+	if (__handoffActive && __handoffMode === 'connect') {
+		return __startConnectHandoff();
+	}
+	return null;
 }).catch(function() {
 	return null;
 }).then(function() {
