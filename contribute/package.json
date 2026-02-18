@@ -1,0 +1,5 @@
+{
+	"name": "sui-ski-dev",
+	"private": true,
+	"description": "Dev deployment of Sui-ski gateway for PR contributors"
+}

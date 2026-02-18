@@ -1,0 +1,18 @@
+# Copy this file to .dev.vars and fill in values you need.
+# None of these are required — the worker runs without them,
+# but some features will be disabled.
+
+# Sui RPC endpoint (defaults to public RPC if unset)
+# SUI_RPC_URL=https://fullnode.mainnet.sui.io:443
+
+# LLM provider key (for AI-powered features)
+# LLM_API_KEY=
+
+# Brave Search (for search-powered features)
+# BRAVE_SEARCH_API_KEY=
+
+# On-chain indexer
+# INDEXER_API_KEY=
+
+# Coinbase x402 verification
+# COINBASE_X402_API_KEY=
