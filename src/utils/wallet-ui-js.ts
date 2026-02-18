@@ -2219,12 +2219,13 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	          }
 			          item.addEventListener('click', function() {
 			            listEl.innerHTML = '<div class="wk-detecting"><div class="wk-spinner"></div> Connecting...</div>';
-			            if (isSubdomain) {
+			            var targetKey = __wkWalletNameKey(name);
+			            var isSlushFamily = __wkWalletKeysRelated(targetKey, 'slush');
+			            if (isSubdomain && !isSlushFamily) {
 			              __wkConnectViaBridge(name, listEl);
 			              return;
 			            }
 			            var target = wallet;
-			            var targetKey = __wkWalletNameKey(name);
 			            var currentWallets = SuiWalletKit.$wallets.value || [];
 			            for (var cw = 0; cw < currentWallets.length; cw++) {
 			              var cwKey = __wkWalletNameKey(currentWallets[cw].name);

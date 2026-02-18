@@ -1392,23 +1392,27 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
                 }
                 __wkSendWalletHintsToBridge([wallet]);
                 var bridgeResult = await __wkConnectViaBridge(wallet && wallet.name ? wallet.name : '');
-                if (!bridgeResult || !bridgeResult.address) {
+                if (bridgeResult && bridgeResult.address) {
+                  initFromSession(bridgeResult.address, bridgeResult.walletName || (wallet && wallet.name) || '');
+                  if (typeof connectWalletSession === 'function') {
+                    var sessionResult = connectWalletSession(
+                      bridgeResult.walletName || (wallet && wallet.name) || '',
+                      bridgeResult.address,
+                    );
+                    __sessionReady = (sessionResult && typeof sessionResult.then === 'function')
+                      ? sessionResult
+                      : Promise.resolve(true);
+                  } else {
+                    __sessionReady = Promise.resolve(true);
+                  }
+                  resolve({ address: bridgeResult.address });
+                  return;
+                }
+                var __bridgeWalletKey = __wkWalletNameKey(wallet && wallet.name ? wallet.name : '');
+                var __canDirectConnect = __wkAliasMatch(__bridgeWalletKey, 'slush') && window.sui && !window.sui.isPhantom;
+                if (!__canDirectConnect) {
                   throw new Error('Bridge wallet connection failed');
                 }
-                initFromSession(bridgeResult.address, bridgeResult.walletName || (wallet && wallet.name) || '');
-                if (typeof connectWalletSession === 'function') {
-                  var sessionResult = connectWalletSession(
-                    bridgeResult.walletName || (wallet && wallet.name) || '',
-                    bridgeResult.address,
-                  );
-                  __sessionReady = (sessionResult && typeof sessionResult.then === 'function')
-                    ? sessionResult
-                    : Promise.resolve(true);
-                } else {
-                  __sessionReady = Promise.resolve(true);
-                }
-                resolve({ address: bridgeResult.address });
-                return;
               }
 
               var phantomProvider = (window.phantom && window.phantom.sui) || window.sui;
@@ -1620,14 +1624,6 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
               __wkFinishConnect(wallet, accounts);
               resolve(accounts[0]);
             } catch (e) {
-              if (__wkIsSubdomain()) {
-                $connection.set({
-                  wallet: null, account: null, address: null,
-                  status: 'disconnected', primaryName: null
-                });
-                reject(e);
-                return;
-              }
               if (__wkIsUserRejection(e)) {
                 $connection.set({
                   wallet: null, account: null, address: null,
