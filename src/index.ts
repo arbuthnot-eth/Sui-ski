@@ -105,6 +105,29 @@ app.use('*', async (c, next) => {
 
 const SESSION_ROUTES = new Set(['root', 'suins'])
 
+function getCookieValue(cookieHeader: string, name: string): string | null {
+	if (!cookieHeader) return null
+	const parts = cookieHeader.split(';')
+	for (let i = 0; i < parts.length; i++) {
+		const part = parts[i].trim()
+		if (!part) continue
+		const eqIndex = part.indexOf('=')
+		if (eqIndex <= 0) continue
+		if (part.slice(0, eqIndex).trim() !== name) continue
+		return part.slice(eqIndex + 1).trim()
+	}
+	return null
+}
+
+function decodeCookieValue(value: string | null): string | null {
+	if (!value) return null
+	try {
+		return decodeURIComponent(value)
+	} catch {
+		return value
+	}
+}
+
 function routeNeedsSession(parsed: ParsedSubdomain, pathname: string): boolean {
 	if (!SESSION_ROUTES.has(parsed.type)) return false
 	if (pathname.startsWith('/api/') || pathname === '/favicon.svg') return false
@@ -118,14 +141,10 @@ function routeNeedsSession(parsed: ParsedSubdomain, pathname: string): boolean {
 }
 
 app.use('*', async (c, next) => {
-	const cookies = c.req.header('Cookie') || ''
-	const sessionCookie = cookies.split('; ').find((row) => row.startsWith('session_id='))
-	const addrCookie = cookies.split('; ').find((row) => row.startsWith('wallet_address='))
-	const nameCookie = cookies.split('; ').find((row) => row.startsWith('wallet_name='))
-
-	const sessionId = sessionCookie?.split('=')[1]
-	const walletAddress = addrCookie?.split('=')[1]
-	const walletName = nameCookie?.split('=')[1]
+	const cookieHeader = c.req.header('Cookie') || ''
+	const sessionId = decodeCookieValue(getCookieValue(cookieHeader, 'session_id'))
+	const walletAddress = decodeCookieValue(getCookieValue(cookieHeader, 'wallet_address'))
+	const walletName = decodeCookieValue(getCookieValue(cookieHeader, 'wallet_name'))
 
 	const session = {
 		address: walletAddress || null,

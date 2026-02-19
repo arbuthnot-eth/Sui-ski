@@ -373,6 +373,21 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	        return false;
 	      }
 
+	      function __wkHasSignMethod(wallet) {
+	        if (!wallet || typeof wallet !== 'object') return false;
+	        var features = wallet.features || {};
+	        return !!(
+	          (features['sui:signAndExecuteTransaction'] && features['sui:signAndExecuteTransaction'].signAndExecuteTransaction)
+	          || (features['sui:signAndExecuteTransactionBlock'] && features['sui:signAndExecuteTransactionBlock'].signAndExecuteTransactionBlock)
+	          || (features['sui:signTransaction'] && features['sui:signTransaction'].signTransaction)
+	          || (features['sui:signTransactionBlock'] && features['sui:signTransactionBlock'].signTransactionBlock)
+	          || typeof wallet.signAndExecuteTransaction === 'function'
+	          || typeof wallet.signAndExecuteTransactionBlock === 'function'
+	          || typeof wallet.signTransaction === 'function'
+	          || typeof wallet.signTransactionBlock === 'function'
+	        );
+	      }
+
 	      function __wkPickInjectedSource(primary, fallback) {
 	        var candidates = [
 	          primary && primary.sui,
@@ -393,7 +408,12 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	        for (var i = 0; i < candidates.length; i++) {
 	          var candidate = candidates[i];
 	          if (!candidate || typeof candidate !== 'object') continue;
-	          if (__wkHasConnectMethod(candidate)) return candidate;
+	          if (__wkHasConnectMethod(candidate) && __wkHasSignMethod(candidate)) return candidate;
+	        }
+	        for (var j = 0; j < candidates.length; j++) {
+	          var connectCandidate = candidates[j];
+	          if (!connectCandidate || typeof connectCandidate !== 'object') continue;
+	          if (__wkHasConnectMethod(connectCandidate)) return connectCandidate;
 	        }
 	        return null;
 	      }
@@ -802,11 +822,14 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 
       function __wkGetPasskeyCookie() {
         try {
-          var cookies = document.cookie.split('; ');
+          var cookies = document.cookie ? document.cookie.split(';') : [];
           for (var i = 0; i < cookies.length; i++) {
-            if (cookies[i].indexOf(__wkPasskeyCookieName + '=') === 0) {
-              return decodeURIComponent(cookies[i].slice(__wkPasskeyCookieName.length + 1));
-            }
+            var part = String(cookies[i] || '').trim();
+            if (!part) continue;
+            var eqIndex = part.indexOf('=');
+            if (eqIndex <= 0) continue;
+            if (part.slice(0, eqIndex).trim() !== __wkPasskeyCookieName) continue;
+            return decodeURIComponent(part.slice(eqIndex + 1).trim());
           }
           return '';
         } catch (_e) { return ''; }
@@ -1033,7 +1056,12 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	      var __wkWindowWallets = [
 	        { check: function() { return window.phantom && window.phantom.sui; }, name: 'Phantom', icon: ${JSON.stringify(PHANTOM_ICON)} },
 	        { check: function() { return (window.backpack && (window.backpack.sui || window.backpack)) || null; }, name: 'Backpack', icon: 'https://backpack.app/favicon.ico' },
-	        { check: function() { return (window.slush && (window.slush.sui || window.slush.wallet || window.slush)) || null; }, name: 'Slush', icon: 'https://slush.app/favicon.ico' },
+	        { check: function() {
+	          var slush = window.slush && (window.slush.sui || window.slush.wallet || window.slush);
+	          if (slush) return slush;
+	          var sui = window.sui;
+	          return (sui && !sui.isPhantom) ? sui : null;
+	        }, name: 'Slush', icon: 'https://slush.app/favicon.ico' },
 	        { check: function() { return (window.suiet && (window.suiet.sui || window.suiet.wallet || window.suiet)) || null; }, name: 'Suiet', icon: 'https://suiet.app/favicon.ico' },
 	        { check: function() { return window.martian && window.martian.sui; }, name: 'Martian', icon: 'https://martianwallet.xyz/favicon.ico' },
 	        { check: function() { return (window.ethos && (window.ethos.sui || window.ethos.wallet || window.ethos)) || null; }, name: 'Ethos', icon: 'https://ethoswallet.xyz/favicon.ico' },
@@ -1291,7 +1319,6 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
       }
 
 	      function detectWallets() {
-	        __wkConsumeTopFrameBridgeReturn();
 	        if (!__wkIsSubdomain()) __wkInitWaaP();
 	        if (__wkIsSubdomain()) {
 	          try { __wkInitSignBridge(); } catch (_e) {}
@@ -1381,35 +1408,31 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
                 }
               }
 
-              if (__wkIsSubdomain()) {
-                __wkInitSignBridge();
-                if (!__skiSignReady) {
-                  throw new Error('Sign bridge is unavailable on this subdomain');
-                }
-                var bridgeReady = await __skiSignReady;
-                if (!bridgeReady) {
-                  throw new Error('Sign bridge is not ready. Refresh and try again.');
-                }
-                __wkSendWalletHintsToBridge([wallet]);
-                var bridgeResult = await __wkConnectViaBridge(wallet && wallet.name ? wallet.name : '');
-                if (!bridgeResult || !bridgeResult.address) {
-                  throw new Error('Bridge wallet connection failed');
-                }
-                initFromSession(bridgeResult.address, bridgeResult.walletName || (wallet && wallet.name) || '');
-                if (typeof connectWalletSession === 'function') {
-                  var sessionResult = connectWalletSession(
-                    bridgeResult.walletName || (wallet && wallet.name) || '',
-                    bridgeResult.address,
-                  );
-                  __sessionReady = (sessionResult && typeof sessionResult.then === 'function')
-                    ? sessionResult
-                    : Promise.resolve(true);
-                } else {
-                  __sessionReady = Promise.resolve(true);
-                }
-                resolve({ address: bridgeResult.address });
-                return;
-              }
+	              if (__wkIsSubdomain()) {
+	                __wkInitSignBridge();
+	                var __bridgeWalletName = wallet && wallet.name ? String(wallet.name) : '';
+	                var bridgeReady = __skiSignReady ? await __skiSignReady : false;
+	                if (bridgeReady) {
+	                  __wkSendWalletHintsToBridge([wallet]);
+	                  var bridgeResult = await __wkConnectViaBridge(__bridgeWalletName);
+	                  if (bridgeResult && bridgeResult.address) {
+	                    initFromSession(bridgeResult.address, bridgeResult.walletName || __bridgeWalletName);
+	                    if (typeof connectWalletSession === 'function') {
+	                      var sessionResult = connectWalletSession(
+	                        bridgeResult.walletName || __bridgeWalletName,
+	                        bridgeResult.address,
+	                      );
+	                      __sessionReady = (sessionResult && typeof sessionResult.then === 'function')
+	                        ? sessionResult
+	                        : Promise.resolve(true);
+	                    } else {
+	                      __sessionReady = Promise.resolve(true);
+	                    }
+	                    resolve({ address: bridgeResult.address });
+	                    return;
+	                  }
+	                }
+	              }
 
               var phantomProvider = (window.phantom && window.phantom.sui) || window.sui;
               var isPhantom = phantomProvider && (
@@ -1620,14 +1643,6 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
               __wkFinishConnect(wallet, accounts);
               resolve(accounts[0]);
             } catch (e) {
-              if (__wkIsSubdomain()) {
-                $connection.set({
-                  wallet: null, account: null, address: null,
-                  status: 'disconnected', primaryName: null
-                });
-                reject(e);
-                return;
-              }
               if (__wkIsUserRejection(e)) {
                 $connection.set({
                   wallet: null, account: null, address: null,
@@ -1757,10 +1772,6 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
       var __wkBridgeWalletHintSignature = '';
       var __wkBridgeHiddenStyle = 'position:fixed;left:-10000px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;z-index:-1;background:transparent';
       var __wkBridgePopupUrl = 'https://sui.ski/sign?bridge=popup';
-      var __wkBridgeReturnFlag = 'ski_bridge_return';
-      var __wkBridgeReturnAddress = 'ski_bridge_wallet_address';
-      var __wkBridgeReturnName = 'ski_bridge_wallet_name';
-      var __wkBridgeReturnError = 'ski_bridge_error';
 
       function __wkSerializeWalletHint(wallet) {
         if (!wallet || !wallet.name) return null;
@@ -1993,71 +2004,6 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         });
       }
 
-      function __wkBeginTopFrameBridgeHandoff(walletName, reason) {
-        if (!__wkIsSubdomain()) return false;
-        try {
-          var returnUrl = new URL(window.location.href);
-          returnUrl.searchParams.delete(__wkBridgeReturnFlag);
-          returnUrl.searchParams.delete(__wkBridgeReturnAddress);
-          returnUrl.searchParams.delete(__wkBridgeReturnName);
-          returnUrl.searchParams.delete(__wkBridgeReturnError);
-
-          var handoffUrl = new URL('https://sui.ski/sign');
-          handoffUrl.searchParams.set('bridge', 'handoff');
-          handoffUrl.searchParams.set('mode', 'connect');
-          handoffUrl.searchParams.set('walletName', String(walletName || ''));
-          handoffUrl.searchParams.set('returnUrl', returnUrl.toString());
-          if (reason) handoffUrl.searchParams.set('reason', String(reason));
-
-          window.location.assign(handoffUrl.toString());
-          return true;
-        } catch (_e) {
-          return false;
-        }
-      }
-
-      function __wkConsumeTopFrameBridgeReturn() {
-        if (!__wkIsSubdomain()) return false;
-        var url = null;
-        try { url = new URL(window.location.href); } catch (_e) { return false; }
-        if (!url || url.searchParams.get(__wkBridgeReturnFlag) !== '1') return false;
-
-        var address = __wkNormalizeAccountAddress(url.searchParams.get(__wkBridgeReturnAddress) || '');
-        var walletName = String(url.searchParams.get(__wkBridgeReturnName) || '').trim();
-        var handoffError = String(url.searchParams.get(__wkBridgeReturnError) || '').trim();
-
-        url.searchParams.delete(__wkBridgeReturnFlag);
-        url.searchParams.delete(__wkBridgeReturnAddress);
-        url.searchParams.delete(__wkBridgeReturnName);
-        url.searchParams.delete(__wkBridgeReturnError);
-        try { window.history.replaceState(null, '', url.toString()); } catch (_e) {}
-
-        if (address) {
-          initFromSession(address, walletName);
-          if (walletName) {
-            try { localStorage.setItem('sui_ski_last_wallet', walletName); } catch (_e) {}
-          }
-          if (typeof connectWalletSession === 'function') {
-            try {
-              var sessionResult = connectWalletSession(walletName, address);
-              __sessionReady = (sessionResult && typeof sessionResult.then === 'function')
-                ? sessionResult
-                : Promise.resolve(true);
-            } catch (_e) {
-              __sessionReady = Promise.resolve(true);
-            }
-          } else {
-            __sessionReady = Promise.resolve(true);
-          }
-        }
-
-        if (handoffError) {
-          try { window.__wkBridgeHandoffError = handoffError; } catch (_e) {}
-          console.warn('[WalletBridge] Top-frame handoff failed:', handoffError);
-        }
-        return true;
-      }
-
 	      function __wkFinishConnect(wallet, accounts) {
           __wkDetachWalletEvents();
           __wkSessionWalletName = '';
@@ -2197,13 +2143,12 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
       }
 
 	      function autoReconnect() {
-	        __wkConsumeTopFrameBridgeReturn();
 	        if (!__wkAutoConnect) return Promise.resolve(false);
 	        return new Promise(function(resolve) {
 	          (async function() {
 	            try {
 	              var session = typeof getWalletSession === 'function' ? getWalletSession() : null;
-	              if (!session || !session.walletName) { resolve(false); return; }
+	              if (!session || (!session.walletName && !session.address)) { resolve(false); return; }
 
 	              if (__wkIsSubdomain() && session.address) {
 	                initFromSession(session.address, session.walletName);
@@ -2324,8 +2269,6 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         return Promise.reject(new Error('Current wallet does not support requestEmail'));
       }
 
-      __wkConsumeTopFrameBridgeReturn();
-
       return {
         __config: { network: __wkNetwork },
         $wallets: $wallets,
@@ -2347,8 +2290,6 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
         get __skiSignFrame() { return __skiSignFrame; },
         get __skiSignReady() { return __skiSignReady; },
         __initSignBridge: __wkInitSignBridge,
-        __beginTopFrameBridgeHandoff: __wkBeginTopFrameBridgeHandoff,
-        __consumeTopFrameBridgeReturn: __wkConsumeTopFrameBridgeReturn,
         __connectViaBridgePopup: __wkConnectViaBridgePopup,
         __isMobileDevice: __wkIsMobileDevice,
         __isInAppBrowser: __wkIsInAppBrowser,

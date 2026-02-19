@@ -1919,6 +1919,75 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	      return '';
 	    }
 
+	    function __wkFindDetectedWalletByKey(targetKey) {
+	      if (!targetKey) return null;
+	      var sources = [
+	        SuiWalletKit.$wallets.value || [],
+	        __wkReadDetectedWalletCache(__wkDetectedWalletCacheKey),
+	        __wkReadDetectedWalletCache(__wkBridgeDetectedWalletCacheKey),
+	        __wkGetBridgeWalletSnapshot(),
+	      ];
+	      var best = null;
+	      for (var s = 0; s < sources.length; s++) {
+	        var list = Array.isArray(sources[s]) ? sources[s] : [];
+	        for (var i = 0; i < list.length; i++) {
+	          var wallet = list[i];
+	          if (!wallet || !wallet.name) continue;
+	          var key = __wkWalletNameKey(wallet.name);
+	          if (!key || !__wkWalletKeysRelated(key, targetKey)) continue;
+	          var candidate = {
+	            name: String(wallet.name),
+	            icon: wallet.icon ? String(wallet.icon) : '',
+	          };
+	          if (key === targetKey && candidate.icon) return candidate;
+	          if (!best || (!best.icon && candidate.icon) || (key === targetKey && !best.keyExact)) {
+	            best = {
+	              name: candidate.name,
+	              icon: candidate.icon,
+	              keyExact: key === targetKey,
+	            };
+	          }
+	        }
+	      }
+	      if (!best) return null;
+	      return {
+	        name: best.name,
+	        icon: best.icon,
+	      };
+	    }
+
+	    function __wkResolveWidgetWallet(conn) {
+	      var walletName = __wkGetConnectionWalletName(conn);
+	      var walletIcon = conn && conn.wallet && conn.wallet.icon ? String(conn.wallet.icon) : '';
+	      var walletKey = __wkWalletNameKey(walletName);
+	      if (walletKey) {
+	        var matched = __wkFindDetectedWalletByKey(walletKey);
+	        if (matched) {
+	          if (!walletName && matched.name) walletName = matched.name;
+	          if (!walletIcon && matched.icon) walletIcon = matched.icon;
+	        }
+	      } else {
+	        var remembered = __wkGetLastWallet();
+	        var rememberedKey = __wkWalletNameKey(remembered);
+	        if (rememberedKey) {
+	          var rememberedMatch = __wkFindDetectedWalletByKey(rememberedKey);
+	          if (rememberedMatch) {
+	            walletName = rememberedMatch.name || remembered;
+	            if (!walletIcon && rememberedMatch.icon) walletIcon = rememberedMatch.icon;
+	          } else {
+	            walletName = remembered;
+	          }
+	        }
+	      }
+	      if (!walletIcon && walletName) {
+	        walletIcon = __wkKnownWalletIconByName(walletName);
+	      }
+	      return {
+	        name: walletName,
+	        icon: walletIcon,
+	      };
+	    }
+
 	    function __wkResolveWalletIcon(wallet) {
 	      var name = wallet && wallet.name ? String(wallet.name) : '';
 	      var knownIcon = __wkKnownWalletIconByName(name);
@@ -2091,21 +2160,6 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	    function __wkConnectViaBridge(walletName, listEl) {
 	      var bridge = SuiWalletKit.__skiSignFrame;
 	      var bridgeReady = SuiWalletKit.__skiSignReady;
-	      function __wkIsPopupBlockedError(message) {
-	        var lower = String(message || '').toLowerCase();
-	        if (!lower) return false;
-	        return (
-	          lower.indexOf('failed to open new window') !== -1
-	          || lower.indexOf('popup blocked') !== -1
-	          || (lower.indexOf('popup') !== -1 && lower.indexOf('blocked') !== -1)
-	          || (lower.indexOf('new window') !== -1 && lower.indexOf('failed') !== -1)
-	        );
-	      }
-	      function __wkBeginTopFrameHandoff(preferredWalletName, reason) {
-	        if (!__wkIsSubdomain()) return false;
-	        if (!SuiWalletKit || typeof SuiWalletKit.__beginTopFrameBridgeHandoff !== 'function') return false;
-	        return !!SuiWalletKit.__beginTopFrameBridgeHandoff(preferredWalletName || '', reason || 'wallet_requires_top_frame_gesture');
-	      }
 	      if (!bridge) {
 	        SuiWalletKit.__initSignBridge();
 	        bridge = SuiWalletKit.__skiSignFrame;
@@ -2142,17 +2196,20 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
             if (typeof connectWalletSession === 'function') {
               connectWalletSession(ev.data.walletName || walletName, ev.data.address);
             }
-	          } else if (ev.data.type === 'ski:connect-error') {
-	            cleanup();
-	            var errMessage = ev.data && ev.data.error ? String(ev.data.error) : '';
-	            var errLower = errMessage.toLowerCase();
-		            if (
-		              __wkIsSubdomain()
-		              && (
-		                errLower.indexOf('selected wallet not available') !== -1
-		                || errLower.indexOf('preferred wallet not available') !== -1
-		              )
-		            ) {
+		          } else if (ev.data.type === 'ski:connect-error') {
+		            cleanup();
+		            var errMessage = ev.data && ev.data.error ? String(ev.data.error) : '';
+		            var errLower = errMessage.toLowerCase();
+		            var walletKey = __wkWalletNameKey(walletName);
+		            var isSlushFamily = __wkWalletKeysRelated(walletKey, 'slush');
+			            if (
+			              __wkIsSubdomain()
+			              && !isSlushFamily
+			              && (
+			                errLower.indexOf('selected wallet not available') !== -1
+			                || errLower.indexOf('preferred wallet not available') !== -1
+			              )
+			            ) {
 	              __wkFetchWalletsViaBridge().then(function(remoteWallets) {
 	                var merged = __wkMergeBridgeWallets(remoteWallets);
 	                var refreshed = __wkBuildWalletDisplayList(merged);
@@ -2161,17 +2218,14 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	                  return;
 	                }
 	                __wkShowConnectError(listEl, { message: errMessage }, walletName);
-		              }).catch(function() {
-		                __wkShowConnectError(listEl, { message: errMessage }, walletName);
-		              });
-			              return;
-			            }
-			            if (__wkIsPopupBlockedError(errMessage)) {
-			              if (__wkBeginTopFrameHandoff(walletName, errMessage || 'wallet_requires_top_frame_gesture')) return;
-			            }
-			            __wkShowConnectError(listEl, { message: errMessage }, walletName);
-			          }
-		        }
+				              }).catch(function() {
+				                __wkShowConnectError(listEl, { message: errMessage }, walletName);
+				              });
+				              return;
+				            }
+				            __wkShowConnectError(listEl, { message: errMessage }, walletName);
+				          }
+			        }
 	        window.addEventListener('message', handleResponse);
 	      });
 	    }
@@ -2217,31 +2271,96 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	              iconEl.src = fallbackIcon;
 	            });
 	          }
-			          item.addEventListener('click', function() {
-			            listEl.innerHTML = '<div class="wk-detecting"><div class="wk-spinner"></div> Connecting...</div>';
-			            if (isSubdomain) {
-			              __wkConnectViaBridge(name, listEl);
-			              return;
-			            }
-			            var target = wallet;
-			            var targetKey = __wkWalletNameKey(name);
-			            var currentWallets = SuiWalletKit.$wallets.value || [];
-			            for (var cw = 0; cw < currentWallets.length; cw++) {
-			              var cwKey = __wkWalletNameKey(currentWallets[cw].name);
-			              if (cwKey && targetKey && __wkWalletKeysRelated(cwKey, targetKey)) {
-			                target = currentWallets[cw];
-			                break;
-			              }
-			            }
-			            SuiWalletKit.connect(target).then(function() {
-			              __wkSetLastWallet(name);
-			            }).catch(function(err) {
-			              __wkShowConnectError(listEl, err, name);
-			            });
-			          });
-		          listEl.appendChild(item);
-		        })(sorted[i]);
-		      }
+				          item.addEventListener('click', function() {
+				            listEl.innerHTML = '<div class="wk-detecting"><div class="wk-spinner"></div> Connecting...</div>';
+				            var targetKey = __wkWalletNameKey(name);
+				            var isSlushFamily = __wkWalletKeysRelated(targetKey, 'slush');
+				            var connectWithTarget = function(targetWallet) {
+				              SuiWalletKit.connect(targetWallet).then(function() {
+				                __wkSetLastWallet(name);
+				              }).catch(function(err) {
+				                __wkShowConnectError(listEl, err, name);
+				              });
+				            };
+				            var pickTargetFromCurrentWallets = function() {
+				              var target = wallet;
+				              var currentWallets = SuiWalletKit.$wallets.value || [];
+				              for (var cw = 0; cw < currentWallets.length; cw++) {
+				                var cwKey = __wkWalletNameKey(currentWallets[cw].name);
+				                if (cwKey && targetKey && __wkWalletKeysRelated(cwKey, targetKey)) {
+				                  target = currentWallets[cw];
+				                  break;
+				                }
+				              }
+				              return target;
+				            };
+				            if (!isSlushFamily) {
+				              connectWithTarget(pickTargetFromCurrentWallets());
+				              return;
+				            }
+				            Promise.resolve().then(function() {
+				              return typeof SuiWalletKit.detectWallets === 'function'
+				                ? SuiWalletKit.detectWallets().catch(function() { return []; })
+				                : [];
+				            }).then(function() {
+				              var localTarget = pickTargetFromCurrentWallets();
+				              var localTargetKey = __wkWalletNameKey(localTarget && localTarget.name ? localTarget.name : '');
+				              if (localTargetKey && __wkWalletKeysRelated(localTargetKey, 'slush')) {
+				                connectWithTarget(localTarget);
+				                return;
+				              }
+				              var provider = (window.slush && (window.slush.sui || window.slush.wallet || window.slush))
+				                || ((window.sui && !window.sui.isPhantom) ? window.sui : null);
+				              if (!provider || typeof provider !== 'object') {
+				                throw new Error('Slush extension not detected in this page context');
+				              }
+				              var source = provider.sui && typeof provider.sui === 'object' ? provider.sui : provider;
+				              var connectFeature = source.features && source.features['standard:connect']
+				                ? source.features['standard:connect']
+				                : (typeof source.connect === 'function'
+				                    ? { connect: source.connect.bind(source) }
+				                    : (typeof source.requestAccounts === 'function'
+				                        ? { connect: source.requestAccounts.bind(source) }
+				                        : (typeof source.requestAccount === 'function'
+				                            ? { connect: source.requestAccount.bind(source) }
+				                            : undefined)));
+				              if (!connectFeature) {
+				                throw new Error('Slush extension detected but no connect method is available');
+				              }
+				              connectWithTarget({
+				                name: name,
+				                icon: source.icon || iconSrc || fallbackIcon,
+				                chains: ['sui:mainnet', 'sui:testnet', 'sui:devnet'],
+				                features: {
+				                  'standard:connect': connectFeature,
+				                  'standard:disconnect': typeof source.disconnect === 'function'
+				                    ? { disconnect: source.disconnect.bind(source) }
+				                    : undefined,
+				                  'sui:signAndExecuteTransaction': typeof source.signAndExecuteTransaction === 'function'
+				                    ? { signAndExecuteTransaction: source.signAndExecuteTransaction.bind(source) }
+				                    : undefined,
+				                  'sui:signAndExecuteTransactionBlock': typeof source.signAndExecuteTransactionBlock === 'function'
+				                    ? { signAndExecuteTransactionBlock: source.signAndExecuteTransactionBlock.bind(source) }
+				                    : undefined,
+				                  'sui:signTransaction': typeof source.signTransaction === 'function'
+				                    ? { signTransaction: source.signTransaction.bind(source) }
+				                    : undefined,
+				                  'sui:signPersonalMessage': typeof source.signPersonalMessage === 'function'
+				                    ? { signPersonalMessage: source.signPersonalMessage.bind(source) }
+				                    : undefined,
+				                },
+				                get accounts() {
+				                  return Array.isArray(source.accounts) ? source.accounts : [];
+				                },
+				                _raw: source,
+				              });
+				            }).catch(function(err) {
+				              __wkShowConnectError(listEl, err, name);
+				            });
+				          });
+			          listEl.appendChild(item);
+			        })(sorted[i]);
+			      }
 	    }
 
 	    function __wkRenderSplit(wallets, options) {
@@ -2689,7 +2808,8 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	        var safeLabel = isPrimaryName
 	          ? '<span class="wk-widget-primary-name">' + __wkEscapeHtml(label) + '</span>'
 	          : __wkEscapeHtml(label);
-	        var walletIcon = conn.wallet && conn.wallet.icon ? conn.wallet.icon : '';
+	        var widgetWallet = __wkResolveWidgetWallet(conn);
+	        var walletIcon = widgetWallet.icon;
 	        var connectionHint = __wkGetWaaPConnectionHint(conn);
 	        var waapMethod = connectionHint ? __wkResolveWaaPMethod(conn) : '';
 	        var methodSvg = (connectionHint && waapMethod) ? __wkWidgetMethodIconSvg(waapMethod) : '';

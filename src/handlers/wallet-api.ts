@@ -17,6 +17,29 @@ interface DisconnectRequest {
 	sessionId: string
 }
 
+function getCookieValue(cookieHeader: string, name: string): string | null {
+	if (!cookieHeader) return null
+	const parts = cookieHeader.split(';')
+	for (let i = 0; i < parts.length; i++) {
+		const part = parts[i].trim()
+		if (!part) continue
+		const eqIndex = part.indexOf('=')
+		if (eqIndex <= 0) continue
+		if (part.slice(0, eqIndex).trim() !== name) continue
+		return part.slice(eqIndex + 1).trim()
+	}
+	return null
+}
+
+function decodeCookieValue(value: string | null): string | null {
+	if (!value) return null
+	try {
+		return decodeURIComponent(value)
+	} catch {
+		return value
+	}
+}
+
 export async function handleWalletChallenge(_request: Request, env: Env): Promise<Response> {
 	const stub = env.WALLET_SESSIONS.getByName('global')
 	const { challenge, expiresAt } = await stub.createChallenge()
@@ -67,13 +90,13 @@ export async function handleWalletConnect(request: Request, env: Env): Promise<R
 
 		response.headers.append(
 			'Set-Cookie',
-			`wallet_address=${body.address}; Domain=${COOKIE_DOMAIN}; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax; Secure`,
+			`wallet_address=${encodeURIComponent(body.address)}; Domain=${COOKIE_DOMAIN}; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax; Secure`,
 		)
 
 		if (body.walletName) {
 			response.headers.append(
 				'Set-Cookie',
-				`wallet_name=${body.walletName}; Domain=${COOKIE_DOMAIN}; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax; Secure`,
+				`wallet_name=${encodeURIComponent(body.walletName)}; Domain=${COOKIE_DOMAIN}; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax; Secure`,
 			)
 		}
 
@@ -91,12 +114,9 @@ export async function handleWalletCheck(request: Request, env: Env): Promise<Res
 	const url = new URL(request.url)
 	const sessionIdParam = url.searchParams.get('sessionId')
 
-	const cookies = request.headers.get('Cookie') || ''
-	const sessionCookie = cookies.split('; ').find((row) => row.startsWith('session_id='))
-	const nameCookie = cookies.split('; ').find((row) => row.startsWith('wallet_name='))
-
-	const sessionId = sessionIdParam || sessionCookie?.split('=')[1]
-	const walletName = nameCookie?.split('=')[1] || null
+	const cookieHeader = request.headers.get('Cookie') || ''
+	const sessionId = sessionIdParam || decodeCookieValue(getCookieValue(cookieHeader, 'session_id'))
+	const walletName = decodeCookieValue(getCookieValue(cookieHeader, 'wallet_name'))
 
 	if (!sessionId) {
 		return jsonResponse({ address: null, verified: false, walletName: null })

@@ -21,8 +21,19 @@ export function generateWalletSessionJs(): string {
     }
 
     function __skiReadCookie(name) {
-      var match = document.cookie.split('; ').find(function(c) { return c.startsWith(name + '='); });
-      return match ? match.split('=')[1] : '';
+      try {
+        var pairs = document.cookie ? document.cookie.split(';') : [];
+        for (var i = 0; i < pairs.length; i++) {
+          var part = String(pairs[i] || '').trim();
+          if (!part) continue;
+          var eqIndex = part.indexOf('=');
+          if (eqIndex <= 0) continue;
+          if (part.slice(0, eqIndex).trim() !== name) continue;
+          var raw = part.slice(eqIndex + 1).trim();
+          try { return decodeURIComponent(raw); } catch (_e) { return raw; }
+        }
+      } catch (_e2) {}
+      return '';
     }
 
     function __skiClearSessionCookies() {
@@ -83,7 +94,6 @@ export function generateWalletSessionJs(): string {
       var address = __skiReadCookie('wallet_address');
       if (!address || !address.startsWith('0x')) return null;
       var walletName = __skiReadCookie('wallet_name') || localStorage.getItem(__WALLET_NAME_KEY) || '';
-      if (!walletName) return null;
       return { walletName: walletName, address: address };
     }
 

@@ -1229,6 +1229,11 @@ ${generateZkSendCss()}</style>
 				return conn && conn.status === 'session' && !!SuiWalletKit.__skiSignFrame;
 			}
 
+			function shouldForceSignBridge() {
+				var conn = SuiWalletKit.$connection.value || {};
+				return !(conn.status === 'session' && !conn.wallet);
+			}
+
 			function getConnectedSenderAddress() {
 				const senderAddress =
 					typeof connectedAccount?.address === 'string'
@@ -1841,7 +1846,7 @@ ${generateZkSendCss()}</style>
 
 					if (txt) txt.textContent = 'Approve in wallet...';
 
-					const result = await SuiWalletKit.signAndExecute(tx, { forceSignBridge: true });
+					const result = await SuiWalletKit.signAndExecute(tx, { forceSignBridge: shouldForceSignBridge() });
 
 					if (!result?.digest) throw new Error('No transaction digest');
 
@@ -2015,7 +2020,7 @@ ${generateZkSendCss()}</style>
 				});
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: true });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: shouldForceSignBridge() });
 
 				showBurnStatus(
 					'NFT burned! ' + renderTxExplorerLinks(result.digest, true) + '<br>' +
@@ -2380,7 +2385,7 @@ ${generateZkSendCss()}</style>
 				showStatus(sendStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 
 				showStatus(sendStatus, '<strong>Sent!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 				try {
@@ -4118,7 +4123,7 @@ ${generateZkSendCss()}</style>
 				tx.setGasBudget(50000000);
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 
 					// Update UI
 					document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
@@ -4208,7 +4213,7 @@ ${generateZkSendCss()}</style>
 				tx.setGasBudget(50000000);
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 
 					connectedPrimaryName = FULL_NAME;
 					ownerDisplayAddress = connectedAddress;
@@ -4350,7 +4355,7 @@ ${generateZkSendCss()}</style>
 				showStatus(modalStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 
 				showStatus(modalStatus, '<strong>Updated!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 
@@ -4509,7 +4514,7 @@ ${generateZkSendCss()}</style>
 				}
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: true });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: shouldForceSignBridge() });
 				const listingId = await extractDecayListingIdFromTxResult(result);
 				await registerDecayListingForNft(NFT_ID, listingId);
 
@@ -4724,7 +4729,7 @@ ${generateZkSendCss()}</style>
 
 				const result = await SuiWalletKit.signAndExecute(tx, {
 					txOptions: { showEffects: true, showObjectChanges: true },
-					forceSignBridge: true,
+					forceSignBridge: shouldForceSignBridge(),
 				});
 
 				const recipientDisplay = transferResolvedName || truncAddr(transferResolvedAddress);
@@ -4994,7 +4999,7 @@ ${generateZkSendCss()}</style>
 					});
 					const linkUrl = result.link.getLink();
 					showStatus(zkStatus, '<span class="loading"></span> Approve in wallet...', 'info');
-					await SuiWalletKit.signAndExecute(result.tx, { forceSignBridge: true });
+					await SuiWalletKit.signAndExecute(result.tx, { forceSignBridge: shouldForceSignBridge() });
 					hideStatus(zkStatus);
 					if (zkResult) {
 						zkResult.style.display = 'block';
@@ -5754,7 +5759,7 @@ ${generateZkSendCss()}</style>
 				if (statusEl) statusEl.textContent = 'Confirm in wallet...';
 
 				let txResult;
-				txResult = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+				txResult = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 
 				if (statusEl) statusEl.textContent = 'Purchased! Redirecting...';
 				closeSearch();
@@ -7334,181 +7339,33 @@ ${generateZkSendCss()}</style>
 			return null;
 		}
 
-		function getRenewalSignatureFromResult(signResult) {
-			if (!signResult) return '';
-			if (typeof signResult.signature === 'string') return signResult.signature;
-			if (Array.isArray(signResult.signatures) && typeof signResult.signatures[0] === 'string') {
-				return signResult.signatures[0];
+		async function signAndExecuteRenewalFromHandlerTx(txBytes, expectedSenderAddress) {
+			if (typeof SuiWalletKit?.signAndExecute !== 'function') {
+				throw new Error('Wallet signing is unavailable. Reconnect wallet and retry.');
 			}
-			if (Array.isArray(signResult.signatures) && signResult.signatures[0]?.length) {
-				try {
-					return bytesToBase64(new Uint8Array(signResult.signatures[0]));
-				} catch (_error) {}
+			const senderAddress = String(
+				expectedSenderAddress || getConnectedSenderAddress() || connectedAddress || '',
+			).trim();
+			if (!senderAddress) throw new Error('Wallet address unavailable for renewal signing');
+
+			const txBlock = buildRenewalTransactionBlock(txBytes);
+			if (txBlock && typeof txBlock.setSenderIfNotSet === 'function') {
+				txBlock.setSenderIfNotSet(senderAddress);
 			}
-			if (signResult.signature && signResult.signature.length) {
-				try {
-					return bytesToBase64(new Uint8Array(signResult.signature));
-				} catch (_error) {}
+
+			const signOptions = {
+				txOptions: { showEffects: true, showObjectChanges: true },
+				forceSignBridge: shouldForceSignBridge(),
+				expectedSender: senderAddress,
+			};
+			const preferredWalletName = String(connectedWalletName || '').trim();
+			if (preferredWalletName) signOptions.walletName = preferredWalletName;
+
+			if (txBlock) {
+				return await SuiWalletKit.signAndExecute(txBlock, signOptions);
 			}
-			return '';
+			return await SuiWalletKit.signAndExecute(txBytes, signOptions);
 		}
-
-		function getRenewalTxBase64(txInput) {
-			if (typeof txInput === 'string') return txInput;
-			if (txInput instanceof Uint8Array) return bytesToBase64(txInput);
-			if (txInput instanceof ArrayBuffer) return bytesToBase64(new Uint8Array(txInput));
-			if (Array.isArray(txInput)) return bytesToBase64(Uint8Array.from(txInput));
-			if (txInput && typeof txInput.serialize === 'function') {
-				const serialized = txInput.serialize();
-				if (serialized instanceof Uint8Array) return bytesToBase64(serialized);
-				if (serialized instanceof ArrayBuffer) return bytesToBase64(new Uint8Array(serialized));
-				if (Array.isArray(serialized)) return bytesToBase64(Uint8Array.from(serialized));
-			}
-			return '';
-		}
-
-		function normalizeWalletNameForReconnect(name) {
-			const raw = String(name || '').trim().toLowerCase();
-			if (!raw) return '';
-			const stripped = raw.replace(/[^a-z0-9]+/g, ' ').trim();
-			if (!stripped) return '';
-			const withoutWallet = stripped.endsWith(' wallet')
-				? stripped.slice(0, -7).trim()
-				: stripped;
-			return withoutWallet.replace(/\s+/g, '');
-		}
-
-		function walletNamesMatchForReconnect(left, right) {
-			const leftRaw = String(left || '').trim().toLowerCase();
-			const rightRaw = String(right || '').trim().toLowerCase();
-			if (!leftRaw || !rightRaw) return false;
-			if (leftRaw === rightRaw) return true;
-			const leftKey = normalizeWalletNameForReconnect(leftRaw);
-			const rightKey = normalizeWalletNameForReconnect(rightRaw);
-			if (!leftKey || !rightKey) return false;
-			if (leftKey === rightKey) return true;
-			return leftKey.indexOf(rightKey) !== -1 || rightKey.indexOf(leftKey) !== -1;
-		}
-
-		async function reconnectWalletForRenewal() {
-			let conn = SuiWalletKit?.$connection?.value || {};
-			if (conn.wallet) return conn;
-
-			let preferredWalletName = '';
-			try {
-				const session = typeof getWalletSession === 'function' ? getWalletSession() : null;
-				preferredWalletName = String(session?.walletName || connectedWalletName || '').trim();
-			} catch (_error) {
-				preferredWalletName = String(connectedWalletName || '').trim();
-			}
-
-			let wallets = [];
-			try {
-				wallets = await SuiWalletKit.detectWallets();
-			} catch (_error) {
-				wallets = SuiWalletKit?.$wallets?.value || [];
-			}
-			if (!Array.isArray(wallets) || wallets.length === 0) return conn;
-
-			let walletMatch = null;
-			if (preferredWalletName) {
-				walletMatch = wallets.find(function(wallet) {
-					return walletNamesMatchForReconnect(wallet?.name || '', preferredWalletName);
-				}) || null;
-			}
-			if (!walletMatch) {
-				walletMatch = wallets.find(function(wallet) {
-					return String(wallet?.name || '').toLowerCase() === 'phantom';
-				}) || null;
-			}
-			if (!walletMatch) {
-				walletMatch = wallets.find(function(wallet) {
-					return !wallet?.__isPasskey;
-				}) || null;
-			}
-			if (!walletMatch) walletMatch = wallets[0] || null;
-			if (!walletMatch) return conn;
-
-			try {
-				await SuiWalletKit.connect(walletMatch);
-			} catch (_error) {}
-
-			return SuiWalletKit?.$connection?.value || conn;
-		}
-
-			async function signAndExecuteRenewalOneClick(
-				txBytes,
-				txBlockInput,
-				signingChain,
-				txOptions,
-				suiClient,
-				expectedSenderAddress,
-			) {
-				let conn = SuiWalletKit?.$connection?.value || {};
-				let wallet = conn.wallet;
-				let account = conn.account || null;
-				const canUseBridge = !!(SuiWalletKit?.__skiSignFrame && SuiWalletKit?.__skiSignReady);
-
-				if (!wallet && !canUseBridge) {
-					conn = await reconnectWalletForRenewal();
-					wallet = conn.wallet;
-					account = conn.account || account;
-				}
-
-				if (!wallet && !(SuiWalletKit?.__skiSignFrame && SuiWalletKit?.__skiSignReady)) {
-					throw new Error('Wallet not connected. Reconnect wallet from sui.ski and retry.');
-				}
-
-				const senderAddress = String(
-					expectedSenderAddress || getConnectedSenderAddress() || conn.address || '',
-				).trim();
-				if (!senderAddress) throw new Error('Wallet address unavailable for renewal signing');
-
-				const accountAddress = String(
-					(typeof account?.address === 'string'
-						? account.address
-						: account?.address?.toString?.() || conn.address || '') || '',
-				).trim();
-				if (
-					accountAddress &&
-					accountAddress.toLowerCase() !== senderAddress.toLowerCase()
-				) {
-					throw new Error('Connected wallet account changed. Reconnect and retry renewal.');
-				}
-
-				const txB64 = getRenewalTxBase64(txBytes);
-				if (!txB64) {
-					throw new Error('Unable to serialize renewal transaction');
-				}
-				const accountChains = Array.isArray(account?.chains)
-					? account.chains.filter(function(chain) {
-						return typeof chain === 'string' && chain.indexOf('sui:') === 0;
-					})
-					: [];
-				const requestChain = accountChains[0] || signingChain;
-				const signOptions = {
-					account: account || undefined,
-					chain: requestChain,
-					txOptions: txOptions || {},
-					preferTransactionBlock: true,
-					singleAttempt: true,
-					forceSignBridge: true,
-				};
-
-				if (txBlockInput && typeof SuiWalletKit?.signAndExecute === 'function') {
-					return await SuiWalletKit.signAndExecute(txBlockInput, signOptions);
-				}
-
-				if (typeof SuiWalletKit?.signAndExecuteFromBytes === 'function') {
-					return await SuiWalletKit.signAndExecuteFromBytes(txBytes, signOptions);
-				}
-
-				if (typeof SuiWalletKit?.signAndExecute === 'function') {
-					return await SuiWalletKit.signAndExecute(txBytes, signOptions);
-				}
-
-				throw new Error('No compatible wallet signing method found for renewal');
-			}
 
 		async function handleRenewal(yearsEl, btnEl, btnTextEl, btnLoadingEl, statusEl, options = {}) {
 			const useProfileName = Boolean(options.useProfileName);
@@ -7657,37 +7514,20 @@ ${generateZkSendCss()}</style>
 				}
 
 				console.log('[Renewal] Signing transaction...');
-				const signingChain = NETWORK === 'testnet'
-					? 'sui:testnet'
-					: NETWORK === 'devnet'
-						? 'sui:devnet'
-						: 'sui:mainnet';
 				const renewalTxBytes = parseRenewalTransactionBytes(renewTxData.txBytes);
-				const renewalTxBlock = buildRenewalTransactionBlock(renewalTxBytes);
-				const executeOptions = {
-					chain: signingChain,
-					txOptions: { showEffects: true, showObjectChanges: true },
-				}
-					const result = await signAndExecuteRenewalOneClick(
-						renewalTxBytes,
-						renewalTxBlock,
-						executeOptions.chain,
-						executeOptions.txOptions,
-						suiClient,
-						senderAddress,
-					);
-					const renewalDigest =
-						result?.digest
-						|| result?.effects?.transactionDigest
-						|| result?.result?.digest
-						|| '';
+				const result = await signAndExecuteRenewalFromHandlerTx(renewalTxBytes, senderAddress);
+				const renewalDigest =
+					result?.digest
+					|| result?.effects?.transactionDigest
+					|| result?.result?.digest
+					|| '';
 
-					console.log('[Renewal] Transaction result:', result);
+				console.log('[Renewal] Transaction result:', result);
 
-					if (renewalDigest) {
-						if (statusEl) {
-							// Show immediate success, then fetch full tx details
-							const digest = renewalDigest;
+				if (renewalDigest) {
+					if (statusEl) {
+						// Show immediate success, then fetch full tx details
+						const digest = renewalDigest;
 						const txExplorerLinks = renderTxExplorerLinks(digest);
 						const txExplorerLinksWithPrefix = renderTxExplorerLinks(digest, true);
 
@@ -7777,7 +7617,7 @@ ${generateZkSendCss()}</style>
 									relistTx.pure.u64(BigInt(savedListingPrice)),
 								],
 							});
-							const relistResult = await SuiWalletKit.signAndExecute(relistTx, { txOptions: { showEffects: true }, forceSignBridge: true });
+							const relistResult = await SuiWalletKit.signAndExecute(relistTx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 							const relistDigest = relistResult?.digest || relistResult?.result?.digest || '';
 							if (relistDigest && statusEl) {
 								statusEl.innerHTML += '<div class="renewal-relist-status success">Relisted at same price! ' + renderTxExplorerLinks(relistDigest, true) + '</div>';
@@ -8050,7 +7890,7 @@ ${generateZkSendCss()}</style>
 				let result = null;
 				showBidBountyStatus(createBountyStatus, 'Sign transaction in wallet...', 'loading');
 				try {
-					result = await SuiWalletKit.signAndExecute(txWrapper, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: true });
+					result = await SuiWalletKit.signAndExecute(txWrapper, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: shouldForceSignBridge() });
 				} catch (error) {
 					console.warn('signAndExecute failed, falling back to manual execution:', error);
 				}
@@ -11240,7 +11080,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -11389,7 +11229,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -11441,7 +11281,7 @@ function shortAddr(addr) {
 					tx.pure.id(currentListing.tokenId),
 				],
 			});
-			return SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+			return SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 		}
 
 		if (marketplaceDelistBtn) {
@@ -11688,7 +11528,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -11987,7 +11827,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 						marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -12195,7 +12035,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					const tx = Transaction.from(data.txBytes);
 					auctionStatus.textContent = 'Confirm in wallet...';
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 
 					const digest = result.digest || '';
 					auctionStatus.innerHTML = 'Purchased! ' + renderTxExplorerLinks(digest, true);
@@ -12256,7 +12096,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					const tx = Transaction.from(data.txBytes);
 					auctionStatus.textContent = 'Confirm cancel in wallet...';
 
-					const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: true });
+					const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
 					const digest = result.digest || result.result?.digest || '';
 					auctionStatus.innerHTML = 'Wrap cancelled. ' + renderTxExplorerLinks(digest, true);
 					auctionStatus.className = 'auction-status success';

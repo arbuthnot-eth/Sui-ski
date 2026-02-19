@@ -93,6 +93,41 @@ appendThunderMessage(tx: Transaction, channelId: string, memberCapId: string, ac
 
 ---
 
+## **IMPORTANT: Wallet Session Architecture — Cookies, NOT Bridges**
+
+**The same Cloudflare Worker serves `sui.ski` AND `*.sui.ski`. Session state flows through `.sui.ski` domain cookies — NOT iframes, NOT popups, NOT postMessage bridges.**
+
+### How It Works
+
+1. **Connect** — User connects wallet on any page → `POST /api/wallet/connect` with signed challenge → server verifies signature via `verifyPersonalMessageSignature` → creates session in `WalletSession` Durable Object
+2. **Cookies** — Server sets three cookies on **`.sui.ski` domain** (available to ALL subdomains):
+   - `session_id` — DO session key
+   - `wallet_address` — `0x...` address
+   - `wallet_name` — e.g. "Slush"
+3. **Subdomain restore** — Browser sends `.sui.ski` cookies automatically → Worker middleware reads them → calls `DO.getSessionInfo(sessionId)` → injects verified session into rendered HTML
+4. **Client hydration** — Page JS calls `SuiWalletKit.initFromSession(address, walletName)` with server-injected data → wallet UI shows connected state immediately
+
+### Rules
+
+- **Subdomain wallet connect goes through the hidden iframe bridge (`sui.ski/sign`) so the wallet dialog shows "From sui.ski".** The iframe is invisible — no popups, no visible windows.
+- **NEVER use popups (`window.open`) for wallet connect.** Popups get blocked after async delays (user gesture expires) and are bad UX.
+- **The hidden iframe bridge handles BOTH connect AND transaction signing on subdomains.** The bridge loads `sui.ski/sign` in a 1px offscreen iframe, relays messages via `postMessage`.
+- **On root domain (`sui.ski`), connect goes directly to the extension** — no bridge needed.
+- Session source of truth is the `WalletSession` Durable Object, not browser cookies (cookies are broadcast cache).
+- Sessions expire after 30 days, auto-extend on activity.
+
+### Session Files
+
+| File | Role |
+|------|------|
+| `src/durable-objects/wallet-session.ts` | Backend DO — session CRUD, challenge creation, verification |
+| `src/handlers/wallet-api.ts` | API routes — `/api/wallet/challenge`, `/connect`, `/disconnect` |
+| `src/utils/wallet-session-js.ts` | Client-side JS — cookie reading, `challengeAndConnect()`, `disconnectWalletSession()` |
+| `src/utils/wallet-kit-js.ts` | Wallet extension connect — `SuiWalletKit.connect()`, `initFromSession()` |
+| `src/index.ts` | Middleware — reads cookies, calls DO, injects session into handler context |
+
+---
+
 ## Directory Structure
 
 ```

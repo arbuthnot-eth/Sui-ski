@@ -1240,6 +1240,11 @@ export function generateRegistrationPage(
 			return conn.address || null
 		}
 
+		function shouldForceSignBridge() {
+			const conn = SuiWalletKit.$connection.value || {}
+			return !(conn.status === 'session' && !conn.wallet)
+		}
+
 		function getConnectedPrimaryName() {
 			const conn = SuiWalletKit.$connection.value
 			if (!conn) return null
@@ -1785,15 +1790,13 @@ export function generateRegistrationPage(
 					: NETWORK === 'devnet'
 						? 'sui:devnet'
 						: 'sui:mainnet'
-				const connForSign = SuiWalletKit.$connection.value || {}
-				const isSessionWallet = connForSign.status === 'session' && !connForSign.wallet
 				const result = await SuiWalletKit.signAndExecute(txBytes, {
 					account: { address, chains: [signingChain] },
 					chain: signingChain,
 					txOptions: { showEffects: true, showObjectChanges: true },
 					preferTransactionBlock: true,
 					singleAttempt: true,
-					forceSignBridge: !isSessionWallet,
+					forceSignBridge: shouldForceSignBridge(),
 				})
 				const digest = result?.digest ? String(result.digest) : ''
 
