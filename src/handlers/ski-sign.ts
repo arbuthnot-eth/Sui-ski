@@ -44,6 +44,36 @@ var __RPC_URLS = {
 	testnet: 'https://fullnode.testnet.sui.io:443',
 	devnet: 'https://fullnode.devnet.sui.io:443',
 };
+var __handoffMode = '';
+var __handoffWalletName = '';
+var __handoffSender = '';
+var __handoffReturnUrl = '';
+var __handoffComplete = false;
+
+function __normalizeHandoffReturnUrl(raw) {
+	if (typeof raw !== 'string') return '';
+	var trimmed = raw.trim();
+	if (!trimmed) return '';
+	try {
+		var parsed = new URL(trimmed, window.location.href);
+		if (parsed.protocol !== 'https:') return '';
+		var host = String(parsed.hostname || '').toLowerCase();
+		if (host !== 'sui.ski' && !(host.length > 8 && host.slice(-8) === '.sui.ski')) return '';
+		return parsed.toString();
+	} catch (_e) {
+		return '';
+	}
+}
+
+(function() {
+	try {
+		var params = new URLSearchParams(window.location.search || '');
+		__handoffMode = String(params.get('bridge') || '').trim().toLowerCase();
+		__handoffWalletName = String(params.get('walletName') || '').trim();
+		__handoffSender = String(params.get('sender') || '').trim();
+		__handoffReturnUrl = __normalizeHandoffReturnUrl(String(params.get('returnUrl') || ''));
+	} catch (_e) {}
+})();
 
 function __normalizeAddress(address) {
 	if (typeof address !== 'string') return '';
@@ -105,7 +135,7 @@ function __normalizeWalletName(name) {
 	if (normalized.slice(-7) === ' wallet') {
 		normalized = normalized.slice(0, -7).trim();
 	}
-	return normalized.replace(/\s+/g, '');
+	return normalized.replace(/\\s+/g, '');
 }
 
 var __walletAliasGroups = [
@@ -303,11 +333,25 @@ async function __collectBridgeWalletList(walletHints) {
 
 function __readSessionWallet() {
 	try {
-		var addrMatch = document.cookie.split('; ').find(function(c) { return c.startsWith('wallet_address='); });
-		var nameMatch = document.cookie.split('; ').find(function(c) { return c.startsWith('wallet_name='); });
-		var address = addrMatch ? addrMatch.split('=')[1] : '';
-		var walletName = nameMatch ? decodeURIComponent(nameMatch.split('=')[1]) : '';
-		if (!walletName) return null;
+		var parts = document.cookie ? document.cookie.split(';') : [];
+		var address = '';
+		var walletName = '';
+		for (var i = 0; i < parts.length; i++) {
+			var part = String(parts[i] || '').trim();
+			if (!part) continue;
+			var eqIndex = part.indexOf('=');
+			if (eqIndex <= 0) continue;
+			var key = part.slice(0, eqIndex).trim();
+			var raw = part.slice(eqIndex + 1).trim();
+			if (key === 'wallet_address') {
+				try { address = decodeURIComponent(raw); } catch (_e) { address = raw; }
+				continue;
+			}
+			if (key === 'wallet_name') {
+				try { walletName = decodeURIComponent(raw); } catch (_e2) { walletName = raw; }
+			}
+		}
+		if (!address && !walletName) return null;
 		return { address: address, walletName: walletName };
 	} catch (_e) {
 		return null;
@@ -359,14 +403,48 @@ function __walletHasAddress(wallet, targetAddress) {
 	return false;
 }
 
-async function __ensureWalletConnection(preferredWalletName, expectedSender, allowHistoryFallback, walletHints) {
+function __walletCanSignTransactions(wallet) {
+	if (!wallet || typeof wallet !== 'object') return false;
+	var features = wallet.features || {};
+	var raw = wallet._raw || null;
+	if (
+		(features['sui:signAndExecuteTransaction'] && typeof features['sui:signAndExecuteTransaction'].signAndExecuteTransaction === 'function')
+		|| (features['sui:signAndExecuteTransactionBlock'] && typeof features['sui:signAndExecuteTransactionBlock'].signAndExecuteTransactionBlock === 'function')
+		|| (features['sui:signTransaction'] && typeof features['sui:signTransaction'].signTransaction === 'function')
+		|| (features['sui:signTransactionBlock'] && typeof features['sui:signTransactionBlock'].signTransactionBlock === 'function')
+	) {
+		return true;
+	}
+	if (
+		typeof wallet.signAndExecuteTransaction === 'function'
+		|| typeof wallet.signAndExecuteTransactionBlock === 'function'
+		|| typeof wallet.signTransaction === 'function'
+		|| typeof wallet.signTransactionBlock === 'function'
+	) {
+		return true;
+	}
+	if (
+		raw && (
+			typeof raw.signAndExecuteTransaction === 'function'
+			|| typeof raw.signAndExecuteTransactionBlock === 'function'
+			|| typeof raw.signTransaction === 'function'
+			|| typeof raw.signTransactionBlock === 'function'
+		)
+	) {
+		return true;
+	}
+	return false;
+}
+
+async function __ensureWalletConnection(preferredWalletName, expectedSender, allowHistoryFallback, walletHints, forceInteractive) {
 	__lastPreferredConnectError = '';
 	var normalizedSender = __normalizeAddress(expectedSender);
 	var allowHistory = allowHistoryFallback !== false;
+	var mustInteractive = !!forceInteractive;
 	__mergeBridgeWalletHints(walletHints);
 	var conn = SuiWalletKit.$connection.value || null;
 	var targetWalletName = preferredWalletName || '';
-	if (conn && conn.wallet) {
+	if (!mustInteractive && conn && conn.wallet) {
 		if (!preferredWalletName || __walletNamesMatch(conn.wallet.name, preferredWalletName)) {
 			return conn;
 		}
@@ -390,19 +468,28 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender, all
 		targetWalletName = session && session.walletName ? session.walletName : '';
 	}
 	var match = null;
+	var preferredFallback = null;
 
 	if (targetWalletName) {
 		for (var i = 0; i < wallets.length; i++) {
 			if (__walletNamesMatch(wallets[i] && wallets[i].name, targetWalletName)) {
-				match = wallets[i];
-				break;
+				if (__walletCanSignTransactions(wallets[i])) {
+					match = wallets[i];
+					break;
+				}
+				if (!preferredFallback) preferredFallback = wallets[i];
 			}
 		}
 	}
 
 	if (!match && normalizedSender) {
 		for (var a = 0; a < wallets.length; a++) {
-			if (wallets[a] && !wallets[a].__isPasskey && __walletHasAddress(wallets[a], normalizedSender)) {
+			if (
+				wallets[a]
+				&& !wallets[a].__isPasskey
+				&& __walletCanSignTransactions(wallets[a])
+				&& __walletHasAddress(wallets[a], normalizedSender)
+			) {
 				match = wallets[a];
 				console.log('[SignBridge] Matched wallet by address:', match.name);
 				break;
@@ -419,12 +506,23 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender, all
 		var history = __readWalletHistory();
 		for (var h = 0; h < history.length && !match; h++) {
 			for (var hw = 0; hw < wallets.length; hw++) {
-				if (wallets[hw] && !wallets[hw].__isPasskey && __walletNamesMatch(wallets[hw].name, history[h].walletName)) {
+				if (
+					wallets[hw]
+					&& !wallets[hw].__isPasskey
+					&& __walletCanSignTransactions(wallets[hw])
+					&& __walletNamesMatch(wallets[hw].name, history[h].walletName)
+				) {
 					match = wallets[hw];
 					console.log('[SignBridge] Matched wallet from history:', match.name);
 					break;
 				}
 			}
+		}
+	}
+
+	if (!match && preferredWalletName) {
+		if (preferredFallback) {
+			match = preferredFallback;
 		}
 	}
 
@@ -436,8 +534,16 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender, all
 
 	if (!match) {
 		for (var p = 0; p < wallets.length; p++) {
-			if (!wallets[p] || wallets[p].__isPasskey) continue;
+			if (!wallets[p] || wallets[p].__isPasskey || !__walletCanSignTransactions(wallets[p])) continue;
 			match = wallets[p];
+			break;
+		}
+	}
+
+	if (!match) {
+		for (var p2 = 0; p2 < wallets.length; p2++) {
+			if (!wallets[p2] || wallets[p2].__isPasskey) continue;
+			match = wallets[p2];
 			break;
 		}
 	}
@@ -445,34 +551,109 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender, all
 	if (!match) match = wallets[0] || null;
 	if (!match) return conn;
 
+	if (!__walletCanSignTransactions(match)) {
+		if (normalizedSender) {
+			for (var as = 0; as < wallets.length; as++) {
+				if (
+					wallets[as]
+					&& !wallets[as].__isPasskey
+					&& __walletCanSignTransactions(wallets[as])
+					&& __walletHasAddress(wallets[as], normalizedSender)
+				) {
+					match = wallets[as];
+					console.log('[SignBridge] Switching to sender-matched wallet with signing support:', match.name);
+					break;
+				}
+			}
+		}
+	}
+
+	if (!__walletCanSignTransactions(match)) {
+		if (!normalizedSender && preferredWalletName) {
+			__lastPreferredConnectError = 'Selected wallet does not expose Sui signing in this context: ' + preferredWalletName;
+			return null;
+		}
+		match = null;
+		for (var sf = 0; sf < wallets.length; sf++) {
+			if (!wallets[sf] || wallets[sf].__isPasskey || !__walletCanSignTransactions(wallets[sf])) continue;
+			match = wallets[sf];
+			break;
+		}
+		if (!match && preferredFallback && __walletCanSignTransactions(preferredFallback)) {
+			match = preferredFallback;
+		}
+		if (match) {
+			console.log('[SignBridge] Falling back to first sign-capable wallet:', match.name);
+		}
+	}
+
+	if (!match || !__walletCanSignTransactions(match)) {
+		__lastPreferredConnectError = 'No detected wallet exposes Sui transaction signing in this context';
+		return conn;
+	}
+
 	console.log('[SignBridge] Connecting to wallet:', match.name);
+
+	var sessionAddr = normalizedSender || '';
+	if (!sessionAddr) {
+		var sessionData = __readSessionWallet();
+		sessionAddr = sessionData && sessionData.address ? __normalizeAddress(sessionData.address) : '';
+	}
+
+	var preAccounts = [];
+	try { preAccounts = Array.isArray(match.accounts) ? match.accounts : []; } catch (_ae) {}
+
+	var resolvedAddr = '';
+	var resolvedAccount = null;
+	var resolvedFromWalletAccounts = false;
+
+	if (preAccounts.length > 0) {
+		for (var pa = 0; pa < preAccounts.length; pa++) {
+			var paAddr = __normalizeAddress(preAccounts[pa] && preAccounts[pa].address);
+			if (paAddr && (!sessionAddr || paAddr === sessionAddr)) {
+				resolvedAddr = paAddr;
+				resolvedAccount = preAccounts[pa];
+				resolvedFromWalletAccounts = true;
+				break;
+			}
+		}
+		if (!resolvedAddr && preAccounts[0] && preAccounts[0].address) {
+			resolvedAddr = __normalizeAddress(preAccounts[0].address);
+			resolvedAccount = preAccounts[0];
+			resolvedFromWalletAccounts = true;
+		}
+	}
+
+	if (!resolvedAddr && sessionAddr) {
+		resolvedAddr = sessionAddr;
+		var networkChain = 'sui:' + (SuiWalletKit.__config.network || 'mainnet');
+		resolvedAccount = { address: sessionAddr, chains: [networkChain] };
+	}
+
+	if (resolvedAddr && resolvedFromWalletAccounts && !mustInteractive) {
+		SuiWalletKit.$connection.set({
+			wallet: match,
+			account: resolvedAccount,
+			address: resolvedAddr,
+			status: 'connected',
+			primaryName: null
+		});
+		console.log('[SignBridge] Restored wallet from session (no popup):', match.name, resolvedAddr);
+		return SuiWalletKit.$connection.value;
+	}
+
+	if (!mustInteractive && allowHistoryFallback === false && window.parent && window.parent !== window) {
+		__lastPreferredConnectError = 'Wallet session unavailable in bridge. Reconnect wallet from sui.ski and retry.';
+		if (preferredWalletName) return null;
+		return conn;
+	}
+
 	try {
 		await SuiWalletKit.connect(match);
 	} catch (_e) {
 		__lastPreferredConnectError = (_e && _e.message) ? String(_e.message) : 'Connection failed';
 		if (preferredWalletName) return null;
 		return SuiWalletKit.$connection.value || conn;
-	}
-
-	conn = SuiWalletKit.$connection.value || conn;
-
-	if (normalizedSender && conn && conn.wallet && !__walletHasAddress(conn.wallet, normalizedSender)) {
-		if (preferredWalletName) {
-			console.warn('[SignBridge] Preferred wallet connected but sender mismatch:', conn.wallet && conn.wallet.name);
-			return null;
-		}
-		console.warn('[SignBridge] Connected wallet does not have expected address, trying others...');
-		for (var r = 0; r < wallets.length; r++) {
-			if (wallets[r] === match || !wallets[r] || wallets[r].__isPasskey) continue;
-			try {
-				await SuiWalletKit.connect(wallets[r]);
-				var retryConn = SuiWalletKit.$connection.value;
-				if (retryConn && retryConn.wallet && __walletHasAddress(retryConn.wallet, normalizedSender)) {
-					console.log('[SignBridge] Found wallet with matching address:', wallets[r].name);
-					return retryConn;
-				}
-			} catch (_e) {}
-		}
 	}
 
 	return SuiWalletKit.$connection.value || conn;
@@ -488,6 +669,66 @@ function __notifyReady() {
 		try {
 			window.opener.postMessage({ type: 'ski:ready' }, '*');
 		} catch (_e) {}
+	}
+}
+
+function __isTopFrameHandoff() {
+	return (
+		__handoffMode === 'handoff'
+		&& !!__handoffReturnUrl
+		&& (!window.parent || window.parent === window)
+	);
+}
+
+function __completeTopFrameHandoff(status, errorMessage) {
+	if (__handoffComplete) return;
+	if (!__isTopFrameHandoff()) return;
+	__handoffComplete = true;
+	try {
+		var next = new URL(__handoffReturnUrl);
+		next.searchParams.set('ski_handoff', '1');
+		next.searchParams.set('ski_handoff_status', status === 'ok' ? 'ok' : 'error');
+		if (errorMessage) next.searchParams.set('ski_handoff_error', String(errorMessage).slice(0, 180));
+		window.location.replace(next.toString());
+	} catch (_e) {
+		window.location.href = __handoffReturnUrl;
+	}
+}
+
+function __finishTopFrameHandoffIfConnected() {
+	if (!__isTopFrameHandoff()) return false;
+	var conn = SuiWalletKit.$connection.value;
+	if (!conn || !conn.address) return false;
+	var expectedSender = __normalizeAddress(__handoffSender);
+	if (expectedSender && __normalizeAddress(conn.address) !== expectedSender) return false;
+	var walletName = (conn.wallet && conn.wallet.name) || __handoffWalletName || '';
+	__saveWalletToHistory(walletName, conn.address);
+	__completeTopFrameHandoff('ok', '');
+	return true;
+}
+
+async function __beginTopFrameHandoffFlow() {
+	if (!__isTopFrameHandoff()) return;
+	if (__finishTopFrameHandoffIfConnected()) return;
+	try {
+		var expectedSender = __normalizeAddress(__handoffSender);
+		if (__handoffWalletName) {
+			var match = await __ensureWalletConnection(__handoffWalletName, expectedSender, true, [], true);
+			if (match && match.address && (!expectedSender || __normalizeAddress(match.address) === expectedSender)) {
+				__saveWalletToHistory((match.wallet && match.wallet.name) || __handoffWalletName, match.address);
+				__completeTopFrameHandoff('ok', '');
+				return;
+			}
+		}
+		var existing = SuiWalletKit.$connection.value;
+		if (existing && existing.address && (!expectedSender || __normalizeAddress(existing.address) === expectedSender)) {
+			__saveWalletToHistory((existing.wallet && existing.wallet.name) || __handoffWalletName, existing.address);
+			__completeTopFrameHandoff('ok', '');
+			return;
+		}
+		SuiWalletKit.openModal();
+	} catch (err) {
+		__completeTopFrameHandoff('error', (err && err.message) ? err.message : 'Wallet handoff failed');
 	}
 }
 
@@ -1185,8 +1426,10 @@ window.addEventListener('message', function(e) {
 				tx.setSenderIfNotSet(resolvedSender);
 			}
 
-			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false, walletHints);
-			if (!conn || !conn.wallet) throw new Error('Wallet not connected in sign bridge');
+			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false, walletHints, false);
+			if (!conn || !conn.wallet) {
+				throw new Error(__lastPreferredConnectError || 'Wallet not connected in sign bridge');
+			}
 			if (
 				preferredWalletName
 				&& !__walletNamesMatch(conn.wallet && conn.wallet.name, preferredWalletName)
@@ -1224,7 +1467,7 @@ window.addEventListener('message', function(e) {
 					var signExecOptions = {
 						txOptions: execOptions,
 						chain: requestedChain,
-						singleAttempt: true,
+						singleAttempt: false,
 						preferTransactionBlock: isWaaP,
 					};
 					if (signingAccount) signExecOptions.account = signingAccount;
@@ -1249,7 +1492,7 @@ window.addEventListener('message', function(e) {
 						console.warn('[SignBridge] signAndExecute failed, trying sign+execute fallback:', signErr);
 						var signOptions = {
 							chain: requestedChain,
-							singleAttempt: true,
+							singleAttempt: false,
 							preferTransactionBlock: true,
 						};
 				if (signingAccount) signOptions.account = signingAccount;
@@ -1314,8 +1557,10 @@ window.addEventListener('message', function(e) {
 			if (!messageBytes || !messageBytes.length) throw new Error('Invalid message payload');
 			console.log('[SignBridge] sign-message: bytes=' + messageBytes.length + ', sender=' + expectedSender + ', wallet=' + preferredWalletName);
 			var resolvedSender = __normalizeAddress(expectedSender);
-			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false, walletHints);
-			if (!conn || !conn.wallet) throw new Error('Wallet not connected in sign bridge');
+			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false, walletHints, false);
+			if (!conn || !conn.wallet) {
+				throw new Error(__lastPreferredConnectError || 'Wallet not connected in sign bridge');
+			}
 			console.log('[SignBridge] sign-message conn: wallet=' + (conn.wallet && conn.wallet.name) + ', status=' + conn.status + ', accounts=' + (conn.wallet && conn.wallet.accounts ? conn.wallet.accounts.length : 'N/A'));
 			if (
 				preferredWalletName
@@ -1407,14 +1652,19 @@ window.addEventListener('message', function(e) {
 	var requestId = e.data.requestId;
 	if (!requestId) return;
 	var preferredWallet = e.data.walletName || '';
+	var expectedSender = __normalizeAddress(e.data.sender || '');
 	var walletHints = Array.isArray(e.data.walletHints) ? e.data.walletHints : [];
+	var forceInteractive = !!e.data.forceInteractive;
 
 	(async function() {
 		try {
 			__mergeBridgeWalletHints(walletHints);
 			var existing = SuiWalletKit.$connection.value;
-			if (existing && existing.wallet && existing.address) {
-				if (!preferredWallet || __walletNamesMatch(existing.wallet.name, preferredWallet)) {
+			if (!forceInteractive && existing && existing.wallet && existing.address) {
+				if (
+					(!preferredWallet || __walletNamesMatch(existing.wallet.name, preferredWallet))
+					&& (!expectedSender || __normalizeAddress(existing.address) === expectedSender)
+				) {
 					__saveWalletToHistory(existing.wallet.name || '', existing.address);
 					e.source.postMessage({
 						type: 'ski:connected',
@@ -1425,7 +1675,7 @@ window.addEventListener('message', function(e) {
 					return;
 				}
 			}
-				var conn = await __ensureWalletConnection(preferredWallet, '', true, walletHints);
+				var conn = await __ensureWalletConnection(preferredWallet, expectedSender, true, walletHints, forceInteractive);
 				if (conn && conn.wallet && conn.address) {
 				__saveWalletToHistory(conn.wallet.name || '', conn.address);
 				e.source.postMessage({
@@ -1560,126 +1810,16 @@ ${generateWalletUiJs({ onConnect: '__onBridgeModalConnect', onDisconnect: '' })}
 var __modalRequestId = '';
 var __modalSource = null;
 var __modalOrigin = '';
-var __handoffMode = '';
-var __handoffWalletName = '';
-var __handoffReturnUrl = '';
-var __handoffReason = '';
-var __handoffActive = false;
-
-function __isAllowedHandoffReturnUrl(urlValue) {
-	try {
-		var parsed = new URL(String(urlValue || ''));
-		if (parsed.protocol !== 'https:') return false;
-		var host = parsed.hostname || '';
-		return host !== 'sui.ski' && host.endsWith('.sui.ski');
-	} catch (_e) {
-		return false;
-	}
-}
-
-function __readConnectHandoffState() {
-	try {
-		if (window.top !== window) return;
-		var params = new URLSearchParams(window.location.search || '');
-		if (params.get('bridge') !== 'handoff') return;
-		if (params.get('mode') !== 'connect') return;
-		var returnUrl = params.get('returnUrl') || '';
-		if (!__isAllowedHandoffReturnUrl(returnUrl)) return;
-		__handoffMode = 'connect';
-		__handoffActive = true;
-		__handoffReturnUrl = returnUrl;
-		__handoffWalletName = params.get('walletName') || '';
-		__handoffReason = params.get('reason') || '';
-	} catch (_e) {}
-}
-
-function __handoffNeedsUserGesture() {
-	if (!__handoffActive || __handoffMode !== 'connect') return false;
-	var reason = String(__handoffReason || '').toLowerCase();
-	if (
-		reason.indexOf('wallet_requires_top_frame_gesture') !== -1
-		|| reason.indexOf('top_frame') !== -1
-		|| reason.indexOf('popup') !== -1
-		|| reason.indexOf('open new window') !== -1
-	) {
-		return true;
-	}
-	var walletKey = __normalizeWalletName(__handoffWalletName || '');
-	return (
-		walletKey === 'slush'
-		|| walletKey === 'slushwallet'
-		|| walletKey === 'sui'
-		|| walletKey === 'suiwallet'
-		|| walletKey === 'mystenwallet'
-	);
-}
-
-function __finishConnectHandoff(address, walletName, errorMessage) {
-	if (!__handoffActive || __handoffMode !== 'connect' || !__handoffReturnUrl) return false;
-	try {
-		var backUrl = new URL(__handoffReturnUrl);
-		backUrl.searchParams.set('ski_bridge_return', '1');
-		if (address) backUrl.searchParams.set('ski_bridge_wallet_address', String(address));
-		if (walletName) backUrl.searchParams.set('ski_bridge_wallet_name', String(walletName));
-		if (errorMessage) backUrl.searchParams.set('ski_bridge_error', String(errorMessage));
-		window.location.replace(backUrl.toString());
-		return true;
-	} catch (_e) {
-		return false;
-	}
-}
-
-async function __startConnectHandoff() {
-	if (!__handoffActive || __handoffMode !== 'connect') return;
-	if (__handoffNeedsUserGesture()) {
-		SuiWalletKit.openModal();
-		return;
-	}
-	var conn = null;
-	try {
-		conn = await __ensureWalletConnection(__handoffWalletName, '', true, []);
-	} catch (_e) {
-		conn = null;
-	}
-	if (conn && conn.address) {
-		var connectedName = (conn.wallet && conn.wallet.name) || __handoffWalletName || '';
-		__saveWalletToHistory(connectedName, conn.address);
-		if (__finishConnectHandoff(conn.address, connectedName, '')) return;
-	}
-
-	if (__handoffWalletName) {
-		try {
-			var wallets = await __collectBridgeWalletCandidates();
-			var target = null;
-			for (var i = 0; i < wallets.length; i++) {
-				if (__walletNamesMatch(wallets[i] && wallets[i].name, __handoffWalletName)) {
-					target = wallets[i];
-					break;
-				}
-			}
-			if (target) {
-				await SuiWalletKit.connect(target);
-				conn = SuiWalletKit.$connection.value;
-				if (conn && conn.address) {
-					var targetName = (conn.wallet && conn.wallet.name) || target.name || __handoffWalletName;
-					__saveWalletToHistory(targetName, conn.address);
-					if (__finishConnectHandoff(conn.address, targetName, '')) return;
-				}
-			}
-		} catch (_e) {}
-	}
-
-	SuiWalletKit.openModal();
-}
 
 window.__onBridgeModalConnect = function() {
 	var conn = SuiWalletKit.$connection.value;
 	if (!conn || !conn.address) return;
+	if (__isTopFrameHandoff()) {
+		__finishTopFrameHandoffIfConnected();
+		return;
+	}
 	var walletName = (conn.wallet && conn.wallet.name) || '';
 	__saveWalletToHistory(walletName, conn.address);
-	if (__handoffActive && __handoffMode === 'connect') {
-		if (__finishConnectHandoff(conn.address, walletName, '')) return;
-	}
 	if (!__modalRequestId) return;
 	if (__modalSource) {
 		__modalSource.postMessage({
@@ -1699,11 +1839,12 @@ SuiWalletKit.renderModal('wk-modal');
 var __origCloseModal = SuiWalletKit.closeModal;
 SuiWalletKit.closeModal = function() {
 	__origCloseModal();
-	if (__handoffActive && __handoffMode === 'connect') {
+	if (__isTopFrameHandoff()) {
 		var handoffConn = SuiWalletKit.$connection.value;
 		if (!handoffConn || handoffConn.status === 'disconnected' || !handoffConn.address) {
-			if (__finishConnectHandoff('', '', 'Connection cancelled')) return;
+			__completeTopFrameHandoff('error', 'Wallet connection was cancelled');
 		}
+		return;
 	}
 	if (__modalRequestId && __modalSource) {
 		var conn = SuiWalletKit.$connection.value;
@@ -1733,8 +1874,6 @@ window.addEventListener('message', function(e) {
 	__modalOrigin = e.origin;
 	SuiWalletKit.openModal();
 });
-
-__readConnectHandoffState();
 
 async function __loadWalletStandard() {
 	var urls = [
@@ -1770,14 +1909,14 @@ Promise.all([__loadWalletStandard(), __registerSlushWallet()]).then(function() {
 }).catch(function() {
 	return null;
 }).then(function() {
-	if (__handoffActive && __handoffMode === 'connect') {
-		return __startConnectHandoff();
-	}
 	return null;
 }).catch(function() {
 	return null;
 }).then(function() {
 	__notifyReady();
+	return __beginTopFrameHandoffFlow();
+}).catch(function() {
+	return null;
 });
 </script>
 </body></html>`
