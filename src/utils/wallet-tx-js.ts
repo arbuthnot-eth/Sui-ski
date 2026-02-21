@@ -973,8 +973,51 @@ export function generateWalletTxJs(): string {
       return __skiCanDirectSlush();
     }
 
+    function __skiIsWaaPWalletName(name) {
+      var key = __skiWalletNameKey(name);
+      return key === 'waap';
+    }
+
+    function __skiCanDirectWaaP() {
+      if (!window.__wkWaaPLoading) return false;
+      try {
+        var wallets = SuiWalletKit.$wallets.value || [];
+        for (var i = 0; i < wallets.length; i++) {
+          if (wallets[i] && wallets[i].name && __skiIsWaaPWalletName(wallets[i].name)) return true;
+        }
+      } catch (_e) {}
+      return false;
+    }
+
+    function __skiShouldBypassBridgeForWaaP(options) {
+      var preferredWalletName = '';
+      if (options && options.walletName) {
+        preferredWalletName = String(options.walletName);
+      }
+      if (!preferredWalletName && options && options.preferredWalletName) {
+        preferredWalletName = String(options.preferredWalletName);
+      }
+      if (!preferredWalletName) {
+        try {
+          var conn = SuiWalletKit.$connection.value || {};
+          preferredWalletName = conn && conn.wallet && conn.wallet.name ? String(conn.wallet.name) : '';
+        } catch (_eConn) {}
+      }
+      if (!preferredWalletName) {
+        preferredWalletName = __skiResolvePreferredWalletName();
+      }
+      if (!preferredWalletName) {
+        try {
+          preferredWalletName = String(localStorage.getItem('sui_ski_last_wallet') || '');
+        } catch (_eLs) {}
+      }
+      if (!__skiIsWaaPWalletName(preferredWalletName)) return false;
+      return __skiCanDirectWaaP();
+    }
+
 	    function __skiShouldUseBridge(options) {
       if (__skiShouldBypassBridgeForSlush(options)) return false;
+      if (__skiShouldBypassBridgeForWaaP(options)) return false;
 	      if (__skiIsSubdomainHost()) {
 	        if ((!SuiWalletKit.__skiSignFrame || !SuiWalletKit.__skiSignReady) && typeof SuiWalletKit.__initSignBridge === 'function') {
 	          try { SuiWalletKit.__initSignBridge(); } catch (_e) {}
@@ -1111,6 +1154,7 @@ export function generateWalletTxJs(): string {
         || msg.indexOf('wallet not connected in sign bridge') !== -1
         || msg.indexOf('wallet requires reconnect in the bridge iframe') !== -1
         || msg.indexOf('connected wallet account does not match') !== -1
+        || msg.indexOf('no compatible signing method found') !== -1
       );
     }
 
@@ -1796,7 +1840,8 @@ export function generateWalletTxJs(): string {
 	    SuiWalletKit.signAndExecute = async function signAndExecute(txInput, options) {
 	      var onSubdomain = __skiIsSubdomainHost();
 	      var bypassBridgeForSlush = __skiShouldBypassBridgeForSlush(options);
-	      var mustUseBridge = !bypassBridgeForSlush && !!(onSubdomain || (options && options.forceSignBridge));
+	      var bypassBridgeForWaaP = __skiShouldBypassBridgeForWaaP(options);
+	      var mustUseBridge = !bypassBridgeForSlush && !bypassBridgeForWaaP && !!(onSubdomain || (options && options.forceSignBridge));
         var preferredWalletName = __skiResolvePreferredWalletNameForOperation(options);
 
 	      if (__skiShouldUseBridge(options)) {
@@ -1856,6 +1901,16 @@ export function generateWalletTxJs(): string {
 	        }
 	        return await __skiWalletSignAndExecute(txInput, slushConn, options);
 	      }
+	      if (bypassBridgeForWaaP) {
+	        if (window.__wkWaaPLoading) {
+	          try { await window.__wkWaaPLoading; } catch (_e) {}
+	        }
+	        var waapConn = await __skiEnsureConnectedWalletForSigning('WaaP');
+	        if (!waapConn || !waapConn.wallet) {
+	          throw new Error('WaaP wallet not available. Reconnect wallet from sui.ski and retry.');
+	        }
+	        return await __skiWalletSignAndExecute(txInput, waapConn, options);
+	      }
 	      return await __skiWalletSignAndExecute(txInput, __wkGetWallet(), options);
 	    };
 
@@ -1868,6 +1923,7 @@ export function generateWalletTxJs(): string {
     SuiWalletKit.signPersonalMessage = async function signPersonalMessage(message, options) {
       var onSubdomain = __skiIsSubdomainHost();
       var bypassBridgeForSlush = __skiShouldBypassBridgeForSlush(options);
+      var bypassBridgeForWaaP = __skiShouldBypassBridgeForWaaP(options);
       var preferredWalletName = __skiResolvePreferredWalletNameForOperation(options);
       if (__skiShouldUseBridge(options)) {
         var bridgeError = null;
@@ -1880,7 +1936,7 @@ export function generateWalletTxJs(): string {
           console.warn('Message sign bridge failed:', err && err.message ? err.message : err);
         }
 
-        var mustUseBridge = !bypassBridgeForSlush && !!(onSubdomain || (options && options.forceSignBridge));
+        var mustUseBridge = !bypassBridgeForSlush && !bypassBridgeForWaaP && !!(onSubdomain || (options && options.forceSignBridge));
         if (mustUseBridge || __wkIsUserRejection(bridgeError)) {
           if (
             mustUseBridge
@@ -1920,7 +1976,7 @@ export function generateWalletTxJs(): string {
         if (bridgeError) throw bridgeError;
       } else {
         var onSubdomainFallback = __skiIsSubdomainHost();
-        if ((!bypassBridgeForSlush && onSubdomainFallback) || (options && options.forceSignBridge)) {
+        if ((!bypassBridgeForSlush && !bypassBridgeForWaaP && onSubdomainFallback) || (options && options.forceSignBridge)) {
           throw new Error('Sign bridge not available. Reconnect wallet from sui.ski and retry.');
         }
       }
@@ -1929,6 +1985,16 @@ export function generateWalletTxJs(): string {
         var slushMsgConn = await __skiEnsureConnectedWalletForSigning('Slush');
         if (!slushMsgConn || !slushMsgConn.wallet) {
           throw new Error('Slush extension not detected in this tab. Open Slush and retry.');
+        }
+      }
+
+      if (bypassBridgeForWaaP) {
+        if (window.__wkWaaPLoading) {
+          try { await window.__wkWaaPLoading; } catch (_e) {}
+        }
+        var waapMsgConn = await __skiEnsureConnectedWalletForSigning('WaaP');
+        if (!waapMsgConn || !waapMsgConn.wallet) {
+          throw new Error('WaaP wallet not available. Reconnect wallet from sui.ski and retry.');
         }
       }
 
@@ -1941,7 +2007,8 @@ export function generateWalletTxJs(): string {
 	    SuiWalletKit.signTransaction = async function signTransaction(txInput, options) {
         var onSubdomain = __skiIsSubdomainHost();
         var bypassBridgeForSlush = __skiShouldBypassBridgeForSlush(options);
-        var mustUseBridge = !bypassBridgeForSlush && !!(onSubdomain || (options && options.forceSignBridge));
+        var bypassBridgeForWaaP = __skiShouldBypassBridgeForWaaP(options);
+        var mustUseBridge = !bypassBridgeForSlush && !bypassBridgeForWaaP && !!(onSubdomain || (options && options.forceSignBridge));
         var preferredWalletName = __skiResolvePreferredWalletNameForOperation(options);
 	      if (__skiShouldUseBridge(options)) {
 	        var bridgeError = null;
@@ -1994,6 +2061,16 @@ export function generateWalletTxJs(): string {
         var slushTxConn = await __skiEnsureConnectedWalletForSigning('Slush');
         if (!slushTxConn || !slushTxConn.wallet) {
           throw new Error('Slush extension not detected in this tab. Open Slush and retry.');
+        }
+      }
+
+      if (bypassBridgeForWaaP) {
+        if (window.__wkWaaPLoading) {
+          try { await window.__wkWaaPLoading; } catch (_e) {}
+        }
+        var waapTxConn = await __skiEnsureConnectedWalletForSigning('WaaP');
+        if (!waapTxConn || !waapTxConn.wallet) {
+          throw new Error('WaaP wallet not available. Reconnect wallet from sui.ski and retry.');
         }
       }
 

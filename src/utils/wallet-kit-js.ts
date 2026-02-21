@@ -1319,7 +1319,7 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
       }
 
 	      function detectWallets() {
-	        if (!__wkIsSubdomain()) __wkInitWaaP();
+	        __wkInitWaaP();
 	        if (__wkIsSubdomain()) {
 	          try { __wkInitSignBridge(); } catch (_e) {}
 	        }
