@@ -1,4 +1,5 @@
 import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
+import { SuiGrpcClient } from '@mysten/sui/grpc'
 import { Transaction } from '@mysten/sui/transactions'
 import { SuinsClient } from '@mysten/suins'
 import { Hono } from 'hono'
@@ -73,16 +74,15 @@ apiRoutes.get('/primary-name', async (c) => {
 			)
 		}
 
-		const client = new SuiClient({
-			url: getDefaultRpcUrl(env.SUI_NETWORK),
+		const grpcClient = new SuiGrpcClient({
+			baseUrl: getDefaultRpcUrl(env.SUI_NETWORK),
 			network: env.SUI_NETWORK,
 		})
 
 		let name: string | null = null
 		try {
-			const result = await client.resolveNameServiceNames({ address })
-			const first = Array.isArray(result?.data) ? result.data[0] : null
-			name = typeof first === 'string' ? first : null
+			const result = await grpcClient.defaultNameServiceName({ address })
+			name = result?.data?.name ?? null
 		} catch (_error) {
 			name = null
 		}

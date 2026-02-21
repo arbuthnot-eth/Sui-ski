@@ -2879,6 +2879,25 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	      }
 	    }
 
+	    var __wkResolvingPrimaryAddr = null;
+	    function __wkAutoResolvePrimaryName(addr) {
+	      if (__wkResolvingPrimaryAddr === addr) return;
+	      __wkResolvingPrimaryAddr = addr;
+	      var url = 'https://' + __wkPrimaryProfileHost + '/api/primary-name?address=' + encodeURIComponent(addr);
+	      fetch(url).then(function(res) {
+	        if (!res.ok) throw new Error('HTTP ' + res.status);
+	        return res.json();
+	      }).then(function(data) {
+	        if (__wkResolvingPrimaryAddr !== addr) return;
+	        __wkResolvingPrimaryAddr = null;
+	        if (data && data.name) {
+	          SuiWalletKit.setPrimaryName(data.name);
+	        }
+	      }).catch(function() {
+	        if (__wkResolvingPrimaryAddr === addr) __wkResolvingPrimaryAddr = null;
+	      });
+	    }
+
 	    SuiWalletKit.renderWidget = function renderWidget(containerId) {
 	      var container = document.getElementById(containerId);
 	      if (!container) throw new Error('Widget container not found: ' + containerId);
@@ -2952,6 +2971,9 @@ export function generateWalletUiJs(config?: WalletUiConfig): string {
 	        } else if (!addr && __wkLastPollingAddr) {
 	          __wkLastPollingAddr = null;
 	          __wkStopPortfolioPolling();
+	        }
+	        if (${showPrimaryName} && addr && !conn.primaryName) {
+	          __wkAutoResolvePrimaryName(addr);
 	        }
 	        __wkUpdateWidget(conn);
 	      });
