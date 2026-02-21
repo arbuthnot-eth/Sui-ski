@@ -1548,8 +1548,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 								var signed = null;
 								var firstError = null;
 								var personalMessageOptions = {
-									forceSignBridge: true,
-									expectedSender: signerAddress,
+																		expectedSender: signerAddress,
 								};
 								try {
 									signed = await SuiWalletKit.signPersonalMessage(messageBytes, personalMessageOptions);
@@ -1577,7 +1576,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 								throw new Error('Wallet signer is unavailable');
 							}
 							var transaction = await prepareWalletTransactionInput(input);
-							var signOptions = { forceSignBridge: true };
+							var signOptions = {};
 							signOptions.expectedSender = signerAddress;
 							if (input && input.account) {
 								signOptions.account = input.account;
@@ -1606,8 +1605,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 							var signOptions = {
 								txOptions: txOptions,
 							};
-							signOptions.forceSignBridge = isSubdomainSuiHost() || !!(input && input.forceSignBridge);
-							signOptions.expectedSender = signerAddress;
+														signOptions.expectedSender = signerAddress;
 							if (input && input.account) {
 								signOptions.account = input.account;
 							} else {
@@ -1646,8 +1644,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 							var signOptions = {
 								txOptions: txOptions,
 							};
-							signOptions.forceSignBridge = isSubdomainSuiHost() || !!(input && input.forceSignBridge);
-							signOptions.expectedSender = signerAddress;
+														signOptions.expectedSender = signerAddress;
 							if (input && input.account) {
 								signOptions.account = input.account;
 							} else {
@@ -1897,8 +1894,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 				await signer.signAndExecuteTransaction({
 					transaction: tx,
 					options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
-					forceSignBridge: true,
-				});
+									});
 				stormMappedChannelId = '';
 				return true;
 			}
@@ -3781,8 +3777,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 				var burnResult = unwrapTxResult(await signer.signAndExecuteTransaction({
 					transaction: tx,
 					options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
-					forceSignBridge: true,
-				}));
+									}));
 				await clearStormMappingIfChannel(state.channelId, senderAddress);
 
 				removeStoredChannelMeta(state.channelId);
@@ -3882,8 +3877,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 				var result = unwrapTxResult(await signer.signAndExecuteTransaction({
 					transaction: tx,
 					options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
-					forceSignBridge: true,
-				}));
+									}));
 				for (var sc = 0; sc < burnTargets.length; sc++) {
 					await clearStormMappingIfChannel(burnTargets[sc].channelId, senderAddress);
 				}
@@ -4105,8 +4099,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 			await signer.signAndExecuteTransaction({
 				transaction: tx,
 				options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
-				forceSignBridge: true,
-				client: runtime,
+								client: runtime,
 			});
 
 			var repaired = await refreshChannelEncryptedKey(officialMessagingClient, state, senderAddress);
@@ -4198,8 +4191,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 				await signer.signAndExecuteTransaction({
 					transaction: tx,
 					options: { showEffects: true, showObjectChanges: true, showRawEffects: true },
-					forceSignBridge: true,
-				});
+									});
 				stormMappedChannelId = channelObjectId;
 				await loadChannels();
 				var canonicalId = getCanonicalPublicChannelId();
@@ -4332,8 +4324,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 							showObjectChanges: true,
 							showRawEffects: true,
 						},
-						forceSignBridge: true,
-					});
+											});
 				}
 				if (typeof messagingClient.executeAddMembersTransaction === 'function') {
 					return await messagingClient.executeAddMembersTransaction({
@@ -4424,8 +4415,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 							showObjectChanges: true,
 							showRawEffects: true,
 						},
-						forceSignBridge: true,
-					});
+											});
 					await loadMembersForActiveChannel();
 					addSystemMessage('Removed ' + (truncateAddress(targetAddress) || targetAddress) + ' from #' + (sanitizeSlug(channel.name || activeChannel) || activeChannel) + '. Decryption access revoked on-chain.');
 				} catch (error) {
@@ -4454,8 +4444,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 					showObjectChanges: true,
 					showRawEffects: true,
 				},
-				forceSignBridge: true,
-				client: client,
+								client: client,
 			});
 			var createResult = unwrapTxResult(createRaw);
 			var createDigest = String(
@@ -4506,8 +4495,7 @@ export function generateThunderJs(config: ThunderConfig): string {
 					showObjectChanges: true,
 					showRawEffects: true,
 				},
-				forceSignBridge: true,
-				client: client,
+								client: client,
 			});
 			unwrapTxResult(finalizeRaw);
 			stormMappedChannelId = normalizeAddress(channelId);

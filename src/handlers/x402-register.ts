@@ -244,7 +244,7 @@ x402RegisterRoutes.post(
 				calculateRegistrationPrice({ domain: cleanDomain, years, env }),
 				getNSSuiPrice(env, true),
 				resolveX402Recipient(env),
-				resolveFeeRecipient(client, suinsClient, env.SERVICE_FEE_NAME, agentAddress),
+				resolveFeeRecipient(client, suinsClient, env.SKI_OPERATOR, agentAddress),
 			])
 
 			const registrationCostNsMist = pricing.nsNeededMist

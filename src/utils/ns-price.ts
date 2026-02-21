@@ -526,4 +526,4 @@ export async function getDeepBookSuiPools(env: Env): Promise<SwappablePool[]> {
 	}
 }
 
-export { DEFAULT_SLIPPAGE_BPS, NS_DECIMALS, NS_SCALE }
+export { DEFAULT_SLIPPAGE_BPS, NS_SCALE }

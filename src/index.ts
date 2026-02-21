@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 import { WalletSession } from './durable-objects/wallet-session'
 import { handleAppRequest } from './handlers/app'
-import { handleAuthenticatedEvents } from './handlers/authenticated-events'
 import { generateDashboardPage } from './handlers/dashboard'
 import { agentGraceVaultRoutes } from './handlers/grace-vault-agent'
 import {
@@ -223,7 +222,6 @@ app.use('*', async (c, next) => {
 	}
 })
 
-app.all('/api/events/*', async (c) => handleAuthenticatedEvents(c.req.raw, c.get('env')))
 app.all('/api/app/*', async (c) => handleAppRequest(c.req.raw, c.get('env'), c.get('session')))
 app.use('/api/agents/grace-vault/*', async (c, next) => {
 	if (c.get('parsed').type !== 'root') return c.notFound()

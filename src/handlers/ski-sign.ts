@@ -77,53 +77,78 @@ function __normalizeHandoffReturnUrl(raw) {
 
 function __normalizeAddress(address) {
 	if (typeof address !== 'string') return '';
-	var trimmed = address.trim();
+	var trimmed = address.trim().toLowerCase();
 	if (!trimmed) return '';
-	if (/^[0-9a-fA-F]{2,}$/.test(trimmed) && trimmed.indexOf('0x') !== 0) {
-		return ('0x' + trimmed).toLowerCase();
+	if (trimmed.indexOf('0x') === 0) trimmed = trimmed.slice(2);
+	if (!trimmed || trimmed.length > 64 || /[^0-9a-f]/.test(trimmed)) return '';
+	trimmed = trimmed.replace(/^0+/, '');
+	if (!trimmed) return '';
+	return '0x' + trimmed.padStart(64, '0');
+}
+
+function __extractWalletAccounts(wallet) {
+	if (!wallet || typeof wallet !== 'object') return [];
+	var out = [];
+	var seen = {};
+	function pushAccount(account) {
+		if (!account || typeof account !== 'object') return;
+		var normalized = __normalizeAddress(account.address);
+		if (!normalized || seen[normalized]) return;
+		seen[normalized] = true;
+		out.push(account);
 	}
-	return trimmed.toLowerCase();
+	function collect(source) {
+		if (!source || (typeof source !== 'object' && typeof source !== 'function')) return;
+		var accounts = null;
+		try { accounts = source.accounts; } catch (_e) {}
+		if (typeof accounts === 'function') {
+			try { accounts = accounts.call(source); } catch (_e2) { accounts = null; }
+		}
+		if (Array.isArray(accounts)) {
+			for (var i = 0; i < accounts.length; i++) pushAccount(accounts[i]);
+		}
+		var account = null;
+		try { account = source.account; } catch (_e3) {}
+		pushAccount(account);
+	}
+	collect(wallet);
+	collect(wallet._raw);
+	collect(wallet.sui);
+	return out;
+}
+
+function __walletNeedsLiveAccount(wallet) {
+	return __walletNamesMatch(wallet && wallet.name, 'waap');
 }
 
 function __resolveSigningAccount(conn, expectedSender) {
 	if (!conn || !conn.wallet) return null;
 	var target = __normalizeAddress(expectedSender);
-	var fallbackAddress = __normalizeAddress(
-		(conn.account && conn.account.address) || conn.address || '',
-	);
-	var fallbackChains = [];
-	if (conn.account && Array.isArray(conn.account.chains)) {
-		fallbackChains = conn.account.chains.slice();
-	} else if (Array.isArray(conn.wallet.chains)) {
-		for (var ci = 0; ci < conn.wallet.chains.length; ci++) {
-			var chain = conn.wallet.chains[ci];
-			if (typeof chain === 'string' && chain.indexOf('sui:') === 0) fallbackChains.push(chain);
-		}
-	}
-	if (!fallbackChains.length) {
-		fallbackChains = ['sui:' + (SuiWalletKit.__config.network || 'mainnet')];
-	}
-	if (!target) {
-		if (conn.account) return conn.account;
-		if (fallbackAddress) {
-			return { address: fallbackAddress, chains: fallbackChains };
-		}
-		return null;
-	}
-	var walletAccounts = [];
-	try {
-		walletAccounts = Array.isArray(conn.wallet.accounts) ? conn.wallet.accounts : [];
-	} catch (_e) {}
+	var walletAccounts = __extractWalletAccounts(conn.wallet);
+	var connAccount = (conn.account && typeof conn.account === 'object') ? conn.account : null;
+
 	for (var i = 0; i < walletAccounts.length; i++) {
 		var candidate = __normalizeAddress(walletAccounts[i] && walletAccounts[i].address);
-		if (candidate && candidate === target) return walletAccounts[i];
+		if (target && candidate && candidate === target) return walletAccounts[i];
 	}
-	if (conn.account && __normalizeAddress(conn.account.address) === target) {
-		return conn.account;
+
+	if (!target) {
+		if (connAccount) {
+			var connAddress = __normalizeAddress(connAccount.address);
+			for (var ci = 0; ci < walletAccounts.length; ci++) {
+				if (__normalizeAddress(walletAccounts[ci] && walletAccounts[ci].address) === connAddress) {
+					return walletAccounts[ci];
+				}
+			}
+			if (!walletAccounts.length) return connAccount;
+		}
+		return walletAccounts.length ? walletAccounts[0] : null;
 	}
-	if (fallbackAddress && fallbackAddress === target) {
-		return { address: target, chains: fallbackChains };
+
+	if (connAccount && __normalizeAddress(connAccount.address) === target && !walletAccounts.length) {
+		return connAccount;
 	}
+
 	return null;
 }
 
@@ -135,7 +160,7 @@ function __normalizeWalletName(name) {
 	if (normalized.slice(-7) === ' wallet') {
 		normalized = normalized.slice(0, -7).trim();
 	}
-	return normalized.replace(/\s+/g, '');
+	return normalized.replace(/ +/g, '');
 }
 
 var __walletAliasGroups = [
@@ -395,8 +420,7 @@ function __saveWalletToHistory(walletName, address) {
 
 function __walletHasAddress(wallet, targetAddress) {
 	if (!wallet || !targetAddress) return false;
-	var accounts = [];
-	try { accounts = Array.isArray(wallet.accounts) ? wallet.accounts : []; } catch (_e) {}
+	var accounts = __extractWalletAccounts(wallet);
 	for (var i = 0; i < accounts.length; i++) {
 		if (__normalizeAddress(accounts[i] && accounts[i].address) === targetAddress) return true;
 	}
@@ -566,7 +590,7 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender, all
 	}
 
 	var preAccounts = [];
-	try { preAccounts = Array.isArray(match.accounts) ? match.accounts : []; } catch (_ae) {}
+	try { preAccounts = __extractWalletAccounts(match); } catch (_ae) {}
 
 	var resolvedAddr = '';
 	var resolvedAccount = null;
@@ -586,16 +610,20 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender, all
 		}
 	}
 
+	var requiresLiveAccount = __walletNeedsLiveAccount(match);
+
 	if (!resolvedAddr && sessionAddr) {
 		resolvedAddr = sessionAddr;
-		var networkChain = 'sui:' + (SuiWalletKit.__config.network || 'mainnet');
-		resolvedAccount = { address: sessionAddr, chains: [networkChain] };
+		if (!requiresLiveAccount) {
+			var networkChain = 'sui:' + (SuiWalletKit.__config.network || 'mainnet');
+			resolvedAccount = { address: sessionAddr, chains: [networkChain] };
+		}
 	}
 
-	if (resolvedAddr && !mustInteractive) {
+	if (resolvedAddr && !mustInteractive && (!requiresLiveAccount || !!resolvedAccount)) {
 		SuiWalletKit.$connection.set({
 			wallet: match,
-			account: resolvedAccount,
+			account: resolvedAccount || null,
 			address: resolvedAddr,
 			status: 'connected',
 			primaryName: null
@@ -1388,7 +1416,7 @@ window.addEventListener('message', function(e) {
 				tx.setSenderIfNotSet(resolvedSender);
 			}
 
-			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false, walletHints, false);
+			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, true, walletHints, false);
 			if (!conn || !conn.wallet) {
 				throw new Error(__lastPreferredConnectError || 'Wallet not connected in sign bridge');
 			}
@@ -1399,6 +1427,19 @@ window.addEventListener('message', function(e) {
 				console.warn('[SignBridge] Wallet name mismatch: expected', preferredWalletName, 'got', conn.wallet && conn.wallet.name);
 			}
 			var signingAccount = __resolveSigningAccount(conn, resolvedSender);
+			if (!signingAccount && __walletNeedsLiveAccount(conn.wallet)) {
+				conn = await __ensureWalletConnection(
+					preferredWalletName || (conn.wallet && conn.wallet.name) || '',
+					resolvedSender,
+					true,
+					walletHints,
+					true,
+				);
+				if (!conn || !conn.wallet) {
+					throw new Error(__lastPreferredConnectError || 'Wallet not connected in sign bridge');
+				}
+				signingAccount = __resolveSigningAccount(conn, resolvedSender);
+			}
 			if (resolvedSender && !signingAccount) {
 				throw new Error('Connected wallet account does not match transaction sender');
 			}
@@ -1519,7 +1560,7 @@ window.addEventListener('message', function(e) {
 			if (!messageBytes || !messageBytes.length) throw new Error('Invalid message payload');
 			console.log('[SignBridge] sign-message: bytes=' + messageBytes.length + ', sender=' + expectedSender + ', wallet=' + preferredWalletName);
 			var resolvedSender = __normalizeAddress(expectedSender);
-			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, false, walletHints, false);
+			var conn = await __ensureWalletConnection(preferredWalletName, resolvedSender, true, walletHints, false);
 			if (!conn || !conn.wallet) {
 				throw new Error(__lastPreferredConnectError || 'Wallet not connected in sign bridge');
 			}
@@ -1531,6 +1572,19 @@ window.addEventListener('message', function(e) {
 				console.warn('[SignBridge] Wallet name mismatch for message signing: expected', preferredWalletName, 'got', conn.wallet && conn.wallet.name);
 			}
 			var signingAccount = __resolveSigningAccount(conn, resolvedSender);
+			if (!signingAccount && __walletNeedsLiveAccount(conn.wallet)) {
+				conn = await __ensureWalletConnection(
+					preferredWalletName || (conn.wallet && conn.wallet.name) || '',
+					resolvedSender,
+					true,
+					walletHints,
+					true,
+				);
+				if (!conn || !conn.wallet) {
+					throw new Error(__lastPreferredConnectError || 'Wallet not connected in sign bridge');
+				}
+				signingAccount = __resolveSigningAccount(conn, resolvedSender);
+			}
 			console.log('[SignBridge] sign-message account:', signingAccount ? ('addr=' + (signingAccount.address || 'none') + ' chains=' + JSON.stringify(signingAccount.chains || []) + ' hasPubKey=' + !!(signingAccount.publicKey)) : 'null');
 			if (resolvedSender && !signingAccount) {
 				throw new Error('Connected wallet account does not match message signer');

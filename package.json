@@ -1,8 +1,12 @@
 {
-	"name": "sui-ski-gateway",
+	"name": "sui.ski",
 	"version": "0.1.0",
-	"description": "Cloudflare gateway for Sui ecosystem - Core SuiNS name resolution",
+	"description": ".Sui Key-In .SKI - Once, Everywhere",
 	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/arbuthnot-eth/Sui-ski"
+	},
 	"scripts": {
 		"dev": "wrangler dev",
 		"deploy": "npx wrangler deploy",

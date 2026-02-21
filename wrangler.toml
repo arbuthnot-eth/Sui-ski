@@ -37,9 +37,9 @@ SEAL_TESTNET_APPROVE_TARGET = "0x81eb6411c2c711bad57f0f2a7c3b233254a23430003de5f
 # LLM API URL (defaults to Anthropic if not set)
 # LLM_API_URL = "https://api.anthropic.com/v1/messages"
 
-# SuiNS name to receive leftover NS tokens from registrations (for LP accumulation)
-SERVICE_FEE_NAME = "brando.sui"
-DISCOUNT_RECIPIENT_NAME = "extra.sui"
+# SuiNS name of the ski operator (receives leftover NS tokens from registrations)
+SKI_OPERATOR = "brando.sui"
+SKI_FACILITATOR = "extra.sui"
 
 # Secrets (set via `wrangler secret put <NAME>`)
 # LLM_API_KEY - API key for LLM provider (Anthropic/OpenAI)

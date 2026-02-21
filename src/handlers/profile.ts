@@ -1,4 +1,5 @@
 import type { Env, SuiNSRecord } from '../types'
+import { BLACK_DOTSKI_WORDMARK_DATA_URL, BLUE_DOTSKI_WORDMARK_DATA_URL } from '../utils/wallet-brand'
 import { generateLogoSvg, getDefaultOgImageUrl, getProfileOgImageUrl } from '../utils/og-image'
 import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import { normalizeMediaUrl, renderSocialMeta } from '../utils/social'
@@ -50,13 +51,8 @@ const TRADEPORT_LOGO_ICON_SVG = `<svg width="99" height="61" viewBox="0 0 99 61"
 </svg>`
 
 const TRADEPORT_LOGO_ICON_DATA_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(TRADEPORT_LOGO_ICON_SVG)}`
-const PROFILE_WALLET_BUTTON_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="380" height="118" viewBox="0 0 380 118" fill="none" role="img" aria-label=".SKI">
-<rect width="380" height="118" fill="#000"/>
-<rect x="4" y="4" width="110" height="110" rx="18" fill="#177EC7" stroke="#fff" stroke-width="8"/>
-<text x="138" y="96" fill="#fff" font-family="Arial Black, Inter, system-ui, sans-serif" font-size="130" font-weight="900" letter-spacing="0">SKI</text>
-</svg>`
-const PROFILE_WALLET_BUTTON_LOGO_DATA_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PROFILE_WALLET_BUTTON_LOGO_SVG)}`
-
+const PROFILE_WALLET_BUTTON_LOGO_DEFAULT_DATA_URL = BLACK_DOTSKI_WORDMARK_DATA_URL
+const PROFILE_WALLET_BUTTON_LOGO_PRIMARY_DATA_URL = BLUE_DOTSKI_WORDMARK_DATA_URL
 /**
  * Generate sui.ski themed SuiNS profile page HTML
  */
@@ -183,7 +179,7 @@ ${generateZkSendCss()}</style>
 	<div class="wallet-widget" id="wallet-widget">
 		<div id="wk-widget"></div>
 		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile" style="display:none">
-			<img class="wallet-profile-logo" src="${PROFILE_WALLET_BUTTON_LOGO_DATA_URL}" alt=".SKI" draggable="false">
+			<img class="wallet-profile-logo" src="${PROFILE_WALLET_BUTTON_LOGO_DEFAULT_DATA_URL}" alt=".SKI" draggable="false">
 		</button>
 	</div>
 
@@ -551,12 +547,17 @@ ${generateZkSendCss()}</style>
 									target="_blank"
 									rel="noopener noreferrer"
 								>--</a>
+								<button type="button" class="marketplace-delist-btn hidden" id="marketplace-cancel-bid-btn" title="Cancel offer" aria-label="Cancel offer">&times;</button>
 							</span>
 						<span class="marketplace-value bid-price" id="marketplace-bid-price"><span class="price-amount">--</span><span class="price-sui"></span></span>
 						<button class="marketplace-accept-bid-btn" id="marketplace-accept-bid-btn" style="display:none;" disabled>
 							<span class="marketplace-accept-text">Accept</span>
 							<span class="marketplace-accept-loading hidden"><span class="loading"></span></span>
 						</button>
+					</div>
+					<div class="marketplace-offers-list" id="marketplace-offers-list" style="display:none;">
+						<div class="marketplace-offers-header">Offers</div>
+						<div class="marketplace-offers-items" id="marketplace-offers-items"></div>
 					</div>
 					<div class="marketplace-row" id="marketplace-sold-row" style="display:none;">
 						<span class="marketplace-seller-meta">
@@ -578,7 +579,7 @@ ${generateZkSendCss()}</style>
 							<div class="marketplace-bid-estimate" id="marketplace-bid-estimate"></div>
 							<div class="marketplace-bid-price-control">
 										<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-down" aria-label="Decrease offer amount">-</button>
-									<input type="text" id="marketplace-bid-amount" placeholder="Offer amount" inputmode="numeric" pattern="[0-9]*" step="1">
+									<input type="text" id="marketplace-bid-amount" placeholder="Offer amount" inputmode="decimal" pattern="[0-9]*\\.?[0-9]*" step="any">
 								<button type="button" class="marketplace-bid-stepper-btn" id="marketplace-bid-price-up" aria-label="Increase offer amount">+</button>
 							</div>
 							<button class="marketplace-bid-btn" id="marketplace-place-bid-btn" disabled>
@@ -973,7 +974,7 @@ ${generateZkSendCss()}</style>
 		const HAS_CONTENT_HASH = ${record.contentHash ? 'true' : 'false'};
 		const IS_IN_GRACE_PERIOD = ${options.inGracePeriod ? 'true' : 'false'};
 		const DECAY_AUCTION_PACKAGE_ID = ${serializeJson(String(env.DECAY_AUCTION_PACKAGE_ID || ''))};
-		const DISCOUNT_RECIPIENT_NAME = ${serializeJson(env.DISCOUNT_RECIPIENT_NAME || 'extra.sui')};
+		const SKI_FACILITATOR = ${serializeJson(env.SKI_FACILITATOR || 'extra.sui')};
 
 		const NAME = window.NAME;
 		const FULL_NAME = window.FULL_NAME;
@@ -998,13 +999,18 @@ ${generateZkSendCss()}</style>
 		window.HAS_CONTENT_HASH = HAS_CONTENT_HASH;
 		window.IS_IN_GRACE_PERIOD = IS_IN_GRACE_PERIOD;
 		window.DECAY_AUCTION_PACKAGE_ID = DECAY_AUCTION_PACKAGE_ID;
-		window.DISCOUNT_RECIPIENT_NAME = DISCOUNT_RECIPIENT_NAME;
+		window.SKI_FACILITATOR = SKI_FACILITATOR;
 		window.rawIdentityNftImage = null;
 
 		${generateWalletSessionJs()}
 		${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
 		${generateWalletTxJs()}
-		${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onProfileWalletConnected', onDisconnect: 'onProfileWalletDisconnected' })}
+		${generateWalletUiJs({
+			showPrimaryName: true,
+			onConnect: 'onProfileWalletConnected',
+			onDisconnect: 'onProfileWalletDisconnected',
+			widgetBrandLogoSrc: BLACK_DOTSKI_WORDMARK_DATA_URL,
+		})}
 		${generateZkSendJs()}
 
 		SuiWalletKit.renderModal('wk-modal');
@@ -1222,17 +1228,19 @@ ${generateZkSendCss()}</style>
 			}
 		});
 
-			function canSign() {
-				if (!connectedAddress) return false;
-				if (connectedWallet && connectedAccount) return true;
-				var conn = SuiWalletKit.$connection.value;
-				return conn && conn.status === 'session' && !!SuiWalletKit.__skiSignFrame;
-			}
+				function canUseSessionSignBridge() {
+					if (!connectedAddress) return false;
+					const conn = SuiWalletKit && SuiWalletKit.$connection ? SuiWalletKit.$connection.value : null;
+					if (!conn || conn.status !== 'session' || conn.wallet) return false;
+					const host = String(window.location && window.location.hostname ? window.location.hostname : '');
+					return host !== 'sui.ski' && host.endsWith('.sui.ski');
+				}
 
-			function shouldForceSignBridge() {
-				var conn = SuiWalletKit.$connection.value || {};
-				return !(conn.status === 'session' && !conn.wallet);
-			}
+				function canSign() {
+					return Boolean(
+						(connectedAddress && connectedWallet && connectedAccount) || canUseSessionSignBridge(),
+					);
+				}
 
 			function getConnectedSenderAddress() {
 				const senderAddress =
@@ -1362,6 +1370,7 @@ ${generateZkSendCss()}</style>
 		const marketplaceDelistBtn = document.getElementById('marketplace-delist-btn');
 		const marketplaceBidPrice = document.getElementById('marketplace-bid-price');
 		const marketplaceBidder = document.getElementById('marketplace-bidder');
+		const marketplaceCancelBidBtn = document.getElementById('marketplace-cancel-bid-btn');
 		const marketplaceAcceptBidBtn = document.getElementById('marketplace-accept-bid-btn');
 		const marketplaceAcceptText = marketplaceAcceptBidBtn?.querySelector('.marketplace-accept-text');
 		const marketplaceAcceptLoading = marketplaceAcceptBidBtn?.querySelector('.marketplace-accept-loading');
@@ -1846,7 +1855,7 @@ ${generateZkSendCss()}</style>
 
 					if (txt) txt.textContent = 'Approve in wallet...';
 
-					const result = await SuiWalletKit.signAndExecute(tx, { forceSignBridge: shouldForceSignBridge() });
+					const result = await SuiWalletKit.signAndExecute(tx);
 
 					if (!result?.digest) throw new Error('No transaction digest');
 
@@ -2020,7 +2029,7 @@ ${generateZkSendCss()}</style>
 				});
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: shouldForceSignBridge() });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true } });
 
 				showBurnStatus(
 					'NFT burned! ' + renderTxExplorerLinks(result.digest, true) + '<br>' +
@@ -2100,15 +2109,25 @@ ${generateZkSendCss()}</style>
 			}
 			return 'https://sui.ski';
 		}
+		const WALLET_PROFILE_LOGO_DEFAULT = ${serializeJson(PROFILE_WALLET_BUTTON_LOGO_DEFAULT_DATA_URL)}
+		const WALLET_PROFILE_LOGO_PRIMARY = ${serializeJson(PROFILE_WALLET_BUTTON_LOGO_PRIMARY_DATA_URL)}
 
 		function updateWalletProfileButton() {
 			if (!walletProfileBtn) return;
 			const primaryName = typeof connectedPrimaryName === 'string' ? connectedPrimaryName.trim().replace(/\\.sui$/i, '') : ''
+			const shouldUsePrimaryLogo = Boolean(primaryName && connectedAddress)
 			const href = getWalletProfileHref();
 			walletProfileBtn.dataset.href = href;
 			walletProfileBtn.title = primaryName ? primaryName + '.sui' : 'Go to sui.ski';
+			const profileLogo = walletProfileBtn.querySelector('.wallet-profile-logo');
+			if (profileLogo) {
+				profileLogo.src = shouldUsePrimaryLogo ? WALLET_PROFILE_LOGO_PRIMARY : WALLET_PROFILE_LOGO_DEFAULT
+			}
 			if (walletWidget) {
-				walletWidget.classList.toggle('has-black-diamond', !!primaryName);
+				walletWidget.classList.toggle(
+					'has-black-diamond',
+					!(connectedAddress && (connectedWallet || connectedAccount)),
+				);
 			}
 		}
 
@@ -2165,7 +2184,7 @@ ${generateZkSendCss()}</style>
 				if (connectedAddress && typeof pendingBidAmount !== 'undefined' && pendingBidAmount !== null) {
 					setTimeout(() => {
 						if (marketplaceBidAmountInput) {
-							marketplaceBidAmountInput.value = String(pendingBidAmount);
+							marketplaceBidAmountInput.value = formatBidInputValue(pendingBidAmount);
 						}
 						pendingBidAmount = null;
 						if (marketplacePlaceBidBtn) {
@@ -2385,7 +2404,7 @@ ${generateZkSendCss()}</style>
 				showStatus(sendStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 				showStatus(sendStatus, '<strong>Sent!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 				try {
@@ -4123,7 +4142,7 @@ ${generateZkSendCss()}</style>
 				tx.setGasBudget(50000000);
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					// Update UI
 					document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
@@ -4213,7 +4232,7 @@ ${generateZkSendCss()}</style>
 				tx.setGasBudget(50000000);
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					connectedPrimaryName = FULL_NAME;
 					ownerDisplayAddress = connectedAddress;
@@ -4355,7 +4374,7 @@ ${generateZkSendCss()}</style>
 				showStatus(modalStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 				showStatus(modalStatus, '<strong>Updated!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 
@@ -4514,7 +4533,7 @@ ${generateZkSendCss()}</style>
 				}
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: shouldForceSignBridge() });
+				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true } });
 				const listingId = await extractDecayListingIdFromTxResult(result);
 				await registerDecayListingForNft(NFT_ID, listingId);
 
@@ -4729,7 +4748,6 @@ ${generateZkSendCss()}</style>
 
 				const result = await SuiWalletKit.signAndExecute(tx, {
 					txOptions: { showEffects: true, showObjectChanges: true },
-					forceSignBridge: shouldForceSignBridge(),
 				});
 
 				const recipientDisplay = transferResolvedName || truncAddr(transferResolvedAddress);
@@ -4999,7 +5017,7 @@ ${generateZkSendCss()}</style>
 					});
 					const linkUrl = result.link.getLink();
 					showStatus(zkStatus, '<span class="loading"></span> Approve in wallet...', 'info');
-					await SuiWalletKit.signAndExecute(result.tx, { forceSignBridge: shouldForceSignBridge() });
+					await SuiWalletKit.signAndExecute(result.tx);
 					hideStatus(zkStatus);
 					if (zkResult) {
 						zkResult.style.display = 'block';
@@ -5618,7 +5636,7 @@ ${generateZkSendCss()}</style>
 				const suiAvailable = BigInt(suiBalanceRes.totalBalance);
 				const shortfall = totalSuiNeeded + GAS_RESERVE - suiAvailable;
 
-				let swapInfo = null;
+				let swapPlan = null;
 
 				if (shortfall > 0n) {
 					if (!DEEPBOOK_PACKAGE) {
@@ -5629,78 +5647,30 @@ ${generateZkSendCss()}</style>
 					}
 
 					if (statusEl) statusEl.textContent = 'Insufficient SUI. Checking holdings...';
-
-					const pools = await fetch('/api/deepbook-pools').then(r => r.json()).catch(() => []);
-					if (!pools.length) {
-						const needed = (Number(totalSuiNeeded) / 1e9).toFixed(4);
-						const have = (Number(suiAvailable) / 1e9).toFixed(4);
-						if (statusEl) statusEl.textContent = 'Need ' + needed + ' SUI (have ' + have + '). Fund: ' + connectedAddress;
-						return;
+					const SWAP_OVERHEAD = 50_000_000n;
+					const swapShortfall = totalSuiNeeded + GAS_RESERVE + SWAP_OVERHEAD - suiAvailable;
+					swapPlan = await findSwapPlanForSui(suiClient, swapShortfall, connectedAddress);
+					if (swapPlan?.length && swapPlan.length > 1) {
+						const planOverhead = SWAP_OVERHEAD * BigInt(swapPlan.length);
+						const revisedShortfall = totalSuiNeeded + GAS_RESERVE + planOverhead - suiAvailable;
+						if (revisedShortfall > swapShortfall) {
+							const revisedPlan = await findSwapPlanForSui(suiClient, revisedShortfall, connectedAddress);
+							if (revisedPlan?.length) {
+								swapPlan = revisedPlan;
+							}
+						}
 					}
 
-					const balanceChecks = pools.map(p =>
-						suiClient.getBalance({ owner: connectedAddress, coinType: p.coinType })
-							.catch(() => ({ totalBalance: '0' }))
-					);
-					const balances = await Promise.all(balanceChecks);
-
-					const candidates = [];
-					for (let i = 0; i < pools.length; i++) {
-						const pool = pools[i];
-						const bal = BigInt(balances[i].totalBalance);
-						if (bal <= 0n) continue;
-						const tokenAmount = Number(bal) / Math.pow(10, pool.decimals);
-						const suiValue = tokenAmount * pool.suiPerToken;
-						candidates.push({ pool, balance: bal, suiValue });
-					}
-
-					candidates.sort((a, b) => {
-						if (a.pool.isDirect && !b.pool.isDirect) return -1;
-						if (!a.pool.isDirect && b.pool.isDirect) return 1;
-						return b.suiValue - a.suiValue;
-					});
-
-					for (const candidate of candidates) {
-						const pool = candidate.pool;
-						const shortfallSui = Number(shortfall) / 1e9;
-						const tokensNeeded = shortfallSui / pool.suiPerToken;
-						const tokenMistNeeded = BigInt(Math.ceil(tokensNeeded * Math.pow(10, pool.decimals)));
-						const tokenMistWithBuffer = tokenMistNeeded * 130n / 100n;
-						const amountToSell = tokenMistWithBuffer > candidate.balance ? candidate.balance : tokenMistWithBuffer;
-
-						const expectedSui = Number(amountToSell) / Math.pow(10, pool.decimals) * pool.suiPerToken;
-						const minSuiOut = BigInt(Math.floor(expectedSui * 0.80 * 1e9));
-
-						if (minSuiOut <= 0n) continue;
-
-						const coins = await suiClient.getCoins({ owner: connectedAddress, coinType: pool.coinType });
-						if (!coins.data.length) continue;
-
-						swapInfo = {
-							type: pool.coinType,
-							pool: pool.poolAddress,
-							name: pool.name,
-							coins: coins.data,
-							amountToSell,
-							minSuiOut,
-							needsDeepFee: true,
-							isDirect: pool.isDirect,
-							suiIsBase: pool.suiIsBase,
-							usdcPoolAddress: pool.usdcPoolAddress,
-						};
-						break;
-					}
-
-					if (!swapInfo) {
-						const needed = (Number(totalSuiNeeded) / 1e9).toFixed(4);
-						const have = (Number(suiAvailable) / 1e9).toFixed(4);
-						if (statusEl) statusEl.textContent = 'Need ' + needed + ' SUI (have ' + have + '). Fund: ' + connectedAddress;
+					if (!swapPlan?.length) {
+						const maxBidSui = await getMaxBidSui();
+						const maxLabel = Number.isFinite(maxBidSui) && maxBidSui > 0 ? maxBidSui.toFixed(2) : '?';
+						if (statusEl) statusEl.textContent = 'Not enough funds. Max ~' + maxLabel + ' SUI';
 						return;
 					}
 				}
 
-				if (statusEl) statusEl.textContent = swapInfo
-					? 'Swapping ' + swapInfo.name + ' for SUI...'
+				if (statusEl) statusEl.textContent = swapPlan?.length
+					? 'Routing via DeepBook...'
 					: 'Building transaction...';
 
 				const tx = new Transaction();
@@ -5714,8 +5684,13 @@ ${generateZkSendCss()}</style>
 				const TRADEPORT_LISTINGS_PACKAGE = '0x6cfe7388ccf732432906d7faebcc33fd91e11d4c2f8cb3ae0082b8d3269e3d5b';
 				const REG_TYPE = '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration';
 
-				if (swapInfo) {
-					prependSwapToTx(tx, swapInfo, connectedAddress);
+				if (swapPlan?.length) {
+					for (let i = 0; i < swapPlan.length; i++) {
+						const swapInfo = swapPlan[i];
+						const label = swapPlan.length > 1 ? ' (' + (i + 1) + '/' + swapPlan.length + ')' : '';
+						if (statusEl) statusEl.textContent = 'Routing via ' + swapInfo.name + label + '...';
+						prependSwapToTx(tx, swapInfo, connectedAddress);
+					}
 				}
 
 				if (isNewFormat) {
@@ -5759,7 +5734,7 @@ ${generateZkSendCss()}</style>
 				if (statusEl) statusEl.textContent = 'Confirm in wallet...';
 
 				let txResult;
-				txResult = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+				txResult = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 				if (statusEl) statusEl.textContent = 'Purchased! Redirecting...';
 				closeSearch();
@@ -7105,7 +7080,7 @@ ${generateZkSendCss()}</style>
 			: null;
 		const CLOCK_OBJECT = '0x6';
 		const SLIPPAGE_BPS = 100n;
-		const FACILITATOR_NAME = DISCOUNT_RECIPIENT_NAME;
+		const FACILITATOR_NAME = SKI_FACILITATOR;
 		let facilitatorAddress = '';
 
 		async function resolveFacilitatorAddress(suinsClient) {
@@ -7203,64 +7178,86 @@ ${generateZkSendCss()}</style>
 			tx.mergeCoins(tx.gas, [swappedSui]);
 		}
 
-		async function findBestSwapForSui(suiClient, shortfallMist, sender) {
-			const pools = await fetch('/api/deepbook-pools').then(r => r.json()).catch(() => []);
-			if (!pools.length) return null;
+			async function findSwapPlanForSui(suiClient, shortfallMist, sender) {
+				const pools = await fetch('/api/deepbook-pools').then(r => r.json()).catch(() => []);
+				if (!pools.length) return null;
 
-			const balanceChecks = pools.map(p =>
-				suiClient.getBalance({ owner: sender, coinType: p.coinType })
-					.catch(() => ({ totalBalance: '0' }))
-			);
-			const balances = await Promise.all(balanceChecks);
+				const balances = await Promise.all(
+					pools.map((pool) =>
+						suiClient
+							.getBalance({ owner: sender, coinType: pool.coinType })
+							.catch(() => ({ totalBalance: '0' })),
+					),
+				);
 
-			const candidates = [];
-			for (let i = 0; i < pools.length; i++) {
-				const pool = pools[i];
-				const bal = BigInt(balances[i].totalBalance);
-				if (bal <= 0n) continue;
-				const tokenAmount = Number(bal) / Math.pow(10, pool.decimals);
-				const suiValue = tokenAmount * pool.suiPerToken;
-				candidates.push({ pool, balance: bal, suiValue });
+				const candidates = [];
+				for (let i = 0; i < pools.length; i++) {
+					const pool = pools[i];
+					const balance = BigInt(balances[i].totalBalance || '0');
+					if (balance <= 0n) continue;
+					if (!pool.isDirect && (!pool.usdcPoolAddress || !DEEPBOOK_SUI_USDC_POOL)) continue;
+					const tokenAmount = Number(balance) / Math.pow(10, pool.decimals);
+					const suiValue = tokenAmount * pool.suiPerToken;
+					if (!Number.isFinite(suiValue) || suiValue <= 0) continue;
+					candidates.push({ pool, balance, suiValue });
+				}
+
+				candidates.sort((a, b) => {
+					if (a.pool.isDirect && !b.pool.isDirect) return -1;
+					if (!a.pool.isDirect && b.pool.isDirect) return 1;
+					return b.suiValue - a.suiValue;
+				});
+
+				const plan = [];
+				let remainingMist = shortfallMist;
+
+				for (const candidate of candidates) {
+					if (remainingMist <= 0n) break;
+					const pool = candidate.pool;
+					if (!pool?.suiPerToken || pool.suiPerToken <= 0) continue;
+					const shortfallSui = Number(remainingMist) / 1e9;
+					if (!Number.isFinite(shortfallSui) || shortfallSui <= 0) break;
+					const tokensNeeded = shortfallSui / pool.suiPerToken;
+					if (!Number.isFinite(tokensNeeded) || tokensNeeded <= 0) continue;
+					const tokenMistNeeded = BigInt(Math.ceil(tokensNeeded * Math.pow(10, pool.decimals)));
+					const tokenMistWithBuffer = (tokenMistNeeded * 130n) / 100n;
+					const maxSellable = (candidate.balance * 95n) / 100n;
+					const amountToSell = tokenMistWithBuffer > maxSellable ? maxSellable : tokenMistWithBuffer;
+					if (amountToSell <= 0n) continue;
+					const expectedSui = (Number(amountToSell) / Math.pow(10, pool.decimals)) * pool.suiPerToken;
+					if (!Number.isFinite(expectedSui) || expectedSui <= 0) continue;
+					const minSuiOut = BigInt(Math.floor(expectedSui * 0.8 * 1e9));
+					if (minSuiOut <= 0n) continue;
+					const expectedSuiMist = BigInt(Math.floor(expectedSui * 1e9));
+					if (expectedSuiMist <= 0n) continue;
+					const coins = await suiClient.getCoins({ owner: sender, coinType: pool.coinType, limit: 200 });
+					if (!coins?.data?.length) continue;
+
+					plan.push({
+						type: pool.coinType,
+						pool: pool.poolAddress,
+						name: pool.name,
+						coins: coins.data,
+						amountToSell,
+						minSuiOut,
+						needsDeepFee: true,
+						isDirect: pool.isDirect,
+						suiIsBase: pool.suiIsBase,
+						usdcPoolAddress: pool.usdcPoolAddress,
+					});
+
+					remainingMist = expectedSuiMist >= remainingMist ? 0n : remainingMist - expectedSuiMist;
+				}
+
+				if (!plan.length) return null;
+				return remainingMist > 0n ? null : plan;
 			}
 
-			candidates.sort((a, b) => {
-				if (a.pool.isDirect && !b.pool.isDirect) return -1;
-				if (!a.pool.isDirect && b.pool.isDirect) return 1;
-				return b.suiValue - a.suiValue;
-			});
-
-			for (const candidate of candidates) {
-				const pool = candidate.pool;
-				const shortfallSui = Number(shortfallMist) / 1e9;
-				const tokensNeeded = shortfallSui / pool.suiPerToken;
-				const tokenMistNeeded = BigInt(Math.ceil(tokensNeeded * Math.pow(10, pool.decimals)));
-				const tokenMistWithBuffer = tokenMistNeeded * 130n / 100n;
-				const maxSellable = candidate.balance * 95n / 100n;
-				const amountToSell = tokenMistWithBuffer > maxSellable ? maxSellable : tokenMistWithBuffer;
-
-				const expectedSui = Number(amountToSell) / Math.pow(10, pool.decimals) * pool.suiPerToken;
-				const minSuiOut = BigInt(Math.floor(expectedSui * 0.80 * 1e9));
-
-				if (minSuiOut <= 0n) continue;
-
-				const coins = await suiClient.getCoins({ owner: sender, coinType: pool.coinType });
-				if (!coins.data.length) continue;
-
-				return {
-					type: pool.coinType,
-					pool: pool.poolAddress,
-					name: pool.name,
-					coins: coins.data,
-					amountToSell,
-					minSuiOut,
-					needsDeepFee: true,
-					isDirect: pool.isDirect,
-					suiIsBase: pool.suiIsBase,
-					usdcPoolAddress: pool.usdcPoolAddress,
-				};
+			async function findBestSwapForSui(suiClient, shortfallMist, sender) {
+				const plan = await findSwapPlanForSui(suiClient, shortfallMist, sender);
+				if (!plan?.length) return null;
+				return plan[0];
 			}
-			return null;
-		}
 
 	async function estimatePortfolioSui(suiClient, address) {
 			const suiBal = await suiClient.getBalance({ owner: address, coinType: SUI_TYPE }).catch(() => ({ totalBalance: '0' }));
@@ -7289,6 +7286,44 @@ ${generateZkSendCss()}</style>
 			const maxBid = (totalSui - OVERHEAD_SUI) / TRADEPORT_FEE_RATE;
 			return Math.max(0, Math.round(maxBid * 1e4) / 1e4);
 		}
+
+			let cachedMaxBidSui = null;
+			let cachedMaxBidSuiAt = 0;
+			let cachedMaxBidSuiPending = null;
+
+		async function getCachedMaxBidSui(forceRefresh = false) {
+			const now = Date.now();
+			if (
+				!forceRefresh
+				&& Number.isFinite(cachedMaxBidSui)
+				&& (now - cachedMaxBidSuiAt) < 5000
+			) {
+				return cachedMaxBidSui;
+			}
+			if (cachedMaxBidSuiPending) return cachedMaxBidSuiPending;
+
+			cachedMaxBidSuiPending = getMaxBidSui()
+				.then((value) => {
+					const normalized = Number.isFinite(value) ? value : 0;
+					cachedMaxBidSui = normalized;
+					cachedMaxBidSuiAt = Date.now();
+					return normalized;
+				})
+				.catch(() => {
+					return Number.isFinite(cachedMaxBidSui) ? cachedMaxBidSui : 0;
+				})
+				.finally(() => {
+					cachedMaxBidSuiPending = null;
+				});
+
+			return cachedMaxBidSuiPending;
+		}
+
+		window.addEventListener('wk:tx-success', () => {
+			cachedMaxBidSuiAt = 0;
+			cachedMaxBidSuiPending = null;
+			updateBidEstimateDisplay();
+		});
 
 		let renewalInFlight = false;
 
@@ -7355,7 +7390,6 @@ ${generateZkSendCss()}</style>
 
 			const signOptions = {
 				txOptions: { showEffects: true, showObjectChanges: true },
-				forceSignBridge: shouldForceSignBridge(),
 				expectedSender: senderAddress,
 			};
 			const preferredWalletName = String(connectedWalletName || '').trim();
@@ -7617,7 +7651,7 @@ ${generateZkSendCss()}</style>
 									relistTx.pure.u64(BigInt(savedListingPrice)),
 								],
 							});
-							const relistResult = await SuiWalletKit.signAndExecute(relistTx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+							const relistResult = await SuiWalletKit.signAndExecute(relistTx, { txOptions: { showEffects: true } });
 							const relistDigest = relistResult?.digest || relistResult?.result?.digest || '';
 							if (relistDigest && statusEl) {
 								statusEl.innerHTML += '<div class="renewal-relist-status success">Relisted at same price! ' + renderTxExplorerLinks(relistDigest, true) + '</div>';
@@ -7885,17 +7919,22 @@ ${generateZkSendCss()}</style>
 
 				const builtTxBytes = await tx.build({ client: suiClient });
 				const txWrapper = buildTxWrapper(builtTxBytes);
-				const chain = NETWORK === 'mainnet' ? 'sui:mainnet' : 'sui:testnet';
 
 				let result = null;
+				let signAndExecuteError = null;
 				showBidBountyStatus(createBountyStatus, 'Sign transaction in wallet...', 'loading');
 				try {
-					result = await SuiWalletKit.signAndExecute(txWrapper, { txOptions: { showEffects: true, showObjectChanges: true }, forceSignBridge: shouldForceSignBridge() });
+					result = await SuiWalletKit.signAndExecute(txWrapper, { txOptions: { showEffects: true, showObjectChanges: true } });
 				} catch (error) {
+					signAndExecuteError = error;
 					console.warn('signAndExecute failed, falling back to manual execution:', error);
 				}
 
 				if (!result) {
+					const conn = SuiWalletKit && SuiWalletKit.$connection ? SuiWalletKit.$connection.value : null;
+					if (conn && conn.status === 'session' && !conn.wallet) {
+						throw signAndExecuteError || new Error('Session signing failed. Reconnect wallet and retry.');
+					}
 					showBidBountyStatus(createBountyStatus, 'Submitting transaction...', 'loading');
 					const signResult = await SuiWalletKit.signTransaction(txWrapper);
 					result = await suiClient.executeTransactionBlock({
@@ -9242,6 +9281,11 @@ function shortAddr(addr) {
 				return Math.round(amountSui * MIST_PER_SUI) / MIST_PER_SUI;
 			}
 
+				function toBidInputPrecision(amountSui) {
+					if (!Number.isFinite(amountSui) || amountSui <= 0) return 0;
+					return Math.round(amountSui * 100) / 100;
+				}
+
 				function formatSuiInputValue(amountSui) {
 					const normalized = toSuiInputPrecision(amountSui);
 					if (!Number.isFinite(normalized) || normalized <= 0) return '';
@@ -9249,6 +9293,12 @@ function shortAddr(addr) {
 						.toFixed(9)
 						.replace(/0+$/, '')
 						.replace(/.$/, '');
+				}
+
+				function formatBidInputValue(amountSui) {
+					const normalized = toBidInputPrecision(amountSui);
+					if (!Number.isFinite(normalized) || normalized <= 0) return '';
+					return normalized.toFixed(2);
 				}
 
 				function toMistBigInt(value) {
@@ -9330,11 +9380,11 @@ function shortAddr(addr) {
 				}
 
 				function applyBidPriceStep(currentSui, minimumSui, direction) {
-					const safeMinimum = Number.isFinite(minimumSui) && minimumSui > 0 ? Math.ceil(minimumSui) : 1;
-					const baseRaw = Number.isFinite(currentSui) && currentSui > 0 ? currentSui : safeMinimum;
-					const base = Math.max(safeMinimum, Math.ceil(baseRaw));
-					const nextRaw = direction === 'down' ? base - 1 : base + 1;
-					return Math.max(safeMinimum, Math.ceil(nextRaw));
+					const safeMinimum = Number.isFinite(minimumSui) && minimumSui > 0 ? minimumSui : 0.01;
+					const base = Number.isFinite(currentSui) && currentSui > 0 ? currentSui : safeMinimum;
+					const step = 0.01;
+					const nextRaw = direction === 'down' ? base - step : base + step;
+					return Math.max(safeMinimum, toBidInputPrecision(nextRaw));
 				}
 
 			function setMarketplaceInputWidth(inputEl) {
@@ -9419,9 +9469,9 @@ function shortAddr(addr) {
 				const bidCurrentValue = parseFloat(String(marketplaceBidAmountInput?.value || '').replace(/[^0-9.]/g, ''));
 				const bidBase = Number.isFinite(bidCurrentValue) && bidCurrentValue > 0
 					? bidCurrentValue
-					: getBidMinimumSui();
-					const bidStep = 1;
-				const bidStepText = formatSuiInputValue(bidStep) || String(bidStep);
+					: 0.01;
+					const bidStep = 0.01;
+				const bidStepText = formatBidInputValue(bidStep) || String(bidStep);
 				if (marketplaceBidPriceUpBtn) {
 					const upLabel = 'Increase offer by ' + bidStepText + ' SUI';
 					marketplaceBidPriceUpBtn.setAttribute('aria-label', upLabel);
@@ -9545,17 +9595,17 @@ function shortAddr(addr) {
 			async function ensureMarketplaceFunding(tx, requiredMist) {
 				if (!connectedAddress) return;
 
-			const suiClient = getSuiClient();
-			const BASE_GAS_RESERVE = 50_000_000n;
-			const SWAP_OVERHEAD = 50_000_000n;
-			const balanceRes = await suiClient.getBalance({
-				owner: connectedAddress,
-				coinType: SUI_TYPE,
-			});
-			const availableMist = BigInt(balanceRes?.totalBalance || '0');
-			const basicShortfall = requiredMist + BASE_GAS_RESERVE - availableMist;
+				const suiClient = getSuiClient();
+				const BASE_GAS_RESERVE = 50_000_000n;
+				const SWAP_OVERHEAD = 50_000_000n;
+				const balanceRes = await suiClient.getBalance({
+					owner: connectedAddress,
+					coinType: SUI_TYPE,
+				});
+				const availableMist = BigInt(balanceRes?.totalBalance || '0');
+				const basicShortfall = requiredMist + BASE_GAS_RESERVE - availableMist;
 
-			if (basicShortfall <= 0n) return;
+				if (basicShortfall <= 0n) return;
 				if (!DEEPBOOK_PACKAGE) {
 					const neededSui = Number(requiredMist + BASE_GAS_RESERVE) / 1e9;
 					const haveSui = Number(availableMist) / 1e9;
@@ -9564,10 +9614,20 @@ function shortAddr(addr) {
 					);
 				}
 
-			const swapShortfall = requiredMist + BASE_GAS_RESERVE + SWAP_OVERHEAD - availableMist;
-			marketplaceStatus.textContent = 'Insufficient SUI. Routing via DeepBook...';
-			const swapInfo = await findBestSwapForSui(suiClient, swapShortfall, connectedAddress);
-				if (!swapInfo) {
+				const swapShortfall = requiredMist + BASE_GAS_RESERVE + SWAP_OVERHEAD - availableMist;
+				marketplaceStatus.textContent = 'Insufficient SUI. Routing via DeepBook...';
+				let swapPlan = await findSwapPlanForSui(suiClient, swapShortfall, connectedAddress);
+				if (swapPlan?.length && swapPlan.length > 1) {
+					const planOverhead = SWAP_OVERHEAD * BigInt(swapPlan.length);
+					const revisedShortfall = requiredMist + BASE_GAS_RESERVE + planOverhead - availableMist;
+					if (revisedShortfall > swapShortfall) {
+						const revisedPlan = await findSwapPlanForSui(suiClient, revisedShortfall, connectedAddress);
+						if (revisedPlan?.length) {
+							swapPlan = revisedPlan;
+						}
+					}
+				}
+				if (!swapPlan?.length) {
 					const totalPortfolio = await estimatePortfolioSui(suiClient, connectedAddress);
 					const maxBidSui = totalPortfolio > 0 ? (totalPortfolio * 0.95).toFixed(2) : '?';
 					throw new Error(
@@ -9575,11 +9635,16 @@ function shortAddr(addr) {
 					);
 				}
 
-				marketplaceStatus.textContent = 'Swapping ' + swapInfo.name + ' to SUI via DeepBook...';
+				for (let i = 0; i < swapPlan.length; i++) {
+					const swapInfo = swapPlan[i];
+					const label = swapPlan.length > 1
+						? ' (' + (i + 1) + '/' + swapPlan.length + ')'
+						: '';
+					marketplaceStatus.textContent = 'Swapping ' + swapInfo.name + ' to SUI via DeepBook' + label + '...';
 					prependSwapToTx(tx, swapInfo, connectedAddress);
 				}
-
-				function getBidMinimumSui() {
+			}
+			function getBidMinimumSui() {
 					const BID_FLOOR_SUI = 1;
 					const bestOfferSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
 					const bestOfferBaselineSui = bestOfferSui > 0 ? (bestOfferSui + 1) : BID_FLOOR_SUI;
@@ -9591,16 +9656,15 @@ function shortAddr(addr) {
 					if (!marketplaceBidAmountInput) return null;
 					const amountSui = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
 					if (!Number.isFinite(amountSui) || amountSui <= 0) return null;
-					return Math.max(getBidMinimumSui(), Math.ceil(amountSui));
+					return Math.max(0.01, toBidInputPrecision(amountSui));
 				}
 
 			function normalizeBidAmountInput() {
 				if (!marketplaceBidAmountInput) return null;
-				const minimumSui = getBidMinimumSui();
-				marketplaceBidAmountInput.min = String(minimumSui);
+				marketplaceBidAmountInput.min = '0.01';
 				const roundedAmount = getRoundedBidAmountSuiOrNull();
 				if (!roundedAmount) return null;
-				marketplaceBidAmountInput.value = String(roundedAmount);
+				marketplaceBidAmountInput.value = formatBidInputValue(roundedAmount);
 				return roundedAmount;
 			}
 
@@ -9610,18 +9674,21 @@ function shortAddr(addr) {
 				const minimumSui = getBidMinimumSui();
 					const currentInput = parseFloat(String(marketplaceBidAmountInput?.value || '').replace(/[^0-9.]/g, ''));
 					const bidSui = Number.isFinite(currentInput) && currentInput > 0
-						? Math.max(minimumSui, Math.ceil(currentInput))
-						: minimumSui;
+						? Math.max(0.01, toBidInputPrecision(currentInput))
+						: Math.max(0.01, toBidInputPrecision(minimumSui));
 				const tradeportFeeSui = bidSui * (tradeportBidFeeBps / 10000);
 				const estimatedCostSui = bidSui + tradeportFeeSui;
 				const usdEstimate = cachedSuiUsdPrice > 0 ? (estimatedCostSui * cachedSuiUsdPrice) : null;
-				if (usdEstimate && Number.isFinite(usdEstimate) && usdEstimate > 0) {
-					const formattedEstimate = formatMarketplaceUsdEstimate(usdEstimate);
-					marketplaceBidEstimate.innerHTML =
-						'<span class="marketplace-bid-usd" title="$' + formattedEstimate.full + '">≈ $' + formattedEstimate.compact + '</span>';
-				} else {
-					marketplaceBidEstimate.innerHTML = '<span class="marketplace-bid-usd">≈ --</span>';
-				}
+				const estimatePrefix = usdEstimate && Number.isFinite(usdEstimate) && usdEstimate > 0
+					? (() => {
+						const formattedEstimate = formatMarketplaceUsdEstimate(usdEstimate);
+						return '<span class="marketplace-bid-usd" title="$' + formattedEstimate.full + '">≈ $' + formattedEstimate.compact + '</span>';
+					})()
+					: '<span class="marketplace-bid-usd">≈ --</span>';
+				const offerDisplay = formatBidInputValue(bidSui) || '--';
+				marketplaceBidEstimate.innerHTML =
+					estimatePrefix
+					+ '<span class="marketplace-bid-cap"><span class="marketplace-bid-cap-label">Offer</span><span class="marketplace-bid-cap-value">' + offerDisplay + '</span>' + SUI_ICON_SVG + '</span>';
 				updateBidButtonLabel(bidSui);
 				updateMarketplaceStepperLabels();
 				queueMarketplaceLayoutSync();
@@ -9630,7 +9697,7 @@ function shortAddr(addr) {
 				function updateBidButtonLabel(bidSui) {
 					if (!marketplaceBidText) return;
 					if (!connectedAddress || marketplacePlaceBidBtn?.classList.contains('connect-wallet')) return;
-					const display = String(Math.max(1, Math.ceil(bidSui)));
+					const display = formatBidInputValue(bidSui) || '0.00';
 					marketplaceBidText.textContent = 'Offer ' + display + ' SUI for ' + NAME + '.sui';
 				}
 
@@ -9638,22 +9705,42 @@ function shortAddr(addr) {
 				if (!marketplaceBidAmountInput) return;
 				const minBidSui = getBidMinimumSui();
 				const bestOfferSui = currentBestBid?.price ? (Number(currentBestBid.price) / 1e9) : 0;
-					const regCostSui = Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0 ? profileRegistrationCostSui : 1;
-					const nextBidSui = Math.max(
-						minBidSui,
-						bestOfferSui > 0 ? (bestOfferSui + 1) : 1,
-						regCostSui,
-					);
-				const currentInput = parseFloat(marketplaceBidAmountInput.value);
-				const hasInput = Number.isFinite(currentInput) && currentInput > 0;
+				const regCostSui = Number.isFinite(profileRegistrationCostSui) && profileRegistrationCostSui > 0 ? profileRegistrationCostSui : 1;
+				const fallbackBidSui = Math.max(
+					minBidSui,
+					bestOfferSui > 0 ? (bestOfferSui + 1) : 1,
+					regCostSui,
+				);
 
-				marketplaceBidAmountInput.min = String(minBidSui);
+				marketplaceBidAmountInput.min = '0.01';
 
-					if (force || !bidInputTouched || !hasInput || currentInput < nextBidSui) {
-						marketplaceBidAmountInput.value = String(Math.ceil(nextBidSui));
+				const applyBidDefault = (rawValue) => {
+					const nextBidSui = Math.max(0.01, toBidInputPrecision(rawValue));
+					const currentInput = parseFloat(String(marketplaceBidAmountInput?.value || '').replace(/[^0-9.]/g, ''));
+					const hasInput = Number.isFinite(currentInput) && currentInput > 0;
+					if (force || !bidInputTouched || !hasInput) {
+						marketplaceBidAmountInput.value = formatBidInputValue(nextBidSui);
 						bidInputTouched = false;
 					}
-				updateBidEstimateDisplay();
+					updateBidEstimateDisplay();
+				};
+
+				if (connectedAddress) {
+					getCachedMaxBidSui()
+						.then((maxBidSui) => {
+							if (Number.isFinite(maxBidSui) && maxBidSui > 0) {
+								applyBidDefault(maxBidSui * 0.95);
+								return;
+							}
+							applyBidDefault(fallbackBidSui);
+						})
+						.catch(() => {
+							applyBidDefault(fallbackBidSui);
+						});
+					return;
+				}
+
+				applyBidDefault(fallbackBidSui);
 			}
 
 			function getBidderFallback(address) {
@@ -9846,11 +9933,10 @@ function shortAddr(addr) {
 						marketplaceActivityLinkTop.href = getTradeportItemUrl(tokenForLink);
 					}
 
-					const activityPayload = targetNft && targetNft.id
-						? { nftId: targetNft.id }
-						: preferredTokenId
-							? { tokenId: NFT_ID }
-							: null;
+					const activityTokenId = String(targetNft?.tokenId || targetNft?.token_id || NFT_ID || '');
+					const activityPayload = activityTokenId
+						? { tokenId: activityTokenId }
+						: null;
 
 					if (!activityPayload) {
 						marketplaceActivity.style.display = 'block';
@@ -10712,6 +10798,17 @@ function shortAddr(addr) {
 					marketplaceDelistBtn.classList.toggle('hidden', !canDelist);
 				}
 
+				if (marketplaceCancelBidBtn) {
+					const canCancelBid = Boolean(
+						connectedAddress
+						&& currentBestBid
+						&& currentBestBid.bidder
+						&& connectedAddress.toLowerCase() === currentBestBid.bidder.toLowerCase()
+						&& currentBestBid.id
+					);
+					marketplaceCancelBidBtn.classList.toggle('hidden', !canCancelBid);
+				}
+
 				if (marketplaceBidInputWrap) {
 					marketplaceBidInputWrap.style.display = isOwner ? 'none' : 'flex';
 				}
@@ -10927,6 +11024,46 @@ function shortAddr(addr) {
 					setBidInputDefaultFromBestOffer();
 				}
 
+				const offersListEl = document.getElementById('marketplace-offers-list');
+				const offersItemsEl = document.getElementById('marketplace-offers-items');
+				if (offersListEl && offersItemsEl) {
+					const allBids = Array.isArray(data.allBids) ? data.allBids : [];
+					offersItemsEl.innerHTML = '';
+					if (allBids.length > 0) {
+						for (const bid of allBids) {
+							const price = Number(bid.price || 0);
+							if (!price || price <= 0) continue;
+							const row = document.createElement('div');
+							row.className = 'marketplace-offer-row';
+							const bidderLink = document.createElement('a');
+							bidderLink.className = 'marketplace-offer-bidder';
+							const bidderAddr = bid.bidder || '';
+							bidderLink.href = bidderAddr ? '/' + bidderAddr : '#';
+							bidderLink.target = '_blank';
+							bidderLink.rel = 'noopener noreferrer';
+							bidderLink.textContent = getBidderFallback(bidderAddr);
+							bidderLink.setAttribute('data-address', bidderAddr);
+							if (bidderAddr) {
+								resolveBidderDisplay(bidderAddr).then(function(display) {
+									if (bidderLink.getAttribute('data-address') === bidderAddr) {
+										bidderLink.textContent = display;
+									}
+								});
+							}
+							const priceSpan = document.createElement('span');
+							priceSpan.className = 'marketplace-offer-price';
+							const priceSui = formatMarketplaceBidSuiDisplay(price / 1e9);
+							priceSpan.innerHTML = '<span class="price-amount">' + priceSui + '</span> <span class="price-sui">' + SUI_ICON_SVG + '</span>';
+							row.appendChild(bidderLink);
+							row.appendChild(priceSpan);
+							offersItemsEl.appendChild(row);
+						}
+						offersListEl.style.display = 'block';
+					} else {
+						offersListEl.style.display = 'none';
+					}
+				}
+
 				if (lastSoldPriceMist && lastSaleEventMs > 0) {
 					const soldInSui = formatMarketplaceBidSuiDisplay(lastSoldPriceMist / 1e9);
 					const soldAmountEl = marketplaceSoldPrice.querySelector('.price-amount');
@@ -11080,7 +11217,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -11229,7 +11366,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -11281,7 +11418,7 @@ function shortAddr(addr) {
 					tx.pure.id(currentListing.tokenId),
 				],
 			});
-			return SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+			return SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 		}
 
 		if (marketplaceDelistBtn) {
@@ -11337,6 +11474,53 @@ function shortAddr(addr) {
 					marketplaceDelistBtn.disabled = false;
 					updateMarketplaceButton();
 					if (renewalUiReady && typeof updateRenewalButton === 'function') updateRenewalButton();
+				}
+			});
+		}
+
+		if (marketplaceCancelBidBtn) {
+			marketplaceCancelBidBtn.addEventListener('click', async () => {
+				if (!canSign() || !currentBestBid || !currentBestBid.id) return;
+				if (!connectedAddress || connectedAddress.toLowerCase() !== currentBestBid.bidder?.toLowerCase()) return;
+				marketplaceCancelBidBtn.disabled = true;
+				marketplaceStatus.textContent = 'Cancelling offer...';
+				marketplaceStatus.className = 'marketplace-status';
+				try {
+					const res = await fetch('/api/marketplace/cancel-bid', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ bidId: currentBestBid.id, buyerAddress: connectedAddress }),
+					});
+					const data = await res.json();
+					if (!res.ok || data.error) throw new Error(data.error || 'API error');
+					marketplaceStatus.textContent = 'Waiting for wallet approval...';
+					const { Transaction: Tx } = await import('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle');
+					const tx = Tx.from(data.txBytes);
+					const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					const digest = result?.digest || result?.result?.digest || '';
+					if (digest) {
+						marketplaceStatus.innerHTML = 'Offer cancelled! SUI returned. ' + renderTxExplorerLinks(digest, true);
+						marketplaceStatus.className = 'marketplace-status success';
+					} else {
+						marketplaceStatus.textContent = 'Offer cancelled!';
+						marketplaceStatus.className = 'marketplace-status success';
+					}
+					currentBestBid = null;
+					if (marketplaceBidRow) marketplaceBidRow.style.display = 'none';
+					if (marketplaceBidder) setMarketplaceBidderLink('', '');
+					setBidInputDefaultFromBestOffer();
+					fetchMarketplaceData().catch(() => null);
+				} catch (e) {
+					const msg = e?.message || 'Transaction failed';
+					if (msg.includes('rejected') || msg.includes('cancelled')) {
+						marketplaceStatus.textContent = 'Transaction cancelled';
+					} else {
+						marketplaceStatus.textContent = 'Cancel failed: ' + msg.slice(0, 100);
+					}
+					marketplaceStatus.className = 'marketplace-status error';
+				} finally {
+					marketplaceCancelBidBtn.disabled = false;
+					updateMarketplaceButton();
 				}
 			});
 		}
@@ -11528,7 +11712,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -11562,7 +11746,15 @@ function shortAddr(addr) {
 
 				if (marketplaceBidAmountInput) {
 					marketplaceBidAmountInput.addEventListener('input', () => {
-						const sanitized = String(marketplaceBidAmountInput.value).replace(/[^0-9]/g, '');
+						const rawSanitized = String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, '');
+						const firstDotIndex = rawSanitized.indexOf('.');
+						let sanitized = rawSanitized;
+						if (firstDotIndex >= 0) {
+							const wholePart = rawSanitized.slice(0, firstDotIndex);
+							const fractionPart = rawSanitized.slice(firstDotIndex + 1).replace(/\./g, '').slice(0, 2);
+							sanitized = wholePart + '.' + fractionPart;
+						}
+						if (sanitized.startsWith('.')) sanitized = '0' + sanitized;
 						if (sanitized !== marketplaceBidAmountInput.value) {
 							marketplaceBidAmountInput.value = sanitized;
 						}
@@ -11621,9 +11813,9 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				if (marketplaceBidPriceUpBtn && marketplaceBidAmountInput) {
 					marketplaceBidPriceUpBtn.addEventListener('click', () => {
 						const currentValue = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
-						const minimumSui = getBidMinimumSui();
+						const minimumSui = 0.01;
 						const nextValue = applyBidPriceStep(currentValue, minimumSui, 'up');
-						marketplaceBidAmountInput.value = formatSuiInputValue(nextValue);
+						marketplaceBidAmountInput.value = formatBidInputValue(nextValue);
 						bidInputTouched = true;
 						updateBidEstimateDisplay();
 				});
@@ -11632,9 +11824,9 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 				if (marketplaceBidPriceDownBtn && marketplaceBidAmountInput) {
 					marketplaceBidPriceDownBtn.addEventListener('click', () => {
 						const currentValue = parseFloat(String(marketplaceBidAmountInput.value).replace(/[^0-9.]/g, ''));
-						const minimumSui = getBidMinimumSui();
+						const minimumSui = 0.01;
 						const nextValue = applyBidPriceStep(currentValue, minimumSui, 'down');
-						marketplaceBidAmountInput.value = formatSuiInputValue(nextValue);
+						marketplaceBidAmountInput.value = formatBidInputValue(nextValue);
 						bidInputTouched = true;
 						updateBidEstimateDisplay();
 				});
@@ -11827,7 +12019,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 						marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -12035,7 +12227,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					const tx = Transaction.from(data.txBytes);
 					auctionStatus.textContent = 'Confirm in wallet...';
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 
 					const digest = result.digest || '';
 					auctionStatus.innerHTML = 'Purchased! ' + renderTxExplorerLinks(digest, true);
@@ -12096,7 +12288,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					const tx = Transaction.from(data.txBytes);
 					auctionStatus.textContent = 'Confirm cancel in wallet...';
 
-					const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true }, forceSignBridge: shouldForceSignBridge() });
+					const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
 					const digest = result.digest || result.result?.digest || '';
 					auctionStatus.innerHTML = 'Wrap cancelled. ' + renderTxExplorerLinks(digest, true);
 					auctionStatus.className = 'auction-status success';

@@ -229,7 +229,7 @@ export async function buildSwapAndRegisterTx(
 	const feeRecipient = await resolveFeeRecipient(
 		client,
 		suinsClient,
-		env.SERVICE_FEE_NAME,
+		env.SKI_OPERATOR,
 		senderAddress,
 	)
 	tx.transferObjects([nsCoin], feeRecipient)
@@ -463,7 +463,7 @@ export async function buildMultiCoinRegisterTx(
 	const feeRecipient = await resolveFeeRecipient(
 		client,
 		suinsClient,
-		env.SERVICE_FEE_NAME,
+		env.SKI_OPERATOR,
 		senderAddress,
 	)
 	tx.transferObjects([nsCoin], feeRecipient)
@@ -655,7 +655,7 @@ export async function buildSwapAndRenewTx(
 	const feeRecipient = await resolveFeeRecipient(
 		client,
 		suinsClient,
-		env.DISCOUNT_RECIPIENT_NAME || 'extra.sui',
+		env.SKI_FACILITATOR || 'extra.sui',
 		senderAddress,
 	)
 	const senderLower = senderAddress.toLowerCase()
@@ -971,7 +971,7 @@ export async function buildMultiCoinRenewTx(
 	const feeRecipient = await resolveFeeRecipient(
 		client,
 		suinsClient,
-		env.DISCOUNT_RECIPIENT_NAME || 'extra.sui',
+		env.SKI_FACILITATOR || 'extra.sui',
 		senderAddress,
 	)
 	const senderLower = senderAddress.toLowerCase()

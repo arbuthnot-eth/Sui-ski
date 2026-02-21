@@ -17,10 +17,6 @@ export function generateWalletTxJs(): string {
       return btoa(parts.join(''));
     }
 
-    function __wkLooksLikeBase64(value) {
-      return !!__wkNormalizeBase64(value);
-    }
-
     function __wkNormalizeBase64(value) {
       if (typeof value !== 'string') return '';
       var cleaned = value.trim();
@@ -56,39 +52,6 @@ export function generateWalletTxJs(): string {
       if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(value)) {
         return new Uint8Array(value.buffer, value.byteOffset || 0, value.byteLength || 0);
       }
-      return null;
-    }
-
-    function __wkExtractBridgePayload(value, depth) {
-      if (!value || depth > 6) return null;
-      if (typeof value === 'string') return value.trim();
-      var asBytes = __wkTryNormalizeBytes(value);
-      if (asBytes) return asBytes;
-      if (typeof value !== 'object') return null;
-
-      var byteKeys = [
-        'txBytes',
-        'transactionBytes',
-        'bytes',
-        'rawBytes',
-        'rawTransaction',
-        'signedTransaction',
-        'serializedTransaction',
-        'transactionBlockBytes',
-        'bcsBytes',
-        'bcs',
-      ];
-      for (var bi = 0; bi < byteKeys.length; bi++) {
-        var byteCandidate = __wkExtractBridgePayload(value[byteKeys[bi]], depth + 1);
-        if (byteCandidate) return byteCandidate;
-      }
-
-      var txKeys = ['transaction', 'transactionBlock', 'tx', 'payload', 'data'];
-      for (var ti = 0; ti < txKeys.length; ti++) {
-        var txCandidate = __wkExtractBridgePayload(value[txKeys[ti]], depth + 1);
-        if (txCandidate) return txCandidate;
-      }
-
       return null;
     }
 
@@ -155,9 +118,35 @@ export function generateWalletTxJs(): string {
       var wallet = conn && conn.wallet;
       var resolved = preferredAccount || conn.account || null;
       var walletAccounts = [];
-      try {
-        walletAccounts = (wallet && Array.isArray(wallet.accounts)) ? wallet.accounts : [];
-      } catch (_e) {}
+      var seenWalletAccounts = {};
+
+      function __wkPushWalletAccount(account) {
+        if (!account || typeof account !== 'object') return;
+        var normalized = __wkNormalizeAccountAddress(account);
+        if (!normalized || seenWalletAccounts[normalized]) return;
+        seenWalletAccounts[normalized] = true;
+        walletAccounts.push(account);
+      }
+
+      function __wkCollectWalletAccounts(source) {
+        if (!source || (typeof source !== 'object' && typeof source !== 'function')) return;
+        var accounts = null;
+        try { accounts = source.accounts; } catch (_e) {}
+        if (typeof accounts === 'function') {
+          try { accounts = accounts.call(source); } catch (_e2) { accounts = null; }
+        }
+        if (Array.isArray(accounts)) {
+          for (var i = 0; i < accounts.length; i++) __wkPushWalletAccount(accounts[i]);
+        }
+        var singleAccount = null;
+        try { singleAccount = source.account; } catch (_e3) {}
+        __wkPushWalletAccount(singleAccount);
+      }
+
+      __wkCollectWalletAccounts(wallet);
+      __wkCollectWalletAccounts(wallet && wallet._raw);
+      __wkCollectWalletAccounts(wallet && wallet.sui);
+
       var targetAddress = __wkNormalizeAccountAddress(resolved);
       if (!targetAddress) return null;
       if (!walletAccounts.length) return resolved;
@@ -171,34 +160,7 @@ export function generateWalletTxJs(): string {
 
     function __wkEnsureAccountForSign(conn, account, chain) {
       if (account && typeof account === 'object') {
-        var normalizedAddress = __wkNormalizeAccountAddress(account);
-        var nextAccount = account;
-        if (normalizedAddress && nextAccount.address !== normalizedAddress) {
-          try {
-            nextAccount = Object.assign({}, nextAccount, { address: normalizedAddress });
-          } catch (_e) {
-            nextAccount.address = normalizedAddress;
-          }
-        }
-        if (!Array.isArray(nextAccount.chains) || nextAccount.chains.length === 0) {
-          var accountChains = [];
-          if (conn && conn.wallet && Array.isArray(conn.wallet.chains)) {
-            for (var i = 0; i < conn.wallet.chains.length; i++) {
-              var walletChain = conn.wallet.chains[i];
-              if (typeof walletChain === 'string' && walletChain.indexOf('sui:') === 0) {
-                accountChains.push(walletChain);
-              }
-            }
-          }
-          if (!accountChains.length && chain) accountChains = [chain];
-          if (!accountChains.length) accountChains = [__wkChain];
-          try {
-            nextAccount = Object.assign({}, nextAccount, { chains: accountChains });
-          } catch (_e) {
-            nextAccount.chains = accountChains;
-          }
-        }
-        return nextAccount;
+        return account;
       }
 
       var fallbackAddress = __wkNormalizeAccountAddress(account);
@@ -275,92 +237,6 @@ export function generateWalletTxJs(): string {
       return rpcJson.result;
     }
 
-    var __skiRequestCounter = 0;
-    var __skiSignTimeout = 120000;
-    var __skiHandoffResult = null;
-
-    function __skiConsumeHandoffQuery() {
-      try {
-        var url = new URL(window.location.href);
-        if (url.searchParams.get('ski_handoff') !== '1') return;
-        var status = String(url.searchParams.get('ski_handoff_status') || '').toLowerCase();
-        var error = String(url.searchParams.get('ski_handoff_error') || '');
-        __skiHandoffResult = {
-          status: status || 'unknown',
-          error: error,
-          at: Date.now(),
-        };
-        try {
-          sessionStorage.setItem('sui_ski_handoff_result', JSON.stringify(__skiHandoffResult));
-        } catch (_eStore) {}
-        url.searchParams.delete('ski_handoff');
-        url.searchParams.delete('ski_handoff_status');
-        url.searchParams.delete('ski_handoff_error');
-        history.replaceState(null, '', url.toString());
-      } catch (_e) {}
-    }
-
-    function __skiReadRecentHandoffResult() {
-      if (__skiHandoffResult) return __skiHandoffResult;
-      try {
-        var raw = sessionStorage.getItem('sui_ski_handoff_result');
-        if (!raw) return null;
-        var parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object') return null;
-        if (!parsed.at || !Number.isFinite(Number(parsed.at))) return null;
-        __skiHandoffResult = {
-          status: String(parsed.status || 'unknown'),
-          error: String(parsed.error || ''),
-          at: Number(parsed.at),
-        };
-        return __skiHandoffResult;
-      } catch (_e) {
-        return null;
-      }
-    }
-
-    function __skiClearHandoffResult() {
-      __skiHandoffResult = null;
-      try { sessionStorage.removeItem('sui_ski_handoff_result'); } catch (_e) {}
-    }
-
-    function __skiBuildHandoffReturnUrl() {
-      var next = new URL(window.location.href);
-      next.searchParams.delete('ski_handoff');
-      next.searchParams.delete('ski_handoff_status');
-      next.searchParams.delete('ski_handoff_error');
-      return next.toString();
-    }
-
-    function __skiStartTopFrameHandoff(preferredWalletName, expectedSender) {
-      var target = new URL('https://sui.ski/sign');
-      target.searchParams.set('bridge', 'handoff');
-      target.searchParams.set('returnUrl', __skiBuildHandoffReturnUrl());
-      if (preferredWalletName && String(preferredWalletName).trim()) {
-        target.searchParams.set('walletName', String(preferredWalletName).trim());
-      }
-      var normalizedSender = __wkNormalizeAccountAddress(expectedSender || '');
-      if (normalizedSender) {
-        target.searchParams.set('sender', normalizedSender);
-      }
-      window.location.assign(target.toString());
-      return true;
-    }
-
-    function __skiMaybeStartTopFrameHandoff(preferredWalletName, err, expectedSender) {
-      if (!__skiIsSubdomainHost()) return false;
-      if (window.top !== window.self) return false;
-      if (!(__skiRequiresTopFrameSigning(err) || __skiIsBridgeWalletAvailabilityError(err))) return false;
-      var recent = __skiReadRecentHandoffResult();
-      if (recent && recent.status !== 'ok' && (Date.now() - recent.at) < 15000) {
-        return false;
-      }
-      __skiClearHandoffResult();
-      return __skiStartTopFrameHandoff(preferredWalletName, expectedSender);
-    }
-
-    __skiConsumeHandoffQuery();
-
     function __skiResolvePreferredWalletName() {
       var conn = SuiWalletKit.$connection.value || {};
       if (conn.wallet && conn.wallet.name) return String(conn.wallet.name);
@@ -376,522 +252,7 @@ export function generateWalletTxJs(): string {
       return '';
     }
 
-    function __skiResolvePreferredWalletNameForOperation(options) {
-      if (options && options.walletName) {
-        var explicitWalletName = String(options.walletName).trim();
-        if (explicitWalletName) return explicitWalletName;
-      }
-      if (options && options.preferredWalletName) {
-        var preferredWalletName = String(options.preferredWalletName).trim();
-        if (preferredWalletName) return preferredWalletName;
-      }
-      return __skiResolvePreferredWalletName();
-    }
 
-    function __skiCollectWalletHints() {
-      var wallets = [];
-      try {
-        if (typeof SuiWalletKit.getSuiWallets === 'function') {
-          wallets = SuiWalletKit.getSuiWallets();
-        }
-      } catch (_e) {}
-      if ((!Array.isArray(wallets) || wallets.length === 0) && SuiWalletKit.$wallets) {
-        wallets = Array.isArray(SuiWalletKit.$wallets.value) ? SuiWalletKit.$wallets.value : [];
-      }
-      var out = [];
-      var byKey = {};
-      for (var i = 0; i < wallets.length; i++) {
-        var wallet = wallets[i];
-        if (!wallet || !wallet.name) continue;
-        var name = String(wallet.name);
-        var key = __skiWalletNameKey(name);
-        if (!key) key = 'wallet-' + i;
-        var icon = wallet.icon ? String(wallet.icon) : '';
-        var existing = byKey[key];
-        if (!existing) {
-          existing = {
-            name: name,
-            icon: icon,
-            __isPasskey: !!wallet.__isPasskey,
-          };
-          byKey[key] = existing;
-          out.push(existing);
-          continue;
-        }
-        if (!existing.icon && icon) existing.icon = icon;
-        if (existing.__isPasskey && !wallet.__isPasskey) existing.__isPasskey = false;
-      }
-      return out;
-    }
-
-    var __skiHiddenStyle = 'position:fixed;left:-10000px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;z-index:-1;background:transparent';
-    var __skiOverlayStyle = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:999999;border:none;background:transparent';
-
-    function __skiPostAndWait(frame, txB64, execOptions, expectedSender, preferredWalletName) {
-      var requestId = 'ski-' + (++__skiRequestCounter) + '-' + Date.now();
-      var walletHints = __skiCollectWalletHints();
-      frame.style.cssText = __skiOverlayStyle;
-      return new Promise(function(resolve, reject) {
-        var done = false;
-        function finish() {
-          frame.style.cssText = __skiHiddenStyle;
-        }
-        var timer = setTimeout(function() {
-          if (done) return;
-          done = true;
-          finish();
-          reject(new Error('Signing timed out after ' + (__skiSignTimeout / 1000) + 's'));
-        }, __skiSignTimeout);
-
-        function handler(e) {
-          if (e.origin !== 'https://sui.ski') return;
-          if (!e.data || e.data.requestId !== requestId) return;
-          if (e.data.type === 'ski:signed' || e.data.type === 'ski:error') {
-            window.removeEventListener('message', handler);
-            clearTimeout(timer);
-            if (done) return;
-            done = true;
-            finish();
-            if (e.data.type === 'ski:error') {
-              reject(new Error(e.data.error || 'Signing failed'));
-            } else {
-              resolve(e.data);
-            }
-          }
-        }
-
-        window.addEventListener('message', handler);
-        frame.contentWindow.postMessage({
-          type: 'ski:sign',
-          txBytes: txB64,
-          requestId: requestId,
-          options: execOptions || {},
-          sender: expectedSender || '',
-          walletName: preferredWalletName || '',
-          walletHints: walletHints,
-        }, 'https://sui.ski');
-      });
-    }
-
-    function __skiPostMessageAndWait(frame, messageB64, expectedSender, preferredWalletName) {
-      var requestId = 'ski-msg-' + (++__skiRequestCounter) + '-' + Date.now();
-      var walletHints = __skiCollectWalletHints();
-      frame.style.cssText = __skiOverlayStyle;
-      return new Promise(function(resolve, reject) {
-        var done = false;
-        function finish() {
-          frame.style.cssText = __skiHiddenStyle;
-        }
-        var timer = setTimeout(function() {
-          if (done) return;
-          done = true;
-          finish();
-          reject(new Error('Signing timed out after ' + (__skiSignTimeout / 1000) + 's'));
-        }, __skiSignTimeout);
-
-        function handler(e) {
-          if (e.origin !== 'https://sui.ski') return;
-          if (!e.data || e.data.requestId !== requestId) return;
-          if (e.data.type === 'ski:signed-message' || e.data.type === 'ski:error') {
-            window.removeEventListener('message', handler);
-            clearTimeout(timer);
-            if (done) return;
-            done = true;
-            finish();
-            if (e.data.type === 'ski:error') {
-              reject(new Error(e.data.error || 'Message signing failed'));
-            } else {
-              resolve(e.data);
-            }
-          }
-        }
-
-        window.addEventListener('message', handler);
-        frame.contentWindow.postMessage({
-          type: 'ski:sign-message',
-          message: messageB64,
-          requestId: requestId,
-          sender: expectedSender || '',
-          walletName: preferredWalletName || '',
-          walletHints: walletHints,
-        }, 'https://sui.ski');
-      });
-    }
-
-    function __skiConnectBridgeAndWait(frame, preferredWalletName, expectedSender, forceInteractive) {
-      var requestId = 'ski-connect-' + (++__skiRequestCounter) + '-' + Date.now();
-      var walletHints = __skiCollectWalletHints();
-      frame.style.cssText = __skiOverlayStyle;
-      return new Promise(function(resolve, reject) {
-        var done = false;
-        function finish() {
-          frame.style.cssText = __skiHiddenStyle;
-        }
-        var timer = setTimeout(function() {
-          if (done) return;
-          done = true;
-          finish();
-          reject(new Error('Bridge connection timed out'));
-        }, 60000);
-
-        function handler(e) {
-          if (e.origin !== 'https://sui.ski') return;
-          if (!e.data || e.data.requestId !== requestId) return;
-          if (e.data.type === 'ski:connected') {
-            window.removeEventListener('message', handler);
-            clearTimeout(timer);
-            if (done) return;
-            done = true;
-            finish();
-            resolve(e.data);
-            return;
-          }
-          if (e.data.type === 'ski:connect-error' || e.data.type === 'ski:error') {
-            window.removeEventListener('message', handler);
-            clearTimeout(timer);
-            if (done) return;
-            done = true;
-            finish();
-            reject(new Error(e.data.error || 'Bridge connection failed'));
-          }
-        }
-
-        window.addEventListener('message', handler);
-        frame.contentWindow.postMessage({
-          type: 'ski:connect',
-          requestId: requestId,
-          walletName: preferredWalletName || '',
-          sender: expectedSender || '',
-          walletHints: walletHints,
-          forceInteractive: !!forceInteractive,
-        }, 'https://sui.ski');
-      });
-    }
-
-    function __skiOpenBridgeModalAndWait(frame, preferredWalletName) {
-      var requestId = 'ski-modal-' + (++__skiRequestCounter) + '-' + Date.now();
-      frame.style.cssText = __skiOverlayStyle;
-      return new Promise(function(resolve, reject) {
-        var done = false;
-        function finish() {
-          frame.style.cssText = __skiHiddenStyle;
-        }
-        var timer = setTimeout(function() {
-          if (done) return;
-          done = true;
-          finish();
-          reject(new Error('Bridge wallet selection timed out'));
-        }, 180000);
-
-        function handler(e) {
-          if (e.origin !== 'https://sui.ski') return;
-          if (!e.data || e.data.requestId !== requestId) return;
-          if (e.data.type === 'ski:connected') {
-            window.removeEventListener('message', handler);
-            clearTimeout(timer);
-            if (done) return;
-            done = true;
-            finish();
-            resolve(e.data);
-            return;
-          }
-          if (e.data.type === 'ski:modal-closed' || e.data.type === 'ski:error') {
-            window.removeEventListener('message', handler);
-            clearTimeout(timer);
-            if (done) return;
-            done = true;
-            finish();
-            reject(new Error(e.data.error || 'Wallet selection was cancelled'));
-          }
-        }
-
-        window.addEventListener('message', handler);
-        frame.contentWindow.postMessage({
-          type: 'ski:open-modal',
-          requestId: requestId,
-          walletName: preferredWalletName || '',
-        }, 'https://sui.ski');
-      });
-    }
-
-    function __skiHasBridgeSessionHints(preferredWalletName, expectedSender) {
-      var expected = __wkNormalizeAccountAddress(expectedSender || '');
-      if (expected) return true;
-      if (preferredWalletName && String(preferredWalletName).trim()) return true;
-      var conn = SuiWalletKit.$connection.value || {};
-      if (conn && (conn.address || conn.primaryName || conn.status === 'session')) return true;
-      try {
-        var session = typeof getWalletSession === 'function' ? getWalletSession() : null;
-        if (session && (session.address || session.walletName)) return true;
-      } catch (_e) {}
-      try {
-        if (localStorage.getItem('sui_ski_last_wallet')) return true;
-      } catch (_e2) {}
-      return false;
-    }
-
-    async function __skiEnsureBridgeConnectionViaIframe(preferredWalletName, expectedSender) {
-      var frame = await __skiEnsureBridge();
-      try {
-        await __skiConnectBridgeAndWait(frame, preferredWalletName, expectedSender, false);
-        return true;
-      } catch (_connectErr) {
-        if (__skiHasBridgeSessionHints(preferredWalletName, expectedSender)) throw _connectErr;
-        try {
-          await __skiConnectBridgeAndWait(frame, preferredWalletName, expectedSender, true);
-          return true;
-        } catch (_interactiveErr) {
-          await __skiOpenBridgeModalAndWait(frame, preferredWalletName);
-          return true;
-        }
-      }
-    }
-
-    function __skiResolveBridgeExpectedSender(options) {
-      var sessionConn = SuiWalletKit.$connection.value || {};
-      var sessionAccount = (options && options.account) || sessionConn.account;
-      var forcedExpectedSender = __wkNormalizeAccountAddress(
-        options && options.expectedSender ? options.expectedSender : '',
-      );
-      return forcedExpectedSender || __wkResolveConnectionAddress(sessionConn, sessionAccount);
-    }
-
-    async function __skiSignViaBridge(txInput, execOptions, options, preferredWalletName) {
-      var frame = await __skiEnsureBridge();
-      var b64 = await __skiSerializeTx(txInput);
-      var expectedSender = __skiResolveBridgeExpectedSender(options);
-      return await __skiPostAndWait(
-        frame,
-        b64,
-        execOptions || {},
-        expectedSender,
-        preferredWalletName,
-      );
-    }
-
-    async function __skiSignMessageViaBridge(message, options, preferredWalletName) {
-      var frame = await __skiEnsureBridge();
-      var expectedSender = __skiResolveBridgeExpectedSender(options);
-      var bytes = __wkNormalizeMessageBytes(message);
-      if (!bytes.length) throw new Error('Missing message bytes for bridge signing');
-      var messageB64 = __wkBytesToBase64(bytes);
-      return await __skiPostMessageAndWait(frame, messageB64, expectedSender, preferredWalletName);
-    }
-
-    var __skiBridgePopup = null;
-
-    function __skiOpenBridgePopup() {
-      if (__skiBridgePopup && !__skiBridgePopup.closed) {
-        try { __skiBridgePopup.focus(); } catch (_e) {}
-      } else {
-        __skiBridgePopup = window.open(
-          'https://sui.ski/sign?bridge=popup',
-          'sui_ski_sign_bridge_popup',
-          'popup=yes,width=460,height=760,resizable=yes,scrollbars=yes',
-        );
-      }
-      if (!__skiBridgePopup || __skiBridgePopup.closed) {
-        return Promise.reject(new Error('Popup blocked. Allow popups for this site and retry.'));
-      }
-      var popup = __skiBridgePopup;
-      return new Promise(function(resolve, reject) {
-        var done = false;
-        function cleanup() {
-          window.removeEventListener('message', handler);
-        }
-        var timeout = setTimeout(function() {
-          if (done) return;
-          done = true;
-          cleanup();
-          reject(new Error('Sign bridge popup timed out'));
-        }, 15000);
-        function handler(e) {
-          if (e.origin !== 'https://sui.ski') return;
-          if (e.source !== popup) return;
-          if (!e.data || e.data.type !== 'ski:ready') return;
-          clearTimeout(timeout);
-          if (done) return;
-          done = true;
-          cleanup();
-          resolve(popup);
-        }
-        window.addEventListener('message', handler);
-        var pingAttempts = 0;
-        var pingTimer = setInterval(function() {
-          if (done) {
-            clearInterval(pingTimer);
-            return;
-          }
-          pingAttempts++;
-          if (pingAttempts > 20) {
-            clearInterval(pingTimer);
-            return;
-          }
-          try {
-            popup.postMessage({ type: 'ski:ping' }, 'https://sui.ski');
-          } catch (_e) {}
-        }, 300);
-        try {
-          popup.postMessage({ type: 'ski:ping' }, 'https://sui.ski');
-        } catch (_e) {}
-      });
-    }
-
-    function __skiPostViaPopupAndWait(payload, successType) {
-      var requestId = payload && payload.requestId ? payload.requestId : ('popup-' + (++__skiRequestCounter) + '-' + Date.now());
-      var message = Object.assign({}, payload || {}, { requestId: requestId });
-      return __skiOpenBridgePopup().then(function(popup) {
-        return new Promise(function(resolve, reject) {
-          var done = false;
-          function cleanup() {
-            window.removeEventListener('message', handler);
-          }
-          var timer = setTimeout(function() {
-            if (done) return;
-            done = true;
-            cleanup();
-            reject(new Error('Popup bridge request timed out'));
-          }, __skiSignTimeout);
-          function handler(e) {
-            if (e.origin !== 'https://sui.ski') return;
-            if (e.source !== popup) return;
-            if (!e.data || e.data.requestId !== requestId) return;
-            if (e.data.type === successType) {
-              clearTimeout(timer);
-              if (done) return;
-              done = true;
-              cleanup();
-              resolve(e.data);
-              return;
-            }
-            if (e.data.type === 'ski:error') {
-              clearTimeout(timer);
-              if (done) return;
-              done = true;
-              cleanup();
-              reject(new Error(e.data.error || 'Popup signing failed'));
-            }
-          }
-          window.addEventListener('message', handler);
-          popup.postMessage(message, 'https://sui.ski');
-        });
-      });
-    }
-
-    function __skiPostAndWaitViaPopup(txB64, execOptions, expectedSender, preferredWalletName) {
-      return __skiPostViaPopupAndWait({
-        type: 'ski:sign',
-        txBytes: txB64,
-        options: execOptions || {},
-        sender: expectedSender || '',
-        walletName: preferredWalletName || '',
-        walletHints: __skiCollectWalletHints(),
-      }, 'ski:signed');
-    }
-
-    function __skiPostMessageAndWaitViaPopup(messageB64, expectedSender, preferredWalletName) {
-      return __skiPostViaPopupAndWait({
-        type: 'ski:sign-message',
-        message: messageB64,
-        sender: expectedSender || '',
-        walletName: preferredWalletName || '',
-        walletHints: __skiCollectWalletHints(),
-      }, 'ski:signed-message');
-    }
-
-    function __wkNormalizeMessageBytes(message) {
-      if (!message) return new Uint8Array(0);
-      if (message instanceof Uint8Array) return message;
-      if (message instanceof ArrayBuffer) return new Uint8Array(message);
-      if (Array.isArray(message)) return Uint8Array.from(message);
-      if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(message)) {
-        return new Uint8Array(message.buffer, message.byteOffset || 0, message.byteLength || 0);
-      }
-      if (typeof message === 'string') {
-        try {
-          var decoded = atob(message);
-          var out = new Uint8Array(decoded.length);
-          for (var i = 0; i < decoded.length; i++) out[i] = decoded.charCodeAt(i);
-          return out;
-        } catch (_e) {
-          try {
-            return new TextEncoder().encode(message);
-          } catch (_e2) {
-            return new Uint8Array(0);
-          }
-        }
-      }
-      return new Uint8Array(0);
-    }
-
-    async function __skiSerializeTx(txInput) {
-      var extracted = __wkExtractBridgePayload(txInput, 0);
-      var candidateTx = (
-        extracted && typeof extracted === 'object' && !__wkTryNormalizeBytes(extracted)
-      ) ? extracted : txInput;
-      if (typeof extracted === 'string') {
-        var extractedB64 = __wkNormalizeBase64(extracted);
-        if (extractedB64) return extractedB64;
-        var hexBytes = __wkTryHexToBytes(extracted);
-        if (hexBytes) return __wkBytesToBase64(hexBytes);
-        if (extracted[0] === '{' || extracted[0] === '[') return extracted;
-      }
-      var directBytes = __wkTryNormalizeBytes(extracted || txInput);
-      if (directBytes) return __wkBytesToBase64(directBytes);
-      if (candidateTx && typeof candidateTx.serialize === 'function') {
-        try {
-          var serialized = await candidateTx.serialize();
-          var serializedBytes = __wkTryNormalizeBytes(serialized);
-          if (serializedBytes) return __wkBytesToBase64(serializedBytes);
-          if (typeof serialized === 'string') {
-            if (__wkLooksLikeBase64(serialized)) return serialized.trim();
-            var serializedHex = __wkTryHexToBytes(serialized);
-            if (serializedHex) return __wkBytesToBase64(serializedHex);
-            return serialized;
-          }
-        } catch (_serializeErr) {}
-      }
-      if (candidateTx && typeof candidateTx.build === 'function') {
-        try {
-          var builtWithoutClient = await candidateTx.build();
-          var builtNoClientBytes = __wkTryNormalizeBytes(builtWithoutClient);
-          if (builtNoClientBytes) return __wkBytesToBase64(builtNoClientBytes);
-          if (typeof builtWithoutClient === 'string') {
-            var noClientB64 = __wkNormalizeBase64(builtWithoutClient);
-            if (noClientB64) return noClientB64;
-          }
-        } catch (_buildNoClientErr) {}
-        var RpcClient = window.SuiJsonRpcClient || window.SuiClient;
-        if (RpcClient && typeof RpcClient === 'function') {
-          try {
-            var rpcClient = new RpcClient({ url: __wkGetRpcUrl() });
-            var builtBytes = await candidateTx.build({ client: rpcClient });
-            var builtWithClientBytes = __wkTryNormalizeBytes(builtBytes);
-            if (builtWithClientBytes) return __wkBytesToBase64(builtWithClientBytes);
-            if (typeof builtBytes === 'string') {
-              var builtWithClientB64 = __wkNormalizeBase64(builtBytes);
-              if (builtWithClientB64) return builtWithClientB64;
-            }
-          } catch (_buildErr) {}
-        }
-      }
-      if (candidateTx && typeof candidateTx.toJSON === 'function') {
-        try {
-          var candidateJson = JSON.stringify(await candidateTx.toJSON());
-          if (candidateJson && candidateJson !== '{}' && candidateJson !== '[]') return candidateJson;
-        } catch (_jsonErr) {}
-      }
-      if (txInput && typeof txInput === 'object') {
-        try {
-          var rawJson = JSON.stringify(txInput);
-          if (rawJson && rawJson !== '{}' && rawJson !== '[]') return rawJson;
-        } catch (_stringifyErr) {}
-      }
-      var detail = txInput && typeof txInput === 'object'
-        ? ('keys=' + Object.keys(txInput).slice(0, 6).join(','))
-        : ('type=' + typeof txInput);
-      throw new Error('Cannot serialize transaction for sign bridge. ' + detail);
-    }
 
     async function __skiSerializeForWallet(txInput) {
       if (typeof txInput === 'string') return txInput;
@@ -948,6 +309,7 @@ export function generateWalletTxJs(): string {
     }
 
     function __skiShouldBypassBridgeForSlush(options) {
+      if (__skiIsSubdomainHost()) return false;
       var preferredWalletName = '';
       if (options && options.walletName) {
         preferredWalletName = String(options.walletName);
@@ -971,33 +333,6 @@ export function generateWalletTxJs(): string {
       }
       if (!__skiIsSlushWalletName(preferredWalletName)) return false;
       return __skiCanDirectSlush();
-    }
-
-	    function __skiShouldUseBridge(options) {
-      if (__skiShouldBypassBridgeForSlush(options)) return false;
-	      if (__skiIsSubdomainHost()) {
-	        if ((!SuiWalletKit.__skiSignFrame || !SuiWalletKit.__skiSignReady) && typeof SuiWalletKit.__initSignBridge === 'function') {
-	          try { SuiWalletKit.__initSignBridge(); } catch (_e) {}
-	        }
-	        return true;
-	      }
-	      if (options && options.forceSignBridge) {
-	        if ((!SuiWalletKit.__skiSignFrame || !SuiWalletKit.__skiSignReady) && typeof SuiWalletKit.__initSignBridge === 'function') {
-	          try { SuiWalletKit.__initSignBridge(); } catch (_e) {}
-	        }
-	        return !!(SuiWalletKit.__skiSignFrame && SuiWalletKit.__skiSignReady);
-	      }
-	      if (!SuiWalletKit.__skiSignFrame || !SuiWalletKit.__skiSignReady) return false;
-	      var conn = SuiWalletKit.$connection.value;
-	      return !!(conn && conn.status === 'session' && !conn.wallet);
-	    }
-
-    async function __skiEnsureBridge() {
-      var ready = SuiWalletKit.__skiSignReady;
-      if (!ready) throw new Error('Sign bridge not initialized');
-      var ok = await ready;
-      if (!ok) throw new Error('Sign bridge failed to connect wallet. Try refreshing.');
-      return SuiWalletKit.__skiSignFrame;
     }
 
     function __skiWalletNameKey(name) {
@@ -1101,18 +436,6 @@ export function generateWalletTxJs(): string {
       return __wkRejectionPatterns.test(msg);
     }
 
-    function __skiIsBridgeWalletAvailabilityError(err) {
-      if (!err) return false;
-      var msg = String(err && err.message ? err.message : err).toLowerCase();
-      if (!msg) return false;
-      return (
-        msg.indexOf('selected wallet not available') !== -1
-        || msg.indexOf('preferred wallet not available') !== -1
-        || msg.indexOf('wallet not connected in sign bridge') !== -1
-        || msg.indexOf('wallet requires reconnect in the bridge iframe') !== -1
-        || msg.indexOf('connected wallet account does not match') !== -1
-      );
-    }
 
     function __skiRequiresTopFrameSigning(err) {
       if (!err) return false;
@@ -1125,6 +448,59 @@ export function generateWalletTxJs(): string {
         || (msg.indexOf('popup') !== -1 && msg.indexOf('blocked') !== -1)
         || (msg.indexOf('new window') !== -1 && msg.indexOf('failed') !== -1)
       );
+    }
+
+    function __skiCanUseSessionSignBridge(conn) {
+      return !!(conn && !conn.wallet && conn.address && conn.status === 'session' && __skiIsSubdomainHost());
+    }
+
+    function __skiCollectBridgeWalletHints(preferredWalletName) {
+      var out = [];
+      var seen = {};
+      function pushHint(name, icon, isPasskey) {
+        var normalizedName = String(name || '').trim();
+        if (!normalizedName) return;
+        var key = __skiWalletNameKey(normalizedName) || normalizedName.toLowerCase();
+        if (seen[key]) return;
+        seen[key] = true;
+        out.push({
+          name: normalizedName,
+          icon: String(icon || ''),
+          __isPasskey: !!isPasskey,
+        });
+      }
+      if (preferredWalletName) {
+        pushHint(preferredWalletName, '', false);
+      }
+      var wallets = [];
+      try {
+        wallets = SuiWalletKit.$wallets && Array.isArray(SuiWalletKit.$wallets.value)
+          ? SuiWalletKit.$wallets.value
+          : [];
+      } catch (_e) {
+        wallets = [];
+      }
+      for (var i = 0; i < wallets.length; i++) {
+        var wallet = wallets[i] || {};
+        pushHint(wallet.name, wallet.icon, wallet.__isPasskey);
+      }
+      return out;
+    }
+
+    async function __skiEnsureBridgeFrame() {
+      var bridge = SuiWalletKit.__skiSignFrame;
+      var bridgeReady = SuiWalletKit.__skiSignReady;
+      if (!bridge && typeof SuiWalletKit.__initSignBridge === 'function') {
+        SuiWalletKit.__initSignBridge();
+        bridge = SuiWalletKit.__skiSignFrame;
+        bridgeReady = SuiWalletKit.__skiSignReady;
+      }
+      if (bridgeReady) {
+        var ready = await bridgeReady;
+        if (!ready) return null;
+      }
+      if (!bridge || !bridge.contentWindow) return null;
+      return bridge;
     }
 
     async function __skiWalletSignAndExecute(txInput, conn, options) {
@@ -1793,71 +1169,187 @@ export function generateWalletTxJs(): string {
       throw new Error('No compatible signing method found. Install a Sui wallet extension.');
     }
 
-	    SuiWalletKit.signAndExecute = async function signAndExecute(txInput, options) {
-	      var onSubdomain = __skiIsSubdomainHost();
-	      var bypassBridgeForSlush = __skiShouldBypassBridgeForSlush(options);
-	      var mustUseBridge = !bypassBridgeForSlush && !!(onSubdomain || (options && options.forceSignBridge));
-        var preferredWalletName = __skiResolvePreferredWalletNameForOperation(options);
-
-	      if (__skiShouldUseBridge(options)) {
-	        var bridgeError = null;
-          var txOptions = (options && options.txOptions) || {};
-	        try {
-	          return await __skiSignViaBridge(txInput, txOptions, options, preferredWalletName);
-	        } catch (err) {
-	          bridgeError = err;
-	          console.warn('Sign bridge failed:', err && err.message ? err.message : err);
-	        }
-
-	        if (mustUseBridge || __wkIsUserRejection(bridgeError)) {
-            if (
-              mustUseBridge
-              && !__wkIsUserRejection(bridgeError)
-              && (
-                __skiRequiresTopFrameSigning(bridgeError)
-                || __skiIsBridgeWalletAvailabilityError(bridgeError)
-              )
-            ) {
-              try {
-                await __skiEnsureBridgeConnectionViaIframe(
-                  preferredWalletName,
-                  __skiResolveBridgeExpectedSender(options),
-                );
-                return await __skiSignViaBridge(txInput, txOptions, options, preferredWalletName);
-              } catch (reconnectErr) {
-                bridgeError = reconnectErr || bridgeError;
+    async function __skiSignViaBridge(txInput, conn, options) {
+      var bridgeHiddenCss = 'position:fixed;left:-10000px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;z-index:-1;background:transparent';
+      var bridgeVisibleCss = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:13001;border:none;background:transparent;';
+      var txRaw = await __skiSerializeForWallet(txInput);
+      var txBytes = txRaw;
+      if (txRaw && typeof txRaw.serialize === 'function') {
+        try {
+          txBytes = await txRaw.serialize();
+        } catch (_e) {
+          if (txRaw && typeof txRaw.build === 'function') {
+            try {
+              var RpcClient = window.SuiJsonRpcClient || window.SuiClient;
+              if (RpcClient) {
+                var rpcClient = new RpcClient({ url: __wkGetRpcUrl() });
+                txBytes = await txRaw.build({ client: rpcClient });
               }
-            }
-            if (
-              mustUseBridge
-              && __skiMaybeStartTopFrameHandoff(
-                preferredWalletName,
-                bridgeError,
-                __skiResolveBridgeExpectedSender(options),
-              )
-            ) {
-              throw new Error('Redirecting to top-frame wallet authorization...');
-            }
-	          throw bridgeError || new Error('Sign bridge failed. Reconnect wallet from sui.ski and retry.');
-	        }
+            } catch (_e2) {}
+          }
+        }
+      }
+      var txB64 = txBytes;
+      if (txBytes instanceof Uint8Array || txBytes instanceof ArrayBuffer || Array.isArray(txBytes)) {
+        txB64 = __wkBytesToBase64(txBytes);
+      }
+      var sender = __wkNormalizeAccountAddress(options && options.expectedSender);
+      if (!sender) sender = __wkResolveConnectionAddress(conn, options && options.account);
+      var walletName = '';
+      if (options && options.walletName) walletName = String(options.walletName).trim();
+      if (!walletName && options && options.preferredWalletName) walletName = String(options.preferredWalletName).trim();
+      if (!walletName) walletName = __skiResolvePreferredWalletName();
+      var walletHints = __skiCollectBridgeWalletHints(walletName);
+      var requestId = 'sign-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      var bridge = await __skiEnsureBridgeFrame();
+      if (!bridge) {
+        throw new Error('Sign bridge not available. Reconnect wallet and retry.');
+      }
+      bridge.style.cssText = bridgeVisibleCss;
+      return new Promise(function(resolve, reject) {
+        var timeout = setTimeout(function() {
+          cleanup();
+          bridge.style.cssText = bridgeHiddenCss;
+          reject(new Error('Transaction signing timed out'));
+        }, 120000);
+        function cleanup() {
+          clearTimeout(timeout);
+          window.removeEventListener('message', handleResponse);
+        }
+        function handleResponse(ev) {
+          if (ev.origin !== 'https://sui.ski') return;
+          if (!ev.data || ev.data.requestId !== requestId) return;
+          if (ev.data.type === 'ski:signed') {
+            cleanup();
+            bridge.style.cssText = bridgeHiddenCss;
+            resolve(ev.data);
+          } else if (ev.data.type === 'ski:error') {
+            cleanup();
+            bridge.style.cssText = bridgeHiddenCss;
+            reject(new Error(ev.data.error || 'Signing failed'));
+          }
+        }
+        window.addEventListener('message', handleResponse);
+        bridge.contentWindow.postMessage({
+          type: 'ski:sign',
+          txBytes: txB64,
+          requestId: requestId,
+          sender: sender,
+          walletName: walletName,
+          walletHints: walletHints,
+          options: (options && options.txOptions) || {},
+        }, 'https://sui.ski');
+      });
+    }
 
-	        var reconnected = await __skiEnsureConnectedWalletForSigning(preferredWalletName);
-	        if (reconnected && reconnected.wallet) {
-	          return await __skiWalletSignAndExecute(txInput, reconnected, options);
+    function __skiMessageToBytes(message) {
+      var normalized = __wkTryNormalizeBytes(message);
+      if (normalized) return normalized;
+      if (typeof message === 'string') {
+        if (typeof TextEncoder !== 'undefined') {
+          return new TextEncoder().encode(message);
+        }
+        var fallback = new Uint8Array(message.length);
+        for (var i = 0; i < message.length; i++) {
+          fallback[i] = message.charCodeAt(i) & 0xff;
+        }
+        return fallback;
+      }
+      return new Uint8Array(0);
+    }
+
+	    async function __skiSignPersonalMessageViaBridge(message, conn, options) {
+      var bridgeHiddenCss = 'position:fixed;left:-10000px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;z-index:-1;background:transparent';
+      var bridgeVisibleCss = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:13001;border:none;background:transparent;';
+      var messageBytes = __skiMessageToBytes(message);
+      if (!messageBytes || messageBytes.length === 0) {
+        throw new Error('Message payload is empty');
+      }
+      var sender = __wkNormalizeAccountAddress(options && options.expectedSender);
+      if (!sender) sender = __wkResolveConnectionAddress(conn, options && options.account);
+      var walletName = '';
+      if (options && options.walletName) walletName = String(options.walletName).trim();
+      if (!walletName && options && options.preferredWalletName) walletName = String(options.preferredWalletName).trim();
+      if (!walletName) walletName = __skiResolvePreferredWalletName();
+      var walletHints = __skiCollectBridgeWalletHints(walletName);
+      var requestId = 'sign-message-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      var bridge = await __skiEnsureBridgeFrame();
+      if (!bridge) {
+        throw new Error('Sign bridge not available. Reconnect wallet and retry.');
+      }
+      bridge.style.cssText = bridgeVisibleCss;
+      return new Promise(function(resolve, reject) {
+        var timeout = setTimeout(function() {
+          cleanup();
+          bridge.style.cssText = bridgeHiddenCss;
+          reject(new Error('Message signing timed out'));
+        }, 120000);
+        function cleanup() {
+          clearTimeout(timeout);
+          window.removeEventListener('message', handleResponse);
+        }
+        function handleResponse(ev) {
+          if (ev.origin !== 'https://sui.ski') return;
+          if (!ev.data || ev.data.requestId !== requestId) return;
+          if (ev.data.type === 'ski:signed-message') {
+            cleanup();
+            bridge.style.cssText = bridgeHiddenCss;
+            resolve({
+              signature: ev.data.signature || '',
+              bytes: ev.data.bytes || __wkBytesToBase64(messageBytes),
+            });
+          } else if (ev.data.type === 'ski:error') {
+            cleanup();
+            bridge.style.cssText = bridgeHiddenCss;
+            reject(new Error(ev.data.error || 'Message signing failed'));
+          }
+        }
+        window.addEventListener('message', handleResponse);
+        bridge.contentWindow.postMessage({
+          type: 'ski:sign-message',
+          message: __wkBytesToBase64(messageBytes),
+          requestId: requestId,
+          sender: sender,
+          walletName: walletName,
+          walletHints: walletHints,
+        }, 'https://sui.ski');
+      });
+	    }
+
+	    function __wkEmitTxSuccess(result) {
+	      try {
+	        var digest = '';
+	        if (result && typeof result === 'object') {
+	          digest = result.digest || (result.result && result.result.digest) || '';
 	        }
-	        if (bridgeError) throw bridgeError;
-	      } else if (mustUseBridge) {
-	        throw new Error('Sign bridge not available. Reconnect wallet from sui.ski and retry.');
-	      }
-	      if (bypassBridgeForSlush) {
-	        var slushConn = await __skiEnsureConnectedWalletForSigning('Slush');
-	        if (!slushConn || !slushConn.wallet) {
-	          throw new Error('Slush extension not detected in this tab. Open Slush and retry.');
-	        }
-	        return await __skiWalletSignAndExecute(txInput, slushConn, options);
-	      }
-	      return await __skiWalletSignAndExecute(txInput, __wkGetWallet(), options);
-	    };
+	        window.dispatchEvent(new CustomEvent('wk:tx-success', {
+	          detail: { digest: digest || '' },
+	        }));
+	      } catch (_e) {}
+	    }
+
+		    SuiWalletKit.signAndExecute = async function signAndExecute(txInput, options) {
+		      var result;
+		      var bypassBridgeForSlush = __skiShouldBypassBridgeForSlush(options);
+		      if (bypassBridgeForSlush) {
+		        var slushConn = await __skiEnsureConnectedWalletForSigning('Slush');
+		        if (!slushConn || !slushConn.wallet) {
+		          throw new Error('Slush extension not detected in this tab. Open Slush and retry.');
+		        }
+		        result = await __skiWalletSignAndExecute(txInput, slushConn, options);
+		        __wkEmitTxSuccess(result);
+		        return result;
+		      }
+		      var bridgeConn = SuiWalletKit.$connection.value || {};
+		      if (__skiCanUseSessionSignBridge(bridgeConn)) {
+		        result = await __skiSignViaBridge(txInput, bridgeConn, options);
+		        __wkEmitTxSuccess(result);
+		        return result;
+		      }
+		      result = await __skiWalletSignAndExecute(txInput, __wkGetWallet(), options);
+		      __wkEmitTxSuccess(result);
+		      return result;
+		    };
 
     SuiWalletKit.signAndExecuteFromBytes = SuiWalletKit.signAndExecute;
 
@@ -1866,70 +1358,17 @@ export function generateWalletTxJs(): string {
       : null;
 
     SuiWalletKit.signPersonalMessage = async function signPersonalMessage(message, options) {
-      var onSubdomain = __skiIsSubdomainHost();
       var bypassBridgeForSlush = __skiShouldBypassBridgeForSlush(options);
-      var preferredWalletName = __skiResolvePreferredWalletNameForOperation(options);
-      if (__skiShouldUseBridge(options)) {
-        var bridgeError = null;
-        try {
-          var signedMessage = await __skiSignMessageViaBridge(message, options, preferredWalletName);
-          console.log('[WalletTx] Message sign bridge success');
-          return signedMessage;
-        } catch (err) {
-          bridgeError = err;
-          console.warn('Message sign bridge failed:', err && err.message ? err.message : err);
-        }
-
-        var mustUseBridge = !bypassBridgeForSlush && !!(onSubdomain || (options && options.forceSignBridge));
-        if (mustUseBridge || __wkIsUserRejection(bridgeError)) {
-          if (
-            mustUseBridge
-            && !__wkIsUserRejection(bridgeError)
-            && (
-              __skiRequiresTopFrameSigning(bridgeError)
-              || __skiIsBridgeWalletAvailabilityError(bridgeError)
-            )
-          ) {
-            try {
-              await __skiEnsureBridgeConnectionViaIframe(
-                preferredWalletName,
-                __skiResolveBridgeExpectedSender(options),
-              );
-              return await __skiSignMessageViaBridge(message, options, preferredWalletName);
-            } catch (reconnectErr) {
-              bridgeError = reconnectErr || bridgeError;
-            }
-          }
-          if (
-            mustUseBridge
-            && __skiMaybeStartTopFrameHandoff(
-              preferredWalletName,
-              bridgeError,
-              __skiResolveBridgeExpectedSender(options),
-            )
-          ) {
-            throw new Error('Redirecting to top-frame wallet authorization...');
-          }
-          throw bridgeError || new Error('Sign bridge failed. Reconnect wallet from sui.ski and retry.');
-        }
-
-        var reconnected = await __skiEnsureConnectedWalletForSigning(preferredWalletName);
-        if (reconnected && reconnected.wallet && __wkNativeSignPersonalMessage) {
-          return await __wkNativeSignPersonalMessage(message);
-        }
-        if (bridgeError) throw bridgeError;
-      } else {
-        var onSubdomainFallback = __skiIsSubdomainHost();
-        if ((!bypassBridgeForSlush && onSubdomainFallback) || (options && options.forceSignBridge)) {
-          throw new Error('Sign bridge not available. Reconnect wallet from sui.ski and retry.');
-        }
-      }
-
       if (bypassBridgeForSlush) {
         var slushMsgConn = await __skiEnsureConnectedWalletForSigning('Slush');
         if (!slushMsgConn || !slushMsgConn.wallet) {
           throw new Error('Slush extension not detected in this tab. Open Slush and retry.');
         }
+      }
+
+      var bridgeMsgConn = SuiWalletKit.$connection.value || {};
+      if (__skiCanUseSessionSignBridge(bridgeMsgConn)) {
+        return await __skiSignPersonalMessageViaBridge(message, bridgeMsgConn, options);
       }
 
       if (!__wkNativeSignPersonalMessage) {
@@ -1939,56 +1378,7 @@ export function generateWalletTxJs(): string {
     };
 
 	    SuiWalletKit.signTransaction = async function signTransaction(txInput, options) {
-        var onSubdomain = __skiIsSubdomainHost();
         var bypassBridgeForSlush = __skiShouldBypassBridgeForSlush(options);
-        var mustUseBridge = !bypassBridgeForSlush && !!(onSubdomain || (options && options.forceSignBridge));
-        var preferredWalletName = __skiResolvePreferredWalletNameForOperation(options);
-	      if (__skiShouldUseBridge(options)) {
-	        var bridgeError = null;
-	        try {
-	          return await __skiSignViaBridge(txInput, {}, options, preferredWalletName);
-	        } catch (err) {
-	          bridgeError = err;
-	          console.warn('Sign bridge failed:', err && err.message ? err.message : err);
-	        }
-
-	        if (mustUseBridge) {
-            if (
-              !__wkIsUserRejection(bridgeError)
-              && (
-                __skiRequiresTopFrameSigning(bridgeError)
-                || __skiIsBridgeWalletAvailabilityError(bridgeError)
-              )
-            ) {
-              try {
-                await __skiEnsureBridgeConnectionViaIframe(
-                  preferredWalletName,
-                  __skiResolveBridgeExpectedSender(options),
-                );
-                return await __skiSignViaBridge(txInput, {}, options, preferredWalletName);
-              } catch (reconnectErr) {
-                bridgeError = reconnectErr || bridgeError;
-              }
-            }
-            if (
-              __skiMaybeStartTopFrameHandoff(
-                preferredWalletName,
-                bridgeError,
-                __skiResolveBridgeExpectedSender(options),
-              )
-            ) {
-              throw new Error('Redirecting to top-frame wallet authorization...');
-            }
-	          throw bridgeError || new Error('Sign bridge failed. Reconnect wallet from sui.ski and retry.');
-	        }
-
-	        var reconnected = await __skiEnsureConnectedWalletForSigning(preferredWalletName);
-	        if (reconnected && reconnected.wallet) {
-	          // Continue into direct wallet signing flow below.
-	        } else if (bridgeError) {
-	          throw bridgeError;
-	        }
-	      }
 
       if (bypassBridgeForSlush) {
         var slushTxConn = await __skiEnsureConnectedWalletForSigning('Slush');

@@ -143,12 +143,14 @@ export const profileStyles = `
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
-			background: rgba(0, 0, 0, 0.92);
-			border: 1.5px solid rgba(255, 255, 255, 0.7);
+			background: linear-gradient(135deg, #090f1d, #0d1728);
+			border: 1.5px solid rgba(148, 163, 184, 0.42);
 			cursor: pointer;
 			transition: all 0.2s ease;
 			padding: 4px 10px;
-			box-shadow: 0 4px 18px rgba(2, 6, 23, 0.36);
+			box-shadow:
+				0 10px 22px rgba(2, 6, 23, 0.45),
+				0 0 0 1px rgba(148, 163, 184, 0.14) inset;
 			forced-color-adjust: none;
 		}
 		.wallet-profile-logo {
@@ -157,28 +159,50 @@ export const profileStyles = `
 			height: 24px;
 			object-fit: contain;
 			object-position: center;
+			background: transparent !important;
 			filter: none !important;
 			-webkit-filter: none !important;
 			forced-color-adjust: none;
+			mix-blend-mode: normal;
 		}
 		.wallet-profile-btn:hover {
-			background: rgba(255, 255, 255, 0.08);
-			border-color: #fff;
+			background: linear-gradient(135deg, #0e172a, #142036);
+			border-color: rgba(191, 219, 254, 0.58);
 			transform: translateY(-1px);
-			box-shadow: 0 8px 22px rgba(2, 6, 23, 0.5), 0 0 18px rgba(255, 255, 255, 0.12);
+			box-shadow:
+				0 14px 30px rgba(2, 6, 23, 0.58),
+				0 0 0 1px rgba(191, 219, 254, 0.18) inset,
+				0 0 20px rgba(96, 165, 250, 0.12);
+		}
+		.wallet-widget:not(.has-black-diamond) .wallet-profile-btn {
+			background: transparent;
+			border-color: transparent;
+			box-shadow: none;
+			padding: 0;
+		}
+		.wallet-widget:not(.has-black-diamond) .wallet-profile-btn:hover {
+			background: transparent;
+			border-color: transparent;
+			transform: none;
+			box-shadow: none;
 		}
 		.wallet-widget.has-black-diamond .wallet-profile-btn {
-			background: rgba(0, 0, 0, 0.92);
-			border-color: rgba(255, 255, 255, 0.7);
-			box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+			background: linear-gradient(135deg, #060b14, #0c1320);
+			border-color: rgba(148, 163, 184, 0.36);
+			box-shadow:
+				0 10px 22px rgba(2, 6, 23, 0.5),
+				0 0 0 1px rgba(148, 163, 184, 0.12) inset;
 		}
 		.wallet-widget.has-black-diamond .wallet-profile-btn .wallet-profile-logo {
 			filter: none;
 		}
 		.wallet-widget.has-black-diamond .wallet-profile-btn:hover {
-			background: rgba(255, 255, 255, 0.08);
-			border-color: #fff;
-			box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5), 0 0 18px rgba(255, 255, 255, 0.12);
+			background: linear-gradient(135deg, #10192b, #1b2840);
+			border-color: rgba(191, 219, 254, 0.62);
+			box-shadow:
+				0 14px 30px rgba(2, 6, 23, 0.62),
+				0 0 0 1px rgba(191, 219, 254, 0.2) inset,
+				0 0 22px rgba(96, 165, 250, 0.14);
 		}
 		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
 		.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
@@ -4573,6 +4597,70 @@ export const profileStyles = `
 			opacity: 0.3;
 			cursor: not-allowed;
 		}
+		.marketplace-offers-list {
+			order: 4;
+			width: 100%;
+			margin-top: 4px;
+		}
+		.marketplace-offers-header {
+			font-size: 0.68rem;
+			font-weight: 600;
+			color: rgba(255, 255, 255, 0.45);
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+			padding: 4px 0 2px;
+		}
+		.marketplace-offers-items {
+			display: flex;
+			flex-direction: column;
+			gap: 3px;
+		}
+		.marketplace-offer-row {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto;
+			gap: 6px;
+			align-items: center;
+			padding: 3px 0;
+			border-top: 1px solid rgba(255, 255, 255, 0.06);
+		}
+		.marketplace-offer-row:first-child {
+			border-top: none;
+		}
+		.marketplace-offer-bidder {
+			color: #c8cde0;
+			font-size: 0.7rem;
+			font-weight: 500;
+			font-family: var(--font-mono, monospace);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			max-width: 170px;
+			text-decoration: none;
+		}
+		.marketplace-offer-bidder:hover {
+			color: #ffffff;
+			text-decoration: underline;
+		}
+		.marketplace-offer-price {
+			font-size: 0.78rem;
+			font-weight: 600;
+			font-family: var(--font-mono, monospace);
+			color: #f59e0b;
+			text-align: right;
+			white-space: nowrap;
+			display: inline-flex;
+			align-items: center;
+			gap: 3px;
+		}
+		.marketplace-offer-price .price-sui {
+			display: inline-flex;
+			align-items: center;
+		}
+		.marketplace-offer-price .price-sui svg {
+			width: 10px;
+			height: 13px;
+			fill: #4DA2FF;
+		}
 		.marketplace-value {
 			font-weight: 600;
 			font-family: var(--font-mono, monospace);
@@ -5121,6 +5209,33 @@ export const profileStyles = `
 				font-size: 0.76rem;
 				letter-spacing: 0.02em;
 				font-variant-numeric: tabular-nums;
+			}
+			.marketplace-bid-cap {
+				margin-left: 6px;
+				color: rgba(226, 232, 240, 0.78);
+				font-size: 0.62rem;
+				font-weight: 600;
+				letter-spacing: 0.02em;
+				display: inline-flex;
+				align-items: center;
+				gap: 4px;
+			}
+			.marketplace-bid-cap-label {
+				opacity: 0.72;
+				font-size: 0.56rem;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+			}
+			.marketplace-bid-cap-value {
+				color: rgba(226, 232, 240, 0.95);
+				font-family: var(--font-mono, ui-monospace, monospace);
+				font-size: 0.66rem;
+				font-weight: 700;
+				font-variant-numeric: tabular-nums;
+			}
+			.marketplace-bid-cap .sui-price-icon {
+				width: 0.56rem;
+				height: auto;
 			}
 			.marketplace-list-estimate {
 				display: inline-flex;
