@@ -731,7 +731,16 @@ export function generateWalletKitJs(config: WalletKitConfig): string {
 	            iframeReady = false;
 	          }
 	          var options = { useStaging: useStaging, config: config };
-	          var wallet = mod.initWaaPSui(options);
+	          var rawWaaPWallet = mod.initWaaPSui(options);
+	          // Wrap with safe accounts getter so external consumers (dapp-kit-core
+	          // autoconnect) never see undefined — they get [] until WaaP finishes login.
+	          var wallet = Object.create(rawWaaPWallet, {
+	            accounts: {
+	              get: function() { return __wkSafeGetAccounts(rawWaaPWallet); },
+	              enumerable: true,
+	              configurable: true
+	            }
+	          });
 	          __wkInitWalletsApi();
 	          if (__wkWalletsApi && typeof __wkWalletsApi.register === 'function') {
 	            __wkWalletsApi.register(wallet);
