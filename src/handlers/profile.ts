@@ -9688,7 +9688,7 @@ function shortAddr(addr) {
 				const offerDisplay = formatBidInputValue(bidSui) || '--';
 				marketplaceBidEstimate.innerHTML =
 					estimatePrefix
-					+ '<span class="marketplace-bid-cap"><span class="marketplace-bid-cap-label">Offer</span><span class="marketplace-bid-cap-value">' + offerDisplay + '</span>' + SUI_ICON_SVG + '</span>';
+					+ '<span class="marketplace-bid-cap"><span class="marketplace-bid-cap-value">' + offerDisplay + '</span>' + SUI_ICON_SVG + '</span>';
 				updateBidButtonLabel(bidSui);
 				updateMarketplaceStepperLabels();
 				queueMarketplaceLayoutSync();

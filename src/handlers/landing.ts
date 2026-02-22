@@ -19,7 +19,7 @@ import { generateWalletTxJs } from '../utils/wallet-tx-js'
 import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
 import { generateThunderCss } from '../utils/thunder-css'
 import { generateThunderJs } from '../utils/thunder-js'
-import { fetchListingOnChain, fetchBestBidOnChain, fetchOnChainSales, fetchNftMetadata, fetchBidsViaIndexer } from '../utils/onchain-listing'
+import { fetchListingOnChain, fetchOnChainSales, fetchNftMetadata, fetchAllBidsForNft } from '../utils/onchain-listing'
 import { fetchNftEventsOnChain, fetchCollectionEventsOnChain } from '../utils/onchain-activity'
 
 interface LandingPageOptions {
@@ -256,7 +256,83 @@ apiRoutes.get('/renew-quote', async (c) => {
 		const message = error instanceof Error ? error.message : 'Failed to generate renewal quote'
 		return jsonResponse({ error: message }, 500)
 	}
-})
+	})
+
+const RENEW_TX_BUILD_MAX_ATTEMPTS = 3
+const RENEW_TX_BUILD_RETRY_BASE_MS = 250
+
+function extractErrorStatus(error: unknown): number | null {
+	if (!error || typeof error !== 'object') return null
+
+	const asRecord = error as Record<string, unknown>
+	const statusCandidates: unknown[] = [asRecord.status]
+
+	const response = asRecord.response
+	if (response && typeof response === 'object') {
+		statusCandidates.push((response as Record<string, unknown>).status)
+	}
+
+	const cause = asRecord.cause
+	if (cause && typeof cause === 'object') {
+		const causeRecord = cause as Record<string, unknown>
+		statusCandidates.push(causeRecord.status)
+		const causeResponse = causeRecord.response
+		if (causeResponse && typeof causeResponse === 'object') {
+			statusCandidates.push((causeResponse as Record<string, unknown>).status)
+		}
+	}
+
+	for (const candidate of statusCandidates) {
+		if (typeof candidate === 'number' && Number.isInteger(candidate) && candidate >= 100 && candidate <= 599) {
+			return candidate
+		}
+		if (typeof candidate === 'string') {
+			const parsed = Number.parseInt(candidate, 10)
+			if (Number.isInteger(parsed) && parsed >= 100 && parsed <= 599) return parsed
+		}
+	}
+
+	if (error instanceof Error) {
+		const patterns = [
+			/\bUnexpected status code:\s*(\d{3})\b/i,
+			/\bstatus(?:\s*code)?\s*[:=]?\s*(\d{3})\b/i,
+			/\bHTTP\s*(\d{3})\b/i,
+		]
+		for (const pattern of patterns) {
+			const match = error.message.match(pattern)
+			if (!match) continue
+			const parsed = Number.parseInt(match[1], 10)
+			if (Number.isInteger(parsed) && parsed >= 100 && parsed <= 599) return parsed
+		}
+	}
+
+	return null
+}
+
+function isRateLimitError(error: unknown): boolean {
+	const status = extractErrorStatus(error)
+	if (status === 429) return true
+	if (!(error instanceof Error)) return false
+	return /rate limit|too many requests/i.test(error.message)
+}
+
+async function waitMs(ms: number): Promise<void> {
+	await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function runWithRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
+	let lastError: unknown = null
+	for (let attempt = 1; attempt <= RENEW_TX_BUILD_MAX_ATTEMPTS; attempt++) {
+		try {
+			return await fn()
+		} catch (error) {
+			lastError = error
+			if (!isRateLimitError(error) || attempt >= RENEW_TX_BUILD_MAX_ATTEMPTS) break
+			await waitMs(RENEW_TX_BUILD_RETRY_BASE_MS * attempt)
+		}
+	}
+	throw lastError
+}
 
 apiRoutes.post('/renew-tx', async (c) => {
 	try {
@@ -289,8 +365,10 @@ apiRoutes.post('/renew-tx', async (c) => {
 		})
 
 		if (paymentMethod === 'sui') {
-			const tx = await buildSuiRenewTx({ domain, nftId, years, senderAddress }, env)
-			const txBytes = await tx.build({ client })
+			const txBytes = await runWithRateLimitRetry(async () => {
+				const tx = await buildSuiRenewTx({ domain, nftId, years, senderAddress }, env)
+				return await tx.build({ client })
+			})
 			return jsonResponse({
 				txBytes: Buffer.from(txBytes).toString('base64'),
 				txEncoding: 'bcs',
@@ -305,11 +383,14 @@ apiRoutes.post('/renew-tx', async (c) => {
 					400,
 				)
 			}
-			const result = await buildMultiCoinRenewTx(
-				{ domain, nftId, years, senderAddress, sourceCoinType, coinObjectIds },
-				env,
+			const result = await runWithRateLimitRetry(
+				async () =>
+					await buildMultiCoinRenewTx(
+						{ domain, nftId, years, senderAddress, sourceCoinType, coinObjectIds },
+						env,
+					),
 			)
-			const txBytes = await result.tx.build({ client })
+			const txBytes = await runWithRateLimitRetry(async () => await result.tx.build({ client }))
 			return jsonResponse({
 				txBytes: Buffer.from(txBytes).toString('base64'),
 				txEncoding: 'bcs',
@@ -328,8 +409,10 @@ apiRoutes.post('/renew-tx', async (c) => {
 			})
 		}
 
-		const result = await buildSwapAndRenewTx({ domain, nftId, years, senderAddress }, env)
-		const txBytes = await result.tx.build({ client })
+		const result = await runWithRateLimitRetry(
+			async () => await buildSwapAndRenewTx({ domain, nftId, years, senderAddress }, env),
+		)
+		const txBytes = await runWithRateLimitRetry(async () => await result.tx.build({ client }))
 		return jsonResponse({
 			txBytes: Buffer.from(txBytes).toString('base64'),
 			txEncoding: 'bcs',
@@ -346,6 +429,17 @@ apiRoutes.post('/renew-tx', async (c) => {
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to build renewal transaction'
+		const status = extractErrorStatus(error)
+		if (isRateLimitError(error)) {
+			return jsonResponse(
+				{ error: 'Renewal build is temporarily rate limited. Please retry in a few seconds.' },
+				429,
+				{ 'Retry-After': '2' },
+			)
+		}
+		if (status && status >= 400 && status <= 499) {
+			return jsonResponse({ error: message }, status)
+		}
 		console.error('Renewal tx error:', error)
 		return jsonResponse({ error: message }, 500)
 	}
@@ -1775,11 +1869,9 @@ async function handleMarketplaceData(name: string, _env: Env, tokenId?: string):
 	}
 
 	try {
-		const apiKey = _env.INDEXER_API_KEY || ''
-
-		const [onChainListing, indexerBids, sales, nftMeta] = await Promise.all([
+		const [onChainListing, allBidsResult, sales, nftMeta] = await Promise.all([
 			fetchListingOnChain(client, resolvedTokenId),
-			apiKey ? fetchBidsViaIndexer(resolvedTokenId, apiKey) : fetchBestBidOnChain(client, resolvedTokenId).then((b) => b ? [b] : []),
+			fetchAllBidsForNft(client, resolvedTokenId),
 			fetchOnChainSales(client, resolvedTokenId),
 			fetchNftMetadata(client, resolvedTokenId),
 		])
@@ -1798,8 +1890,7 @@ async function handleMarketplaceData(name: string, _env: Env, tokenId?: string):
 		}
 
 		const allBids: MarketplaceBid[] = []
-		const bidResults = Array.isArray(indexerBids) ? indexerBids : indexerBids ? [indexerBids] : []
-		for (const b of bidResults) {
+		for (const b of allBidsResult) {
 			allBids.push({
 				id: b.id,
 				price: b.price,
@@ -1847,7 +1938,11 @@ async function handleMarketplaceData(name: string, _env: Env, tokenId?: string):
 
 		return new Response(JSON.stringify(data), {
 			status: 200,
-			headers: { ...corsHeaders, 'X-Cache': 'MISS', 'X-Listing-Source': apiKey ? 'indexer' : 'onchain' },
+			headers: {
+				...corsHeaders,
+				'X-Cache': 'MISS',
+				'X-Bids-Count': String(allBids.length),
+			},
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch marketplace data'

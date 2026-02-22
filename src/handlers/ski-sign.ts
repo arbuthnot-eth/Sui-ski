@@ -356,6 +356,14 @@ async function __collectBridgeWalletList(walletHints) {
 	return __mergeBridgeWalletCache(current);
 }
 
+async function __collectBridgeWalletCandidatesForConnection(walletHints) {
+	__mergeBridgeWalletHints(walletHints);
+	var wallets = await __collectBridgeWalletCandidates();
+	var current = __getBridgeWalletList(wallets);
+	__mergeBridgeWalletCache(current);
+	return Array.isArray(wallets) ? wallets : [];
+}
+
 function __readSessionWallet() {
 	try {
 		var parts = document.cookie ? document.cookie.split(';') : [];
@@ -574,7 +582,11 @@ async function __ensureWalletConnection(preferredWalletName, expectedSender, all
 
 	if (!__walletCanSignTransactions(match)) {
 		if (preferredWalletName) {
-			__lastPreferredConnectError = 'Selected wallet does not expose Sui signing in this context: ' + preferredWalletName;
+			if (window.parent && window.parent !== window) {
+				__lastPreferredConnectError = 'Wallet requires top-frame signing. Open https://sui.ski/sign in this tab and reconnect ' + preferredWalletName + '.';
+			} else {
+				__lastPreferredConnectError = 'Selected wallet does not expose Sui signing in this context: ' + preferredWalletName;
+			}
 			return null;
 		}
 		__lastPreferredConnectError = 'No detected wallet exposes Sui transaction signing in this context';

@@ -450,13 +450,59 @@ export function generateWalletTxJs(): string {
       );
     }
 
-    function __skiCanUseSessionSignBridge(conn) {
-      return !!(conn && !conn.wallet && conn.address && conn.status === 'session' && __skiIsSubdomainHost());
-    }
+	    function __skiCanUseSessionSignBridge(conn) {
+	      return !!(conn && !conn.wallet && conn.address && conn.status === 'session' && __skiIsSubdomainHost());
+	    }
 
-    function __skiCollectBridgeWalletHints(preferredWalletName) {
-      var out = [];
-      var seen = {};
+	    function __skiResolveRequestedWalletName(options) {
+	      var walletName = '';
+	      if (options && options.walletName) walletName = String(options.walletName).trim();
+	      if (!walletName && options && options.preferredWalletName) walletName = String(options.preferredWalletName).trim();
+	      if (!walletName) walletName = __skiResolvePreferredWalletName();
+	      return walletName;
+	    }
+
+	    function __skiShouldTopFrameHandoffFromBridgeError(err) {
+	      if (!err) return false;
+	      if (__skiRequiresTopFrameSigning(err)) return true;
+	      var msg = String(err && err.message ? err.message : err).toLowerCase();
+	      if (!msg) return false;
+	      return (
+	        msg.indexOf('does not expose sui signing in this context') !== -1
+	        || msg.indexOf('wallet session unavailable in bridge') !== -1
+	        || msg.indexOf('wallet not connected in sign bridge') !== -1
+	        || msg.indexOf('selected wallet not available') !== -1
+	      );
+	    }
+
+	    function __skiStartTopFrameSignHandoff(walletName, sender) {
+	      if (!__skiIsSubdomainHost()) return false;
+	      try {
+	        if (window.__skiTopFrameHandoffInFlight) return true;
+	        try {
+	          var sp = new URLSearchParams(window.location.search);
+	          if (sp.get('ski_handoff') === '1') return false;
+	        } catch (_ep) {}
+	        var currentUrl = new URL(window.location.href);
+	        currentUrl.searchParams.delete('ski_handoff');
+	        currentUrl.searchParams.delete('ski_handoff_status');
+	        currentUrl.searchParams.delete('ski_handoff_error');
+	        var handoffUrl = new URL('https://sui.ski/sign');
+	        handoffUrl.searchParams.set('bridge', 'handoff');
+	        handoffUrl.searchParams.set('returnUrl', currentUrl.toString());
+	        if (walletName) handoffUrl.searchParams.set('walletName', String(walletName).slice(0, 120));
+	        if (sender) handoffUrl.searchParams.set('sender', String(sender).slice(0, 120));
+	        window.__skiTopFrameHandoffInFlight = true;
+	        window.location.assign(handoffUrl.toString());
+	        return true;
+	      } catch (_e) {
+	        return false;
+	      }
+	    }
+
+	    function __skiCollectBridgeWalletHints(preferredWalletName) {
+	      var out = [];
+	      var seen = {};
       function pushHint(name, icon, isPasskey) {
         var normalizedName = String(name || '').trim();
         if (!normalizedName) return;
@@ -1328,9 +1374,9 @@ export function generateWalletTxJs(): string {
 	      } catch (_e) {}
 	    }
 
-		    SuiWalletKit.signAndExecute = async function signAndExecute(txInput, options) {
-		      var result;
-		      var bypassBridgeForSlush = __skiShouldBypassBridgeForSlush(options);
+			    SuiWalletKit.signAndExecute = async function signAndExecute(txInput, options) {
+			      var result;
+			      var bypassBridgeForSlush = __skiShouldBypassBridgeForSlush(options);
 		      if (bypassBridgeForSlush) {
 		        var slushConn = await __skiEnsureConnectedWalletForSigning('Slush');
 		        if (!slushConn || !slushConn.wallet) {
@@ -1340,14 +1386,38 @@ export function generateWalletTxJs(): string {
 		        __wkEmitTxSuccess(result);
 		        return result;
 		      }
-		      var bridgeConn = SuiWalletKit.$connection.value || {};
-		      if (__skiCanUseSessionSignBridge(bridgeConn)) {
-		        result = await __skiSignViaBridge(txInput, bridgeConn, options);
-		        __wkEmitTxSuccess(result);
-		        return result;
-		      }
-		      result = await __skiWalletSignAndExecute(txInput, __wkGetWallet(), options);
-		      __wkEmitTxSuccess(result);
+			      var bridgeConn = SuiWalletKit.$connection.value || {};
+			      if (__skiCanUseSessionSignBridge(bridgeConn)) {
+			        var requestedWalletName = __skiResolveRequestedWalletName(options);
+			        var localConn = await __skiEnsureConnectedWalletForSigning(requestedWalletName);
+			        if (localConn && localConn.wallet) {
+			          try {
+			            result = await __skiWalletSignAndExecute(txInput, localConn, options);
+			            __wkEmitTxSuccess(result);
+			            return result;
+			          } catch (_localSignErr) {
+			            if (__wkIsUserRejection(_localSignErr)) throw _localSignErr;
+			          }
+			        }
+			        try {
+			          result = await __skiSignViaBridge(txInput, bridgeConn, options);
+			          __wkEmitTxSuccess(result);
+			          return result;
+			        } catch (bridgeErr) {
+			          if (__skiShouldTopFrameHandoffFromBridgeError(bridgeErr)) {
+			            var handoffWalletName = requestedWalletName;
+			            var handoffSender = __wkNormalizeAccountAddress(options && options.expectedSender);
+			            if (!handoffSender) handoffSender = __wkResolveConnectionAddress(bridgeConn, options && options.account);
+			            if (__skiStartTopFrameSignHandoff(handoffWalletName, handoffSender)) {
+			              return new Promise(function() {});
+			            }
+			            throw new Error('Wallet signing unavailable. Please reconnect your wallet and retry.');
+				          }
+				          throw bridgeErr;
+				        }
+			      }
+			      result = await __skiWalletSignAndExecute(txInput, __wkGetWallet(), options);
+			      __wkEmitTxSuccess(result);
 		      return result;
 		    };
 
@@ -1366,10 +1436,29 @@ export function generateWalletTxJs(): string {
         }
       }
 
-      var bridgeMsgConn = SuiWalletKit.$connection.value || {};
-      if (__skiCanUseSessionSignBridge(bridgeMsgConn)) {
-        return await __skiSignPersonalMessageViaBridge(message, bridgeMsgConn, options);
-      }
+	      var bridgeMsgConn = SuiWalletKit.$connection.value || {};
+	      if (__skiCanUseSessionSignBridge(bridgeMsgConn)) {
+	        var requestedMsgWalletName = __skiResolveRequestedWalletName(options);
+	        var localMsgConn = await __skiEnsureConnectedWalletForSigning(requestedMsgWalletName);
+	        if (localMsgConn && localMsgConn.wallet && __wkNativeSignPersonalMessage) {
+	          try {
+	            return await __wkNativeSignPersonalMessage(message);
+	          } catch (_localMsgSignErr) {}
+	        }
+	        try {
+	          return await __skiSignPersonalMessageViaBridge(message, bridgeMsgConn, options);
+	        } catch (bridgeMsgErr) {
+	          if (__skiShouldTopFrameHandoffFromBridgeError(bridgeMsgErr)) {
+	            var handoffMsgWalletName = requestedMsgWalletName;
+	            var handoffMsgSender = __wkNormalizeAccountAddress(options && options.expectedSender);
+	            if (!handoffMsgSender) handoffMsgSender = __wkResolveConnectionAddress(bridgeMsgConn, options && options.account);
+	            if (__skiStartTopFrameSignHandoff(handoffMsgWalletName, handoffMsgSender)) {
+	              return new Promise(function() {});
+	            }
+	          }
+	          throw bridgeMsgErr;
+	        }
+	      }
 
       if (!__wkNativeSignPersonalMessage) {
         throw new Error('Current wallet does not support personal message signing');

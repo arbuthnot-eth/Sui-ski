@@ -7,10 +7,6 @@ const TRADEPORT_BIDDINGS_PACKAGE =
 const SINGLE_BID_TYPE = `${TRADEPORT_BIDDINGS_PACKAGE}::tradeport_biddings::SingleBid`
 const GRAPHQL_URL = 'https://graphql.mainnet.sui.io/graphql'
 
-const INDEXER_API_URL = 'https://api.indexer.xyz/graphql'
-const INDEXER_API_USER = 'imbibed.solutions'
-const SUINS_COLLECTION_ID = '060fe4fb-9a3e-4170-a494-a25e62aba689'
-
 export interface OnChainListing {
 	price: number
 	seller: string
@@ -25,109 +21,14 @@ export interface OnChainBid {
 	tokenId: string
 }
 
-const BIDS_VIA_ACTIONS_QUERY = `query($collectionId: uuid!, $tokenId: String!, $limit: Int!) {
-	sui {
-		actions(
-			where: {
-				collection_id: { _eq: $collectionId }
-				nft: { token_id: { _eq: $tokenId } }
-				type: { _in: ["create_bid", "bid", "cancel_bid", "accept_bid"] }
-			}
-			order_by: [{ block_time: desc }, { tx_index: desc }]
-			limit: $limit
-		) {
-			type
-			price
-			sender
-			receiver
-			nonce
-			block_time
-		}
-	}
-}`
-
-export async function fetchBidsViaIndexer(
+export async function fetchAllBidsForNft(
+	client: SuiClient,
 	tokenId: string,
-	apiKey: string,
 ): Promise<OnChainBid[]> {
 	try {
-		const res = await fetch(INDEXER_API_URL, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'x-api-user': INDEXER_API_USER,
-				'x-api-key': apiKey,
-			},
-			body: JSON.stringify({
-				query: BIDS_VIA_ACTIONS_QUERY,
-				variables: {
-					collectionId: SUINS_COLLECTION_ID,
-					tokenId,
-					limit: 100,
-				},
-			}),
-		})
-
-		if (!res.ok) {
-			console.log('fetchBidsViaIndexer: HTTP error', res.status)
-			return []
-		}
-
-		const result = (await res.json()) as {
-			data?: {
-				sui?: {
-					actions?: Array<{
-						type: string
-						price: number
-						sender: string
-						receiver: string
-						nonce: string
-						block_time: string
-					}>
-				}
-			}
-			errors?: Array<{ message: string }>
-		}
-
-		if (result.errors?.length) {
-			console.log('fetchBidsViaIndexer: GQL error', result.errors[0].message)
-			return []
-		}
-
-		const actions = result.data?.sui?.actions ?? []
-		console.log('fetchBidsViaIndexer:', tokenId, 'actions', actions.length, actions.length > 0 ? 'types: ' + [...new Set(actions.map(a => a.type))].join(',') : '')
-
-		const cancelledNonces = new Set<string>()
-		const bidCreates: Array<{ nonce: string; price: number; bidder: string }> = []
-
-		for (const action of actions) {
-			if (action.type === 'cancel_bid' || action.type === 'accept_bid') {
-				if (action.nonce) cancelledNonces.add(action.nonce)
-			} else if (action.type === 'create_bid' || action.type === 'bid') {
-				bidCreates.push({
-					nonce: action.nonce || '',
-					price: action.price,
-					bidder: action.sender,
-				})
-			}
-		}
-
-		const bids: OnChainBid[] = []
-		for (const bc of bidCreates) {
-			if (bc.nonce && cancelledNonces.has(bc.nonce)) continue
-			if (bc.price <= 0 || !bc.bidder) continue
-			bids.push({
-				id: bc.nonce || String(bc.price),
-				price: bc.price,
-				bidder: bc.bidder,
-				tokenId,
-			})
-		}
-
-		bids.sort((a, b) => b.price - a.price)
-		return bids
-	} catch (err) {
-		console.error('Indexer bids fetch failed:', err instanceof Error ? err.message : err)
+		const bid = await fetchBestBidOnChain(client, tokenId)
+		return bid ? [bid] : []
+	} catch {
 		return []
 	}
 }
