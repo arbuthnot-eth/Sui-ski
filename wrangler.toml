@@ -1,13 +1,13 @@
-name = "sui-ski-gateway"
+name = "sui-ski"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
 account_id = "6a10ee79fe9d21b5e2c3155ce8690742"
 
 # Wildcard route for *.sui.ski
+# Root sui.ski is handled by dotski worker in .SKI project
 routes = [
   { pattern = "*.sui.ski/*", zone_name = "sui.ski" },
-  { pattern = "sui.ski/*", zone_name = "sui.ski" },
   { pattern = "*.t.sui.ski/*", zone_name = "sui.ski" },
   { pattern = "t.sui.ski/*", zone_name = "sui.ski" },
   { pattern = "*.d.sui.ski/*", zone_name = "sui.ski" },
@@ -17,6 +17,7 @@ routes = [
 # Environment variables (non-sensitive)
 [vars]
 SUI_NETWORK = "mainnet"
+SUI_GRAPHQL_URL = "https://sui-mainnet.mystenlabs.com/graphql"
 # SUI_RPC_URL set via `wrangler secret put SUI_RPC_URL` (Triton token URL)
 WALRUS_NETWORK = "mainnet"
 # Seal configuration — mainnet (Phase 1: Overclock open-mode only, threshold 1)
@@ -66,7 +67,7 @@ id = "c0054cf22c6a4daa99cb36347fa5229c"
 [[durable_objects.bindings]]
 name = "WALLET_SESSIONS"
 class_name = "WalletSession"
-script_name = "sui-ski-gateway"
+script_name = "sui-ski"
 
 [[migrations]]
 tag = "v1"

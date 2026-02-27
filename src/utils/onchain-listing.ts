@@ -1,11 +1,11 @@
-import type { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
+import type { SuiGraphQLClient } from '@mysten/sui/graphql'
+import { graphqlGetDynamicField, graphqlGetObject, graphqlQueryEvents } from './sui-graphql'
 import { fetchNftEventsOnChain } from './onchain-activity'
 
 const TRADEPORT_V2_STORE = '0xf96f9363ac5a64c058bf7140723226804d74c0dab2dd27516fb441a180cd763b'
 const TRADEPORT_BIDDINGS_PACKAGE =
 	'0x53134eb544c5a0b5085e99efaf7eab13b28ad123de35d61f941f8c8c40b72033'
 const SINGLE_BID_TYPE = `${TRADEPORT_BIDDINGS_PACKAGE}::tradeport_biddings::SingleBid`
-const GRAPHQL_URL = 'https://graphql.mainnet.sui.io/graphql'
 
 export interface OnChainListing {
 	price: number
@@ -22,7 +22,7 @@ export interface OnChainBid {
 }
 
 export async function fetchAllBidsForNft(
-	client: SuiClient,
+	client: SuiGraphQLClient,
 	tokenId: string,
 ): Promise<OnChainBid[]> {
 	try {
@@ -34,13 +34,13 @@ export async function fetchAllBidsForNft(
 }
 
 export async function fetchListingOnChain(
-	client: SuiClient,
+	client: SuiGraphQLClient,
 	tokenId: string,
 ): Promise<OnChainListing | null> {
 	try {
-		const result = await client.getDynamicFieldObject({
-			parentId: TRADEPORT_V2_STORE,
-			name: { type: '0x2::object::ID', value: tokenId },
+		const result = await graphqlGetDynamicField(client, TRADEPORT_V2_STORE, {
+			type: '0x2::object::ID',
+			value: tokenId,
 		})
 
 		if (!result.data?.content || result.data.content.dataType !== 'moveObject') {
@@ -62,7 +62,10 @@ export async function fetchListingOnChain(
 	}
 }
 
-async function fetchBidViaGraphQL(tokenId: string): Promise<OnChainBid | null> {
+async function fetchBidViaGraphQL(
+	client: SuiGraphQLClient,
+	tokenId: string,
+): Promise<OnChainBid | null> {
 	const query = `query($type: String!, $after: String) {
 		objects(filter: { type: $type }, first: 50, after: $after) {
 			nodes { address asMoveObject { contents { json } } }
@@ -74,24 +77,22 @@ async function fetchBidViaGraphQL(tokenId: string): Promise<OnChainBid | null> {
 	const MAX_PAGES = 20
 
 	for (let page = 0; page < MAX_PAGES; page++) {
-		const res = await fetch(GRAPHQL_URL, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ query, variables: { type: SINGLE_BID_TYPE, after } }),
+		const res = await client.query({
+			query,
+			variables: { type: SINGLE_BID_TYPE, after },
 		})
-		if (!res.ok) return null
-		const result = (await res.json()) as {
-			data?: {
-				objects?: {
+		// biome-ignore lint: accessing raw GraphQL response
+		const rawData = res.data as Record<string, unknown>
+		const objects = rawData?.objects as
+			| {
 					nodes?: Array<{
 						address: string
 						asMoveObject?: { contents?: { json?: Record<string, unknown> } }
 					}>
 					pageInfo?: { hasNextPage: boolean; endCursor: string | null }
-				}
-			}
-		}
-		const nodes = result.data?.objects?.nodes ?? []
+			  }
+			| undefined
+		const nodes = objects?.nodes ?? []
 		for (const node of nodes) {
 			const json = node.asMoveObject?.contents?.json
 			if (!json) continue
@@ -102,7 +103,7 @@ async function fetchBidViaGraphQL(tokenId: string): Promise<OnChainBid | null> {
 			if (!price || !bidder) continue
 			return { id: node.address, price, bidder, tokenId }
 		}
-		const pageInfo = result.data?.objects?.pageInfo
+		const pageInfo = objects?.pageInfo
 		if (!pageInfo?.hasNextPage || !pageInfo.endCursor) break
 		after = pageInfo.endCursor
 	}
@@ -110,21 +111,21 @@ async function fetchBidViaGraphQL(tokenId: string): Promise<OnChainBid | null> {
 }
 
 export async function fetchBestBidOnChain(
-	client: SuiClient,
+	client: SuiGraphQLClient,
 	tokenId: string,
 ): Promise<OnChainBid | null> {
 	try {
 		const cancelledOrMatched = new Set<string>()
 		const createEvents: { bidId: string; price: number; bidder: string; nftId: string }[] = []
 
-		const events = await client.queryEvents({
-			query: { MoveEventModule: { package: TRADEPORT_BIDDINGS_PACKAGE, module: 'tradeport_biddings' } },
-			limit: 50,
-			order: 'descending',
-		})
+		const events = await graphqlQueryEvents(
+			client,
+			{ MoveEventModule: { package: TRADEPORT_BIDDINGS_PACKAGE, module: 'tradeport_biddings' } },
+			{ limit: 50 },
+		)
 
 		for (const evt of events.data) {
-			const pj = evt.parsedJson as Record<string, unknown> | undefined
+			const pj = evt.parsedJson
 			if (!pj) continue
 
 			const evtType = evt.type
@@ -147,21 +148,21 @@ export async function fetchBestBidOnChain(
 			}
 		}
 
-		let best: typeof createEvents[number] | null = null
+		let best: (typeof createEvents)[number] | null = null
 		for (const bid of createEvents) {
 			if (cancelledOrMatched.has(bid.bidId)) continue
 			if (!best || bid.price > best.price) best = bid
 		}
 
 		if (best) {
-			const obj = await client.getObject({ id: best.bidId, options: { showContent: true } })
+			const obj = await graphqlGetObject(client, best.bidId)
 			if (obj.data) return { id: best.bidId, price: best.price, bidder: best.bidder, tokenId }
 		}
 
-		return fetchBidViaGraphQL(tokenId)
+		return fetchBidViaGraphQL(client, tokenId)
 	} catch {
 		try {
-			return await fetchBidViaGraphQL(tokenId)
+			return await fetchBidViaGraphQL(client, tokenId)
 		} catch {
 			return null
 		}
@@ -178,7 +179,7 @@ export interface OnChainSale {
 }
 
 export async function fetchOnChainSales(
-	client: SuiClient,
+	client: SuiGraphQLClient,
 	tokenId: string,
 	limit = 50,
 ): Promise<OnChainSale[]> {
@@ -211,17 +212,13 @@ export interface OnChainNftMeta {
 }
 
 export async function fetchNftMetadata(
-	client: SuiClient,
+	client: SuiGraphQLClient,
 	tokenId: string,
 ): Promise<OnChainNftMeta | null> {
 	try {
-		const obj = await client.getObject({
-			id: tokenId,
-			options: { showDisplay: true, showOwner: true },
-		})
+		const obj = await graphqlGetObject(client, tokenId)
 		if (!obj.data) return null
 
-		const display = obj.data.display?.data as Record<string, string> | null | undefined
 		const ownerField = obj.data.owner
 		let owner = ''
 		if (ownerField && typeof ownerField === 'object') {
@@ -231,10 +228,10 @@ export async function fetchNftMetadata(
 
 		return {
 			id: obj.data.objectId,
-			name: display?.name ?? '',
+			name: '',
 			tokenId,
 			owner,
-			imageUrl: display?.image_url ?? null,
+			imageUrl: null,
 		}
 	} catch {
 		return null

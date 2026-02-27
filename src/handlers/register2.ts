@@ -7,7 +7,7 @@ import { generateLogoSvg } from '../utils/og-image'
 import { calculateRegistrationPrice } from '../utils/pricing'
 import { jsonResponse } from '../utils/response'
 import { getDefaultRpcUrl } from '../utils/rpc'
-import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
+import { skiScriptTag, skiStyleTag, skiWalletBridge } from '../utils/ski-embed'
 import {
 	buildMultiCoinRegisterTx,
 	buildSuiRegisterTx,
@@ -15,10 +15,6 @@ import {
 	prependGasSwapIfNeeded,
 } from '../utils/swap-transactions'
 import { relaySignedTransaction } from '../utils/transactions'
-import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
-import { generateWalletSessionJs } from '../utils/wallet-session-js'
-import { generateWalletTxJs } from '../utils/wallet-tx-js'
-import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -48,7 +44,7 @@ interface RegistrationPageOptions {
 export function generateRegistrationPage(
 	name: string,
 	env: Env,
-	session?: RegisterSession,
+	_session?: RegisterSession,
 	options: RegistrationPageOptions = {},
 ): string {
 	const cleanName = name.replace(/\.sui$/i, '').toLowerCase()
@@ -107,13 +103,13 @@ export function generateRegistrationPage(
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
-	${generateExtensionNoiseFilter()}
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="sui-ski-register-flow" content="${registerFlow}">
 	<meta name="sui-ski-register-bucket" content="${registerBucket}">
 	<title>${escapeHtml(cleanName)}.sui available | sui.ski</title>
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+	${skiStyleTag()}
 		<style>
 			@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 					:root {
@@ -775,17 +771,27 @@ export function generateRegistrationPage(
 			@media (max-width: 1020px) {
 				.layout-grid { grid-template-columns: 1fr; }
 			}
-		${generateWalletUiCss()}
+		/* Wallet modal */
+		.wk-modal-overlay { display:none; position:fixed; inset:0; background:rgba(4,8,16,0.82); backdrop-filter:blur(12px); z-index:13000; align-items:center; justify-content:center; padding:10px; }
+		.wk-modal-overlay.open { display:flex; }
+		.wk-modal { background:linear-gradient(180deg,#141820 0%,#0e1118 100%); border:1px solid rgba(160,200,240,0.12); border-radius:12px; max-width:380px; width:100%; overflow:hidden; box-shadow:0 28px 84px rgba(2,6,23,0.82); }
+		.wk-dd-item { width:100%; background:none; border:none; border-bottom:1px solid rgba(73,218,145,0.07); color:var(--text); font-size:0.9rem; font-weight:600; cursor:pointer; text-align:left; padding:12px 20px; display:flex; align-items:center; gap:12px; transition:background 0.15s; }
+		.wk-dd-item:hover { background:rgba(73,218,145,0.08); }
+		.wk-dd-item:last-child { border-bottom:none; }
+		/* Connected pill in top-right widget */
+		.wk-widget-btn { display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:10px; border:1px solid rgba(73,218,145,0.3); background:rgba(10,34,22,0.7); color:var(--text); font-size:0.8rem; font-weight:700; cursor:pointer; text-decoration:none; }
+		.wk-widget-btn.connected { border-color:rgba(73,218,145,0.5); }
+		.wk-widget-btn:hover { background:rgba(10,34,22,0.9); }
 	</style>
+	${skiScriptTag()}
 </head>
 <body data-register-flow="${registerFlow}">
-	<div id="wk-modal"></div>
 	<div class="wallet-widget" id="wallet-widget">
-		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile">
-			${generateLogoSvg(18)}
-		</button>
 		<div id="wk-widget"></div>
+		<button class="wallet-ski-btn" id="wallet-ski-btn" style="display:none"></button>
+		<div id="wallet-menu-root"></div>
 	</div>
+	<div id="ski-modal"></div>
 
 	<div class="container">
 		<div class="layout-grid">
@@ -823,6 +829,9 @@ export function generateRegistrationPage(
 		</span>
 	</div>
 
+	<script>
+${skiWalletBridge({ network })}
+	</script>
 	<script type="module">
 		let SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction
 		{
@@ -838,15 +847,14 @@ export function generateRegistrationPage(
 				new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout: ' + url)), SDK_TIMEOUT)),
 			])
 			const results = await Promise.allSettled([
-				timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
 				timedImport('https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle'),
 				timedImport('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle'),
 				timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
 			])
-			if (results[1].status === 'fulfilled') ({ SuiJsonRpcClient } = results[1].value)
-			if (results[2].status === 'fulfilled') ({ Transaction } = results[2].value)
-			if (results[3].status === 'fulfilled') {
-				const suinsModule = results[3].value
+			if (results[0].status === 'fulfilled') ({ SuiJsonRpcClient } = results[0].value)
+			if (results[1].status === 'fulfilled') ({ Transaction } = results[1].value)
+			if (results[2].status === 'fulfilled') {
+				const suinsModule = results[2].value
 				SuinsClient = pickExport(suinsModule, 'SuinsClient')
 				SuinsTransaction = pickExport(suinsModule, 'SuinsTransaction')
 			}
@@ -855,14 +863,12 @@ export function generateRegistrationPage(
 			window.SuiJsonRpcClient = SuiJsonRpcClient
 		}
 
-		${generateWalletSessionJs()}
-		${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
-		${generateWalletTxJs()}
-		${generateWalletUiJs({
-			showPrimaryName: true,
-			onConnect: 'onRegisterWalletConnected',
-			onDisconnect: 'onRegisterWalletDisconnected',
-		})}
+		window.addEventListener('ski:wallet-connected', function() {
+			if (typeof window.onRegisterWalletConnected === 'function') window.onRegisterWalletConnected()
+		})
+		window.addEventListener('ski:wallet-disconnected', function() {
+			if (typeof window.onRegisterWalletDisconnected === 'function') window.onRegisterWalletDisconnected()
+		})
 
 		const NAME = ${serializeJson(cleanName)}
 		const NETWORK = ${serializeJson(network)}
@@ -1092,9 +1098,8 @@ export function generateRegistrationPage(
 		}
 
 		function getWalletRouteLabel() {
-			const walletName = getConnectedWalletName().trim()
-			if (!walletName) return 'Connected wallet'
-			return walletName === 'WaaP' ? 'WaaP wallet' : walletName + ' wallet'
+			var walletName = getConnectedWalletName().trim()
+			return walletName ? walletName + ' wallet' : 'Connected wallet'
 		}
 
 		function coinSymbolFromType(coinType) {
@@ -1234,19 +1239,16 @@ export function generateRegistrationPage(
 		}
 
 		function getConnectedAddress() {
-			const conn = SuiWalletKit.$connection.value
-			if (!conn) return null
-			if (conn.status !== 'connected' && conn.status !== 'session') return null
-			return conn.address || null
+			return window._skiAddr || null
 		}
 
 		function getConnectedPrimaryName() {
-			const conn = SuiWalletKit.$connection.value
-			if (!conn) return null
-			if (conn.status !== 'connected' && conn.status !== 'session') return null
-			if (!conn.primaryName || typeof conn.primaryName !== 'string') return null
-			const normalized = conn.primaryName.trim().replace(/\\.sui$/i, '')
-			return normalized || null
+			if (!window._skiAddr) return null
+			try {
+				const cached = localStorage.getItem('ski:suins:' + window._skiAddr)
+				if (cached && typeof cached === 'string') return cached.replace(/\.sui$/i, '')
+			} catch {}
+			return null
 		}
 
 			function getRpcUrlForNetwork() {
@@ -1330,13 +1332,13 @@ export function generateRegistrationPage(
 		}
 
 		function updateWalletProfileButton() {
-			if (!walletProfileBtn) return
-			const address = getConnectedAddress()
 			const primaryName = getConnectedPrimaryName()
-			walletProfileBtn.classList.toggle('visible', !!address)
 			if (walletWidget) {
 				walletWidget.classList.toggle('has-black-diamond', !!primaryName)
 			}
+			if (!walletProfileBtn) return
+			const address = getConnectedAddress()
+			walletProfileBtn.classList.toggle('visible', !!address)
 			if (primaryName) {
 				walletProfileBtn.dataset.href = 'https://' + encodeURIComponent(primaryName) + '.sui.ski'
 				walletProfileBtn.title = primaryName + '.sui'
@@ -1458,10 +1460,7 @@ export function generateRegistrationPage(
 		}
 
 		function getConnectedWalletName() {
-			const conn = SuiWalletKit.$connection.value
-			if (conn && conn.wallet && conn.wallet.name) return String(conn.wallet.name)
-			const session = typeof getWalletSession === 'function' ? getWalletSession() : null
-			return session && session.walletName ? String(session.walletName) : ''
+			return window._skiConn ? (window._skiConn.walletName || '') : ''
 		}
 
 		async function checkAutoPaymentRoute() {
@@ -1491,70 +1490,24 @@ export function generateRegistrationPage(
 		}
 
 		function getConnectedWalletIcon() {
-			const conn = SuiWalletKit.$connection.value
-			if (conn && conn.wallet && conn.wallet.icon) return String(conn.wallet.icon)
-			return ''
+			const conn = window._skiConn
+			return (conn && conn.wallet && conn.wallet.icon) ? conn.wallet.icon : ''
 		}
 
-		function getConnectedAccountLabel() {
-			const conn = SuiWalletKit.$connection.value
-			if (!conn || !conn.account) return ''
-			return typeof conn.account.label === 'string' ? conn.account.label.trim() : ''
-		}
+		function getConnectedAccountLabel() { return '' }
 
 		function updateCardWalletInfo() {
-			const el = document.getElementById('nft-wallet-icons')
+			var el = document.getElementById('nft-wallet-icons')
 			if (!el) return
-			const address = getConnectedAddress()
-			if (!address || scrubMode) {
-				el.className = 'nft-wallet-icons'
-				el.innerHTML = ''
-				return
-			}
-			const walletName = getConnectedWalletName()
-			const isWaaP = walletName.toLowerCase() === 'waap'
-			let accountLabel = getConnectedAccountLabel()
-			if (!accountLabel && isWaaP && typeof __wkGetWaaPLabelForAddress === 'function') {
-				accountLabel = __wkGetWaaPLabelForAddress(address)
-			}
-			if (!accountLabel && isWaaP) {
-				const pName = getConnectedPrimaryName()
-				if (pName) accountLabel = pName
-			}
-			let html = ''
-			if (isWaaP && typeof __wkWaaPIcon === 'string' && __wkWaaPIcon) {
-				html += '<div class="nft-wallet-icon-row">' +
-					'<img src="' + __wkWaaPIcon + '" alt="WaaP" onerror="this.style.display=\\'none\\'">' +
-					'<span class="nft-wallet-icon-label">WaaP</span>' +
-					'</div>'
-			}
-			const waapMethod = isWaaP && typeof __wkGetWaaPMethodForAddress === 'function'
-				? __wkGetWaaPMethodForAddress(address)
-				: (isWaaP && typeof __wkPendingWaaPMethod === 'string' ? __wkPendingWaaPMethod : '')
-			if (waapMethod && typeof __wkSocialIcons === 'object' && __wkSocialIcons[waapMethod]) {
-				const methodSvg = __wkSocialIcons[waapMethod]
-					.replace(/width="\\d+"/, 'width="20"')
-					.replace(/height="\\d+"/, 'height="20"')
-					.replace(/fill="[^"]*"/, 'fill="#e2e8f0"')
-				let methodLabel = accountLabel || ''
-				if (!methodLabel) {
-					const fallbackLabels = { x: 'X', google: 'Google', discord: 'Discord', apple: 'Apple', email: 'Email', phone: 'Phone' }
-					methodLabel = fallbackLabels[waapMethod] || ''
-				}
-				html += '<div class="nft-wallet-icon-row">' + methodSvg +
-					(methodLabel ? '<span class="nft-wallet-icon-label">' + methodLabel + '</span>' : '') +
-					'</div>'
-			}
-			if (!isWaaP && walletName) {
-				html += '<div class="nft-wallet-icon-row"><span class="nft-wallet-icon-label">' + walletName + '</span></div>'
-			}
-			if (html) {
-				el.className = 'nft-wallet-icons show'
-				el.innerHTML = html
-			} else {
-				el.className = 'nft-wallet-icons'
-				el.innerHTML = ''
-			}
+			var address = getConnectedAddress()
+			if (!address || scrubMode) { el.className = 'nft-wallet-icons'; el.innerHTML = ''; return }
+			var walletName = getConnectedWalletName()
+			var walletIcon = getConnectedWalletIcon()
+			var html = ''
+			if (walletIcon) html += '<div class="nft-wallet-icon-row"><img src="' + walletIcon + '" alt="' + walletName + '" onerror="this.style.display=\'none\'"></div>'
+			if (walletName) html += '<div class="nft-wallet-icon-row"><span class="nft-wallet-icon-label">' + walletName + '</span></div>'
+			if (html) { el.className = 'nft-wallet-icons show'; el.innerHTML = html }
+			else { el.className = 'nft-wallet-icons'; el.innerHTML = '' }
 		}
 
 		function formatCompactSuiPrice(suiAmount) {
@@ -1718,7 +1671,7 @@ export function generateRegistrationPage(
 			if (!IS_REGISTERABLE || !registerBtn) return
 			const address = getConnectedAddress()
 			if (!address) {
-				SuiWalletKit.openModal()
+				window.dispatchEvent(new CustomEvent('ski:open-modal'))
 				return
 			}
 
@@ -1785,13 +1738,7 @@ export function generateRegistrationPage(
 					: NETWORK === 'devnet'
 						? 'sui:devnet'
 						: 'sui:mainnet'
-				const result = await SuiWalletKit.signAndExecute(txBytes, {
-					account: { address, chains: [signingChain] },
-					chain: signingChain,
-					txOptions: { showEffects: true, showObjectChanges: true },
-					preferTransactionBlock: true,
-					singleAttempt: true,
-				})
+				const result = await window._skiSignAndExecute(txBytes, signingChain)
 				const digest = result?.digest ? String(result.digest) : ''
 
 				const effectsStatus = result?.effects?.status
@@ -1809,7 +1756,7 @@ export function generateRegistrationPage(
 				if (!createdNft && digest) {
 					showStatus('Verifying registration...', 'info')
 					try {
-						const txCheck = await client.getTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } })
+						const txCheck = await getSuiClient()?.getTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } })
 						if (txCheck?.effects?.status?.status === 'failure') {
 							throw new Error(txCheck.effects.status.error || 'Transaction failed on-chain')
 						}
@@ -1848,10 +1795,7 @@ export function generateRegistrationPage(
 					'ok',
 					true,
 				)
-				if (wantsPrimaryName && typeof SuiWalletKit.setPrimaryName === 'function') {
-					SuiWalletKit.setPrimaryName(NAME)
-				}
-				registerBtn.textContent = 'Registered'
+					registerBtn.textContent = 'Registered'
 				registerBtn.disabled = true
 
 				setTimeout(() => { window.location.href = profileUrl }, 2000)
@@ -1899,15 +1843,6 @@ export function generateRegistrationPage(
 			updateCardWalletInfo()
 			renderNftQr()
 		}
-
-		${generateSharedWalletMountJs({
-			network: env.SUI_NETWORK,
-			session,
-			onConnect: 'onRegisterWalletConnected',
-			onDisconnect: 'onRegisterWalletDisconnected',
-			profileButtonId: 'wallet-profile-btn',
-			profileFallbackHref: 'https://sui.ski',
-		})}
 
 		;(function fitNameSize() {
 			const nameEl = document.querySelector('.nft-name')

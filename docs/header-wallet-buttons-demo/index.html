@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Header Wallet Buttons Demo</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="page">
+    <section class="stage-card">
+      <div class="stage-top">
+        <h1>Header Buttons Standalone Demo</h1>
+        <p>Simulates the two profile header buttons with local-only state.</p>
+      </div>
+
+      <div class="demo-stage">
+        <div class="wallet-widget has-black-diamond" id="wallet-widget">
+          <div id="wk-widget"></div>
+
+          <button class="wallet-profile-btn" id="wallet-profile-btn" title="Open wallet menu" aria-label="Open wallet menu" style="display:none">
+            <img
+              class="wallet-profile-logo"
+              src="../button-assets/dotSKI-wordmark-black.png"
+              alt=".SKI"
+              draggable="false"
+            >
+          </button>
+
+          <div id="wallet-menu-root"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="controls-card">
+      <h2>Simulation Controls</h2>
+
+      <div class="controls-grid">
+        <label>
+          Primary Name
+          <input id="primary-name-input" type="text" value="brando" placeholder="brando">
+        </label>
+
+        <label>
+          Address
+          <input id="address-input" type="text" value="0x5f2e9b1c4a8d7e0f6b3c2d1a9e8f7b6c5d4a3b2c">
+        </label>
+
+        <label>
+          Method
+          <select id="method-select">
+            <option value="x" selected>X</option>
+            <option value="google">Google</option>
+            <option value="wallet">Wallet</option>
+          </select>
+        </label>
+
+        <label>
+          SUI
+          <input id="sui-input" type="number" step="0.01" value="2.10">
+        </label>
+
+        <label>
+          USD
+          <input id="usd-input" type="number" step="0.01" value="1.09">
+        </label>
+      </div>
+
+      <div class="control-actions">
+        <button id="connect-btn" class="action primary">Connect</button>
+        <button id="disconnect-btn" class="action" disabled>Disconnect</button>
+        <button id="apply-btn" class="action">Apply Values</button>
+        <button id="clear-primary-btn" class="action">Clear Primary Name</button>
+        <button id="randomize-btn" class="action">Randomize</button>
+      </div>
+
+      <p class="hint">
+        Notes: in connected state, clicking the name pill opens `primaryname.sui.ski`, and clicking `.SKI` opens the wallet menu underneath `.SKI`. Click the address row to copy; that same row turns blue and shows `Copied! ✓` for 2.2s before restoring the address. Leave Primary Name empty (or click Clear Primary Name) to show address like `0x13556...467389`. Session persists across hard refresh while connected, and fully clears on Disconnect.
+      </p>
+    </section>
+  </main>
+
+  <div id="connect-modal" class="wk-modal-overlay" hidden>
+    <div class="wk-modal" role="dialog" aria-modal="true" aria-label="Connect Wallet">
+      <div class="wk-modal-head">
+        <h3>Connect Wallet</h3>
+        <button id="close-modal-btn" class="wk-close" aria-label="Close">×</button>
+      </div>
+
+      <div class="wk-methods">
+        <button class="wk-method" data-method="x">
+          <img src="../button-assets/x-social-icon.svg" alt="X" width="20" height="20">
+          Connect with X
+        </button>
+        <button class="wk-method" data-method="google">
+          <span class="wk-method-g">G</span>
+          Connect with Google
+        </button>
+        <button class="wk-method" data-method="wallet">
+          <span class="wk-method-wallet">◎</span>
+          Connect Wallet
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

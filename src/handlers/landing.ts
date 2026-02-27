@@ -13,10 +13,9 @@ import { getDefaultRpcUrl } from '../utils/rpc'
 import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import { renderSocialMeta } from '../utils/social'
 import { getGatewayStatus } from '../utils/status'
-import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
-import { generateWalletTxJs } from '../utils/wallet-tx-js'
-import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
+import { skiStyleTag, skiScriptTag, skiWidgetMarkup, skiEventBridge, skiWalletBridge } from '../utils/ski-embed'
+import { getSuiGraphQLClient } from '../utils/sui-graphql'
 import { generateThunderCss } from '../utils/thunder-css'
 import { generateThunderJs } from '../utils/thunder-js'
 import { fetchListingOnChain, fetchOnChainSales, fetchNftMetadata, fetchAllBidsForNft } from '../utils/onchain-listing'
@@ -1832,10 +1831,7 @@ async function handleMarketplaceData(name: string, _env: Env, tokenId?: string):
 	const tradeportItemUrl = (tid: string) =>
 		`https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=${tid}&modalSlug=suins&nav=1`
 
-	const client = new SuiClient({
-		url: getDefaultRpcUrl(_env.SUI_NETWORK),
-		network: _env.SUI_NETWORK,
-	})
+	const client = getSuiGraphQLClient(_env)
 
 	let resolvedTokenId = tokenId
 	if (!resolvedTokenId) {
@@ -2131,10 +2127,7 @@ async function handleNftActivityByTokenId(tokenId: string, _env: Env): Promise<R
 	}
 
 	try {
-		const client = new SuiClient({
-			url: getDefaultRpcUrl(_env.SUI_NETWORK),
-			network: _env.SUI_NETWORK,
-		})
+		const client = getSuiGraphQLClient(_env)
 
 		const onChainEvents = await fetchNftEventsOnChain(client, tokenId, 200)
 
@@ -3295,10 +3288,7 @@ async function handleGraceActivity(env: Env, options: GraceActivityOptions): Pro
 		let source = 'indexer'
 
 		try {
-			const client = new SuiClient({
-				url: getDefaultRpcUrl(env.SUI_NETWORK),
-				network: env.SUI_NETWORK,
-			})
+			const client = getSuiGraphQLClient(env)
 
 			const onChainEvents = await fetchCollectionEventsOnChain(client, 1000)
 			if (onChainEvents.length > 0) {
@@ -3977,7 +3967,6 @@ export function landingPageHTML(_network: string, options: LandingPageOptions = 
 	return `<!DOCTYPE html>
 <html lang="en">
 	<head>
-		${generateExtensionNoiseFilter()}
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 		<title>sui.ski - SuiNS Gateway</title>
@@ -4730,7 +4719,6 @@ ${socialMeta}
 			text-underline-offset: 2px;
 		}
 
-		${generateWalletUiCss()}
 
 		@media (max-width: 540px) {
 				.header { padding: 40px 16px 16px; }
@@ -4738,6 +4726,7 @@ ${socialMeta}
 				.search-container { padding: 10px 12px; }
 			}
 		</style>
+${skiStyleTag()}
 </head>
 <body>
 	<div class="wallet-widget" id="wallet-widget">
@@ -4814,6 +4803,7 @@ ${socialMeta}
 		<span class="sui-price-wrap"><img class="sui-icon" src="/media-pack/SuiIcon.svg" alt="SUI"><span class="price" id="sui-price">$--</span></span>
 	</div>
 
+${skiWidgetMarkup()}
 		<script type="module">
 				let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction;
 				{
@@ -4850,6 +4840,7 @@ ${socialMeta}
 				if (SuiJsonRpcClient) window.SuiJsonRpcClient = SuiJsonRpcClient;
 				if (Transaction) window.Transaction = Transaction;
 				${generateWalletSessionJs()}
+				${skiWalletBridge({ network: options.network || 'mainnet' })}
 			const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
 			const NETWORK = ${JSON.stringify(options.network || 'mainnet')};
 			const RPC_URL = RPC_URLS[NETWORK] || RPC_URLS.mainnet;
@@ -4873,17 +4864,17 @@ ${socialMeta}
 				let walletDropdownRefreshTimer = null;
 
 				function getConnectedAddress() {
-					var conn = SuiWalletKit.$connection.value;
+					var conn = _skiAddr ? { address: _skiAddr, status: 'connected' } : null;
 					return conn && (conn.status === 'connected' || conn.status === 'session') ? conn.address : null;
 				}
 
 				function getViewerAddress() {
-					var conn = SuiWalletKit.$connection.value;
+					var conn = _skiAddr ? { address: _skiAddr, status: 'connected' } : null;
 					return conn && (conn.status === 'connected' || conn.status === 'session') ? conn.address : null;
 				}
 
 				function getConnectedPrimaryName() {
-					var conn = SuiWalletKit.$connection.value;
+					var conn = _skiAddr ? { address: _skiAddr, status: 'connected' } : null;
 					if (!conn || (conn.status !== 'connected' && conn.status !== 'session')) return null;
 					if (!conn.primaryName) return null;
 					return String(conn.primaryName).replace(/\\.sui$/i, '');
@@ -4913,9 +4904,7 @@ ${socialMeta}
 					suinsClient = null;
 				}
 
-				${generateWalletKitJs({ network: options.network || 'mainnet', autoConnect: true })}
-				${generateWalletTxJs()}
-				${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onLandingWalletConnected', onDisconnect: 'onLandingWalletDisconnected' })}
+				${skiEventBridge({ onConnect: 'onLandingWalletConnected', onDisconnect: 'onLandingWalletDisconnected' })}
 
 					const walletWidgetEl = document.getElementById('wallet-widget');
 					const walletProfileBtnEl = document.getElementById('wallet-profile-btn');
@@ -4951,16 +4940,16 @@ ${socialMeta}
 						profileFallbackHref: 'https://sui.ski',
 					})}
 
-					if (typeof SuiWalletKit.subscribe === 'function' && SuiWalletKit.$connection) {
-						SuiWalletKit.subscribe(SuiWalletKit.$connection, function() {
-							syncWalletProfileButtonVisibility();
-							scheduleWalletDrivenDropdownRefresh();
-						});
-					}
+					_skiSubscribe(function() {
+						syncWalletProfileButtonVisibility();
+						scheduleWalletDrivenDropdownRefresh();
+					}, function() {
+						syncWalletProfileButtonVisibility();
+					});
 
 			async function executeTransaction(tx) {
 				var txBytes = await tx.build({ client: suiClient });
-				return SuiWalletKit.signAndExecuteFromBytes(txBytes);
+				return _skiSignAndExecute(txBytes);
 			}
 
 			const WAAP_REFERRAL_ADDRESS = '0x53f1e3d5f1e3f5aefa47fd3d5a47c9b8cc87e26a2c7bf39e26c870ded4eca7df';
@@ -5075,9 +5064,7 @@ ${socialMeta}
 				var address = getConnectedAddress();
 				if (!address) {
 					regModalShowStatus('Connect your wallet first', 'info');
-					if (typeof SuiWalletKit !== 'undefined' && typeof SuiWalletKit.openModal === 'function') {
-						SuiWalletKit.openModal();
-					}
+					window.dispatchEvent(new CustomEvent('ski:open-modal'));
 					return;
 				}
 				regModalBusy = true;
@@ -5110,7 +5097,7 @@ ${socialMeta}
 					for (var i = 0; i < raw.length; i++) txBytes[i] = raw.charCodeAt(i);
 
 					regModalShowStatus('Approve in wallet...', 'info');
-					var result = await SuiWalletKit.signAndExecute(txBytes, { txOptions: { showEffects: true } });
+					var result = await _skiSignAndExecute(txBytes);
 					var digest = result && result.digest ? String(result.digest) : '';
 
 					var effectsStatus = result && result.effects && result.effects.status ? result.effects.status : null;
@@ -5158,9 +5145,7 @@ ${socialMeta}
 						'ok',
 						true,
 					);
-					if (regModalWantsPrimary && typeof SuiWalletKit.setPrimaryName === 'function') {
-						SuiWalletKit.setPrimaryName(regModalName);
-					}
+					// setPrimaryName not available in dapp kit
 					if (regBtn) { regBtn.textContent = 'Registered'; regBtn.disabled = true; }
 				} catch (error) {
 					var msg = error && error.message ? error.message : 'Registration failed';
@@ -6167,6 +6152,7 @@ ${socialMeta}
 	<div id="thunder-root"></div>
 	<script>${generateThunderJs({ page: 'landing', network: options.network || 'mainnet' })}</script>
 
+${skiScriptTag()}
 </body>
 </html>`
 }
@@ -6175,7 +6161,6 @@ export function cloudflareGracePageHTML(network: string): string {
 	return `<!doctype html>
 <html lang="en">
 <head>
-	${generateExtensionNoiseFilter()}
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>SuiNS Grace Radar | sui.ski</title>
@@ -6252,10 +6237,10 @@ export function cloudflareGracePageHTML(network: string): string {
 		.wallet-btn.connected { border-color: rgba(34, 197, 94, 0.5); }
 		.w-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); display: inline-block; }
 		.wallet-btn.connected .w-dot { background: var(--ok); }
-		${generateWalletUiCss()}
-		@media (max-width: 940px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .input { min-width: 0; width: 100%; } }
+			@media (max-width: 940px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .input { min-width: 0; width: 100%; } }
 		@media (max-width: 820px) { .table-wrap { overflow-x: auto; } table { min-width: 820px; } }
 	</style>
+${skiStyleTag()}
 </head>
 <body>
 	<div class="wrap">
@@ -6333,6 +6318,7 @@ export function cloudflareGracePageHTML(network: string): string {
 
 	<div id="wk-modal"></div>
 
+${skiWidgetMarkup()}
 	<script type="module">
 	var SDK_TIMEOUT = 20000;
 	var timedImport = function(url, ms) { ms = ms || SDK_TIMEOUT; return Promise.race([import(url), new Promise(function(_, r) { setTimeout(function() { r(new Error('Timeout')); }, ms); })]); };
@@ -6341,12 +6327,11 @@ export function cloudflareGracePageHTML(network: string): string {
 	var sdkR = await Promise.allSettled([timedImport('https://esm.sh/@wallet-standard/app@1.1.0')]);
 	if (sdkR[0].status === 'fulfilled') getWallets = pick(sdkR[0].value, 'getWallets');
 	${generateWalletSessionJs()}
-	${generateWalletKitJs({ network: network || 'mainnet', autoConnect: true })}
-	${generateWalletUiJs({ showPrimaryName: false, onConnect: 'onGraceWalletConnected', onDisconnect: 'onGraceWalletDisconnected' })}
+	${skiWalletBridge({ network: network || 'mainnet' })}
+	${skiEventBridge({ onConnect: 'onGraceWalletConnected', onDisconnect: 'onGraceWalletDisconnected' })}
 
 	function getAddr() {
-		if (typeof SuiWalletKit === 'undefined') return null;
-		var c = SuiWalletKit.$connection.value;
+		var c = _skiAddr ? { address: _skiAddr, status: 'connected' } : null;
 		return c && (c.status === 'connected' || c.status === 'session') ? c.address : null;
 	}
 	var wBtn = document.getElementById('wallet-btn');
@@ -6359,8 +6344,8 @@ export function cloudflareGracePageHTML(network: string): string {
 	window.onGraceWalletConnected = function() { syncW(); if (window.loadBm) window.loadBm(); };
 	window.onGraceWalletDisconnected = function() { syncW(); window.bookmarks = {}; if (window.renderBm) window.renderBm(); };
 	wBtn.addEventListener('click', function() {
-		if (getAddr()) { if (typeof SuiWalletKit !== 'undefined' && SuiWalletKit.disconnect) SuiWalletKit.disconnect(); }
-		else { if (typeof SuiWalletKit !== 'undefined' && SuiWalletKit.openModal) SuiWalletKit.openModal(); }
+		if (getAddr()) { _skiDisconnect(); }
+		else { window.dispatchEvent(new CustomEvent('ski:open-modal')); }
 	});
 	setTimeout(syncW, 500);
 	window.getAddr = getAddr;
@@ -6598,6 +6583,8 @@ export function cloudflareGracePageHTML(network: string): string {
 	<style>${generateThunderCss()}</style>
 	<div id="thunder-root"></div>
 	<script>${generateThunderJs({ page: 'landing', network: network || 'mainnet' })}</script>
+
+${skiScriptTag()}
 </body>
 </html>`
 }
@@ -6606,7 +6593,6 @@ export function generateCancelBidPage(env: Env, bidId: string): string {
 	const escapedBidId = bidId.replace(/[^a-fA-F0-9x]/g, '')
 	return `<!DOCTYPE html>
 <html lang="en"><head>
-${generateExtensionNoiseFilter()}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cancel Bid - sui.ski</title>
@@ -6632,8 +6618,8 @@ a{color:#a090e0;text-decoration:none}
 a:hover{text-decoration:underline}
 .back{display:inline-block;margin-bottom:16px;font-size:.8rem;color:#888}
 .back:hover{color:#c8c0f0}
-${generateWalletUiCss()}
 </style>
+${skiStyleTag()}
 </head><body>
 <div class="card">
 <a class="back" href="/">&larr; Back to sui.ski</a>
@@ -6648,10 +6634,10 @@ ${generateWalletUiCss()}
 </div>
 <div id="wk-modal"></div>
 
+${skiWidgetMarkup()}
 <script>
-${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
-${generateWalletTxJs()}
-${generateWalletUiJs({ onConnect: 'onWalletConnect', onDisconnect: '' })}
+${skiWalletBridge({ network: env.SUI_NETWORK })}
+${skiEventBridge({ onConnect: 'onWalletConnect' })}
 
 var statusEl = document.getElementById('status');
 var cancelBtn = document.getElementById('cancelBtn');
@@ -6664,25 +6650,25 @@ function showStatus(msg, type) {
 }
 
 function onWalletConnect() {
-	var conn = SuiWalletKit.$connection.value;
+	var conn = _skiAddr ? { address: _skiAddr } : null;
 	if (conn && conn.address) {
 		connectedAddress = conn.address;
 		cancelBtn.textContent = 'Cancel Bid';
 	}
 }
 
-SuiWalletKit.$connection.listen(function(conn) {
+_skiSubscribe(function(conn) {
 	if (conn && conn.address) {
 		onWalletConnect();
-	} else {
+	}
+}, function() {
 		connectedAddress = null;
 		cancelBtn.textContent = 'Connect Wallet';
-	}
 });
 
 cancelBtn.addEventListener('click', async function() {
 	if (!connectedAddress) {
-		SuiWalletKit.openModal();
+		window.dispatchEvent(new CustomEvent('ski:open-modal'));
 		return;
 	}
 	var bid = (bidInput.value || '').trim();
@@ -6708,9 +6694,7 @@ cancelBtn.addEventListener('click', async function() {
 		var Tx = await import('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle').then(function(m) { return m.Transaction; });
 		var tx = Tx.from(data.txBytes);
 
-		var result = await SuiWalletKit.signAndExecute(tx, {
-			txOptions: { showEffects: true },
-		});
+		var result = await _skiSignAndExecute(tx);
 
 		var digest = result.digest || (result.result && result.result.digest) || '';
 		if (digest) {
@@ -6736,11 +6720,12 @@ cancelBtn.addEventListener('click', async function() {
 	}
 });
 
-SuiWalletKit.detectWallets().then(function() {
-	var conn = SuiWalletKit.$connection.value;
+Promise.resolve([]).then(function() {
+	var conn = _skiAddr ? { address: _skiAddr } : null;
 	if (conn && conn.address) onWalletConnect();
 });
-SuiWalletKit.renderModal('wk-modal');
 </script>
+
+${skiScriptTag()}
 </body></html>`
 }

@@ -5,6 +5,7 @@ import { cacheKey } from '../utils/cache'
 import { getDefaultRpcUrl } from '../utils/rpc'
 import { toSuiNSName } from '../utils/subdomain'
 import { lookupName as surfluxLookupName } from '../utils/surflux-grpc'
+import { getSuiGraphQLClient, graphqlGetObject } from '../utils/sui-graphql'
 
 const CACHE_TTL = 600
 const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000
@@ -68,21 +69,13 @@ export async function resolveSuiNS(
 				// Fetch NFT owner if we have the NFT ID (Surflux doesn't return owner)
 				if (surfluxRecord.nftId && !surfluxRecord.ownerAddress) {
 					try {
-						const suiClient = new SuiClient({
-							url: getDefaultRpcUrl(env.SUI_NETWORK),
-							network: env.SUI_NETWORK,
-						})
-						const nftObject = await suiClient.getObject({
-							id: surfluxRecord.nftId,
-							options: { showOwner: true },
-						})
+						const gqlClient = getSuiGraphQLClient(env)
+						const nftObject = await graphqlGetObject(gqlClient, surfluxRecord.nftId)
 						if (nftObject.data?.owner) {
 							const owner = nftObject.data.owner
-							if (typeof owner === 'string') {
-								surfluxRecord.ownerAddress = owner
-							} else if ('AddressOwner' in owner) {
+							if (owner.AddressOwner) {
 								surfluxRecord.ownerAddress = owner.AddressOwner
-							} else if ('ObjectOwner' in owner) {
+							} else if (owner.ObjectOwner) {
 								surfluxRecord.ownerAddress = owner.ObjectOwner
 							}
 						}
@@ -118,17 +111,13 @@ export async function resolveSuiNS(
 		let ownerAddress: string | undefined
 		if (nameRecord.nftId) {
 			try {
-				const nftObject = await suiClient.getObject({
-					id: nameRecord.nftId,
-					options: { showOwner: true },
-				})
+				const gqlClient = getSuiGraphQLClient(env)
+				const nftObject = await graphqlGetObject(gqlClient, nameRecord.nftId)
 				if (nftObject.data?.owner) {
 					const owner = nftObject.data.owner
-					if (typeof owner === 'string') {
-						ownerAddress = owner
-					} else if ('AddressOwner' in owner) {
+					if (owner.AddressOwner) {
 						ownerAddress = owner.AddressOwner
-					} else if ('ObjectOwner' in owner) {
+					} else if (owner.ObjectOwner) {
 						ownerAddress = owner.ObjectOwner
 					}
 				}

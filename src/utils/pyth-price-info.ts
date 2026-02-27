@@ -1,24 +1,23 @@
-import type { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import { parseStructTag } from '@mysten/sui/utils'
 import { mainPackage } from '@mysten/suins'
+import type { Env } from '../types'
+import { getSuiGraphQLClient, graphqlGetDynamicField } from './sui-graphql'
 
 const PYTH_MAINNET_STATE = mainPackage.mainnet.pyth.pythStateId
 const PYTH_TESTNET_STATE = mainPackage.testnet.pyth.pythStateId
 
 export async function getPythPriceInfoObjectId(
-	client: SuiClient,
+	env: Env,
 	network: 'mainnet' | 'testnet',
 	feedId: string,
 ): Promise<string> {
+	const client = getSuiGraphQLClient(env)
 	const pythStateId = network === 'mainnet' ? PYTH_MAINNET_STATE : PYTH_TESTNET_STATE
 	const normalizedFeed = feedId.startsWith('0x') ? feedId : `0x${feedId}`
 
-	const priceTableResult = await client.getDynamicFieldObject({
-		parentId: pythStateId,
-		name: {
-			type: 'vector<u8>',
-			value: 'price_info',
-		},
+	const priceTableResult = await graphqlGetDynamicField(client, pythStateId, {
+		type: 'vector<u8>',
+		value: 'price_info',
 	})
 
 	if (!priceTableResult.data?.type) {
@@ -42,12 +41,9 @@ export async function getPythPriceInfoObjectId(
 		feedBytes.push(parseInt(hex.slice(i, i + 2), 16))
 	}
 
-	const feedResult = await client.getDynamicFieldObject({
-		parentId: priceTableResult.data.objectId,
-		name: {
-			type: `${fieldType}::price_identifier::PriceIdentifier`,
-			value: { bytes: feedBytes },
-		},
+	const feedResult = await graphqlGetDynamicField(client, priceTableResult.data.objectId, {
+		type: `${fieldType}::price_identifier::PriceIdentifier`,
+		value: { bytes: feedBytes },
 	})
 
 	if (!feedResult.data?.content || feedResult.data.content.dataType !== 'moveObject') {

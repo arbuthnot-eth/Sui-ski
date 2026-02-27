@@ -21,6 +21,7 @@ import { jsonResponse } from '../utils/response'
 import { getDefaultRpcUrl } from '../utils/rpc'
 import { fetchMultichainPaymentRequirements, resolveX402Providers, x402PaymentMiddleware } from '../utils/x402-middleware'
 import { resolveX402Recipient } from '../utils/x402-sui'
+import { getSuiGraphQLClient } from '../utils/sui-graphql'
 
 type X402RegisterEnv = {
 	Bindings: Env
@@ -345,44 +346,30 @@ x402RegisterRoutes.post(
 
 			const txBytes = await tx.build({ client: client as never })
 			const { signature } = await keypair.signTransaction(txBytes)
-			const txBytesBase64 = btoa(String.fromCharCode(...txBytes))
-
-			const rpcResponse = await fetch(env.SUI_RPC_URL, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					jsonrpc: '2.0',
-					id: Date.now(),
-					method: 'sui_executeTransactionBlock',
-					params: [
-						txBytesBase64,
-						[signature],
-						{ showEffects: true, showEvents: true, showObjectChanges: true },
-						'WaitForLocalExecution',
-					],
-				}),
+			const gqlClient = getSuiGraphQLClient(env)
+			const gqlResult = await gqlClient.executeTransaction({
+				transaction: txBytes,
+				signatures: [signature],
 			})
 
-			const rpcJson = (await rpcResponse.json()) as {
-				result?: {
-					digest?: string
-					effects?: { status?: { status: string; error?: string } }
-					events?: Array<{ type: string; parsedJson?: Record<string, unknown> }>
-					objectChanges?: Array<{
-						type: string
-						objectType?: string
-						objectId?: string
-						owner?: unknown
-					}>
-				}
-				error?: { message?: string }
+			const gqlTx = gqlResult.transaction as {
+				digest?: string
+				status?: string
+				effects?: { status?: { status: string; error?: string } }
+				events?: Array<{ type: string; parsedJson?: Record<string, unknown> }>
+				objectChanges?: Array<{
+					type: string
+					objectType?: string
+					objectId?: string
+					owner?: unknown
+				}>
+			} | undefined
+
+			if (!gqlTx) {
+				throw new Error('Transaction failed: no result from GraphQL')
 			}
 
-			if (rpcJson.error) {
-				throw new Error(`Transaction failed: ${rpcJson.error.message}`)
-			}
-
-			const txResult = rpcJson.result
+			const txResult = gqlTx
 			if (!txResult?.effects?.status || txResult.effects.status.status !== 'success') {
 				throw new Error(
 					`Transaction execution failed: ${txResult?.effects?.status?.error || 'unknown error'}`,
@@ -538,45 +525,31 @@ x402RegisterRoutes.post('/sweep', async (c) => {
 
 		const txBytes = await tx.build({ client: client as never })
 		const { signature } = await keypair.signTransaction(txBytes)
-		const txBytesBase64 = btoa(String.fromCharCode(...txBytes))
-
-		const rpcResponse = await fetch(env.SUI_RPC_URL, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				jsonrpc: '2.0',
-				id: Date.now(),
-				method: 'sui_executeTransactionBlock',
-				params: [
-					txBytesBase64,
-					[signature],
-					{ showEffects: true, showBalanceChanges: true },
-					'WaitForLocalExecution',
-				],
-			}),
+		const gqlClient2 = getSuiGraphQLClient(env)
+		const gqlResult2 = await gqlClient2.executeTransaction({
+			transaction: txBytes,
+			signatures: [signature],
 		})
 
-		const rpcJson = (await rpcResponse.json()) as {
-			result?: {
-				digest?: string
-				effects?: { status?: { status: string; error?: string } }
-			}
-			error?: { message?: string }
+		const gqlTx2 = gqlResult2.transaction as {
+			digest?: string
+			status?: string
+			effects?: { status?: { status: string; error?: string } }
+		} | undefined
+
+		if (!gqlTx2) {
+			throw new Error(`Sweep transaction failed: no result from GraphQL`)
 		}
 
-		if (rpcJson.error) {
-			throw new Error(`Sweep transaction failed: ${rpcJson.error.message}`)
-		}
-
-		if (rpcJson.result?.effects?.status?.status !== 'success') {
+		if (gqlTx2.status !== 'success' && gqlTx2.effects?.status?.status !== 'success') {
 			throw new Error(
-				`Sweep execution failed: ${rpcJson.result?.effects?.status?.error || 'unknown'}`,
+				`Sweep execution failed: ${gqlTx2.effects?.status?.error || 'unknown'}`,
 			)
 		}
 
 		return jsonResponse({
 			success: true,
-			digest: rpcJson.result.digest,
+			digest: gqlTx2.digest,
 			agentAddress,
 			recipient: x402Recipient,
 			transfers,

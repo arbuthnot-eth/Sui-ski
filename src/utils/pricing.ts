@@ -67,7 +67,7 @@ export async function calculateRegistrationPrice(
 		getUSDCSuiPrice(env),
 		getNSSuiPrice(env),
 		nsFeedId
-			? getPythPriceInfoObjectId(client, network, nsFeedId).catch(() => undefined)
+			? getPythPriceInfoObjectId(env, network, nsFeedId).catch(() => undefined)
 			: Promise.resolve(undefined),
 	])
 	const suiPriceUsd = usdcResult.usdcPerSui
@@ -195,7 +195,7 @@ export async function calculateRenewalPrice(params: CalculatePriceParams): Promi
 		getUSDCSuiPrice(env),
 		getNSSuiPrice(env),
 		nsFeedId
-			? getPythPriceInfoObjectId(client, network, nsFeedId).catch(() => undefined)
+			? getPythPriceInfoObjectId(env, network, nsFeedId).catch(() => undefined)
 			: Promise.resolve(undefined),
 	])
 	const suiPriceUsd = usdcResult.usdcPerSui

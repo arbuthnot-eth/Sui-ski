@@ -2,10 +2,8 @@ import type { Env } from '../types'
 import { generateLogoSvg } from '../utils/og-image'
 import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import { renderSocialMeta } from '../utils/social'
-import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
-import { generateWalletTxJs } from '../utils/wallet-tx-js'
-import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
+import { skiScriptTag, skiStyleTag, skiWidgetMarkup, skiWalletBridge } from '../utils/ski-embed'
 
 export function generateDashboardPage(env: Env): string {
 	const network = env.SUI_NETWORK || 'mainnet'
@@ -23,7 +21,6 @@ export function generateDashboardPage(env: Env): string {
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
-	${generateExtensionNoiseFilter()}
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>My Names — sui.ski</title>
@@ -938,8 +935,8 @@ export function generateDashboardPage(env: Env): string {
 			}
 		}
 
-		${generateWalletUiCss()}
-	</style>
+		</style>
+	${skiStyleTag()}
 </head>
 <body>
 	<div class="top-bar">
@@ -1165,6 +1162,7 @@ export function generateDashboardPage(env: Env): string {
 		</div>
 	</div>
 
+	${skiWidgetMarkup()}
 	<script type="module">
 		let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction;
 		{
@@ -1198,9 +1196,7 @@ export function generateDashboardPage(env: Env): string {
 		}
 
 		${generateWalletSessionJs()}
-		${generateWalletKitJs({ network, autoConnect: true })}
-		${generateWalletTxJs()}
-		${generateWalletUiJs({ showPrimaryName: true, onConnect: 'onWalletConnected', onDisconnect: 'onWalletDisconnected' })}
+		${skiWalletBridge({ network: env.SUI_NETWORK })}
 
 		const API_BASE = ${JSON.stringify(apiBase)};
 		const PROFILE_BASE = ${JSON.stringify(profileBase)};
@@ -1317,8 +1313,7 @@ export function generateDashboardPage(env: Env): string {
 		}
 
 		function isWalletActive() {
-			const status = SuiWalletKit.$connection.value.status;
-			return status === 'connected' || status === 'session';
+			return !!_skiAddr;
 		}
 
 		function selectName(name) {
@@ -1417,7 +1412,7 @@ export function generateDashboardPage(env: Env): string {
 		}
 
 		async function loadNames() {
-			const address = SuiWalletKit.$connection.value.address;
+			const address = _skiAddr;
 			if (!address) return;
 
 			loadingState.style.display = '';
@@ -1455,9 +1450,8 @@ export function generateDashboardPage(env: Env): string {
 		}
 
 		function updateWalletUI() {
-			const conn = SuiWalletKit.$connection.value;
-			const address = conn.address;
-			const isActive = conn.status === 'connected' || conn.status === 'session';
+			const address = _skiAddr;
+			const isActive = !!address;
 
 			if (isActive && address) {
 				connectCta.style.display = 'none';
@@ -1521,7 +1515,7 @@ export function generateDashboardPage(env: Env): string {
 					price: BigInt(priceMist)
 				});
 
-				const result = await SuiWalletKit.signAndExecute(tx);
+				const result = await _skiSignAndExecute(tx);
 				showTxSuccess('Renewal successful!', result.digest);
 				setTimeout(() => loadNames(), 2000);
 			} catch (e) {
@@ -1591,12 +1585,12 @@ export function generateDashboardPage(env: Env): string {
 		});
 
 		document.getElementById('connect-btn').addEventListener('click', () => {
-			SuiWalletKit.openModal();
+			window.dispatchEvent(new CustomEvent('ski:open-modal'));
 		});
 
 		document.getElementById('renew-btn').addEventListener('click', () => {
 			if (!isWalletActive()) {
-				SuiWalletKit.openModal();
+				window.dispatchEvent(new CustomEvent('ski:open-modal'));
 			} else {
 				executeRenewal();
 			}
@@ -1604,7 +1598,7 @@ export function generateDashboardPage(env: Env): string {
 
 		document.getElementById('list-btn').addEventListener('click', () => {
 			if (!isWalletActive()) {
-				SuiWalletKit.openModal();
+				window.dispatchEvent(new CustomEvent('ski:open-modal'));
 			} else {
 				executeList();
 			}
@@ -1612,14 +1606,14 @@ export function generateDashboardPage(env: Env): string {
 
 		document.getElementById('bid-btn').addEventListener('click', () => {
 			if (!isWalletActive()) {
-				SuiWalletKit.openModal();
+				window.dispatchEvent(new CustomEvent('ski:open-modal'));
 			} else {
 				executeBid();
 			}
 		});
 
 		document.getElementById('copy-address').addEventListener('click', async () => {
-			const addr = SuiWalletKit.$connection.value.address;
+			const addr = _skiAddr;
 			if (addr) {
 				await navigator.clipboard.writeText(addr);
 				const btn = document.getElementById('copy-address');
@@ -1639,8 +1633,8 @@ export function generateDashboardPage(env: Env): string {
 			updateWalletUI();
 		};
 
-		SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
-			if (conn && (conn.status === 'connected' || conn.status === 'session') && conn.address) {
+		_skiSubscribe(function(conn) {
+			if (conn && conn.address) {
 				updateWalletUI();
 				loadNames();
 			}
@@ -1654,6 +1648,7 @@ export function generateDashboardPage(env: Env): string {
 			profileFallbackHref: 'https://sui.ski',
 		})}
 	</script>
+	${skiScriptTag()}
 </body>
 </html>`
 }

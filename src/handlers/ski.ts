@@ -1,9 +1,7 @@
 import type { Env } from '../types'
 import { generateLogoSvg } from '../utils/og-image'
-import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
-import { generateWalletTxJs } from '../utils/wallet-tx-js'
-import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
+import { skiEventBridge, skiScriptTag, skiStyleTag, skiWalletBridge, skiWidgetMarkup } from '../utils/ski-embed'
 
 interface SkiSession {
 	address: string | null
@@ -19,7 +17,6 @@ export function generateSkiPage(env: Env, session?: SkiSession): string {
 
 	return `<!DOCTYPE html>
 <html lang="en"><head>
-${generateExtensionNoiseFilter()}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sui Key-In</title>
@@ -34,7 +31,6 @@ body::before {
 	background: radial-gradient(circle at center, rgba(34, 197, 94, 0.11) 0%, rgba(16, 185, 129, 0.04) 35%, transparent 62%);
 	pointer-events: none; z-index: 0;
 }
-${generateWalletUiCss()}
 .ski-container{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:24px;width:100%;max-width:460px;padding:20px}
 .ski-suins-preview{width:100%;border-radius:20px;border:1px solid rgba(74,222,128,0.25);background:linear-gradient(140deg, rgba(8,20,15,0.96), rgba(10,18,16,0.9));box-shadow:0 18px 42px rgba(16,185,129,0.12), inset 0 0 0 1px rgba(34,197,94,0.08);padding:16px}
 .ski-suins-top{display:flex;gap:14px;align-items:center;margin-bottom:12px}
@@ -67,6 +63,7 @@ ${generateWalletUiCss()}
 	.ski-green-orb{width:62px;height:62px}
 }
 </style>
+${skiStyleTag()}
 </head><body>
 <div class="ski-container">
 	<div class="ski-suins-preview">
@@ -116,14 +113,14 @@ ${generateWalletUiCss()}
 	<button id="ski-login-btn" class="ski-login-btn" style="display:none">Sign In with Sui</button>
 </div>
 
+${skiWidgetMarkup()}
 <script>
 var __skiReturnUrl = new URLSearchParams(window.location.search).get('return') || '';
 var __skiServerSession = ${sessionJson};
 
 ${generateWalletSessionJs()}
-${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
-${generateWalletTxJs()}
-${generateWalletUiJs({ onConnect: '__skiDone' })}
+${skiWalletBridge({ network: env.SUI_NETWORK })}
+${skiEventBridge({ onConnect: '__skiDone' })}
 
 function __wkActivateLocks() {
 	var locks = document.querySelectorAll('.ski-lock');
@@ -143,8 +140,7 @@ window.__skiDone = function() {
 	__skiDoneTriggered = true;
 	__wkActivateLocks();
 	
-	var conn = SuiWalletKit.$connection.value;
-	var addr = (conn && conn.address) || (__skiServerSession && __skiServerSession.address) || '';
+	var addr = _skiAddr || (__skiServerSession && __skiServerSession.address) || '';
 	if (!addr) return;
 	var statusEl = document.getElementById('ski-status');
 	var loginBtn = document.getElementById('ski-login-btn');
@@ -158,7 +154,7 @@ window.__skiDone = function() {
 	}
 	__skiUpdatePreviewOwner(addr);
 
-	var sessionPromise = SuiWalletKit.__sessionReady || Promise.resolve(true);
+	var sessionPromise = Promise.resolve(true);
 	var timedOut = false;
 	var timer = setTimeout(function() { timedOut = true; }, 15000);
 
@@ -247,17 +243,15 @@ function __skiInitDerivedPreview() {
 	if (titleEl) titleEl.textContent = fullName;
 	if (keyEl) keyEl.textContent = nameKey;
 	if (nftEl) nftEl.textContent = nftId;
-	var conn = SuiWalletKit.$connection.value;
 	var session = getWalletSession();
-	var owner = (conn && conn.address) || (session && session.address) || (__skiServerSession && __skiServerSession.address) || '';
+	var owner = _skiAddr || (session && session.address) || (__skiServerSession && __skiServerSession.address) || '';
 	__skiUpdatePreviewOwner(owner);
 }
 
-SuiWalletKit.renderModal('wk-modal');
 __skiInitDerivedPreview();
 
 document.getElementById('ski-login-btn').onclick = function() {
-	SuiWalletKit.openModal();
+	window.dispatchEvent(new CustomEvent('ski:open-modal'));
 };
 
 if (__skiServerSession && __skiServerSession.address && __skiReturnUrl) {
@@ -268,10 +262,10 @@ if (__skiServerSession && __skiServerSession.address && __skiReturnUrl) {
 	}
 	setTimeout(function() { window.location.href = __skiReturnUrl; }, 800);
 } else {
-	SuiWalletKit.detectWallets().then(function(wallets) {
+	Promise.resolve([]).then(function(wallets) {
 		var statusEl = document.getElementById('ski-status');
 		var loginBtn = document.getElementById('ski-login-btn');
-		
+
 		var session = getWalletSession();
 		if (session && session.address) {
 			__wkActivateLocks();
@@ -295,20 +289,21 @@ if (__skiServerSession && __skiServerSession.address && __skiReturnUrl) {
 			}
 			return;
 		}
-		
+
 		if (statusEl) statusEl.textContent = 'Ready to unlock';
 		if (loginBtn) {
 			loginBtn.style.display = 'block';
 			loginBtn.textContent = 'Sign In with Sui';
-			loginBtn.onclick = function() { SuiWalletKit.openModal(); };
+			loginBtn.onclick = function() { window.dispatchEvent(new CustomEvent('ski:open-modal')); };
 		}
-		
+
 		// Auto-open modal if no session
 		if (!session || !session.address) {
-			setTimeout(function() { SuiWalletKit.openModal(); }, 500);
+			setTimeout(function() { window.dispatchEvent(new CustomEvent('ski:open-modal')); }, 500);
 		}
 	});
 }
 </script>
+${skiScriptTag()}
 </body></html>`
 }

@@ -23,9 +23,8 @@
 
 import type { Env } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
-import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
-import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
+import { skiScriptTag, skiStyleTag, skiWidgetMarkup, skiWalletBridge } from '../utils/ski-embed'
 
 const llmRateLimits = new Map<string, { count: number; resetAt: number }>()
 
@@ -651,7 +650,6 @@ function generateAppShell(
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
-	${generateExtensionNoiseFilter()}
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 	<title>${title} | sui.ski</title>
@@ -659,9 +657,9 @@ function generateAppShell(
 	<meta name="theme-color" content="#000">
 	
 	<style>
-		${generateWalletUiCss()}
 		${getAppStyles()}
 	</style>
+	${skiStyleTag()}
 </head>
 <body>
 	<div id="wk-modal"></div>
@@ -669,9 +667,11 @@ function generateAppShell(
 		${generateAppContent(currentPath, env)}
 	</div>
 
+	${skiWidgetMarkup()}
 	<script>
 		${getAppScript(env, session)}
 	</script>
+	${skiScriptTag()}
 </body>
 </html>`
 }
@@ -1358,15 +1358,13 @@ function getAppScript(env: Env, session?: { address: string | null; verified: bo
 		var __skiServerSession = ${session?.address ? JSON.stringify({ address: session.address, verified: session.verified }) : 'null'};
 		if (__skiServerSession && __skiServerSession.address) { initSessionFromServer(__skiServerSession); }
 		
-		${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
-		${generateWalletUiJs({ onConnect: 'onAppWalletConnected', onDisconnect: 'onAppWalletDisconnected' })}
+		${skiWalletBridge({ network: env.SUI_NETWORK })}
 
 		let connectedAddress = null;
 
 		function onAppWalletConnected() {
-			const conn = SuiWalletKit.$connection.value;
-			if (!conn || !conn.address) return;
-			connectedAddress = conn.address;
+			if (!_skiAddr) return;
+			connectedAddress = _skiAddr;
 			
 			const text = document.getElementById('wallet-text');
 			const btn = document.getElementById('connect-wallet');
@@ -1384,20 +1382,20 @@ function getAppScript(env: Env, session?: { address: string | null; verified: bo
 
 		window.connectWallet = function() {
 			if (connectedAddress) {
-				SuiWalletKit.disconnect();
+				_skiDisconnect();
 				return;
 			}
-			SuiWalletKit.openModal();
+			window.dispatchEvent(new CustomEvent('ski:open-modal'));
 		};
 
-		SuiWalletKit.renderModal('wk-modal');
+		window.dispatchEvent(new CustomEvent('ski:open-modal'));
 		
-		SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
-			if (conn && conn.status === 'connected') {
+		_skiSubscribe(function(conn) {
+			if (conn && conn.address) {
 				onAppWalletConnected();
-			} else {
-				onAppWalletDisconnected();
 			}
+		}, function() {
+			onAppWalletDisconnected();
 		});
 
 		// Client-side routing
@@ -1418,13 +1416,12 @@ function getAppScript(env: Env, session?: { address: string | null; verified: bo
 		});
 
 		// Initial state
-		const initialConn = SuiWalletKit.$connection.value;
-		if (initialConn && initialConn.status === 'connected') {
+		if (_skiAddr) {
 			onAppWalletConnected();
 		}
 
-		SuiWalletKit.detectWallets().then(function() {
-			SuiWalletKit.autoReconnect();
+		Promise.resolve([]).then(function() {
+			// autoReconnect handled by ski embed
 		});
 	`
 }

@@ -1,4 +1,5 @@
-import type { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
+import type { SuiGraphQLClient } from '@mysten/sui/graphql'
+import { graphqlQueryEvents, type LegacyEvent } from './sui-graphql'
 
 const TRADEPORT_LISTINGS_PACKAGE =
 	'0x6cfe7388ccf732432906d7faebcc33fd91e11d4c2f8cb3ae0082b8d3269e3d5b'
@@ -40,7 +41,7 @@ export interface OnChainCollectionActivity {
 }
 
 function parseEventToNftActivity(
-	evt: { id: { txDigest: string; eventSeq: string }; type: string; parsedJson: Record<string, unknown>; timestampMs?: string },
+	evt: LegacyEvent,
 	tokenIdFilter: string,
 ): OnChainNftActivity | null {
 	const pj = evt.parsedJson
@@ -49,17 +50,21 @@ function parseEventToNftActivity(
 	const evtTokenId = String(pj.nft_id ?? pj.maybe_nft_id ?? pj.token_id ?? '')
 	if (tokenIdFilter && evtTokenId.toLowerCase() !== tokenIdFilter.toLowerCase()) return null
 
-	const evtType = evt.type.includes('Buy') || evt.type.includes('buy')
-		? 'buy'
-		: evt.type.includes('List') || evt.type.includes('list')
-			? 'list'
-			: evt.type.includes('Delist') || evt.type.includes('delist') || evt.type.includes('Cancel') || evt.type.includes('cancel')
-				? 'delist'
-				: evt.type.includes('Bid') || evt.type.includes('bid')
-					? 'bid'
-					: evt.type.includes('Accept') || evt.type.includes('accept')
-						? 'accept_bid'
-						: 'unknown'
+	const evtType =
+		evt.type.includes('Buy') || evt.type.includes('buy')
+			? 'buy'
+			: evt.type.includes('List') || evt.type.includes('list')
+				? 'list'
+				: evt.type.includes('Delist') ||
+					  evt.type.includes('delist') ||
+					  evt.type.includes('Cancel') ||
+					  evt.type.includes('cancel')
+					? 'delist'
+					: evt.type.includes('Bid') || evt.type.includes('bid')
+						? 'bid'
+						: evt.type.includes('Accept') || evt.type.includes('accept')
+							? 'accept_bid'
+							: 'unknown'
 
 	const price = Number(pj.price ?? 0)
 	const timestamp = evt.timestampMs ? new Date(Number(evt.timestampMs)).toISOString() : ''
@@ -81,26 +86,28 @@ function parseEventToNftActivity(
 	}
 }
 
-function parseEventToCollectionActivity(
-	evt: { id: { txDigest: string; eventSeq: string }; type: string; parsedJson: Record<string, unknown>; timestampMs?: string },
-): OnChainCollectionActivity | null {
+function parseEventToCollectionActivity(evt: LegacyEvent): OnChainCollectionActivity | null {
 	const pj = evt.parsedJson
 	if (!pj) return null
 
 	const nftTokenId = String(pj.nft_id ?? pj.maybe_nft_id ?? pj.token_id ?? '')
 	if (!nftTokenId) return null
 
-	const evtType = evt.type.includes('Buy') || evt.type.includes('buy')
-		? 'buy'
-		: evt.type.includes('Accept') || evt.type.includes('accept')
-			? 'accept_bid'
-			: evt.type.includes('List') || evt.type.includes('list')
-				? 'list'
-				: evt.type.includes('Delist') || evt.type.includes('delist') || evt.type.includes('Cancel') || evt.type.includes('cancel')
-					? 'delist'
-					: evt.type.includes('Bid') || evt.type.includes('bid')
-						? 'bid'
-						: 'unknown'
+	const evtType =
+		evt.type.includes('Buy') || evt.type.includes('buy')
+			? 'buy'
+			: evt.type.includes('Accept') || evt.type.includes('accept')
+				? 'accept_bid'
+				: evt.type.includes('List') || evt.type.includes('list')
+					? 'list'
+					: evt.type.includes('Delist') ||
+						  evt.type.includes('delist') ||
+						  evt.type.includes('Cancel') ||
+						  evt.type.includes('cancel')
+						? 'delist'
+						: evt.type.includes('Bid') || evt.type.includes('bid')
+							? 'bid'
+							: 'unknown'
 
 	const price = Number(pj.price ?? 0)
 	const timestampMs = evt.timestampMs ? Number(evt.timestampMs) : 0
@@ -124,34 +131,27 @@ function parseEventToCollectionActivity(
 	}
 }
 
-type SuiEvent = {
-	id: { txDigest: string; eventSeq: string }
-	type: string
-	parsedJson: Record<string, unknown>
-	timestampMs?: string
-}
-
 export async function fetchNftEventsOnChain(
-	client: SuiClient,
+	client: SuiGraphQLClient,
 	tokenId: string,
 	limit = 200,
 ): Promise<OnChainNftActivity[]> {
 	const activities: OnChainNftActivity[] = []
 
 	const [listingEvents, biddingEvents] = await Promise.all([
-		client.queryEvents({
-			query: { MoveEventModule: { package: TRADEPORT_LISTINGS_PACKAGE, module: 'tradeport_listings' } },
-			limit,
-			order: 'descending',
-		}),
-		client.queryEvents({
-			query: { MoveEventModule: { package: TRADEPORT_BIDDINGS_PACKAGE, module: 'tradeport_biddings' } },
-			limit,
-			order: 'descending',
-		}),
+		graphqlQueryEvents(
+			client,
+			{ MoveEventModule: { package: TRADEPORT_LISTINGS_PACKAGE, module: 'tradeport_listings' } },
+			{ limit },
+		),
+		graphqlQueryEvents(
+			client,
+			{ MoveEventModule: { package: TRADEPORT_BIDDINGS_PACKAGE, module: 'tradeport_biddings' } },
+			{ limit },
+		),
 	])
 
-	const allEvents = [...listingEvents.data, ...biddingEvents.data] as SuiEvent[]
+	const allEvents = [...listingEvents.data, ...biddingEvents.data]
 	for (const evt of allEvents) {
 		const activity = parseEventToNftActivity(evt, tokenId)
 		if (activity) activities.push(activity)
@@ -162,33 +162,40 @@ export async function fetchNftEventsOnChain(
 }
 
 export async function fetchCollectionEventsOnChain(
-	client: SuiClient,
+	client: SuiGraphQLClient,
 	limit = 1000,
 ): Promise<OnChainCollectionActivity[]> {
 	const activities: OnChainCollectionActivity[] = []
 	const pageSize = Math.min(limit, 200)
 	let remaining = limit
-
-	let cursor: { txDigest: string; eventSeq: string } | null = null
+	let cursor: string | null = null
 
 	while (remaining > 0) {
 		const batchSize = Math.min(remaining, pageSize)
 		const [listingEvents, biddingEvents] = await Promise.all([
-			client.queryEvents({
-				query: { MoveEventModule: { package: TRADEPORT_LISTINGS_PACKAGE, module: 'tradeport_listings' } },
-				limit: batchSize,
-				order: 'descending',
-				cursor: cursor ?? undefined,
-			}),
-			client.queryEvents({
-				query: { MoveEventModule: { package: TRADEPORT_BIDDINGS_PACKAGE, module: 'tradeport_biddings' } },
-				limit: batchSize,
-				order: 'descending',
-				cursor: cursor ?? undefined,
-			}),
+			graphqlQueryEvents(
+				client,
+				{
+					MoveEventModule: {
+						package: TRADEPORT_LISTINGS_PACKAGE,
+						module: 'tradeport_listings',
+					},
+				},
+				{ limit: batchSize, cursor },
+			),
+			graphqlQueryEvents(
+				client,
+				{
+					MoveEventModule: {
+						package: TRADEPORT_BIDDINGS_PACKAGE,
+						module: 'tradeport_biddings',
+					},
+				},
+				{ limit: batchSize, cursor },
+			),
 		])
 
-		const allEvents = [...listingEvents.data, ...biddingEvents.data] as SuiEvent[]
+		const allEvents = [...listingEvents.data, ...biddingEvents.data]
 		if (allEvents.length === 0) break
 
 		for (const evt of allEvents) {
@@ -198,12 +205,8 @@ export async function fetchCollectionEventsOnChain(
 
 		remaining -= allEvents.length
 		if (!listingEvents.hasNextPage && !biddingEvents.hasNextPage) break
-		if (listingEvents.data.length > 0) {
-			const last = listingEvents.data[listingEvents.data.length - 1]
-			cursor = last.id as { txDigest: string; eventSeq: string }
-		} else {
-			break
-		}
+		cursor = listingEvents.nextCursor ?? biddingEvents.nextCursor ?? null
+		if (!cursor) break
 	}
 
 	activities.sort((a, b) => b.blockTimeMs - a.blockTimeMs)

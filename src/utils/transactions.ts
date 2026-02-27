@@ -1,4 +1,6 @@
+import { fromBase64 } from '@mysten/sui/utils'
 import type { Env } from '../types'
+import { getSuiGraphQLClient } from './sui-graphql'
 
 interface RelayResult {
 	ok: boolean
@@ -11,55 +13,33 @@ export async function relaySignedTransaction(
 	env: Env,
 	txBytes: string,
 	signatures: string[],
-	options: Record<string, unknown> = {},
-	requestType = 'WaitForLocalExecution',
+	_options: Record<string, unknown> = {},
+	_requestType = 'WaitForLocalExecution',
 ): Promise<RelayResult> {
-	const executionParams = [
-		txBytes,
-		signatures,
-		{
-			showEffects: true,
-			showEvents: true,
-			showBalanceChanges: false,
-			showInput: false,
-			...options,
-		},
-		requestType,
-	]
-
 	try {
-		const rpcResponse = await fetch(env.SUI_RPC_URL, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				jsonrpc: '2.0',
-				id: Date.now(),
-				method: 'sui_executeTransactionBlock',
-				params: executionParams,
-			}),
+		const client = getSuiGraphQLClient(env)
+		const result = await client.executeTransaction({
+			transaction: fromBase64(txBytes),
+			signatures,
 		})
 
-		const rpcJson = await rpcResponse.json().catch(() => ({}))
-		const rpcError = (rpcJson as { error?: { message?: string } }).error
-		const ok = rpcResponse.ok && !rpcError
-		const errorMessage =
-			typeof rpcError?.message === 'string'
-				? rpcError.message
-				: rpcError
-					? JSON.stringify(rpcError)
-					: undefined
+		const tx = result.transaction as
+			| { digest?: string; status?: string; effects?: unknown }
+			| undefined
+		const status = tx?.status ?? 'success'
+		const ok = status === 'success' || status === 'Success'
 
 		return {
 			ok,
-			status: rpcResponse.status,
-			response: rpcJson,
-			error: errorMessage,
+			status: 200,
+			response: result,
 		}
 	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Unable to reach Sui GraphQL'
 		return {
 			ok: false,
 			status: 0,
-			error: error instanceof Error ? error.message : 'Unable to reach Sui RPC',
+			error: message,
 		}
 	}
 }

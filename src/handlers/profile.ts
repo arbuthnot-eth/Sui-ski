@@ -5,10 +5,8 @@ import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import { normalizeMediaUrl, renderSocialMeta } from '../utils/social'
 import { generateThunderCss } from '../utils/thunder-css'
 import { generateThunderJs } from '../utils/thunder-js'
-import { generateExtensionNoiseFilter, generateWalletKitJs } from '../utils/wallet-kit-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
-import { generateWalletTxJs } from '../utils/wallet-tx-js'
-import { generateWalletUiCss, generateWalletUiJs } from '../utils/wallet-ui-js'
+import { skiStyleTag, skiScriptTag, skiWidgetMarkup, skiEventBridge, skiWalletBridge } from '../utils/ski-embed'
 import { generateZkSendCss, generateZkSendJs } from '../utils/zksend-js'
 import { profileStyles } from './profile.css'
 
@@ -148,7 +146,6 @@ export function generateProfilePage(
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
-	${generateExtensionNoiseFilter()}
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>${escapeHtml(fullName)} | sui.ski</title>${canonicalTag}${socialMeta}
@@ -166,8 +163,8 @@ export function generateProfilePage(
 		</script>
 
 	<style>${profileStyles}
-${generateWalletUiCss()}
 ${generateZkSendCss()}</style>
+${skiStyleTag()}
 </head>
 <body>
 	<!-- Home Button -->
@@ -798,6 +795,7 @@ ${generateZkSendCss()}</style>
 
 	<div id="wk-modal"></div>
 
+${skiWidgetMarkup()}
 		<script type="module">
 			let getWallets, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction;
 			let SealClient = null, SessionKey = null, fromHex = null, toHex = null;
@@ -1003,18 +1001,10 @@ ${generateZkSendCss()}</style>
 		window.rawIdentityNftImage = null;
 
 		${generateWalletSessionJs()}
-		${generateWalletKitJs({ network: env.SUI_NETWORK, autoConnect: true })}
-		${generateWalletTxJs()}
-		${generateWalletUiJs({
-			showPrimaryName: true,
-			onConnect: 'onProfileWalletConnected',
-			onDisconnect: 'onProfileWalletDisconnected',
-			widgetBrandLogoSrc: BLACK_DOTSKI_WORDMARK_DATA_URL,
-		})}
+		${skiWalletBridge({ network: env.SUI_NETWORK })}
+		${skiEventBridge({ onConnect: 'onProfileWalletConnected', onDisconnect: 'onProfileWalletDisconnected' })}
 		${generateZkSendJs()}
 
-		SuiWalletKit.renderModal('wk-modal');
-		SuiWalletKit.renderWidget('wk-widget');
 
 		window.onProfileWalletConnected = function() {
 			updateUIForWallet();
@@ -1091,7 +1081,7 @@ ${generateZkSendCss()}</style>
 			) {
 				return;
 			}
-			SuiWalletKit.setPrimaryName(normalizedPrimary);
+			// setPrimaryName not available in dapp kit
 		}
 		let suinsModuleLoadingPromise = null;
 		function pickSuinsExport(mod, name) {
@@ -1197,13 +1187,13 @@ ${generateZkSendCss()}</style>
 
 		var __lastVaultAddress = null;
 		var __initialConnectionFired = false;
-		SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
+		_skiSubscribe(function(conn) {
 			var previousAddress = connectedAddress || '';
-			connectedWallet = conn.wallet;
-			connectedAccount = conn.account;
-			connectedAddress = conn.address;
-			connectedWalletName = conn.wallet ? conn.wallet.name : null;
-			connectedPrimaryName = conn.primaryName;
+			connectedWallet = conn ? conn.wallet : null;
+			connectedAccount = conn ? conn.account : null;
+			connectedAddress = conn ? conn.address : null;
+			connectedWalletName = conn && conn.wallet ? conn.wallet.name : (conn ? conn.walletName : null);
+			connectedPrimaryName = conn ? conn.primaryName : null;
 			updateWalletProfileButton();
 
 			var normalizedPrev = String(previousAddress || '').trim().toLowerCase();
@@ -1226,11 +1216,21 @@ ${generateZkSendCss()}</style>
 				window.userVaultNames = new Set();
 				if (typeof window.renderVaultDashboard === 'function') window.renderVaultDashboard();
 			}
+		}, function() {
+			connectedWallet = null;
+			connectedAccount = null;
+			connectedAddress = null;
+			connectedWalletName = null;
+			connectedPrimaryName = null;
+			updateWalletProfileButton();
+			__lastVaultAddress = null;
+			window.userVaultNames = new Set();
+			if (typeof window.renderVaultDashboard === 'function') window.renderVaultDashboard();
 		});
 
 				function canUseSessionSignBridge() {
 					if (!connectedAddress) return false;
-					const conn = SuiWalletKit && SuiWalletKit.$connection ? SuiWalletKit.$connection.value : null;
+					const conn = _skiAddr ? { address: _skiAddr } : null;
 					if (!conn || conn.status !== 'session' || conn.wallet) return false;
 					const host = String(window.location && window.location.hostname ? window.location.hostname : '');
 					return host !== 'sui.ski' && host.endsWith('.sui.ski');
@@ -1276,7 +1276,7 @@ ${generateZkSendCss()}</style>
 
 			window.connectWallet = function connectWallet() {
 				if (canSign()) return Promise.resolve();
-				SuiWalletKit.openModal();
+				window.dispatchEvent(new CustomEvent('ski:open-modal'));
 				return new Promise(function(resolve) {
 				var unsub = SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
 					if (conn && (conn.status === 'connected' || conn.status === 'session') && conn.address) {
@@ -1855,7 +1855,7 @@ ${generateZkSendCss()}</style>
 
 					if (txt) txt.textContent = 'Approve in wallet...';
 
-					const result = await SuiWalletKit.signAndExecute(tx);
+					const result = await _skiSignAndExecute(tx);
 
 					if (!result?.digest) throw new Error('No transaction digest');
 
@@ -2029,7 +2029,7 @@ ${generateZkSendCss()}</style>
 				});
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true } });
+				result = await _skiSignAndExecute(tx);
 
 				showBurnStatus(
 					'NFT burned! ' + renderTxExplorerLinks(result.digest, true) + '<br>' +
@@ -2404,7 +2404,7 @@ ${generateZkSendCss()}</style>
 				showStatus(sendStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+				result = await _skiSignAndExecute(tx);
 
 				showStatus(sendStatus, '<strong>Sent!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 				try {
@@ -4142,7 +4142,7 @@ ${generateZkSendCss()}</style>
 				tx.setGasBudget(50000000);
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+				result = await _skiSignAndExecute(tx);
 
 					// Update UI
 					document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
@@ -4232,7 +4232,7 @@ ${generateZkSendCss()}</style>
 				tx.setGasBudget(50000000);
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+				result = await _skiSignAndExecute(tx);
 
 					connectedPrimaryName = FULL_NAME;
 					ownerDisplayAddress = connectedAddress;
@@ -4374,7 +4374,7 @@ ${generateZkSendCss()}</style>
 				showStatus(modalStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+				result = await _skiSignAndExecute(tx);
 
 				showStatus(modalStatus, '<strong>Updated!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 
@@ -4533,7 +4533,7 @@ ${generateZkSendCss()}</style>
 				}
 
 				let result;
-				result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true, showObjectChanges: true } });
+				result = await _skiSignAndExecute(tx);
 				const listingId = await extractDecayListingIdFromTxResult(result);
 				await registerDecayListingForNft(NFT_ID, listingId);
 
@@ -4746,9 +4746,7 @@ ${generateZkSendCss()}</style>
 				transferStatus.innerHTML = '<span class="loading"></span> Approve in wallet...';
 				transferStatus.className = 'transfer-status info';
 
-				const result = await SuiWalletKit.signAndExecute(tx, {
-					txOptions: { showEffects: true, showObjectChanges: true },
-				});
+				const result = await _skiSignAndExecute(tx);
 
 				const recipientDisplay = transferResolvedName || truncAddr(transferResolvedAddress);
 				transferStatus.innerHTML =
@@ -5017,7 +5015,7 @@ ${generateZkSendCss()}</style>
 					});
 					const linkUrl = result.link.getLink();
 					showStatus(zkStatus, '<span class="loading"></span> Approve in wallet...', 'info');
-					await SuiWalletKit.signAndExecute(result.tx);
+					await _skiSignAndExecute(result.tx);
 					hideStatus(zkStatus);
 					if (zkResult) {
 						zkResult.style.display = 'block';
@@ -5221,7 +5219,7 @@ ${generateZkSendCss()}</style>
 
 		window.onProfileWalletConnected = function() {
 			setTimeout(function() {
-				var conn = SuiWalletKit.$connection.value;
+				var conn = _skiAddr ? { address: _skiAddr } : null;
 				if (conn) {
 					connectedWallet = conn.wallet;
 					connectedAccount = conn.account;
@@ -5734,7 +5732,7 @@ ${generateZkSendCss()}</style>
 				if (statusEl) statusEl.textContent = 'Confirm in wallet...';
 
 				let txResult;
-				txResult = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+				txResult = await _skiSignAndExecute(tx);
 
 				if (statusEl) statusEl.textContent = 'Purchased! Redirecting...';
 				closeSearch();
@@ -5967,7 +5965,7 @@ ${generateZkSendCss()}</style>
 				showMessageStatus('Please approve the transaction in your wallet...', 'info', true);
 
 				// Sign and execute
-				const result = await SuiWalletKit.signAndExecute(tx);
+				const result = await _skiSignAndExecute(tx);
 
 				btnText.textContent = 'Confirming...';
 				showMessageStatus('Waiting for confirmation...', 'info', true);
@@ -7396,9 +7394,9 @@ ${generateZkSendCss()}</style>
 			if (preferredWalletName) signOptions.walletName = preferredWalletName;
 
 			if (txBlock) {
-				return await SuiWalletKit.signAndExecute(txBlock, signOptions);
+				return await _skiSignAndExecute(txBlock);
 			}
-			return await SuiWalletKit.signAndExecute(txBytes, signOptions);
+			return await _skiSignAndExecute(txBytes);
 		}
 
 		async function handleRenewal(yearsEl, btnEl, btnTextEl, btnLoadingEl, statusEl, options = {}) {
@@ -7651,7 +7649,7 @@ ${generateZkSendCss()}</style>
 									relistTx.pure.u64(BigInt(savedListingPrice)),
 								],
 							});
-							const relistResult = await SuiWalletKit.signAndExecute(relistTx, { txOptions: { showEffects: true } });
+							const relistResult = await _skiSignAndExecute(relistTx);
 							const relistDigest = relistResult?.digest || relistResult?.result?.digest || '';
 							if (relistDigest && statusEl) {
 								statusEl.innerHTML += '<div class="renewal-relist-status success">Relisted at same price! ' + renderTxExplorerLinks(relistDigest, true) + '</div>';
@@ -7924,19 +7922,19 @@ ${generateZkSendCss()}</style>
 				let signAndExecuteError = null;
 				showBidBountyStatus(createBountyStatus, 'Sign transaction in wallet...', 'loading');
 				try {
-					result = await SuiWalletKit.signAndExecute(txWrapper, { txOptions: { showEffects: true, showObjectChanges: true } });
+					result = await _skiSignAndExecute(txWrapper);
 				} catch (error) {
 					signAndExecuteError = error;
 					console.warn('signAndExecute failed, falling back to manual execution:', error);
 				}
 
 				if (!result) {
-					const conn = SuiWalletKit && SuiWalletKit.$connection ? SuiWalletKit.$connection.value : null;
+					const conn = _skiAddr ? { address: _skiAddr } : null;
 					if (conn && conn.status === 'session' && !conn.wallet) {
 						throw signAndExecuteError || new Error('Session signing failed. Reconnect wallet and retry.');
 					}
 					showBidBountyStatus(createBountyStatus, 'Submitting transaction...', 'loading');
-					const signResult = await SuiWalletKit.signTransaction(txWrapper);
+					const signResult = await _skiSignTransaction(txWrapper);
 					result = await suiClient.executeTransactionBlock({
 						transactionBlock: builtTxBytes,
 						signature: signResult.signature,
@@ -11217,7 +11215,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					result = await _skiSignAndExecute(tx);
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -11366,7 +11364,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					result = await _skiSignAndExecute(tx);
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -11418,7 +11416,7 @@ function shortAddr(addr) {
 					tx.pure.id(currentListing.tokenId),
 				],
 			});
-			return SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+			return _skiSignAndExecute(tx);
 		}
 
 		if (marketplaceDelistBtn) {
@@ -11496,7 +11494,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet approval...';
 					const { Transaction: Tx } = await import('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle');
 					const tx = Tx.from(data.txBytes);
-					const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					const result = await _skiSignAndExecute(tx);
 					const digest = result?.digest || result?.result?.digest || '';
 					if (digest) {
 						marketplaceStatus.innerHTML = 'Offer cancelled! SUI returned. ' + renderTxExplorerLinks(digest, true);
@@ -11582,9 +11580,7 @@ function shortAddr(addr) {
 						marketplaceStatus.textContent = 'Confirm in wallet (one-time authorization)...';
 						marketplaceStatus.className = 'marketplace-status';
 
-						const result = await SuiWalletKit.signAndExecute(tx, {
-							txOptions: { showEffects: true, showObjectChanges: true },
-						});
+						const result = await _skiSignAndExecute(tx);
 						const listingId = await extractDecayListingIdFromTxResult(result);
 						await registerDecayListingForNft(NFT_ID, listingId);
 
@@ -11712,7 +11708,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					result = await _skiSignAndExecute(tx);
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -12019,7 +12015,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 						marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					result = await _skiSignAndExecute(tx);
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -12227,7 +12223,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					const tx = Transaction.from(data.txBytes);
 					auctionStatus.textContent = 'Confirm in wallet...';
 					let result;
-					result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					result = await _skiSignAndExecute(tx);
 
 					const digest = result.digest || '';
 					auctionStatus.innerHTML = 'Purchased! ' + renderTxExplorerLinks(digest, true);
@@ -12288,7 +12284,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					const tx = Transaction.from(data.txBytes);
 					auctionStatus.textContent = 'Confirm cancel in wallet...';
 
-					const result = await SuiWalletKit.signAndExecute(tx, { txOptions: { showEffects: true } });
+					const result = await _skiSignAndExecute(tx);
 					const digest = result.digest || result.result?.digest || '';
 					auctionStatus.innerHTML = 'Wrap cancelled. ' + renderTxExplorerLinks(digest, true);
 					auctionStatus.className = 'auction-status success';
@@ -13576,7 +13572,6 @@ export function generateEmbedProfilePage(
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
-	${generateExtensionNoiseFilter()}
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>${escapeHtml(fullName)}</title>
@@ -13692,6 +13687,7 @@ export function generateEmbedProfilePage(
 		}
 	})();
 	</script>
+${skiScriptTag()}
 </body>
 </html>`
 }
