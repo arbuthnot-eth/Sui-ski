@@ -1,5 +1,5 @@
 // Keep in sync with node_modules/sui.ski/package.json version
-const SKISKI_VERSION = '0.1.10'
+const SKISKI_VERSION = '0.1.18'
 const CDN = `https://cdn.jsdelivr.net/npm/sui.ski@${SKISKI_VERSION}/public`
 
 export function skiStyleTag(): string {

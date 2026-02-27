@@ -30,7 +30,7 @@
 		"@mysten/suins": "^1.0.0",
 		"agents": "^0.4.1",
 		"hono": "^4.11.7",
-		"sui.ski": "^0.1.10",
+		"sui.ski": "^0.1.18",
 		"tiny-invariant": "^1.3.3"
 	},
 	"devDependencies": {

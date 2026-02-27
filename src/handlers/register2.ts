@@ -95,6 +95,7 @@ export function generateRegistrationPage(
 					</div>
 				</div>
 				<div class="status-note" id="payment-route-hint"></div>
+				<div class="balance-row" id="wallet-balance-row"></div>
 				<div class="status" id="register-status"></div>
 			</div>`
 		: `<div class="nft-card" style="aspect-ratio:1;justify-content:center;align-items:center;text-align:center;"><span style="font-size:1.6rem;font-weight:800;color:#fff;">${escapeHtml(cleanName)}<span style="color:var(--ski-green);">.sui</span></span><span style="font-size:0.85rem;color:var(--muted);margin-top:8px;">Minimum length is 3 characters.</span></div>`
@@ -655,52 +656,7 @@ export function generateRegistrationPage(
 				align-items: center;
 				gap: 10px;
 			}
-				.wallet-profile-btn {
-					width: 40px;
-					height: 40px;
-					border-radius: 10px;
-					display: none;
-					align-items: center;
-					justify-content: center;
-					background: rgba(120, 130, 155, 0.1);
-					border: 1px solid rgba(120, 130, 155, 0.35);
-					padding: 0;
-					cursor: pointer;
-				}
-				.wallet-profile-btn svg {
-					filter: brightness(0.7) contrast(1.2) saturate(0.4);
-				}
-				.wallet-profile-btn.visible { display: inline-flex; }
-			.wallet-profile-btn:hover { background: rgba(120, 130, 155, 0.2); border-color: rgba(120, 130, 155, 0.55); }
-			.wallet-widget.has-black-diamond .wallet-profile-btn {
-				background: linear-gradient(135deg, rgba(10, 10, 18, 0.6), rgba(18, 18, 28, 0.7));
-				border-color: rgba(120, 130, 155, 0.42);
-				box-shadow: 0 0 24px rgba(0, 0, 0, 0.4);
-			}
-			.wallet-widget.has-black-diamond .wallet-profile-btn:hover {
-				background: linear-gradient(135deg, rgba(16, 16, 26, 0.7), rgba(24, 24, 36, 0.8));
-				border-color: rgba(140, 150, 175, 0.62);
-				box-shadow: 0 0 28px rgba(0, 0, 0, 0.5);
-			}
-			.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
-			.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
-				background: linear-gradient(135deg, rgba(8, 8, 16, 0.95), rgba(16, 16, 30, 0.94));
-				border-color: rgba(198, 170, 98, 0.62);
-				color: #d0d4e0;
-				box-shadow:
-					0 0 0 1px rgba(160, 120, 56, 0.24) inset,
-					0 10px 24px rgba(0, 0, 0, 0.58),
-					0 0 18px rgba(194, 145, 72, 0.26);
-			}
-			.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected:hover,
-			.wallet-widget.has-black-diamond #wk-widget > div > button.connected:hover {
-				border-color: rgba(234, 206, 128, 0.88);
-				box-shadow:
-					0 0 0 1px rgba(196, 154, 76, 0.34) inset,
-					0 12px 28px rgba(0, 0, 0, 0.62),
-					0 0 24px rgba(234, 179, 8, 0.28);
-			}
-			.tracker-footer {
+				.tracker-footer {
 				position: fixed;
 				left: 0;
 				right: 0;
@@ -771,17 +727,9 @@ export function generateRegistrationPage(
 			@media (max-width: 1020px) {
 				.layout-grid { grid-template-columns: 1fr; }
 			}
-		/* Wallet modal */
-		.wk-modal-overlay { display:none; position:fixed; inset:0; background:rgba(4,8,16,0.82); backdrop-filter:blur(12px); z-index:13000; align-items:center; justify-content:center; padding:10px; }
-		.wk-modal-overlay.open { display:flex; }
-		.wk-modal { background:linear-gradient(180deg,#141820 0%,#0e1118 100%); border:1px solid rgba(160,200,240,0.12); border-radius:12px; max-width:380px; width:100%; overflow:hidden; box-shadow:0 28px 84px rgba(2,6,23,0.82); }
-		.wk-dd-item { width:100%; background:none; border:none; border-bottom:1px solid rgba(73,218,145,0.07); color:var(--text); font-size:0.9rem; font-weight:600; cursor:pointer; text-align:left; padding:12px 20px; display:flex; align-items:center; gap:12px; transition:background 0.15s; }
-		.wk-dd-item:hover { background:rgba(73,218,145,0.08); }
-		.wk-dd-item:last-child { border-bottom:none; }
-		/* Connected pill in top-right widget */
-		.wk-widget-btn { display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:10px; border:1px solid rgba(73,218,145,0.3); background:rgba(10,34,22,0.7); color:var(--text); font-size:0.8rem; font-weight:700; cursor:pointer; text-decoration:none; }
-		.wk-widget-btn.connected { border-color:rgba(73,218,145,0.5); }
-		.wk-widget-btn:hover { background:rgba(10,34,22,0.9); }
+		.balance-row { font-size: 0.78rem; color: var(--muted); min-height: 1.1em; margin-top: 2px; padding: 0 2px; }
+		.balance-row .bal-sui { color: #4da2ff; font-weight: 600; }
+		.balance-row .bal-ns { color: var(--ski-green-light); font-weight: 600; }
 	</style>
 	${skiScriptTag()}
 </head>
@@ -895,10 +843,9 @@ ${skiWalletBridge({ network })}
 			const registerBtn = document.getElementById('register-btn')
 			const registerStatus = document.getElementById('register-status')
 			const paymentRouteHintEl = document.getElementById('payment-route-hint')
+			const walletBalanceRow = document.getElementById('wallet-balance-row')
 			const priceValue = document.getElementById('price-value')
 			const suiPriceEl = document.getElementById('sui-price')
-			const walletWidget = document.getElementById('wallet-widget')
-			const walletProfileBtn = document.getElementById('wallet-profile-btn')
 			const downloadQrBtn = document.getElementById('download-qr-btn')
 			const scrubBtn = document.getElementById('scrub-btn')
 			const x402PriceEl = document.getElementById('x402-price')
@@ -1118,14 +1065,14 @@ ${skiWalletBridge({ network })}
 			}
 			if (selectedPaymentMode === 'coin') {
 				const symbol = coinSymbolFromType(sourceCoinType || USDC_TYPE_FULL) || 'USDC'
-				paymentRouteHintEl.textContent = getWalletRouteLabel() + ': ' + symbol + ' -> SUI -> NS -> register'
+				paymentRouteHintEl.textContent = getWalletRouteLabel() + ': ' + symbol + ' → SUI → NS → register (DeepBook)'
 				return
 			}
 			if (selectedPaymentMode === 'sui') {
-				paymentRouteHintEl.textContent = getWalletRouteLabel() + ': SUI -> NS -> register'
+				paymentRouteHintEl.textContent = getWalletRouteLabel() + ': SUI → NS → register (DeepBook)'
 				return
 			}
-			paymentRouteHintEl.textContent = getWalletRouteLabel() + ': auto route (click SUI or USD price to lock mode)'
+			paymentRouteHintEl.textContent = getWalletRouteLabel() + ': auto: SUI → NS → register (DeepBook)'
 		}
 
 		function updatePrimaryStarUi() {
@@ -1331,32 +1278,16 @@ ${skiWalletBridge({ network })}
 			return null
 		}
 
-		function updateWalletProfileButton() {
-			const primaryName = getConnectedPrimaryName()
-			if (walletWidget) {
-				walletWidget.classList.toggle('has-black-diamond', !!primaryName)
-			}
-			if (!walletProfileBtn) return
-			const address = getConnectedAddress()
-			walletProfileBtn.classList.toggle('visible', !!address)
-			if (primaryName) {
-				walletProfileBtn.dataset.href = 'https://' + encodeURIComponent(primaryName) + '.sui.ski'
-				walletProfileBtn.title = primaryName + '.sui'
-			} else {
-				walletProfileBtn.dataset.href = 'https://sui.ski'
-				walletProfileBtn.title = 'Go to sui.ski'
-			}
-		}
-
 		const REG_SUI_ICON = '<svg class="reg-sui-icon" viewBox="0 0 300 384" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M240.057 159.914C255.698 179.553 265.052 204.39 265.052 231.407C265.052 258.424 255.414 284.019 239.362 303.768L237.971 305.475L237.608 303.31C237.292 301.477 236.929 299.613 236.502 297.749C228.46 262.421 202.265 232.134 159.148 207.597C130.029 191.071 113.361 171.195 108.985 148.586C106.157 133.972 108.258 119.294 112.318 106.717C116.379 94.1569 122.414 83.6187 127.549 77.2831L144.328 56.7754C147.267 53.1731 152.781 53.1731 155.719 56.7754L240.073 159.914H240.057ZM266.584 139.422L154.155 1.96703C152.007 -0.655678 147.993 -0.655678 145.845 1.96703L33.4316 139.422L33.0683 139.881C12.3868 165.555 0 198.181 0 233.698C0 316.408 67.1635 383.461 150 383.461C232.837 383.461 300 316.408 300 233.698C300 198.181 287.613 165.555 266.932 139.896L266.568 139.438L266.584 139.422ZM60.3381 159.472L70.3866 147.164L70.6868 149.439C70.9237 151.24 71.2239 153.041 71.5715 154.858C78.0809 189.001 101.322 217.456 140.173 239.496C173.952 258.724 193.622 280.828 199.278 305.064C201.648 315.176 202.059 325.129 201.032 333.835L200.969 334.372L200.479 334.609C185.233 342.05 168.09 346.237 149.984 346.237C86.4546 346.237 34.9484 294.826 34.9484 231.391C34.9484 204.153 44.4439 179.142 60.3065 159.44L60.3381 159.472Z" fill="#4DA2FF"/></svg>'
 
 		function updateRegisterButton() {
 			if (!registerBtn) return
 			const address = getConnectedAddress()
-			updateWalletProfileButton()
 			const stepperEl = document.querySelector('.year-stepper-h')
 			if (!address) {
-				registerBtn.style.display = 'none'
+				registerBtn.textContent = 'Connect Wallet'
+				registerBtn.style.display = ''
+				registerBtn.disabled = false
 				if (downloadQrBtn) downloadQrBtn.style.display = 'none'
 				if (scrubBtn) scrubBtn.style.display = 'none'
 				if (stepperEl) stepperEl.style.display = 'none'
@@ -1487,6 +1418,30 @@ ${skiWalletBridge({ network })}
 					setSelectedPaymentMode('coin')
 				}
 			} catch {}
+		}
+
+		async function updateBalanceDisplay() {
+			if (!walletBalanceRow) return
+			const address = getConnectedAddress()
+			if (!address) { walletBalanceRow.innerHTML = ''; return }
+			const client = getSuiClient()
+			if (!client) return
+			try {
+				const [suiBal, nsBal] = await Promise.all([
+					client.getBalance({ owner: address, coinType: SUI_TYPE_FULL }).catch(() => ({ totalBalance: '0' })),
+					client.getBalance({ owner: address, coinType: NS_TYPE_FULL }).catch(() => ({ totalBalance: '0' })),
+				])
+				const suiMist = parseMistToBigInt(suiBal && suiBal.totalBalance)
+				const nsMist = parseMistToBigInt(nsBal && nsBal.totalBalance)
+				const suiVal = (Number(suiMist) / 1e9).toLocaleString('en-US', { maximumFractionDigits: 2 })
+				const nsVal = (Number(nsMist) / 1e6).toLocaleString('en-US', { maximumFractionDigits: 0 })
+				walletBalanceRow.innerHTML =
+					'<span class="bal-sui">' + suiVal + ' SUI</span>' +
+					' \u00b7 ' +
+					'<span class="bal-ns">' + nsVal + ' NS</span>'
+			} catch {
+				walletBalanceRow.innerHTML = ''
+			}
 		}
 
 		function getConnectedWalletIcon() {
@@ -1825,23 +1780,23 @@ ${skiWalletBridge({ network })}
 
 		window.onRegisterWalletConnected = function() {
 			updateRegisterButton()
-			updateWalletProfileButton()
 			updatePaymentRouteHint()
 			syncPrimaryStarState()
 			updateCardWalletInfo()
 			renderNftQr()
 			checkAutoPaymentRoute()
+			updateBalanceDisplay()
 		}
 
 		window.onRegisterWalletDisconnected = function() {
 			selectedPaymentMode = 'auto'
 			paymentModeManualOverride = false
 			updateRegisterButton()
-			updateWalletProfileButton()
 			updatePaymentRouteHint()
 			syncPrimaryStarState()
 			updateCardWalletInfo()
 			renderNftQr()
+			if (walletBalanceRow) walletBalanceRow.innerHTML = ''
 		}
 
 		;(function fitNameSize() {
@@ -1918,13 +1873,7 @@ ${skiWalletBridge({ network })}
 				fetchPricing()
 			})
 		}
-		if (walletProfileBtn && !walletProfileBtn.dataset.registerBound) {
-			walletProfileBtn.dataset.registerBound = '1'
-			walletProfileBtn.addEventListener('click', (e) => {
-				e.stopPropagation()
-				window.location.href = walletProfileBtn.dataset.href || 'https://sui.ski'
-			})
-		}
+
 		if (primaryStarEl) {
 			primaryStarEl.addEventListener('click', () => {
 				wantsPrimaryName = !wantsPrimaryName
