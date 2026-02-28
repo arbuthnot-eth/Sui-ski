@@ -12,9 +12,14 @@ import {
 import { createSuiMcpHandler } from './handlers/mcp'
 import { handleMessagingApi } from './handlers/messaging-sdk'
 import { generateEmbedProfilePage, generateProfilePage } from './handlers/profile'
-import { handleBuildRegisterTx, handleRegistrationSubmission } from './handlers/register2'
+import {
+	generateRegistrationPage,
+	handleBuildRegisterTx,
+	handleRegistrationSubmission,
+} from './handlers/register2'
 import { generateSkiPage } from './handlers/ski'
 import { generateSkiSignPage } from './handlers/ski-sign'
+import { thunderRoutes } from './handlers/thunder'
 import { vaultRoutes } from './handlers/vault'
 import {
 	handleWalletChallenge,
@@ -22,7 +27,6 @@ import {
 	handleWalletConnect,
 	handleWalletDisconnect,
 } from './handlers/wallet-api'
-import { thunderRoutes } from './handlers/thunder'
 import { x402RegisterRoutes } from './handlers/x402-register'
 import { resolveContent, resolveDirectContent } from './resolvers/content'
 import { handleRPCRequest } from './resolvers/rpc'
@@ -325,6 +329,27 @@ app.get('/sign', async (c) => {
 		'Cache-Control': 'no-store, no-cache, must-revalidate',
 		Pragma: 'no-cache',
 	})
+})
+
+app.get('/register', async (c) => {
+	if (c.get('parsed').type !== 'root') return c.notFound()
+	const url = new URL(c.req.url)
+	const rawName = (url.searchParams.get('name') || '').trim().toLowerCase()
+	const cleanName = rawName.replace(/\.sui$/i, '').replace(/[^a-z0-9-]/g, '')
+	if (!cleanName || cleanName.length < 3) {
+		return htmlResponse(
+			`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Register .sui | sui.ski</title></head><body style="font-family:Inter,system-ui,sans-serif;background:#050b08;color:#ebfff4;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;"><form method="GET" action="/register" style="display:grid;gap:12px;width:min(420px,100%);background:#0b1712;border:1px solid rgba(73,218,145,.25);border-radius:14px;padding:18px;"><label for="name" style="font-size:.9rem;color:#b8ffda;">Enter a name to register</label><div style="display:flex;gap:8px;"><input id="name" name="name" required minlength="3" pattern="[a-z0-9-]+" placeholder="yourname" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid rgba(184,255,218,.2);background:#07100c;color:#ebfff4;"><button type="submit" style="padding:10px 14px;border-radius:10px;border:1px solid rgba(73,218,145,.45);background:#123a28;color:#b8ffda;font-weight:700;cursor:pointer;">Open</button></div><small style="color:#8fb9a3;">Only lowercase letters, numbers, and hyphens.</small></form></body></html>`,
+			200,
+			{ 'Cache-Control': 'no-store' },
+		)
+	}
+	return htmlResponse(
+		generateRegistrationPage(cleanName, c.get('env'), c.get('session'), { flow: 'register2' }),
+		200,
+		{
+			'Cache-Control': 'no-store',
+		},
+	)
 })
 
 app.get('/cancel-bid', async (c) => {

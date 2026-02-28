@@ -178,6 +178,61 @@
 - Verification:
   - `bun -e "import('./src/utils/wallet-ui-js.ts').then((m)=>{const js=m.generateWalletUiJs(); if(!js.includes('/api/primary-name')) throw new Error('missing primary-name fetch'); console.log('wallet-ui-js import ok');})"` passed.
   - `bun --bun tsc --noEmit --pretty false --noUnusedLocals false` passed.
-  - Header check evidence:
+- Header check evidence:
   - `https://lockin.sui.ski/api/primary-name?...` returns `200` with `access-control-allow-origin: *`.
   - `https://sui.ski/api/primary-name?...` returns `404 Not Found`.
+
+---
+
+# Task Plan: New Register Page (SuiNS PTB + Sui 2.5.0)
+
+- [x] Add a dedicated root route for register page rendering (`/register`) with name normalization.
+- [x] Update register page header controls to match sui.ski top-right wallet + `.SKI` profile buttons.
+- [x] Upgrade register page browser SDK imports to `@mysten/sui@2.5.0` paths and keep PTB registration flow.
+- [x] Ensure the registration target remains the connected wallet sender address.
+- [x] Make discounted pricing display explicit in both SUI and stable terms (NS reduction reflected).
+- [x] Verify with typecheck and targeted source checks.
+
+## Review
+
+- Added `/register` route in `src/index.ts`:
+  - accepts `?name=...`,
+  - sanitizes to lowercase `[a-z0-9-]`,
+  - renders `generateRegistrationPage(..., { flow: 'register2' })`,
+  - shows a small fallback name form if no valid name is supplied.
+- Updated `src/handlers/register2.ts`:
+  - switched browser SDK imports to `@mysten/sui@2.5.0` (`jsonRpc` + `transactions` bundles),
+  - replaced top-right control mount with the same `wallet-profile-btn + wk-widget` pattern used by sui.ski,
+  - mounted shared wallet behavior via `generateSharedWalletMountJs(...)` for profile button href/visibility and primary-name sync,
+  - kept PTB registration flow through `/api/register/build-tx` and wallet signing with connected sender address,
+  - made price label explicit as stablecoin quote with discount context (e.g., `USDC/yr · 25% NS off`) and coin CTA text.
+- Verification:
+  - `npx biome check src/handlers/register2.ts src/index.ts` passed.
+  - `bun -e "import('./src/handlers/register2.ts').then(()=>console.log('register2 import ok'))"` passed.
+  - `bun --bun tsc --noEmit --pretty false --noUnusedLocals false` fails due pre-existing unrelated repo errors in `landing.ts`, `x402-register.ts`, `sui-graphql.ts`, `onchain-activity.ts`, and `transactions.ts`.
+
+---
+
+# Task Plan: Simplify `register2.ts` + Use `.SKI` Package Button
+
+- [x] Replace `src/handlers/register2.ts` with a simpler implementation.
+- [x] Use the same package-native `.SKI` button mount (`wallet-ski-btn`) from `sui.ski`.
+- [x] Keep exports required by app routes: `generateRegistrationPage`, `handleBuildRegisterTx`, `handleRegistrationSubmission`.
+- [x] Verify formatting and module import validity.
+
+## Review
+
+- Replaced the previous large `register2.ts` with a lean implementation:
+  - simple register page UI and pricing display,
+  - package-native wallet widget markup:
+    - `#wk-widget`
+    - `#wallet-ski-btn`
+    - `#wallet-menu-root`
+    - `#ski-modal-root`
+  - wallet bridge usage for connect/sign flow.
+- Kept server API handlers in the same file for compatibility:
+  - `/api/register/build-tx` now builds a straightforward PTB path (`NS swap`, fallback to direct SUI registration),
+  - `/api/register/submit` relay logic remains available.
+- Verification:
+  - `npx biome check src/handlers/register2.ts` passed.
+  - `bun -e "import('./src/handlers/register2.ts').then(()=>console.log('register2 import ok'))"` passed.

@@ -1,6 +1,4 @@
-// Keep in sync with node_modules/sui.ski/package.json version
-const SKISKI_VERSION = '0.1.18'
-const CDN = `https://cdn.jsdelivr.net/npm/sui.ski@${SKISKI_VERSION}/public`
+const CDN = 'https://cdn.jsdelivr.net/npm/sui.ski@latest/public'
 
 export function skiStyleTag(): string {
 	return `<link rel="stylesheet" href="${CDN}/styles.css">`
@@ -11,7 +9,12 @@ export function skiScriptTag(): string {
 }
 
 export function skiWidgetMarkup(): string {
-	return `<div id="wallet-widget"></div>\n<div id="ski-modal-root"></div>`
+	return `<div class="wallet-widget" id="wallet-widget">
+\t<div id="wk-widget"></div>
+\t<button class="wallet-ski-btn" id="wallet-ski-btn" style="display:none"></button>
+\t<div id="wallet-menu-root"></div>
+</div>
+<div id="ski-modal"></div>`
 }
 
 /**

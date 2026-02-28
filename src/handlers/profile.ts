@@ -7,7 +7,6 @@ import { generateThunderCss } from '../utils/thunder-css'
 import { generateThunderJs } from '../utils/thunder-js'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 import { skiStyleTag, skiScriptTag, skiWidgetMarkup, skiEventBridge, skiWalletBridge } from '../utils/ski-embed'
-import { generateZkSendCss, generateZkSendJs } from '../utils/zksend-js'
 import { profileStyles } from './profile.css'
 
 interface ProfilePageOptions {
@@ -162,8 +161,7 @@ export function generateProfilePage(
 			import('https://esm.sh/@wallet-standard/app@1.1.0').catch(()=>{});
 		</script>
 
-	<style>${profileStyles}
-${generateZkSendCss()}</style>
+	<style>${profileStyles}</style>
 ${skiStyleTag()}
 </head>
 <body>
@@ -699,11 +697,6 @@ ${skiStyleTag()}
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="send-modal-icon"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
 				<h3>Send SUI</h3>
 			</div>
-			<div class="send-tab-row">
-				<button class="send-tab-btn active" id="send-tab-direct">Direct Transfer</button>
-				<button class="send-tab-btn" id="send-tab-link">Send via Link</button>
-			</div>
-			<div id="send-panel-direct" class="send-tab-panel">
 			<div class="send-recipient-card">
 				<span class="send-recipient-label">To</span>
 				<span class="send-recipient-name" id="send-recipient-name">${escapeHtml(cleanName)}.sui</span>
@@ -721,23 +714,6 @@ ${skiStyleTag()}
 			<div class="send-modal-buttons">
 				<button class="cancel-btn" id="send-cancel-btn">Cancel</button>
 				<button class="save-btn" id="send-confirm-btn">Send to ${escapeHtml(cleanName)}.sui</button>
-			</div>
-			</div>
-			<div id="send-panel-link" class="send-tab-panel hidden">
-				<div class="send-amount-row">
-					<button type="button" class="send-stepper-btn" id="zk-amount-down" aria-label="Decrease by 1 SUI">-</button>
-					<label for="zk-amount" class="visually-hidden">Amount in SUI</label>
-					<input type="text" id="zk-amount" value="1" inputmode="decimal" placeholder="1" />
-					<span class="send-amount-currency">SUI</span>
-					<button type="button" class="send-stepper-btn" id="zk-amount-up" aria-label="Increase by 1 SUI">+</button>
-				</div>
-				<div class="send-wallet-indicator" id="zk-wallet-indicator"></div>
-				<div id="zk-status" class="status hidden"></div>
-				<div id="zk-result" style="display:none;"></div>
-				<div class="send-modal-buttons">
-					<button class="cancel-btn" id="zk-cancel-btn">Cancel</button>
-					<button class="save-btn" id="zk-generate-btn">Generate Link</button>
-				</div>
 			</div>
 		</div>
 	</div>
@@ -1003,7 +979,6 @@ ${skiWidgetMarkup()}
 		${generateWalletSessionJs()}
 		${skiWalletBridge({ network: env.SUI_NETWORK })}
 		${skiEventBridge({ onConnect: 'onProfileWalletConnected', onDisconnect: 'onProfileWalletDisconnected' })}
-		${generateZkSendJs()}
 
 
 		window.onProfileWalletConnected = function() {
@@ -1278,14 +1253,12 @@ ${skiWidgetMarkup()}
 				if (canSign()) return Promise.resolve();
 				window.dispatchEvent(new CustomEvent('ski:open-modal'));
 				return new Promise(function(resolve) {
-				var unsub = SuiWalletKit.subscribe(SuiWalletKit.$connection, function(conn) {
-					if (conn && (conn.status === 'connected' || conn.status === 'session') && conn.address) {
-						unsub();
+					window.addEventListener('ski:wallet-connected', function handler() {
+						window.removeEventListener('ski:wallet-connected', handler);
 						resolve();
-					}
+					});
 				});
-			});
-		};
+			};
 
 		function renderWalletBar() {}
 		function updateGlobalWalletWidget() {}
@@ -4939,111 +4912,6 @@ ${skiWidgetMarkup()}
 			if (e.target === sendModal) closeSendModal();
 		});
 
-		const sendTabDirect = document.getElementById('send-tab-direct');
-		const sendTabLink = document.getElementById('send-tab-link');
-		const sendPanelDirect = document.getElementById('send-panel-direct');
-		const sendPanelLink = document.getElementById('send-panel-link');
-		function switchSendTab(tab) {
-			if (tab === 'direct') {
-				if (sendTabDirect) sendTabDirect.classList.add('active');
-				if (sendTabLink) sendTabLink.classList.remove('active');
-				if (sendPanelDirect) sendPanelDirect.classList.remove('hidden');
-				if (sendPanelLink) sendPanelLink.classList.add('hidden');
-			} else {
-				if (sendTabLink) sendTabLink.classList.add('active');
-				if (sendTabDirect) sendTabDirect.classList.remove('active');
-				if (sendPanelLink) sendPanelLink.classList.remove('hidden');
-				if (sendPanelDirect) sendPanelDirect.classList.add('hidden');
-			}
-		}
-		if (sendTabDirect) sendTabDirect.addEventListener('click', () => switchSendTab('direct'));
-		if (sendTabLink) sendTabLink.addEventListener('click', () => switchSendTab('link'));
-
-		const zkAmountInput = document.getElementById('zk-amount');
-		const zkAmountDown = document.getElementById('zk-amount-down');
-		const zkAmountUp = document.getElementById('zk-amount-up');
-		const zkCancelBtn = document.getElementById('zk-cancel-btn');
-		const zkGenerateBtn = document.getElementById('zk-generate-btn');
-		const zkStatus = document.getElementById('zk-status');
-		const zkResult = document.getElementById('zk-result');
-		if (zkCancelBtn) zkCancelBtn.addEventListener('click', closeSendModal);
-		if (zkAmountInput) {
-			zkAmountInput.addEventListener('input', () => {
-				zkAmountInput.value = zkAmountInput.value.replace(/[^0-9.]/g, '');
-			});
-			zkAmountInput.addEventListener('focus', () => { zkAmountInput.select(); });
-			zkAmountInput.addEventListener('keydown', (e) => {
-				if (e.key === 'Enter') { e.preventDefault(); zkGenerateBtn?.click(); }
-			});
-		}
-		if (zkAmountDown && zkAmountInput) {
-			zkAmountDown.addEventListener('click', () => {
-				const current = parseFloat(zkAmountInput.value) || 1;
-				zkAmountInput.value = String(Math.max(1, Math.floor(current - 1)));
-			});
-		}
-		if (zkAmountUp && zkAmountInput) {
-			zkAmountUp.addEventListener('click', () => {
-				const current = parseFloat(zkAmountInput.value) || 0;
-				zkAmountInput.value = String(Math.floor(current + 1));
-			});
-		}
-		if (zkGenerateBtn) {
-			zkGenerateBtn.addEventListener('click', async () => {
-				if (!canSign()) {
-					showStatus(zkStatus, 'Connect wallet first', 'error');
-					return;
-				}
-				const suiAmount = zkAmountInput ? Number(zkAmountInput.value) : 0;
-				if (!Number.isFinite(suiAmount) || suiAmount <= 0) {
-					showStatus(zkStatus, 'Enter a valid amount', 'error');
-					return;
-				}
-				const mist = BigInt(Math.ceil(suiAmount * 1e9));
-				if (mist <= 0n) {
-					showStatus(zkStatus, 'Amount is too small', 'error');
-					return;
-				}
-				zkGenerateBtn.disabled = true;
-				showStatus(zkStatus, '<span class="loading"></span> Loading zkSend...', 'info');
-				if (zkResult) zkResult.style.display = 'none';
-				try {
-					const result = await SuiWalletKit.createSendLink({
-						sender: connectedAddress,
-						client: getSuiClient(),
-						mist: mist,
-					});
-					const linkUrl = result.link.getLink();
-					showStatus(zkStatus, '<span class="loading"></span> Approve in wallet...', 'info');
-					await _skiSignAndExecute(result.tx);
-					hideStatus(zkStatus);
-					if (zkResult) {
-						zkResult.style.display = 'block';
-						zkResult.innerHTML = '<div class="zk-link-result">'
-							+ '<div class="zk-link-result-label">Claim Link</div>'
-							+ '<div class="zk-link-row">'
-							+ '<input type="text" readonly class="zk-link-input" id="zk-link-url" value="' + linkUrl.replace(/"/g, '&quot;') + '" />'
-							+ '<button class="zk-copy-btn" id="zk-copy-btn">Copy</button>'
-							+ '</div></div>';
-						const zkCopyBtn = document.getElementById('zk-copy-btn');
-						const zkLinkUrl = document.getElementById('zk-link-url');
-						if (zkCopyBtn && zkLinkUrl) {
-							zkCopyBtn.addEventListener('click', () => {
-								navigator.clipboard.writeText(zkLinkUrl.value).then(() => {
-									zkCopyBtn.textContent = 'Copied!';
-									setTimeout(() => { zkCopyBtn.textContent = 'Copy'; }, 2000);
-								});
-							});
-						}
-					}
-				} catch (error) {
-					const msg = error?.message || 'Failed to generate link';
-					showStatus(zkStatus, 'Failed: ' + msg, 'error');
-				} finally {
-					zkGenerateBtn.disabled = false;
-				}
-			});
-		}
 
 		function formatSuiName(name) {
 			if (!name) return '';
@@ -7327,7 +7195,7 @@ ${skiWidgetMarkup()}
 
 		function getRenewalApiUrl(path) {
 			const normalizedPath = String(path || '').startsWith('/') ? path : '/' + String(path || '');
-			const conn = SuiWalletKit?.$connection?.value || {};
+			const conn = (typeof _skiConn !== 'undefined' ? _skiConn : null) || {};
 			const accountChains = Array.isArray(conn?.account?.chains) ? conn.account.chains : [];
 			let chain = '';
 			for (const candidate of accountChains) {
@@ -7373,7 +7241,7 @@ ${skiWidgetMarkup()}
 		}
 
 		async function signAndExecuteRenewalFromHandlerTx(txBytes, expectedSenderAddress) {
-			if (typeof SuiWalletKit?.signAndExecute !== 'function') {
+			if (typeof _skiSignAndExecute !== 'function') {
 				throw new Error('Wallet signing is unavailable. Reconnect wallet and retry.');
 			}
 			const senderAddress = String(
