@@ -1,6 +1,15 @@
 import type { SuiGraphQLClient } from '@mysten/sui/graphql'
-import { graphqlGetDynamicField, graphqlGetObject, graphqlQueryEvents } from './sui-graphql'
+import type { SuiGrpcClient } from '@mysten/sui/grpc'
+import type { SuiJsonRpcClient } from '@mysten/sui/jsonRpc'
 import { fetchNftEventsOnChain } from './onchain-activity'
+import {
+	graphqlGetDynamicField,
+	graphqlGetObject,
+	grpcGetDynamicObjectField,
+	raceQueryEvents,
+	raceTransports,
+	rpcGetDynamicObjectField,
+} from './sui-graphql'
 
 const TRADEPORT_V2_STORE = '0xf96f9363ac5a64c058bf7140723226804d74c0dab2dd27516fb441a180cd763b'
 const TRADEPORT_BIDDINGS_PACKAGE =
@@ -24,9 +33,10 @@ export interface OnChainBid {
 export async function fetchAllBidsForNft(
 	client: SuiGraphQLClient,
 	tokenId: string,
+	rpcClient?: SuiJsonRpcClient,
 ): Promise<OnChainBid[]> {
 	try {
-		const bid = await fetchBestBidOnChain(client, tokenId)
+		const bid = await fetchBestBidOnChain(client, tokenId, rpcClient)
 		return bid ? [bid] : []
 	} catch {
 		return []
@@ -36,12 +46,22 @@ export async function fetchAllBidsForNft(
 export async function fetchListingOnChain(
 	client: SuiGraphQLClient,
 	tokenId: string,
+	grpcClient?: SuiGrpcClient,
+	rpcClient?: SuiJsonRpcClient,
 ): Promise<OnChainListing | null> {
 	try {
-		const result = await graphqlGetDynamicField(client, TRADEPORT_V2_STORE, {
-			type: '0x2::object::ID',
-			value: tokenId,
-		})
+		const name = { type: '0x2::object::ID', value: tokenId }
+		const calls: Array<() => Promise<import('./sui-graphql').LegacyDynamicFieldObject>> = []
+
+		if (grpcClient) {
+			calls.push(() => grpcGetDynamicObjectField(grpcClient, TRADEPORT_V2_STORE, name))
+		}
+		calls.push(() => graphqlGetDynamicField(client, TRADEPORT_V2_STORE, name))
+		if (rpcClient) {
+			calls.push(() => rpcGetDynamicObjectField(rpcClient, TRADEPORT_V2_STORE, name))
+		}
+
+		const result = await raceTransports(calls)
 
 		if (!result.data?.content || result.data.content.dataType !== 'moveObject') {
 			return null
@@ -57,7 +77,13 @@ export async function fetchListingOnChain(
 		if (!price || !seller) return null
 
 		return { price, seller, nonce, tokenId }
-	} catch {
+	} catch (e) {
+		console.error(
+			'[fetchListingOnChain] failed for',
+			tokenId,
+			':',
+			e instanceof Error ? e.message : e,
+		)
 		return null
 	}
 }
@@ -81,7 +107,6 @@ async function fetchBidViaGraphQL(
 			query,
 			variables: { type: SINGLE_BID_TYPE, after },
 		})
-		// biome-ignore lint: accessing raw GraphQL response
 		const rawData = res.data as Record<string, unknown>
 		const objects = rawData?.objects as
 			| {
@@ -113,15 +138,17 @@ async function fetchBidViaGraphQL(
 export async function fetchBestBidOnChain(
 	client: SuiGraphQLClient,
 	tokenId: string,
+	rpcClient?: SuiJsonRpcClient,
 ): Promise<OnChainBid | null> {
 	try {
 		const cancelledOrMatched = new Set<string>()
 		const createEvents: { bidId: string; price: number; bidder: string; nftId: string }[] = []
 
-		const events = await graphqlQueryEvents(
+		const events = await raceQueryEvents(
 			client,
 			{ MoveEventModule: { package: TRADEPORT_BIDDINGS_PACKAGE, module: 'tradeport_biddings' } },
 			{ limit: 50 },
+			rpcClient,
 		)
 
 		for (const evt of events.data) {
@@ -182,9 +209,10 @@ export async function fetchOnChainSales(
 	client: SuiGraphQLClient,
 	tokenId: string,
 	limit = 50,
+	rpcClient?: SuiJsonRpcClient,
 ): Promise<OnChainSale[]> {
 	try {
-		const events = await fetchNftEventsOnChain(client, tokenId, limit)
+		const events = await fetchNftEventsOnChain(client, tokenId, limit, rpcClient)
 		const sales: OnChainSale[] = []
 		for (const evt of events) {
 			if (evt.type !== 'buy' && evt.type !== 'accept_bid') continue
@@ -214,24 +242,79 @@ export interface OnChainNftMeta {
 export async function fetchNftMetadata(
 	client: SuiGraphQLClient,
 	tokenId: string,
+	rpcClient?: SuiJsonRpcClient,
+	grpcClient?: SuiGrpcClient,
 ): Promise<OnChainNftMeta | null> {
 	try {
-		const obj = await graphqlGetObject(client, tokenId)
+		const obj = await graphqlGetObject(
+			client,
+			tokenId,
+			{ showOwner: true, showContent: true, showDisplay: true },
+			rpcClient,
+			grpcClient,
+		)
 		if (!obj.data) return null
 
 		const ownerField = obj.data.owner
 		let owner = ''
 		if (ownerField && typeof ownerField === 'object') {
-			if ('AddressOwner' in ownerField) owner = String(ownerField.AddressOwner)
-			else if ('ObjectOwner' in ownerField) owner = String(ownerField.ObjectOwner)
+			if ('AddressOwner' in ownerField) {
+				owner = String(ownerField.AddressOwner)
+			} else if ('ObjectOwner' in ownerField) {
+				// Walk up the ObjectOwner chain (DynamicField → Listing → Kiosk) to find the human
+				let currentId = String(ownerField.ObjectOwner)
+				try {
+					for (let depth = 0; depth < 4; depth++) {
+						const parentObj = await graphqlGetObject(
+							client,
+							currentId,
+							undefined,
+							rpcClient,
+							grpcClient,
+						)
+						if (!parentObj.data) break
+						const parentOwner = parentObj.data.owner
+						if (parentOwner?.AddressOwner) {
+							owner = parentOwner.AddressOwner
+							break
+						}
+						const pf = parentObj.data.content?.fields as Record<string, unknown> | undefined
+						if (pf?.seller && typeof pf.seller === 'string') {
+							owner = pf.seller
+							break
+						}
+						if (pf?.owner && typeof pf.owner === 'string') {
+							owner = pf.owner
+							break
+						}
+						if (parentOwner?.ObjectOwner) {
+							currentId = parentOwner.ObjectOwner
+							continue
+						}
+						break
+					}
+				} catch {
+					/* fall through */
+				}
+				if (!owner) owner = String(ownerField.ObjectOwner)
+			}
 		}
+
+		const display = obj.data.display
+		const fields = obj.data.content?.fields as Record<string, unknown> | undefined
+		const name = display?.name ?? (fields?.domain_name as string) ?? ''
+		const imageUrl =
+			display?.image_url ??
+			(fields?.domain_name
+				? `https://api-mainnet.suins.io/nfts/${fields.domain_name}/${fields.expiration_timestamp_ms}`
+				: null)
 
 		return {
 			id: obj.data.objectId,
-			name: '',
+			name,
 			tokenId,
 			owner,
-			imageUrl: null,
+			imageUrl,
 		}
 	} catch {
 		return null

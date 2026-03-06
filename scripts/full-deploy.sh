@@ -19,8 +19,5 @@ fi
 echo "\n⬆️  Pushing to current remote..."
 git push
 
-echo "\n🚀 Deploying via npm..."
-npm run deploy
-
 echo "\n🚀 Deploying via bun..."
-bun run deploy
+npx wrangler deploy

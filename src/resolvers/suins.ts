@@ -1,14 +1,62 @@
-import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
+import type { SuiGraphQLClient } from '@mysten/sui/graphql'
+import type { SuiGrpcClient } from '@mysten/sui/grpc'
+import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc'
 import { SuinsClient } from '@mysten/suins'
 import type { Env, ResolverResult, SuiNSRecord } from '../types'
 import { cacheKey } from '../utils/cache'
 import { getDefaultRpcUrl } from '../utils/rpc'
 import { toSuiNSName } from '../utils/subdomain'
+import {
+	getSuiGraphQLClient,
+	getSuiGrpcClient,
+	getSuiRpcClient,
+	graphqlGetObject,
+} from '../utils/sui-graphql'
 import { lookupName as surfluxLookupName } from '../utils/surflux-grpc'
-import { getSuiGraphQLClient, graphqlGetObject } from '../utils/sui-graphql'
 
 const CACHE_TTL = 600
 const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000
+
+/**
+ * Resolve the human owner of an NFT. Walks up the ObjectOwner chain
+ * (DynamicField wrappers, Kiosks, Tradeport listings) to find the
+ * actual AddressOwner or seller address.
+ */
+async function resolveNftHumanOwner(
+	nftId: string,
+	gqlClient: SuiGraphQLClient,
+	rpcClient: SuiJsonRpcClient,
+	grpcClient: SuiGrpcClient,
+): Promise<string | undefined> {
+	const MAX_DEPTH = 4
+	let currentId = nftId
+
+	for (let depth = 0; depth < MAX_DEPTH; depth++) {
+		const obj = await graphqlGetObject(gqlClient, currentId, undefined, rpcClient, grpcClient)
+		if (!obj.data) return undefined
+
+		const owner = obj.data.owner
+		if (!owner) return undefined
+
+		// Direct address owner — we're done
+		if (owner.AddressOwner) return owner.AddressOwner
+
+		// Check content fields for seller (Tradeport listing) or owner (Kiosk)
+		const fields = obj.data.content?.fields as Record<string, unknown> | undefined
+		if (fields?.seller && typeof fields.seller === 'string') return fields.seller
+		if (fields?.owner && typeof fields.owner === 'string') return fields.owner
+
+		// ObjectOwner — walk up one level
+		if (owner.ObjectOwner) {
+			currentId = owner.ObjectOwner
+			continue
+		}
+
+		return undefined
+	}
+
+	return undefined
+}
 
 const suinsMemCache = new Map<
 	string,
@@ -70,15 +118,14 @@ export async function resolveSuiNS(
 				if (surfluxRecord.nftId && !surfluxRecord.ownerAddress) {
 					try {
 						const gqlClient = getSuiGraphQLClient(env)
-						const nftObject = await graphqlGetObject(gqlClient, surfluxRecord.nftId)
-						if (nftObject.data?.owner) {
-							const owner = nftObject.data.owner
-							if (owner.AddressOwner) {
-								surfluxRecord.ownerAddress = owner.AddressOwner
-							} else if (owner.ObjectOwner) {
-								surfluxRecord.ownerAddress = owner.ObjectOwner
-							}
-						}
+						const rpcClient = getSuiRpcClient(env)
+						const grpcClient = getSuiGrpcClient(env)
+						surfluxRecord.ownerAddress = await resolveNftHumanOwner(
+							surfluxRecord.nftId,
+							gqlClient,
+							rpcClient,
+							grpcClient,
+						)
 					} catch (e) {
 						console.log('Could not fetch NFT owner for Surflux record:', e)
 					}
@@ -92,7 +139,7 @@ export async function resolveSuiNS(
 		}
 
 		// Fallback: SuiNS SDK (JSON-RPC)
-		const suiClient = new SuiClient({
+		const suiClient = new SuiJsonRpcClient({
 			url: getDefaultRpcUrl(env.SUI_NETWORK),
 			network: env.SUI_NETWORK,
 		})
@@ -112,15 +159,14 @@ export async function resolveSuiNS(
 		if (nameRecord.nftId) {
 			try {
 				const gqlClient = getSuiGraphQLClient(env)
-				const nftObject = await graphqlGetObject(gqlClient, nameRecord.nftId)
-				if (nftObject.data?.owner) {
-					const owner = nftObject.data.owner
-					if (owner.AddressOwner) {
-						ownerAddress = owner.AddressOwner
-					} else if (owner.ObjectOwner) {
-						ownerAddress = owner.ObjectOwner
-					}
-				}
+				const rpcClient = getSuiRpcClient(env)
+				const grpcClient = getSuiGrpcClient(env)
+				ownerAddress = await resolveNftHumanOwner(
+					nameRecord.nftId,
+					gqlClient,
+					rpcClient,
+					grpcClient,
+				)
 			} catch (e) {
 				console.log('Could not fetch NFT owner:', e)
 			}
@@ -237,7 +283,7 @@ function parseContentHash(hash: string): SuiNSRecord['content'] {
  */
 export async function getSuiNSOwner(name: string, env: Env): Promise<string | null> {
 	try {
-		const suiClient = new SuiClient({
+		const suiClient = new SuiJsonRpcClient({
 			url: getDefaultRpcUrl(env.SUI_NETWORK),
 			network: env.SUI_NETWORK,
 		})

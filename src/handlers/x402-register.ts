@@ -19,9 +19,13 @@ import {
 import { calculateRegistrationPrice, formatPricingResponse } from '../utils/pricing'
 import { jsonResponse } from '../utils/response'
 import { getDefaultRpcUrl } from '../utils/rpc'
-import { fetchMultichainPaymentRequirements, resolveX402Providers, x402PaymentMiddleware } from '../utils/x402-middleware'
+import { getSuiGraphQLClient, unwrapTransactionResult } from '../utils/sui-graphql'
+import {
+	fetchMultichainPaymentRequirements,
+	resolveX402Providers,
+	x402PaymentMiddleware,
+} from '../utils/x402-middleware'
 import { resolveX402Recipient } from '../utils/x402-sui'
-import { getSuiGraphQLClient } from '../utils/sui-graphql'
 
 type X402RegisterEnv = {
 	Bindings: Env
@@ -54,7 +58,7 @@ async function resolveFeeRecipient(
 	fallback: string,
 ): Promise<string> {
 	if (!feeName) return fallback
-	const normalizedName = feeName.replace(/\.sui$/i, '') + '.sui'
+	const normalizedName = `${feeName.replace(/\.sui$/i, '')}.sui`
 	try {
 		const record = await suinsClient.getNameRecord(normalizedName)
 		if (record?.targetAddress && ADDRESS_PATTERN.test(record.targetAddress)) {
@@ -99,9 +103,15 @@ x402RegisterRoutes.get('/info', async (c) => {
 	const [payTo, multichainAccepts, agentAddress] = await Promise.all([
 		resolveX402Recipient(env),
 		fetchMultichainPaymentRequirements(env, feeMist),
-		Promise.resolve<string | null>((() => {
-			try { return getAgentAddress(env) } catch { return null }
-		})()),
+		Promise.resolve<string | null>(
+			(() => {
+				try {
+					return getAgentAddress(env)
+				} catch {
+					return null
+				}
+			})(),
+		),
 	])
 
 	const suiAccept = {
@@ -350,40 +360,39 @@ x402RegisterRoutes.post(
 			const gqlResult = await gqlClient.executeTransaction({
 				transaction: txBytes,
 				signatures: [signature],
+				include: { effects: true, events: true, objectTypes: true },
 			})
 
-			const gqlTx = gqlResult.transaction as {
-				digest?: string
-				status?: string
-				effects?: { status?: { status: string; error?: string } }
-				events?: Array<{ type: string; parsedJson?: Record<string, unknown> }>
-				objectChanges?: Array<{
-					type: string
-					objectType?: string
-					objectId?: string
-					owner?: unknown
-				}>
-			} | undefined
+			const gqlTx = unwrapTransactionResult(gqlResult)
 
 			if (!gqlTx) {
 				throw new Error('Transaction failed: no result from GraphQL')
 			}
 
 			const txResult = gqlTx
-			if (!txResult?.effects?.status || txResult.effects.status.status !== 'success') {
+			const txSucceeded =
+				typeof txResult.status === 'object' && 'success' in txResult.status
+					? !!txResult.status.success
+					: false
+			if (!txSucceeded) {
 				throw new Error(
-					`Transaction execution failed: ${txResult?.effects?.status?.error || 'unknown error'}`,
+					`Transaction execution failed: ${
+						(typeof txResult.status === 'object' && 'error' in txResult.status
+							? txResult.status.error
+							: undefined) || 'unknown error'
+					}`,
 				)
 			}
 
 			const digest = txResult.digest || 'unknown'
 
 			let nftId: string | null = null
-			if (txResult.objectChanges) {
-				for (const change of txResult.objectChanges) {
+			if (txResult.effects?.changedObjects) {
+				for (const change of txResult.effects.changedObjects) {
+					const objectType = txResult.objectTypes?.[change.objectId]
 					if (
-						change.type === 'created' &&
-						change.objectType?.includes('::suins_registration::SuinsRegistration')
+						change.idOperation === 'Created' &&
+						objectType?.includes('::suins_registration::SuinsRegistration')
 					) {
 						nftId = change.objectId || null
 						break
@@ -395,10 +404,10 @@ x402RegisterRoutes.post(
 			if (txResult.events) {
 				for (const event of txResult.events) {
 					if (
-						event.type.includes('::register::NameRegistered') ||
-						event.type.includes('Register')
+						event.eventType.includes('::register::NameRegistered') ||
+						event.eventType.includes('Register')
 					) {
-						registrationEvent = event.parsedJson || null
+						registrationEvent = event.json || null
 						break
 					}
 				}
@@ -529,21 +538,26 @@ x402RegisterRoutes.post('/sweep', async (c) => {
 		const gqlResult2 = await gqlClient2.executeTransaction({
 			transaction: txBytes,
 			signatures: [signature],
+			include: { effects: true },
 		})
 
-		const gqlTx2 = gqlResult2.transaction as {
-			digest?: string
-			status?: string
-			effects?: { status?: { status: string; error?: string } }
-		} | undefined
+		const gqlTx2 = unwrapTransactionResult(gqlResult2)
 
 		if (!gqlTx2) {
 			throw new Error(`Sweep transaction failed: no result from GraphQL`)
 		}
 
-		if (gqlTx2.status !== 'success' && gqlTx2.effects?.status?.status !== 'success') {
+		const sweepSucceeded =
+			typeof gqlTx2.status === 'object' && 'success' in gqlTx2.status
+				? !!gqlTx2.status.success
+				: false
+		if (!sweepSucceeded) {
 			throw new Error(
-				`Sweep execution failed: ${gqlTx2.effects?.status?.error || 'unknown'}`,
+				`Sweep execution failed: ${
+					(typeof gqlTx2.status === 'object' && 'error' in gqlTx2.status
+						? gqlTx2.status.error
+						: undefined) || 'unknown'
+				}`,
 			)
 		}
 

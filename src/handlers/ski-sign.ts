@@ -1,5 +1,11 @@
 import type { Env } from '../types'
-import { skiStyleTag, skiScriptTag, skiWidgetMarkup, skiEventBridge, skiWalletBridge } from '../utils/ski-embed'
+import {
+	skiEventBridge,
+	skiScriptTag,
+	skiStyleTag,
+	skiWalletBridge,
+	skiWidgetMarkup,
+} from '../utils/ski-embed'
 import { getSuiGraphQLUrl } from '../utils/sui-graphql'
 import { generateWalletTxJs } from '../utils/wallet-tx-js'
 
@@ -30,7 +36,6 @@ body{margin:0;background:transparent}
 ${skiStyleTag()}
 </head><body>
 ${skiWidgetMarkup()}
-<div id="wk-modal"></div>
 <script>
 var __skiNetwork = '${env.SUI_NETWORK || 'mainnet'}';
 ${skiWalletBridge({ network: env.SUI_NETWORK })}
@@ -726,7 +731,7 @@ async function __beginTopFrameHandoffFlow() {
 			__completeTopFrameHandoff('ok', '');
 			return;
 		}
-		window.dispatchEvent(new CustomEvent('ski:open-modal'));
+		window.dispatchEvent(new CustomEvent('ski:request-signin'));
 	} catch (err) {
 		__completeTopFrameHandoff('error', (err && err.message) ? err.message : 'Wallet handoff failed');
 	}
@@ -1246,7 +1251,7 @@ async function __phantomSignThenExecute(txInput, execOptions, senderAddress, txJ
 async function __getSuiClient() {
 	if (__suiClient) return __suiClient;
 	if (!__SuiClientClass) {
-		var mod = await import('https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle');
+		var mod = await import('https://esm.sh/@mysten/sui@2.6.0/jsonRpc?bundle');
 		__SuiClientClass = mod.SuiJsonRpcClient;
 	}
 	var network = __skiNetwork || 'mainnet';
@@ -1316,12 +1321,12 @@ var __TransactionClassFallback = null;
 async function __getTransactionClass() {
 	if (__TransactionClass) return __TransactionClass;
 	var primaryUrls = [
-		'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/transactions/+esm',
-		'https://esm.sh/@mysten/sui@2.4.0/transactions?bundle',
+		'https://cdn.jsdelivr.net/npm/@mysten/sui@2.6.0/transactions/+esm',
+		'https://esm.sh/@mysten/sui@2.6.0/transactions?bundle',
 	];
 	var fallbackUrls = [
-		'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/transactions/+esm',
-		'https://esm.sh/@mysten/sui@2.4.0/transactions?bundle',
+		'https://cdn.jsdelivr.net/npm/@mysten/sui@2.6.0/transactions/+esm',
+		'https://esm.sh/@mysten/sui@2.6.0/transactions?bundle',
 	];
 	for (var i = 0; i < primaryUrls.length; i++) {
 		try {
@@ -1844,7 +1849,7 @@ window.__onBridgeModalConnect = function() {
 	__modalOrigin = '';
 };
 
-window.dispatchEvent(new CustomEvent('ski:open-modal'));
+window.addEventListener('load', function() { window.dispatchEvent(new CustomEvent('ski:request-signin')); });
 
 // Modal close handling: check _skiAddr for cancellation
 
@@ -1860,7 +1865,7 @@ window.addEventListener('message', function(e) {
 	__modalRequestId = e.data.requestId || '';
 	__modalSource = e.source;
 	__modalOrigin = e.origin;
-	window.dispatchEvent(new CustomEvent('ski:open-modal'));
+	window.dispatchEvent(new CustomEvent('ski:request-signin'));
 });
 
 async function __loadWalletStandard() {

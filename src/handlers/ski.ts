@@ -1,7 +1,13 @@
 import type { Env } from '../types'
 import { generateLogoSvg } from '../utils/og-image'
+import {
+	skiEventBridge,
+	skiScriptTag,
+	skiStyleTag,
+	skiWalletBridge,
+	skiWidgetMarkup,
+} from '../utils/ski-embed'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
-import { skiEventBridge, skiScriptTag, skiStyleTag, skiWalletBridge, skiWidgetMarkup } from '../utils/ski-embed'
 
 interface SkiSession {
 	address: string | null
@@ -99,8 +105,6 @@ ${skiStyleTag()}
 		<p>ubiquitous authentication</p>
 	</div>
 	
-	<div id="wk-modal"></div>
-	
 	<div class="ski-locks" id="ski-locks">
 		<div class="ski-lock" title="app.sui.ski"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
 		<div class="ski-lock" title="my.sui.ski"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg></div>
@@ -140,7 +144,7 @@ window.__skiDone = function() {
 	__skiDoneTriggered = true;
 	__wkActivateLocks();
 	
-	var addr = _skiAddr || (__skiServerSession && __skiServerSession.address) || '';
+	var addr = window._skiAddr || (__skiServerSession && __skiServerSession.address) || '';
 	if (!addr) return;
 	var statusEl = document.getElementById('ski-status');
 	var loginBtn = document.getElementById('ski-login-btn');
@@ -244,14 +248,14 @@ function __skiInitDerivedPreview() {
 	if (keyEl) keyEl.textContent = nameKey;
 	if (nftEl) nftEl.textContent = nftId;
 	var session = getWalletSession();
-	var owner = _skiAddr || (session && session.address) || (__skiServerSession && __skiServerSession.address) || '';
+	var owner = window._skiAddr || (session && session.address) || (__skiServerSession && __skiServerSession.address) || '';
 	__skiUpdatePreviewOwner(owner);
 }
 
 __skiInitDerivedPreview();
 
 document.getElementById('ski-login-btn').onclick = function() {
-	window.dispatchEvent(new CustomEvent('ski:open-modal'));
+	window.dispatchEvent(new CustomEvent('ski:request-signin'));
 };
 
 if (__skiServerSession && __skiServerSession.address && __skiReturnUrl) {
@@ -294,12 +298,12 @@ if (__skiServerSession && __skiServerSession.address && __skiReturnUrl) {
 		if (loginBtn) {
 			loginBtn.style.display = 'block';
 			loginBtn.textContent = 'Sign In with Sui';
-			loginBtn.onclick = function() { window.dispatchEvent(new CustomEvent('ski:open-modal')); };
+			loginBtn.onclick = function() { window.dispatchEvent(new CustomEvent('ski:request-signin')); };
 		}
 
 		// Auto-open modal if no session
 		if (!session || !session.address) {
-			setTimeout(function() { window.dispatchEvent(new CustomEvent('ski:open-modal')); }, 500);
+			window.addEventListener('load', function() { window.dispatchEvent(new CustomEvent('ski:request-signin')); });
 		}
 	});
 }

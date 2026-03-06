@@ -1,6 +1,6 @@
 import { fromBase64 } from '@mysten/sui/utils'
 import type { Env } from '../types'
-import { getSuiGraphQLClient } from './sui-graphql'
+import { getSuiGraphQLClient, unwrapTransactionResult } from './sui-graphql'
 
 interface RelayResult {
 	ok: boolean
@@ -21,13 +21,12 @@ export async function relaySignedTransaction(
 		const result = await client.executeTransaction({
 			transaction: fromBase64(txBytes),
 			signatures,
+			include: { effects: true },
 		})
 
-		const tx = result.transaction as
-			| { digest?: string; status?: string; effects?: unknown }
-			| undefined
-		const status = tx?.status ?? 'success'
-		const ok = status === 'success' || status === 'Success'
+		const tx = unwrapTransactionResult(result)
+		const ok =
+			!!tx && typeof tx.status === 'object' && 'success' in tx.status ? !!tx.status.success : false
 
 		return {
 			ok,

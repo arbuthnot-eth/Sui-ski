@@ -84,7 +84,7 @@ export function generateRegistrationPage(
 	const serializeJson = (value: unknown) =>
 		JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
 
-	const CDN_ASSETS = 'https://cdn.jsdelivr.net/npm/sui.ski@latest/public/assets'
+	const CDN_ASSETS = 'https://cdn.jsdelivr.net/npm/sui.ski@0.1.77/public/assets'
 
 	return `<!DOCTYPE html>
 <html lang="en">

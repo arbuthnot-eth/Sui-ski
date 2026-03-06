@@ -1,12 +1,16 @@
 import type { Env, SuiNSRecord } from '../types'
-import { BLACK_DOTSKI_WORDMARK_DATA_URL, BLUE_DOTSKI_WORDMARK_DATA_URL } from '../utils/wallet-brand'
 import { generateLogoSvg, getDefaultOgImageUrl, getProfileOgImageUrl } from '../utils/og-image'
-import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
+import {
+	skiButtonDefaultSvg,
+	skiButtonGraceSvg,
+	skiGraceDaysPill,
+	skiScriptTag,
+	skiStyleTag,
+	skiWalletBridge,
+} from '../utils/ski-embed'
 import { normalizeMediaUrl, renderSocialMeta } from '../utils/social'
 import { generateThunderCss } from '../utils/thunder-css'
 import { generateThunderJs } from '../utils/thunder-js'
-import { generateWalletSessionJs } from '../utils/wallet-session-js'
-import { skiStyleTag, skiScriptTag, skiWidgetMarkup, skiEventBridge, skiWalletBridge } from '../utils/ski-embed'
 import { profileStyles } from './profile.css'
 
 interface ProfilePageOptions {
@@ -48,8 +52,6 @@ const TRADEPORT_LOGO_ICON_SVG = `<svg width="99" height="61" viewBox="0 0 99 61"
 </svg>`
 
 const TRADEPORT_LOGO_ICON_DATA_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(TRADEPORT_LOGO_ICON_SVG)}`
-const PROFILE_WALLET_BUTTON_LOGO_DEFAULT_DATA_URL = BLACK_DOTSKI_WORDMARK_DATA_URL
-const PROFILE_WALLET_BUTTON_LOGO_PRIMARY_DATA_URL = BLUE_DOTSKI_WORDMARK_DATA_URL
 /**
  * Generate sui.ski themed SuiNS profile page HTML
  */
@@ -155,14 +157,14 @@ export function generateProfilePage(
 	<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 	<link rel="preconnect" href="https://unpkg.com" crossorigin>
 		<script type="module">
-			import('https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle').catch(()=>{});
-			import('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle').catch(()=>{});
-			import('https://esm.sh/@mysten/suins@1.0.0?bundle').catch(()=>{});
+			import('https://esm.sh/@mysten/sui@2.6.0/jsonRpc?bundle').catch(()=>{});
+			import('https://esm.sh/@mysten/sui@2.6.0/transactions?bundle').catch(()=>{});
+			import('https://esm.sh/@mysten/suins@1.0.2?bundle').catch(()=>{});
 			import('https://esm.sh/@wallet-standard/app@1.1.0').catch(()=>{});
 		</script>
 
-	<style>${profileStyles}</style>
 ${skiStyleTag()}
+	<style>${profileStyles}</style>
 </head>
 <body>
 	<!-- Home Button -->
@@ -171,12 +173,13 @@ ${skiStyleTag()}
 	</a>
 
 	<!-- Wallet Widget (Shared with landing page component) -->
-	<div class="wallet-widget" id="wallet-widget">
-		<div id="wk-widget"></div>
-		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile" style="display:none">
-			<img class="wallet-profile-logo" src="${PROFILE_WALLET_BUTTON_LOGO_DEFAULT_DATA_URL}" alt=".SKI" draggable="false">
-		</button>
+	<div class="wallet-widget ski-wallet" id="wallet-widget">
+		<button class="wallet-ski-btn ski-dot-btn ski-btn ski-dot" id="ski-dot" title="Open SKI menu" aria-label="Status" style="display:none"></button>
+		<div id="ski-profile"></div>
+		<button class="wallet-ski-btn ski-btn" id="ski-btn" title="Open SKI menu" aria-label="Open SKI menu">${options.inGracePeriod ? skiButtonGraceSvg() : skiButtonDefaultSvg()}</button>${options.inGracePeriod && daysToExpire !== null ? skiGraceDaysPill(30 + daysToExpire) : ''}
+		<div id="ski-menu"></div>
 	</div>
+	<div id="ski-modal"></div>
 
 
 		<div class="container">
@@ -769,11 +772,8 @@ ${skiStyleTag()}
 		</div>
 	</div>
 
-	<div id="wk-modal"></div>
-
-${skiWidgetMarkup()}
 		<script type="module">
-			let getWallets, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction;
+			let getWallets, SuiJsonRpcClient, SuiGrpcClient, Transaction, SuinsClient, SuinsTransaction;
 			let SealClient = null, SessionKey = null, fromHex = null, toHex = null;
 			let sealSdkLoaded = false;
 			async function initSealSdk() {
@@ -840,23 +840,27 @@ ${skiWidgetMarkup()}
 					'https://cdn.jsdelivr.net/npm/@wallet-standard/app@1.1.0/+esm',
 					'https://unpkg.com/@wallet-standard/app@1.1.0?module',
 				];
+				const suiGrpcUrls = [
+					'https://esm.sh/@mysten/sui@2.6.0/grpc?bundle',
+					'https://esm.sh/@mysten/sui@2.6.0/grpc',
+				];
 				const suiJsonRpcUrls = [
-					'https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle',
-					'https://esm.sh/@mysten/sui@2.4.0/jsonRpc',
-					'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/+esm',
-					'https://unpkg.com/@mysten/sui@2.4.0?module',
+					'https://esm.sh/@mysten/sui@2.6.0/jsonRpc?bundle',
+					'https://esm.sh/@mysten/sui@2.6.0/jsonRpc',
+					'https://cdn.jsdelivr.net/npm/@mysten/sui@2.6.0/+esm',
+					'https://unpkg.com/@mysten/sui@2.6.0?module',
 				];
 				const suiTransactionsUrls = [
-					'https://esm.sh/@mysten/sui@2.4.0/transactions?bundle',
-					'https://esm.sh/@mysten/sui@2.4.0/transactions',
-					'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/+esm',
-					'https://unpkg.com/@mysten/sui@2.4.0?module',
+					'https://esm.sh/@mysten/sui@2.6.0/transactions?bundle',
+					'https://esm.sh/@mysten/sui@2.6.0/transactions',
+					'https://cdn.jsdelivr.net/npm/@mysten/sui@2.6.0/+esm',
+					'https://unpkg.com/@mysten/sui@2.6.0?module',
 				];
 				const suinsUrls = [
-					'https://esm.sh/@mysten/suins@1.0.0?bundle',
-					'https://esm.sh/@mysten/suins@1.0.0',
-					'https://cdn.jsdelivr.net/npm/@mysten/suins@1.0.0/+esm',
-					'https://unpkg.com/@mysten/suins@1.0.0?module',
+					'https://esm.sh/@mysten/suins@1.0.2?bundle',
+					'https://esm.sh/@mysten/suins@1.0.2',
+					'https://cdn.jsdelivr.net/npm/@mysten/suins@1.0.2/+esm',
+					'https://unpkg.com/@mysten/suins@1.0.2?module',
 				];
 
 				const results = await Promise.allSettled([
@@ -864,6 +868,7 @@ ${skiWidgetMarkup()}
 					importFirst(suiJsonRpcUrls),
 					importFirst(suiTransactionsUrls),
 					importFirst(suinsUrls),
+					importFirst(suiGrpcUrls),
 				]);
 				if (results[0].status === 'fulfilled') {
 					const walletsModule = results[0].value;
@@ -886,6 +891,10 @@ ${skiWidgetMarkup()}
 					const suinsModule = results[3].value;
 					SuinsClient = pickSuinsClientExport(suinsModule);
 					SuinsTransaction = pickExport(suinsModule, 'SuinsTransaction');
+				}
+				if (results[4] && results[4].status === 'fulfilled') {
+					const grpcModule = results[4].value;
+					SuiGrpcClient = pickExport(grpcModule, 'SuiGrpcClient') || SuiGrpcClient;
 				}
 				const failed = results.filter(r => r.status === 'rejected');
 				if (failed.length > 0) {
@@ -975,30 +984,49 @@ ${skiWidgetMarkup()}
 		window.DECAY_AUCTION_PACKAGE_ID = DECAY_AUCTION_PACKAGE_ID;
 		window.SKI_FACILITATOR = SKI_FACILITATOR;
 		window.rawIdentityNftImage = null;
+		window.__skiServerSession = ${serializeJson(
+			options.session?.address
+				? {
+						address: options.session.address,
+						walletName: options.session.walletName || '',
+					}
+				: null,
+		)};
+		(function seedSkiPreload() {
+			var session = window.__skiServerSession;
+			if (!session || !session.address) return;
+			try {
+				if (!localStorage.getItem('ski:last-address')) {
+					localStorage.setItem('ski:last-address', session.address);
+				}
+				if (session.walletName && !localStorage.getItem('ski:last-wallet')) {
+					localStorage.setItem('ski:last-wallet', session.walletName);
+				}
+				if (session.walletName && !localStorage.getItem('sui_wallet_name')) {
+					localStorage.setItem('sui_wallet_name', session.walletName);
+				}
+			} catch (_e) {}
+		})();
 
-		${generateWalletSessionJs()}
-		${skiWalletBridge({ network: env.SUI_NETWORK })}
-		${skiEventBridge({ onConnect: 'onProfileWalletConnected', onDisconnect: 'onProfileWalletDisconnected' })}
+			${skiWalletBridge({ network: env.SUI_NETWORK })}
 
-
-		window.onProfileWalletConnected = function() {
-			updateUIForWallet();
-			if (connectedAddress) {
-				resolveWalletName(connectedAddress);
-			}
-		};
-
-		window.onProfileWalletDisconnected = function() {
-			updateUIForWallet();
-		};
-
-		const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
+			const RPC_URLS = { mainnet: 'https://fullnode.mainnet.sui.io:443', testnet: 'https://fullnode.testnet.sui.io:443', devnet: 'https://fullnode.devnet.sui.io:443' };
 		const ACTIVE_RPC_URL = RPC_URLS[NETWORK] || RPC_URLS.mainnet;
 
 		let cachedSuiClient = null;
 		const getSuiClient = () => {
 			if (!cachedSuiClient) {
-				cachedSuiClient = new SuiJsonRpcClient({ url: ACTIVE_RPC_URL });
+				// Prefer JSON-RPC for client-side: existing code uses getOwnedObjects, getBalance, etc.
+				// gRPC client has different method names (listOwnedObjects) so it's not a drop-in replacement.
+				if (SuiJsonRpcClient) {
+					cachedSuiClient = new SuiJsonRpcClient({ url: ACTIVE_RPC_URL });
+				} else if (SuiGrpcClient) {
+					try {
+						cachedSuiClient = new SuiGrpcClient({ baseUrl: ACTIVE_RPC_URL, network: NETWORK });
+					} catch (e) {
+						console.warn('gRPC client failed:', e.message);
+					}
+				}
 			}
 			return cachedSuiClient;
 		};
@@ -1094,11 +1122,11 @@ ${skiWidgetMarkup()}
 					suinsModuleLoadingPromise = (async () => {
 						const timeoutMs = 30000;
 						const urls = [
-							'https://esm.sh/@mysten/suins@1.0.0?bundle',
-							'https://esm.sh/@mysten/suins@1.0.0',
+							'https://esm.sh/@mysten/suins@1.0.2?bundle',
+							'https://esm.sh/@mysten/suins@1.0.2',
 							'https://esm.sh/@mysten/suins?bundle',
-							'https://cdn.jsdelivr.net/npm/@mysten/suins@1.0.0/+esm',
-							'https://unpkg.com/@mysten/suins@1.0.0?module',
+							'https://cdn.jsdelivr.net/npm/@mysten/suins@1.0.2/+esm',
+							'https://unpkg.com/@mysten/suins@1.0.2?module',
 						];
 					for (const url of urls) {
 						try {
@@ -1162,16 +1190,19 @@ ${skiWidgetMarkup()}
 
 		var __lastVaultAddress = null;
 		var __initialConnectionFired = false;
-		_skiSubscribe(function(conn) {
-			var previousAddress = connectedAddress || '';
-			connectedWallet = conn ? conn.wallet : null;
-			connectedAccount = conn ? conn.account : null;
-			connectedAddress = conn ? conn.address : null;
-			connectedWalletName = conn && conn.wallet ? conn.wallet.name : (conn ? conn.walletName : null);
-			connectedPrimaryName = conn ? conn.primaryName : null;
-			updateWalletProfileButton();
+			window._skiSubscribe(function(conn) {
+				var previousAddress = connectedAddress || '';
+				connectedWallet = conn ? conn.wallet : null;
+				connectedAccount = conn ? conn.account : null;
+				connectedAddress = conn ? conn.address : null;
+				connectedWalletName = conn && conn.wallet ? conn.wallet.name : (conn ? conn.walletName : null);
+				connectedPrimaryName = conn ? conn.primaryName : null;
+				checkEditPermission();
+				updateUIForWallet();
+				updateGlobalWalletWidget();
+				updateWalletWidgetChrome();
 
-			var normalizedPrev = String(previousAddress || '').trim().toLowerCase();
+				var normalizedPrev = String(previousAddress || '').trim().toLowerCase();
 			var normalizedNext = String(connectedAddress || '').trim().toLowerCase();
 			if (__initialConnectionFired && normalizedPrev && normalizedNext && normalizedNext !== normalizedPrev) {
 				window.location.reload();
@@ -1180,32 +1211,37 @@ ${skiWidgetMarkup()}
 			__initialConnectionFired = true;
 
 			if (connectedAddress) {
-				if (connectedAddress !== __lastVaultAddress) {
-					__lastVaultAddress = connectedAddress;
+					if (connectedAddress !== __lastVaultAddress) {
+						__lastVaultAddress = connectedAddress;
+						window.userVaultNames = new Set();
+						if (typeof window.renderVaultDashboard === 'function') window.renderVaultDashboard();
+						if (typeof window.loadUserVault === 'function') window.loadUserVault();
+					}
+					resolveWalletName(connectedAddress);
+				} else {
+					__lastVaultAddress = null;
 					window.userVaultNames = new Set();
 					if (typeof window.renderVaultDashboard === 'function') window.renderVaultDashboard();
-					if (typeof window.loadUserVault === 'function') window.loadUserVault();
 				}
-			} else {
+			}, function() {
+				connectedWallet = null;
+				connectedAccount = null;
+				connectedAddress = null;
+				connectedWalletName = null;
+				connectedPrimaryName = null;
+				canEdit = false;
+				updateEditButton();
+				updateUIForWallet();
+				updateGlobalWalletWidget();
+				updateWalletWidgetChrome();
 				__lastVaultAddress = null;
 				window.userVaultNames = new Set();
-				if (typeof window.renderVaultDashboard === 'function') window.renderVaultDashboard();
-			}
-		}, function() {
-			connectedWallet = null;
-			connectedAccount = null;
-			connectedAddress = null;
-			connectedWalletName = null;
-			connectedPrimaryName = null;
-			updateWalletProfileButton();
-			__lastVaultAddress = null;
-			window.userVaultNames = new Set();
 			if (typeof window.renderVaultDashboard === 'function') window.renderVaultDashboard();
 		});
 
 				function canUseSessionSignBridge() {
 					if (!connectedAddress) return false;
-					const conn = _skiAddr ? { address: _skiAddr } : null;
+					const conn = window._skiConn || null;
 					if (!conn || conn.status !== 'session' || conn.wallet) return false;
 					const host = String(window.location && window.location.hostname ? window.location.hostname : '');
 					return host !== 'sui.ski' && host.endsWith('.sui.ski');
@@ -1251,7 +1287,7 @@ ${skiWidgetMarkup()}
 
 			window.connectWallet = function connectWallet() {
 				if (canSign()) return Promise.resolve();
-				window.dispatchEvent(new CustomEvent('ski:open-modal'));
+				window.dispatchEvent(new CustomEvent('ski:request-signin'));
 				return new Promise(function(resolve) {
 					window.addEventListener('ski:wallet-connected', function handler() {
 						window.removeEventListener('ski:wallet-connected', handler);
@@ -1297,7 +1333,6 @@ ${skiWidgetMarkup()}
 		const walletWidget = document.getElementById('wallet-widget');
 		const walletBtn = document.getElementById('wallet-btn');
 		const walletBtnText = document.getElementById('wallet-btn-text');
-		const walletProfileBtn = document.getElementById('wallet-profile-btn');
 		const walletMenu = document.getElementById('wallet-menu');
 		const viewPortfolioLink = document.getElementById('view-portfolio-link');
 		const editModal = document.getElementById('edit-modal');
@@ -1828,7 +1863,7 @@ ${skiWidgetMarkup()}
 
 					if (txt) txt.textContent = 'Approve in wallet...';
 
-					const result = await _skiSignAndExecute(tx);
+					const result = await window._skiSignAndExecute(tx);
 
 					if (!result?.digest) throw new Error('No transaction digest');
 
@@ -2002,7 +2037,7 @@ ${skiWidgetMarkup()}
 				});
 
 				let result;
-				result = await _skiSignAndExecute(tx);
+				result = await window._skiSignAndExecute(tx);
 
 				showBurnStatus(
 					'NFT burned! ' + renderTxExplorerLinks(result.digest, true) + '<br>' +
@@ -2074,41 +2109,13 @@ ${skiWidgetMarkup()}
 			}
 		}
 
-		function getWalletProfileHref() {
-			const primaryName = typeof connectedPrimaryName === 'string' ? connectedPrimaryName.trim().replace(/\\.sui$/i, '') : ''
-			if (primaryName) {
-				const cleanedName = primaryName
-				return \`https://\${cleanedName}.sui.ski\`;
-			}
-			return 'https://sui.ski';
-		}
-		const WALLET_PROFILE_LOGO_DEFAULT = ${serializeJson(PROFILE_WALLET_BUTTON_LOGO_DEFAULT_DATA_URL)}
-		const WALLET_PROFILE_LOGO_PRIMARY = ${serializeJson(PROFILE_WALLET_BUTTON_LOGO_PRIMARY_DATA_URL)}
-
-		function updateWalletProfileButton() {
-			if (!walletProfileBtn) return;
-			const primaryName = typeof connectedPrimaryName === 'string' ? connectedPrimaryName.trim().replace(/\\.sui$/i, '') : ''
-			const shouldUsePrimaryLogo = Boolean(primaryName && connectedAddress)
-			const href = getWalletProfileHref();
-			walletProfileBtn.dataset.href = href;
-			walletProfileBtn.title = primaryName ? primaryName + '.sui' : 'Go to sui.ski';
-			const profileLogo = walletProfileBtn.querySelector('.wallet-profile-logo');
-			if (profileLogo) {
-				profileLogo.src = shouldUsePrimaryLogo ? WALLET_PROFILE_LOGO_PRIMARY : WALLET_PROFILE_LOGO_DEFAULT
-			}
+		function updateWalletWidgetChrome() {
 			if (walletWidget) {
 				walletWidget.classList.toggle(
 					'has-black-diamond',
 					!(connectedAddress && (connectedWallet || connectedAccount)),
 				);
 			}
-		}
-
-		if (walletProfileBtn) {
-			walletProfileBtn.addEventListener('click', (e) => {
-				e.stopPropagation();
-				window.location.href = walletProfileBtn.dataset.href || 'https://sui.ski';
-			});
 		}
 
 			// Global function to update UI when wallet connects/disconnects
@@ -2124,11 +2131,9 @@ ${skiWidgetMarkup()}
 			window.updateEditButton = updateEditButton;
 			renderWalletBar();
 			updateGlobalWalletWidget();
+			updateWalletWidgetChrome();
 			checkEditPermission();
 			updateEditButton();
-				var profBtn = document.getElementById('wallet-profile-btn');
-				var hasWallet = !!connectedAddress;
-				if (profBtn) profBtn.style.display = hasWallet ? '' : 'none';
 				if (typeof loadUserVault === 'function') loadUserVault();
 				if (typeof updateBountiesSectionVisibility === 'function') updateBountiesSectionVisibility();
 					if (renewalUiReady && typeof updateRenewalButton === 'function') updateRenewalButton();
@@ -2377,7 +2382,7 @@ ${skiWidgetMarkup()}
 				showStatus(sendStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
 				let result;
-				result = await _skiSignAndExecute(tx);
+				result = await window._skiSignAndExecute(tx);
 
 				showStatus(sendStatus, '<strong>Sent!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 				try {
@@ -4115,7 +4120,7 @@ ${skiWidgetMarkup()}
 				tx.setGasBudget(50000000);
 
 				let result;
-				result = await _skiSignAndExecute(tx);
+				result = await window._skiSignAndExecute(tx);
 
 					// Update UI
 					document.querySelector('.owner-addr').textContent = connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6);
@@ -4205,7 +4210,7 @@ ${skiWidgetMarkup()}
 				tx.setGasBudget(50000000);
 
 				let result;
-				result = await _skiSignAndExecute(tx);
+				result = await window._skiSignAndExecute(tx);
 
 					connectedPrimaryName = FULL_NAME;
 					ownerDisplayAddress = connectedAddress;
@@ -4347,7 +4352,7 @@ ${skiWidgetMarkup()}
 				showStatus(modalStatus, '<span class="loading"></span> Approve in wallet...', 'info');
 
 				let result;
-				result = await _skiSignAndExecute(tx);
+				result = await window._skiSignAndExecute(tx);
 
 				showStatus(modalStatus, '<strong>Updated!</strong> ' + renderTxExplorerLinks(result.digest, true), 'success');
 
@@ -4506,7 +4511,7 @@ ${skiWidgetMarkup()}
 				}
 
 				let result;
-				result = await _skiSignAndExecute(tx);
+				result = await window._skiSignAndExecute(tx);
 				const listingId = await extractDecayListingIdFromTxResult(result);
 				await registerDecayListingForNft(NFT_ID, listingId);
 
@@ -4719,7 +4724,7 @@ ${skiWidgetMarkup()}
 				transferStatus.innerHTML = '<span class="loading"></span> Approve in wallet...';
 				transferStatus.className = 'transfer-status info';
 
-				const result = await _skiSignAndExecute(tx);
+				const result = await window._skiSignAndExecute(tx);
 
 				const recipientDisplay = transferResolvedName || truncAddr(transferResolvedAddress);
 				transferStatus.innerHTML =
@@ -4964,9 +4969,15 @@ ${skiWidgetMarkup()}
 				ownerLabelEl.textContent = 'Owner';
 			}
 
+			// Fallback: if no address resolved server-side, fetch NFT owner client-side
+			if (!displayAddress && NFT_ID) {
+				if (!nftOwnerAddress) nftOwnerAddress = await fetchNftOwner();
+				if (nftOwnerAddress) displayAddress = nftOwnerAddress;
+			}
+
 			// For active names, show the target address (targetPrimaryName is used elsewhere)
 				if (!IS_IN_GRACE_PERIOD) {
-					displayName = await fetchPrimaryName(CURRENT_ADDRESS);
+					displayName = await fetchPrimaryName(displayAddress || CURRENT_ADDRESS);
 					if (displayName) {
 						targetPrimaryName = displayName;
 					}
@@ -5085,49 +5096,7 @@ ${skiWidgetMarkup()}
 		updateGlobalWalletWidget();
 		updateEditButton();
 
-		window.onProfileWalletConnected = function() {
-			setTimeout(function() {
-				var conn = _skiAddr ? { address: _skiAddr } : null;
-				if (conn) {
-					connectedWallet = conn.wallet;
-					connectedAccount = conn.account;
-					connectedAddress = conn.address;
-					connectedWalletName = conn.wallet ? conn.wallet.name : null;
-					connectedPrimaryName = conn.primaryName;
-				}
-				checkEditPermission();
-				updateUIForWallet();
-				updateGlobalWalletWidget();
-				updateWalletProfileButton();
-				if (conn && conn.address) resolveWalletName(conn.address);
-			}, 0);
-		};
-
-		window.onProfileWalletDisconnected = function() {
-			setTimeout(function() {
-				connectedWallet = null;
-				connectedAccount = null;
-				connectedAddress = null;
-				connectedWalletName = null;
-				canEdit = false;
-				connectedPrimaryName = null;
-				updateEditButton();
-				updateUIForWallet();
-				updateGlobalWalletWidget();
-				updateWalletProfileButton();
-			}, 0);
-		};
-
-		${generateSharedWalletMountJs({
-			network: env.SUI_NETWORK,
-			session: options.session,
-			onConnect: 'onProfileWalletConnected',
-			onDisconnect: 'onProfileWalletDisconnected',
-			profileButtonId: 'wallet-profile-btn',
-			profileFallbackHref: 'https://sui.ski',
-		})}
-
-		updateWalletProfileButton();
+		updateWalletWidgetChrome();
 		fetchAndDisplayOwnerInfo();
 		updateGracePeriodOwnerInfo();
 		updateGracePeriodCountdown();
@@ -5600,7 +5569,7 @@ ${skiWidgetMarkup()}
 				if (statusEl) statusEl.textContent = 'Confirm in wallet...';
 
 				let txResult;
-				txResult = await _skiSignAndExecute(tx);
+				txResult = await window._skiSignAndExecute(tx);
 
 				if (statusEl) statusEl.textContent = 'Purchased! Redirecting...';
 				closeSearch();
@@ -5778,10 +5747,10 @@ ${skiWidgetMarkup()}
 							throw lastError || new Error('Import failed');
 						};
 						const suiUrls = [
-							'https://esm.sh/@mysten/sui@2.4.0?bundle',
-							'https://esm.sh/@mysten/sui@2.4.0',
-							'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/+esm',
-							'https://unpkg.com/@mysten/sui@2.4.0?module',
+							'https://esm.sh/@mysten/sui@2.6.0?bundle',
+							'https://esm.sh/@mysten/sui@2.6.0',
+							'https://cdn.jsdelivr.net/npm/@mysten/sui@2.6.0/+esm',
+							'https://unpkg.com/@mysten/sui@2.6.0?module',
 						];
 						const sdkModule = await importFirst(suiUrls);
 						SuiJsonRpcClient = sdkModule?.SuiJsonRpcClient || sdkModule?.SuiClient || sdkModule?.default?.SuiJsonRpcClient || SuiJsonRpcClient;
@@ -5833,7 +5802,7 @@ ${skiWidgetMarkup()}
 				showMessageStatus('Please approve the transaction in your wallet...', 'info', true);
 
 				// Sign and execute
-				const result = await _skiSignAndExecute(tx);
+				const result = await window._skiSignAndExecute(tx);
 
 				btnText.textContent = 'Confirming...';
 				showMessageStatus('Waiting for confirmation...', 'info', true);
@@ -6036,6 +6005,8 @@ ${skiWidgetMarkup()}
 					const nftOwner = await fetchNftOwner();
 					if (nftOwner && isValidSuiAddress(nftOwner)) {
 						console.log('Using NFT owner:', nftOwner);
+						nftOwnerAddress = nftOwner;
+						if (!CURRENT_ADDRESS) fetchLinkedNames();
 						return fetchNFTs(cursor, nftOwner);
 					}
 				}
@@ -7195,7 +7166,7 @@ ${skiWidgetMarkup()}
 
 		function getRenewalApiUrl(path) {
 			const normalizedPath = String(path || '').startsWith('/') ? path : '/' + String(path || '');
-			const conn = (typeof _skiConn !== 'undefined' ? _skiConn : null) || {};
+			const conn = (typeof window._skiConn !== 'undefined' ? window._skiConn : null) || {};
 			const accountChains = Array.isArray(conn?.account?.chains) ? conn.account.chains : [];
 			let chain = '';
 			for (const candidate of accountChains) {
@@ -7212,7 +7183,7 @@ ${skiWidgetMarkup()}
 				? 'https://t.sui.ski'
 				: chain === 'sui:devnet'
 					? 'https://d.sui.ski'
-					: 'https://sui.ski';
+					: window.location.origin;
 			return rootOrigin + normalizedPath;
 		}
 
@@ -7241,7 +7212,7 @@ ${skiWidgetMarkup()}
 		}
 
 		async function signAndExecuteRenewalFromHandlerTx(txBytes, expectedSenderAddress) {
-			if (typeof _skiSignAndExecute !== 'function') {
+			if (typeof window._skiSignAndExecute !== 'function') {
 				throw new Error('Wallet signing is unavailable. Reconnect wallet and retry.');
 			}
 			const senderAddress = String(
@@ -7262,9 +7233,9 @@ ${skiWidgetMarkup()}
 			if (preferredWalletName) signOptions.walletName = preferredWalletName;
 
 			if (txBlock) {
-				return await _skiSignAndExecute(txBlock);
+				return await window._skiSignAndExecute(txBlock);
 			}
-			return await _skiSignAndExecute(txBytes);
+			return await window._skiSignAndExecute(txBytes);
 		}
 
 		async function handleRenewal(yearsEl, btnEl, btnTextEl, btnLoadingEl, statusEl, options = {}) {
@@ -7517,7 +7488,7 @@ ${skiWidgetMarkup()}
 									relistTx.pure.u64(BigInt(savedListingPrice)),
 								],
 							});
-							const relistResult = await _skiSignAndExecute(relistTx);
+							const relistResult = await window._skiSignAndExecute(relistTx);
 							const relistDigest = relistResult?.digest || relistResult?.result?.digest || '';
 							if (relistDigest && statusEl) {
 								statusEl.innerHTML += '<div class="renewal-relist-status success">Relisted at same price! ' + renderTxExplorerLinks(relistDigest, true) + '</div>';
@@ -7790,19 +7761,19 @@ ${skiWidgetMarkup()}
 				let signAndExecuteError = null;
 				showBidBountyStatus(createBountyStatus, 'Sign transaction in wallet...', 'loading');
 				try {
-					result = await _skiSignAndExecute(txWrapper);
+					result = await window._skiSignAndExecute(txWrapper);
 				} catch (error) {
 					signAndExecuteError = error;
 					console.warn('signAndExecute failed, falling back to manual execution:', error);
 				}
 
 				if (!result) {
-					const conn = _skiAddr ? { address: _skiAddr } : null;
+					const conn = window._skiAddr ? { address: window._skiAddr } : null;
 					if (conn && conn.status === 'session' && !conn.wallet) {
 						throw signAndExecuteError || new Error('Session signing failed. Reconnect wallet and retry.');
 					}
 					showBidBountyStatus(createBountyStatus, 'Submitting transaction...', 'loading');
-					const signResult = await _skiSignTransaction(txWrapper);
+					const signResult = await window._skiSignTransaction(txWrapper);
 					result = await suiClient.executeTransactionBlock({
 						transactionBlock: builtTxBytes,
 						signature: signResult.signature,
@@ -8902,7 +8873,7 @@ function shortAddr(addr) {
 		}
 
 			async function fetchLinkedNames(options = {}) {
-			const primaryAddr = TARGET_ADDRESS || OWNER_ADDRESS;
+			const primaryAddr = TARGET_ADDRESS || OWNER_ADDRESS || nftOwnerAddress;
 			const forceRefresh = options?.forceRefresh === true;
 			if (!linkedNamesList || !primaryAddr) {
 				linkedNamesData = [];
@@ -11083,7 +11054,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await _skiSignAndExecute(tx);
+					result = await window._skiSignAndExecute(tx);
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -11232,7 +11203,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await _skiSignAndExecute(tx);
+					result = await window._skiSignAndExecute(tx);
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -11284,7 +11255,7 @@ function shortAddr(addr) {
 					tx.pure.id(currentListing.tokenId),
 				],
 			});
-			return _skiSignAndExecute(tx);
+			return window._skiSignAndExecute(tx);
 		}
 
 		if (marketplaceDelistBtn) {
@@ -11360,9 +11331,9 @@ function shortAddr(addr) {
 					const data = await res.json();
 					if (!res.ok || data.error) throw new Error(data.error || 'API error');
 					marketplaceStatus.textContent = 'Waiting for wallet approval...';
-					const { Transaction: Tx } = await import('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle');
+					const { Transaction: Tx } = await import('https://esm.sh/@mysten/sui@2.6.0/transactions?bundle');
 					const tx = Tx.from(data.txBytes);
-					const result = await _skiSignAndExecute(tx);
+					const result = await window._skiSignAndExecute(tx);
 					const digest = result?.digest || result?.result?.digest || '';
 					if (digest) {
 						marketplaceStatus.innerHTML = 'Offer cancelled! SUI returned. ' + renderTxExplorerLinks(digest, true);
@@ -11448,7 +11419,7 @@ function shortAddr(addr) {
 						marketplaceStatus.textContent = 'Confirm in wallet (one-time authorization)...';
 						marketplaceStatus.className = 'marketplace-status';
 
-						const result = await _skiSignAndExecute(tx);
+						const result = await window._skiSignAndExecute(tx);
 						const listingId = await extractDecayListingIdFromTxResult(result);
 						await registerDecayListingForNft(NFT_ID, listingId);
 
@@ -11576,7 +11547,7 @@ function shortAddr(addr) {
 					marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await _skiSignAndExecute(tx);
+					result = await window._skiSignAndExecute(tx);
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -11883,7 +11854,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 						marketplaceStatus.textContent = 'Waiting for wallet...';
 
 					let result;
-					result = await _skiSignAndExecute(tx);
+					result = await window._skiSignAndExecute(tx);
 
 					const digest = result.digest || result.result?.digest || '';
 					if (digest) {
@@ -12091,7 +12062,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					const tx = Transaction.from(data.txBytes);
 					auctionStatus.textContent = 'Confirm in wallet...';
 					let result;
-					result = await _skiSignAndExecute(tx);
+					result = await window._skiSignAndExecute(tx);
 
 					const digest = result.digest || '';
 					auctionStatus.innerHTML = 'Purchased! ' + renderTxExplorerLinks(digest, true);
@@ -12152,7 +12123,7 @@ if (marketplaceListPriceDownBtn && marketplaceListAmountInput) {
 					const tx = Transaction.from(data.txBytes);
 					auctionStatus.textContent = 'Confirm cancel in wallet...';
 
-					const result = await _skiSignAndExecute(tx);
+					const result = await window._skiSignAndExecute(tx);
 					const digest = result.digest || result.result?.digest || '';
 					auctionStatus.innerHTML = 'Wrap cancelled. ' + renderTxExplorerLinks(digest, true);
 					auctionStatus.className = 'auction-status success';
@@ -13296,6 +13267,7 @@ const ENABLE_BOUNTIES = false;
 	<div id="thunder-root"></div>
 	<script>${generateThunderJs({ page: 'profile', name: cleanName, address: record.address, ownerAddress: record.ownerAddress, nftId: record.nftId, expirationMs: expiresMs, linkedNames: undefined, serverScope: 'owner', network: network })}</script>
 
+${skiScriptTag()}
 </body>
 </html>`
 }

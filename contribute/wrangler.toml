@@ -4,7 +4,7 @@ compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
 
 [build]
-command = "npm install --prefix .."
+command = "cd .. && bun install --frozen-lockfile"
 
 [vars]
 SUI_NETWORK = "mainnet"

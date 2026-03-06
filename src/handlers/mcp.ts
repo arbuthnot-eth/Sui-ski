@@ -1,14 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { createMcpHandler } from 'agents/mcp'
 import { z } from 'zod'
-import type { Env, SuiNSRecord } from '../types'
 import { resolveSuiNS } from '../resolvers/suins'
+import type { Env, SuiNSRecord } from '../types'
+import { cacheKey, getCached, setCache } from '../utils/cache'
 import { getUSDCSuiPrice } from '../utils/ns-price'
 import { calculateRegistrationPrice, formatPricingResponse } from '../utils/pricing'
+import { getDefaultRpcUrl } from '../utils/rpc'
 import { fetchMultichainPaymentRequirements } from '../utils/x402-middleware'
 import { resolveX402Recipient, X402SuiPaymentHandler } from '../utils/x402-sui'
-import { getDefaultRpcUrl } from '../utils/rpc'
-import { cacheKey, getCached, setCache } from '../utils/cache'
 
 const SUI_ASSET = '0x2::sui::SUI'
 const USDC_DECIMALS = 6
@@ -85,7 +85,17 @@ function suiMistToUsdcSmallest(amountMist: string, usdcPerSui: number): string {
 async function buildMultichainAccepts(
 	env: Env,
 	amountMist: string,
-): Promise<Array<{ scheme: string; network: string; asset: string; amount: string; payTo: string; maxTimeoutSeconds: number; extra?: Record<string, unknown> }>> {
+): Promise<
+	Array<{
+		scheme: string
+		network: string
+		asset: string
+		amount: string
+		payTo: string
+		maxTimeoutSeconds: number
+		extra?: Record<string, unknown>
+	}>
+> {
 	const hasMultichainAddresses = env.X402_BASE_PAY_TO || env.X402_SOL_PAY_TO
 	if (!hasMultichainAddresses || !env.X402_MULTICHAIN) return []
 
@@ -103,7 +113,11 @@ async function verifyMultichainPayload(
 		return { valid: false, error: 'Multi-chain verifier service binding not configured' }
 	}
 
-	let parsed: { x402Version?: number; accepted?: { scheme?: string; network?: string }; payload?: Record<string, unknown> }
+	let parsed: {
+		x402Version?: number
+		accepted?: { scheme?: string; network?: string }
+		payload?: Record<string, unknown>
+	}
 	try {
 		parsed = JSON.parse(atob(paymentPayload))
 	} catch {
@@ -134,11 +148,12 @@ async function verifyMultichainPayload(
 			return { valid: false, error: body.invalidReason || `Verifier returned ${response.status}` }
 		}
 
-		const digest = typeof parsed.payload?.digest === 'string'
-			? parsed.payload.digest
-			: typeof parsed.payload?.transaction === 'string'
-				? (parsed.payload.transaction as string)
-				: paymentPayload.slice(0, 16)
+		const digest =
+			typeof parsed.payload?.digest === 'string'
+				? parsed.payload.digest
+				: typeof parsed.payload?.transaction === 'string'
+					? (parsed.payload.transaction as string)
+					: paymentPayload.slice(0, 16)
 
 		return { valid: true, payer: body.payer, digest }
 	} catch (error) {
@@ -195,14 +210,21 @@ async function verifyToolPayment(
 
 		const result = await verifyMultichainPayload(env, paymentPayload)
 		if (!result.valid) {
-			return { paid: false, requirements: { error: result.error || 'Multi-chain payment verification failed' } }
+			return {
+				paid: false,
+				requirements: { error: result.error || 'Multi-chain payment verification failed' },
+			}
 		}
 
 		await setCache(replayKey, true, DIGEST_REPLAY_TTL)
 		return { paid: true, payer: result.payer || 'unknown' }
 	}
 
-	const replayKey = cacheKey('mcp-digest', paymentDigest!)
+	const digest = paymentDigest
+	if (!digest) {
+		return { paid: false, requirements: { error: 'Payment digest is required' } }
+	}
+	const replayKey = cacheKey('mcp-digest', digest)
 	const used = await getCached<boolean>(replayKey)
 	if (used) {
 		return { paid: false, requirements: { error: 'Payment digest already used' } }
@@ -224,12 +246,15 @@ async function verifyToolPayment(
 			payTo: recipientAddress,
 			maxTimeoutSeconds: 120,
 		},
-		payload: { digest: paymentDigest! },
+		payload: { digest },
 	}
 
 	const verification = await handler.verifyPayment(payload, toolConfig.amountMist)
 	if (!verification.valid) {
-		return { paid: false, requirements: { error: verification.error || 'Payment verification failed' } }
+		return {
+			paid: false,
+			requirements: { error: verification.error || 'Payment verification failed' },
+		}
 	}
 
 	await setCache(replayKey, true, DIGEST_REPLAY_TTL)
@@ -271,7 +296,7 @@ function createSuiMcpServer(env: Env): McpServer {
 			const record = result.data as SuiNSRecord
 			return jsonResult({
 				found: true,
-				name: name.replace(/\.sui$/i, '') + '.sui',
+				name: `${name.replace(/\.sui$/i, '')}.sui`,
 				address: record.address,
 				ownerAddress: record.ownerAddress,
 				avatar: record.avatar,
@@ -293,13 +318,10 @@ function createSuiMcpServer(env: Env): McpServer {
 			status: z
 				.enum(['all', 'grace', 'expiring'])
 				.optional()
-				.describe('Filter: "grace" = expired in grace period, "expiring" = expiring soon, "all" = both'),
-			limit: z
-				.number()
-				.min(1)
-				.max(100)
-				.optional()
-				.describe('Max results to return (default 20)'),
+				.describe(
+					'Filter: "grace" = expired in grace period, "expiring" = expiring soon, "all" = both',
+				),
+			limit: z.number().min(1).max(100).optional().describe('Max results to return (default 20)'),
 		},
 		async ({ query, status, limit }) => {
 			const params = new URLSearchParams()
@@ -404,17 +426,19 @@ function createSuiMcpServer(env: Env): McpServer {
 			domain: z.string().describe('Domain to register (e.g. "example" or "example.sui")'),
 			years: z.number().min(1).max(5).optional().describe('Registration years (default 1)'),
 			senderAddress: z.string().describe('Sui address that will sign and send the transaction'),
-			paymentDigest: z
-				.string()
-				.optional()
-				.describe('Sui transaction digest for SUI payment'),
+			paymentDigest: z.string().optional().describe('Sui transaction digest for SUI payment'),
 			paymentPayload: z
 				.string()
 				.optional()
 				.describe('Base64-encoded x402 payment payload for EVM/Solana payments'),
 		},
 		async ({ domain, years, senderAddress, paymentDigest, paymentPayload }) => {
-			const payment = await verifyToolPayment(env, 'build-register-tx', paymentDigest, paymentPayload)
+			const payment = await verifyToolPayment(
+				env,
+				'build-register-tx',
+				paymentDigest,
+				paymentPayload,
+			)
 			if (!payment.paid) {
 				return jsonResult(payment.requirements)
 			}
@@ -445,10 +469,7 @@ function createSuiMcpServer(env: Env): McpServer {
 		'[PAID: 0.05 SUI] Ask the Sui ecosystem AI assistant a question about SuiNS, Sui, DeFi, or the blockchain.',
 		{
 			message: z.string().max(2000).describe('Your question or message'),
-			paymentDigest: z
-				.string()
-				.optional()
-				.describe('Sui transaction digest for SUI payment'),
+			paymentDigest: z.string().optional().describe('Sui transaction digest for SUI payment'),
 			paymentPayload: z
 				.string()
 				.optional()
@@ -507,23 +528,20 @@ function createSuiMcpServer(env: Env): McpServer {
 				.enum(['all', 'grace', 'expiring'])
 				.optional()
 				.describe('Filter: "grace" = in grace period, "expiring" = expiring soon'),
-			limit: z
-				.number()
-				.min(1)
-				.max(100)
-				.optional()
-				.describe('Max results (default 25)'),
-			paymentDigest: z
-				.string()
-				.optional()
-				.describe('Sui transaction digest for SUI payment'),
+			limit: z.number().min(1).max(100).optional().describe('Max results (default 25)'),
+			paymentDigest: z.string().optional().describe('Sui transaction digest for SUI payment'),
 			paymentPayload: z
 				.string()
 				.optional()
 				.describe('Base64-encoded x402 payment payload for EVM/Solana payments'),
 		},
 		async ({ query, status, limit, paymentDigest, paymentPayload }) => {
-			const payment = await verifyToolPayment(env, 'search-expiring-listings', paymentDigest, paymentPayload)
+			const payment = await verifyToolPayment(
+				env,
+				'search-expiring-listings',
+				paymentDigest,
+				paymentPayload,
+			)
 			if (!payment.paid) {
 				return jsonResult(payment.requirements)
 			}
@@ -552,5 +570,5 @@ function createSuiMcpServer(env: Env): McpServer {
 
 export function createSuiMcpHandler(env: Env) {
 	const server = createSuiMcpServer(env)
-	return createMcpHandler(server)
+	return createMcpHandler(server as unknown as Parameters<typeof createMcpHandler>[0])
 }

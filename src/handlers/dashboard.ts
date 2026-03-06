@@ -1,13 +1,12 @@
 import type { Env } from '../types'
 import { generateLogoSvg } from '../utils/og-image'
 import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
+import { skiScriptTag, skiStyleTag, skiWalletBridge } from '../utils/ski-embed'
 import { renderSocialMeta } from '../utils/social'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
-import { skiScriptTag, skiStyleTag, skiWidgetMarkup, skiWalletBridge } from '../utils/ski-embed'
 
 export function generateDashboardPage(env: Env): string {
 	const network = env.SUI_NETWORK || 'mainnet'
-	const apiBase = network === 'mainnet' ? 'https://sui.ski' : `https://t.sui.ski`
 	const profileBase = network === 'mainnet' ? 'sui.ski' : 't.sui.ski'
 
 	const socialMeta = renderSocialMeta({
@@ -961,11 +960,15 @@ export function generateDashboardPage(env: Env): string {
 	</div>
 
 	<div class="wallet-widget" id="wallet-widget">
+		<button class="wallet-ski-btn ski-dot-btn ski-btn ski-dot" id="ski-dot" title="Open SKI menu" aria-label="Status" style="display:none"></button>
+		<button class="wallet-ski-btn ski-btn" id="ski-btn" style="display:none"></button>
+		<div id="ski-menu"></div>
 		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile">
 			${generateLogoSvg(18)}
 		</button>
-		<div id="wk-widget"></div>
+		<div id="ski-profile"></div>
 	</div>
+	<div id="ski-modal"></div>
 
 	<div class="main-container">
 		<div class="sidebar">
@@ -1142,8 +1145,6 @@ export function generateDashboardPage(env: Env): string {
 		</div>
 	</div>
 
-	<div id="wk-modal"></div>
-
 	<div class="tx-modal-overlay" id="tx-modal">
 		<div class="tx-modal">
 			<div class="tx-modal-header">
@@ -1162,8 +1163,7 @@ export function generateDashboardPage(env: Env): string {
 		</div>
 	</div>
 
-	${skiWidgetMarkup()}
-	<script type="module">
+		<script type="module">
 		let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction;
 		{
 			const pickExport = (mod, name) => {
@@ -1181,9 +1181,9 @@ export function generateDashboardPage(env: Env): string {
 			]);
 			const results = await Promise.allSettled([
 				timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
-				timedImport('https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle'),
-				timedImport('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle'),
-				timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
+				timedImport('https://esm.sh/@mysten/sui@2.6.0/jsonRpc?bundle'),
+				timedImport('https://esm.sh/@mysten/sui@2.6.0/transactions?bundle'),
+				timedImport('https://esm.sh/@mysten/suins@1.0.2?bundle'),
 			]);
 			if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
 			if (results[1].status === 'fulfilled') ({ getJsonRpcFullnodeUrl, SuiJsonRpcClient } = results[1].value);
@@ -1198,7 +1198,7 @@ export function generateDashboardPage(env: Env): string {
 		${generateWalletSessionJs()}
 		${skiWalletBridge({ network: env.SUI_NETWORK })}
 
-		const API_BASE = ${JSON.stringify(apiBase)};
+		const API_BASE = window.location.origin;
 		const PROFILE_BASE = ${JSON.stringify(profileBase)};
 		const TRADEPORT_URL = 'https://www.tradeport.xyz/sui/collection/suins';
 		const RPC_URL = ${JSON.stringify(env.SUI_RPC_URL || 'https://fullnode.mainnet.sui.io:443')};
@@ -1313,7 +1313,7 @@ export function generateDashboardPage(env: Env): string {
 		}
 
 		function isWalletActive() {
-			return !!_skiAddr;
+			return !!window._skiAddr;
 		}
 
 		function selectName(name) {
@@ -1412,7 +1412,7 @@ export function generateDashboardPage(env: Env): string {
 		}
 
 		async function loadNames() {
-			const address = _skiAddr;
+			const address = window._skiAddr;
 			if (!address) return;
 
 			loadingState.style.display = '';
@@ -1450,7 +1450,7 @@ export function generateDashboardPage(env: Env): string {
 		}
 
 		function updateWalletUI() {
-			const address = _skiAddr;
+			const address = window._skiAddr;
 			const isActive = !!address;
 
 			if (isActive && address) {
@@ -1515,7 +1515,7 @@ export function generateDashboardPage(env: Env): string {
 					price: BigInt(priceMist)
 				});
 
-				const result = await _skiSignAndExecute(tx);
+				const result = await window._skiSignAndExecute(tx);
 				showTxSuccess('Renewal successful!', result.digest);
 				setTimeout(() => loadNames(), 2000);
 			} catch (e) {
@@ -1585,12 +1585,12 @@ export function generateDashboardPage(env: Env): string {
 		});
 
 		document.getElementById('connect-btn').addEventListener('click', () => {
-			window.dispatchEvent(new CustomEvent('ski:open-modal'));
+			window.dispatchEvent(new CustomEvent('ski:request-signin'));
 		});
 
 		document.getElementById('renew-btn').addEventListener('click', () => {
 			if (!isWalletActive()) {
-				window.dispatchEvent(new CustomEvent('ski:open-modal'));
+				window.dispatchEvent(new CustomEvent('ski:request-signin'));
 			} else {
 				executeRenewal();
 			}
@@ -1598,7 +1598,7 @@ export function generateDashboardPage(env: Env): string {
 
 		document.getElementById('list-btn').addEventListener('click', () => {
 			if (!isWalletActive()) {
-				window.dispatchEvent(new CustomEvent('ski:open-modal'));
+				window.dispatchEvent(new CustomEvent('ski:request-signin'));
 			} else {
 				executeList();
 			}
@@ -1606,14 +1606,14 @@ export function generateDashboardPage(env: Env): string {
 
 		document.getElementById('bid-btn').addEventListener('click', () => {
 			if (!isWalletActive()) {
-				window.dispatchEvent(new CustomEvent('ski:open-modal'));
+				window.dispatchEvent(new CustomEvent('ski:request-signin'));
 			} else {
 				executeBid();
 			}
 		});
 
 		document.getElementById('copy-address').addEventListener('click', async () => {
-			const addr = _skiAddr;
+			const addr = window._skiAddr;
 			if (addr) {
 				await navigator.clipboard.writeText(addr);
 				const btn = document.getElementById('copy-address');
@@ -1633,7 +1633,7 @@ export function generateDashboardPage(env: Env): string {
 			updateWalletUI();
 		};
 
-		_skiSubscribe(function(conn) {
+		window._skiSubscribe(function(conn) {
 			if (conn && conn.address) {
 				updateWalletUI();
 				loadNames();

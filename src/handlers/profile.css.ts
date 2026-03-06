@@ -105,28 +105,26 @@ export const profileStyles = `
 			top: calc(16px + env(safe-area-inset-top));
 			left: calc(16px + env(safe-area-inset-left));
 			z-index: 9999;
-			width: 44px;
-			height: 44px;
+			width: auto;
+			height: auto;
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			background: var(--card-bg-solid);
-			backdrop-filter: blur(16px);
-			-webkit-backdrop-filter: blur(16px);
-			border: 1px solid var(--border);
-			border-radius: 12px;
+			background: transparent;
+			border: 0;
+			border-radius: 0;
 			text-decoration: none;
 			transition: all 0.25s ease;
-			box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+			box-shadow: none;
+			padding: 0;
 		}
 		.home-btn:hover {
-			border-color: rgba(96, 165, 250, 0.4);
-			box-shadow: 0 4px 20px rgba(96, 165, 250, 0.15);
 			transform: translateY(-1px);
 		}
 		.home-btn svg {
-			width: 28px;
-			height: 28px;
+			width: 36px;
+			height: 36px;
+			display: block;
 		}
 		.wallet-widget {
 			position: fixed;
@@ -137,75 +135,25 @@ export const profileStyles = `
 			align-items: center;
 			gap: 10px;
 		}
-		.wallet-profile-btn {
-			min-height: 32px;
-			border-radius: 10px;
+		.ski-grace-pill {
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
-			background: linear-gradient(135deg, #090f1d, #0d1728);
-			border: 1.5px solid rgba(148, 163, 184, 0.42);
-			cursor: pointer;
-			transition: all 0.2s ease;
-			padding: 4px 10px;
+			padding: 3px 10px;
+			border-radius: 10px;
+			background: linear-gradient(135deg, #7f1d1d, #991b1b);
+			border: 1.5px solid rgba(248, 113, 113, 0.5);
+			color: #fca5a5;
+			font-size: 0.85rem;
+			font-weight: 700;
+			font-family: 'SF Mono', 'Fira Code', monospace;
+			white-space: nowrap;
 			box-shadow:
-				0 10px 22px rgba(2, 6, 23, 0.45),
-				0 0 0 1px rgba(148, 163, 184, 0.14) inset;
-			forced-color-adjust: none;
+				0 10px 22px rgba(127, 29, 29, 0.35),
+				0 0 0 1px rgba(248, 113, 113, 0.12) inset;
 		}
-		.wallet-profile-logo {
-			display: block;
-			width: 92px;
-			height: 24px;
-			object-fit: contain;
-			object-position: center;
-			background: transparent !important;
-			filter: none !important;
-			-webkit-filter: none !important;
-			forced-color-adjust: none;
-			mix-blend-mode: normal;
-		}
-		.wallet-profile-btn:hover {
-			background: linear-gradient(135deg, #0e172a, #142036);
-			border-color: rgba(191, 219, 254, 0.58);
-			transform: translateY(-1px);
-			box-shadow:
-				0 14px 30px rgba(2, 6, 23, 0.58),
-				0 0 0 1px rgba(191, 219, 254, 0.18) inset,
-				0 0 20px rgba(96, 165, 250, 0.12);
-		}
-		.wallet-widget:not(.has-black-diamond) .wallet-profile-btn {
-			background: transparent;
-			border-color: transparent;
-			box-shadow: none;
-			padding: 0;
-		}
-		.wallet-widget:not(.has-black-diamond) .wallet-profile-btn:hover {
-			background: transparent;
-			border-color: transparent;
-			transform: none;
-			box-shadow: none;
-		}
-		.wallet-widget.has-black-diamond .wallet-profile-btn {
-			background: linear-gradient(135deg, #060b14, #0c1320);
-			border-color: rgba(148, 163, 184, 0.36);
-			box-shadow:
-				0 10px 22px rgba(2, 6, 23, 0.5),
-				0 0 0 1px rgba(148, 163, 184, 0.12) inset;
-		}
-		.wallet-widget.has-black-diamond .wallet-profile-btn .wallet-profile-logo {
-			filter: none;
-		}
-		.wallet-widget.has-black-diamond .wallet-profile-btn:hover {
-			background: linear-gradient(135deg, #10192b, #1b2840);
-			border-color: rgba(191, 219, 254, 0.62);
-			box-shadow:
-				0 14px 30px rgba(2, 6, 23, 0.62),
-				0 0 0 1px rgba(191, 219, 254, 0.2) inset,
-				0 0 22px rgba(96, 165, 250, 0.14);
-		}
-		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
-		.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
+		.wallet-widget.has-black-diamond #ski-profile .wk-widget-btn.connected,
+		.wallet-widget.has-black-diamond #ski-profile > div > button.connected {
 			background: linear-gradient(135deg, rgba(8, 8, 16, 0.95), rgba(16, 16, 30, 0.94));
 			border-color: rgba(198, 170, 98, 0.62);
 			color: #d0d4e0;
@@ -214,8 +162,8 @@ export const profileStyles = `
 				0 10px 24px rgba(0, 0, 0, 0.58),
 				0 0 18px rgba(194, 145, 72, 0.26);
 		}
-		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected:hover,
-		.wallet-widget.has-black-diamond #wk-widget > div > button.connected:hover {
+		.wallet-widget.has-black-diamond #ski-profile .wk-widget-btn.connected:hover,
+		.wallet-widget.has-black-diamond #ski-profile > div > button.connected:hover {
 			border-color: rgba(234, 206, 128, 0.88);
 			box-shadow:
 				0 0 0 1px rgba(196, 154, 76, 0.34) inset,

@@ -23,8 +23,8 @@
 
 import type { Env } from '../types'
 import { htmlResponse, jsonResponse } from '../utils/response'
+import { skiScriptTag, skiStyleTag, skiWalletBridge, skiWidgetMarkup } from '../utils/ski-embed'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
-import { skiScriptTag, skiStyleTag, skiWidgetMarkup, skiWalletBridge } from '../utils/ski-embed'
 
 const llmRateLimits = new Map<string, { count: number; resetAt: number }>()
 
@@ -227,7 +227,7 @@ async function handleMessagingApi(request: Request, env: Env, url: URL): Promise
 				messagingSdk:
 					'https://esm.sh/gh/arbuthnot-eth/sui-stack-messaging-sdk@mainnet-messaging-v3.3-2026-02-16/packages/messaging',
 				sealSdk: 'https://cdn.jsdelivr.net/npm/@mysten/seal@1.0.1/+esm',
-				suiSdk: 'https://cdn.jsdelivr.net/npm/@mysten/sui@2.4.0/+esm',
+				suiSdk: 'https://cdn.jsdelivr.net/npm/@mysten/sui@2.6.0/+esm',
 				messagingVersion: '0.4.0',
 				messagingPackageConfig,
 			},
@@ -662,7 +662,6 @@ function generateAppShell(
 	${skiStyleTag()}
 </head>
 <body>
-	<div id="wk-modal"></div>
 	<div id="app">
 		${generateAppContent(currentPath, env)}
 	</div>
@@ -1363,8 +1362,8 @@ function getAppScript(env: Env, session?: { address: string | null; verified: bo
 		let connectedAddress = null;
 
 		function onAppWalletConnected() {
-			if (!_skiAddr) return;
-			connectedAddress = _skiAddr;
+			if (!window._skiAddr) return;
+			connectedAddress = window._skiAddr;
 			
 			const text = document.getElementById('wallet-text');
 			const btn = document.getElementById('connect-wallet');
@@ -1382,15 +1381,15 @@ function getAppScript(env: Env, session?: { address: string | null; verified: bo
 
 		window.connectWallet = function() {
 			if (connectedAddress) {
-				_skiDisconnect();
+				window._skiDisconnect();
 				return;
 			}
-			window.dispatchEvent(new CustomEvent('ski:open-modal'));
+			window.dispatchEvent(new CustomEvent('ski:request-signin'));
 		};
 
-		window.dispatchEvent(new CustomEvent('ski:open-modal'));
-		
-		_skiSubscribe(function(conn) {
+		window.addEventListener('load', function() { window.dispatchEvent(new CustomEvent('ski:request-signin')); });
+
+		window._skiSubscribe(function(conn) {
 			if (conn && conn.address) {
 				onAppWalletConnected();
 			}
@@ -1416,7 +1415,7 @@ function getAppScript(env: Env, session?: { address: string | null; verified: bo
 		});
 
 		// Initial state
-		if (_skiAddr) {
+		if (window._skiAddr) {
 			onAppWalletConnected();
 		}
 

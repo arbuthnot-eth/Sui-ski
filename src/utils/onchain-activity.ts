@@ -1,8 +1,10 @@
 import type { SuiGraphQLClient } from '@mysten/sui/graphql'
-import { graphqlQueryEvents, type LegacyEvent } from './sui-graphql'
+import type { SuiJsonRpcClient } from '@mysten/sui/jsonRpc'
+import { type LegacyEvent, raceQueryEvents } from './sui-graphql'
 
+// Runtime module address (different from package object ID due to upgrade)
 const TRADEPORT_LISTINGS_PACKAGE =
-	'0x6cfe7388ccf732432906d7faebcc33fd91e11d4c2f8cb3ae0082b8d3269e3d5b'
+	'0xff2251ea99230ed1cbe3a347a209352711c6723fcdcd9286e16636e65bb55cab'
 const TRADEPORT_BIDDINGS_PACKAGE =
 	'0x53134eb544c5a0b5085e99efaf7eab13b28ad123de35d61f941f8c8c40b72033'
 
@@ -56,9 +58,9 @@ function parseEventToNftActivity(
 			: evt.type.includes('List') || evt.type.includes('list')
 				? 'list'
 				: evt.type.includes('Delist') ||
-					  evt.type.includes('delist') ||
-					  evt.type.includes('Cancel') ||
-					  evt.type.includes('cancel')
+						evt.type.includes('delist') ||
+						evt.type.includes('Cancel') ||
+						evt.type.includes('cancel')
 					? 'delist'
 					: evt.type.includes('Bid') || evt.type.includes('bid')
 						? 'bid'
@@ -101,9 +103,9 @@ function parseEventToCollectionActivity(evt: LegacyEvent): OnChainCollectionActi
 				: evt.type.includes('List') || evt.type.includes('list')
 					? 'list'
 					: evt.type.includes('Delist') ||
-						  evt.type.includes('delist') ||
-						  evt.type.includes('Cancel') ||
-						  evt.type.includes('cancel')
+							evt.type.includes('delist') ||
+							evt.type.includes('Cancel') ||
+							evt.type.includes('cancel')
 						? 'delist'
 						: evt.type.includes('Bid') || evt.type.includes('bid')
 							? 'bid'
@@ -134,20 +136,23 @@ function parseEventToCollectionActivity(evt: LegacyEvent): OnChainCollectionActi
 export async function fetchNftEventsOnChain(
 	client: SuiGraphQLClient,
 	tokenId: string,
-	limit = 200,
+	limit = 500,
+	rpcClient?: SuiJsonRpcClient,
 ): Promise<OnChainNftActivity[]> {
 	const activities: OnChainNftActivity[] = []
 
 	const [listingEvents, biddingEvents] = await Promise.all([
-		graphqlQueryEvents(
+		raceQueryEvents(
 			client,
 			{ MoveEventModule: { package: TRADEPORT_LISTINGS_PACKAGE, module: 'tradeport_listings' } },
 			{ limit },
+			rpcClient,
 		),
-		graphqlQueryEvents(
+		raceQueryEvents(
 			client,
 			{ MoveEventModule: { package: TRADEPORT_BIDDINGS_PACKAGE, module: 'tradeport_biddings' } },
 			{ limit },
+			rpcClient,
 		),
 	])
 
@@ -164,6 +169,7 @@ export async function fetchNftEventsOnChain(
 export async function fetchCollectionEventsOnChain(
 	client: SuiGraphQLClient,
 	limit = 1000,
+	rpcClient?: SuiJsonRpcClient,
 ): Promise<OnChainCollectionActivity[]> {
 	const activities: OnChainCollectionActivity[] = []
 	const pageSize = Math.min(limit, 200)
@@ -172,8 +178,11 @@ export async function fetchCollectionEventsOnChain(
 
 	while (remaining > 0) {
 		const batchSize = Math.min(remaining, pageSize)
-		const [listingEvents, biddingEvents] = await Promise.all([
-			graphqlQueryEvents(
+		const [listingEvents, biddingEvents]: [
+			Awaited<ReturnType<typeof raceQueryEvents>>,
+			Awaited<ReturnType<typeof raceQueryEvents>>,
+		] = await Promise.all([
+			raceQueryEvents(
 				client,
 				{
 					MoveEventModule: {
@@ -182,8 +191,9 @@ export async function fetchCollectionEventsOnChain(
 					},
 				},
 				{ limit: batchSize, cursor },
+				rpcClient,
 			),
-			graphqlQueryEvents(
+			raceQueryEvents(
 				client,
 				{
 					MoveEventModule: {
@@ -192,6 +202,7 @@ export async function fetchCollectionEventsOnChain(
 					},
 				},
 				{ limit: batchSize, cursor },
+				rpcClient,
 			),
 		])
 

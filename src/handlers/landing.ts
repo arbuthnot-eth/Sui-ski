@@ -1,5 +1,5 @@
-import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import { SuiGrpcClient } from '@mysten/sui/grpc'
+import { SuiJsonRpcClient as SuiClient } from '@mysten/sui/jsonRpc'
 import { Transaction } from '@mysten/sui/transactions'
 import { SuinsClient } from '@mysten/suins'
 import { Hono } from 'hono'
@@ -7,19 +7,36 @@ import type { Env, SuiNSRecord } from '../types'
 import { cacheKey, getCached, setCache } from '../utils/cache'
 import { getDeepBookSuiPools, getNSSuiPrice, getUSDCSuiPrice } from '../utils/ns-price'
 import { generateLogoSvg, getDefaultOgImageUrl } from '../utils/og-image'
+import { fetchCollectionEventsOnChain, fetchNftEventsOnChain } from '../utils/onchain-activity'
+import {
+	fetchAllBidsForNft,
+	fetchListingOnChain,
+	fetchNftMetadata,
+	fetchOnChainSales,
+} from '../utils/onchain-listing'
 import { calculateRegistrationPrice, formatPricingResponse, getBasePricing } from '../utils/pricing'
 import { jsonResponse } from '../utils/response'
 import { getDefaultRpcUrl } from '../utils/rpc'
 import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
+import {
+	skiEventBridge,
+	skiScriptTag,
+	skiStyleTag,
+	skiWalletBridge,
+	skiWidgetMarkup,
+} from '../utils/ski-embed'
 import { renderSocialMeta } from '../utils/social'
 import { getGatewayStatus } from '../utils/status'
-import { generateWalletSessionJs } from '../utils/wallet-session-js'
-import { skiStyleTag, skiScriptTag, skiWidgetMarkup, skiEventBridge, skiWalletBridge } from '../utils/ski-embed'
-import { getSuiGraphQLClient } from '../utils/sui-graphql'
+import {
+	getSuiGraphQLClient,
+	getSuiGrpcClient,
+	getSuiRpcClient,
+	graphqlGetObject,
+	raceQueryEvents,
+} from '../utils/sui-graphql'
 import { generateThunderCss } from '../utils/thunder-css'
 import { generateThunderJs } from '../utils/thunder-js'
-import { fetchListingOnChain, fetchOnChainSales, fetchNftMetadata, fetchAllBidsForNft } from '../utils/onchain-listing'
-import { fetchNftEventsOnChain, fetchCollectionEventsOnChain } from '../utils/onchain-activity'
+import { generateWalletSessionJs } from '../utils/wallet-session-js'
 
 interface LandingPageOptions {
 	canonicalUrl?: string
@@ -255,7 +272,7 @@ apiRoutes.get('/renew-quote', async (c) => {
 		const message = error instanceof Error ? error.message : 'Failed to generate renewal quote'
 		return jsonResponse({ error: message }, 500)
 	}
-	})
+})
 
 const RENEW_TX_BUILD_MAX_ATTEMPTS = 3
 const RENEW_TX_BUILD_RETRY_BASE_MS = 250
@@ -282,7 +299,12 @@ function extractErrorStatus(error: unknown): number | null {
 	}
 
 	for (const candidate of statusCandidates) {
-		if (typeof candidate === 'number' && Number.isInteger(candidate) && candidate >= 100 && candidate <= 599) {
+		if (
+			typeof candidate === 'number' &&
+			Number.isInteger(candidate) &&
+			candidate >= 100 &&
+			candidate <= 599
+		) {
 			return candidate
 		}
 		if (typeof candidate === 'string') {
@@ -1429,32 +1451,35 @@ async function handleNamesByAddress(
 			`SUMMARY after indexer: ${allNames.length} total (${ownedNames} owned, ${listedNames} listed)`,
 		)
 
+		// gRPC primary: fetch all owned SuiNS NFTs directly from on-chain
 		const SUINS_V1_TYPE =
 			'0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::suins_registration::SuinsRegistration'
-		let rpcFallbackCount = 0
+		const grpcPrimaryClient = getSuiGrpcClient(env)
+		let grpcPrimaryCount = 0
 		try {
-			let cursor: string | null | undefined = null
+			let cursor: string | undefined
 			let hasNext = true
 			while (hasNext) {
-				const page = await client.getOwnedObjects({
-					owner: normalizedAddress,
-					filter: { StructType: SUINS_V1_TYPE },
-					options: { showContent: true },
-					cursor: cursor ?? undefined,
-					limit: 50,
-				})
-				const objects = page.data || []
+				const page: Awaited<ReturnType<typeof grpcPrimaryClient.listOwnedObjects>> =
+					await grpcPrimaryClient.listOwnedObjects({
+						owner: normalizedAddress,
+						type: SUINS_V1_TYPE,
+						include: { json: true },
+						cursor,
+						limit: 50,
+					})
+				const objects = page.objects || []
 				for (const obj of objects) {
-					if (!obj.data?.content || obj.data.content.dataType !== 'moveObject') continue
-					const fields = obj.data.content.fields as Record<string, unknown>
-					const domainName = String(fields?.domain_name || '')
-					const objectId = obj.data.objectId
-					if (!domainName || !objectId) continue
+					const objectId = obj.objectId as string | undefined
+					const json = obj.json as Record<string, unknown> | undefined
+					if (!objectId || !json) continue
+					const domainName = String(json.domain_name || '')
+					if (!domainName) continue
 					if (seenNftIds.has(objectId)) continue
 					const normalizedName = normalizeSuinsName(domainName)
 					if (!normalizedName) continue
 					seenNftIds.add(objectId)
-					const rawExp = fields?.expiration_timestamp_ms
+					const rawExp = json.expiration_timestamp_ms
 					allNames.push({
 						name: normalizedName,
 						nftId: objectId,
@@ -1464,22 +1489,186 @@ async function handleNamesByAddress(
 						isListed: false,
 						listingPriceMist: null,
 					})
-					rpcFallbackCount++
+					grpcPrimaryCount++
 				}
 				hasNext = page.hasNextPage
-				cursor = page.nextCursor
+				cursor = page.cursor ?? undefined
 			}
-		} catch (rpcError) {
-			console.error('RPC fallback for owned SuiNS NFTs failed:', rpcError)
+		} catch (grpcError) {
+			console.error('gRPC primary for owned SuiNS NFTs failed:', grpcError)
+			// Fallback to JSON-RPC if gRPC fails
+			try {
+				let cursor: string | null | undefined = null
+				let hasNext = true
+				while (hasNext) {
+					const page = await client.getOwnedObjects({
+						owner: normalizedAddress,
+						filter: { StructType: SUINS_V1_TYPE },
+						options: { showContent: true },
+						cursor: cursor ?? undefined,
+						limit: 50,
+					})
+					const objects = page.data || []
+					for (const obj of objects) {
+						if (!obj.data?.content || obj.data.content.dataType !== 'moveObject') continue
+						const fields = obj.data.content.fields as Record<string, unknown>
+						const domainName = String(fields?.domain_name || '')
+						const objectId = obj.data.objectId
+						if (!domainName || !objectId) continue
+						if (seenNftIds.has(objectId)) continue
+						const normalizedName = normalizeSuinsName(domainName)
+						if (!normalizedName) continue
+						seenNftIds.add(objectId)
+						const rawExp = fields?.expiration_timestamp_ms
+						allNames.push({
+							name: normalizedName,
+							nftId: objectId,
+							expirationMs: rawExp ? Number(rawExp) : null,
+							targetAddress: null,
+							isPrimary: false,
+							isListed: false,
+							listingPriceMist: null,
+						})
+						grpcPrimaryCount++
+					}
+					hasNext = page.hasNextPage
+					cursor = page.nextCursor
+				}
+			} catch (rpcError) {
+				console.error('JSON-RPC fallback for owned SuiNS NFTs also failed:', rpcError)
+			}
 		}
-		if (rpcFallbackCount > 0) {
-			console.log(`RPC fallback found ${rpcFallbackCount} additional names not in indexer`)
+		if (grpcPrimaryCount > 0) {
+			console.log(`gRPC/RPC found ${grpcPrimaryCount} additional names not in indexer`)
+		}
+
+		// On-chain fallback: scan Tradeport listing events to find listed names by this seller
+		// This catches names listed on the marketplace (where on-chain owner is the kiosk, not the seller)
+		const TP_LISTINGS_PKG = '0xff2251ea99230ed1cbe3a347a209352711c6723fcdcd9286e16636e65bb55cab'
+		const gqlClient = getSuiGraphQLClient(env)
+		const jsonRpcClient = getSuiRpcClient(env)
+		let eventListingsCount = 0
+		try {
+			// Paginate through listing events to find this seller's active listings
+			const allListingEvents: import('../utils/sui-graphql').LegacyEvent[] = []
+			let evtCursor: string | null = null
+			const EVT_PAGE_SIZE = 200
+			const EVT_MAX_PAGES = 5
+			for (let evtPage = 0; evtPage < EVT_MAX_PAGES; evtPage++) {
+				const page = await raceQueryEvents(
+					gqlClient,
+					{ MoveEventModule: { package: TP_LISTINGS_PKG, module: 'tradeport_listings' } },
+					{ limit: EVT_PAGE_SIZE, cursor: evtCursor },
+					jsonRpcClient,
+				)
+				allListingEvents.push(...page.data)
+				if (!page.hasNextPage || !page.nextCursor) break
+				evtCursor = page.nextCursor
+			}
+			console.log(`Event fallback: scanned ${allListingEvents.length} listing events`)
+
+			// Track latest event per NFT to determine current state (filter by seller in memory)
+			const nftLatestEvent = new Map<string, { type: string; nftId: string }>()
+			for (const evt of allListingEvents) {
+				const pj = evt.parsedJson
+				if (!pj) continue
+				const seller = String(pj.seller ?? pj.sender ?? '').toLowerCase()
+				if (seller !== normalizedAddress) continue
+				const nftId = String(pj.nft_id ?? pj.maybe_nft_id ?? pj.token_id ?? '')
+				if (!nftId || seenNftIds.has(nftId)) continue
+
+				const evtType =
+					evt.type.includes('List') || evt.type.includes('list')
+						? 'list'
+						: evt.type.includes('Delist') ||
+								evt.type.includes('delist') ||
+								evt.type.includes('Cancel') ||
+								evt.type.includes('cancel')
+							? 'delist'
+							: evt.type.includes('Buy') || evt.type.includes('buy')
+								? 'buy'
+								: 'other'
+
+				// Keep only the most recent event per NFT (events are in descending order)
+				if (!nftLatestEvent.has(nftId)) {
+					nftLatestEvent.set(nftId, { type: evtType, nftId })
+				}
+			}
+
+			// For NFTs whose latest event is a listing, verify on-chain and add
+			const listedNftIds = [...nftLatestEvent.entries()]
+				.filter(([, v]) => v.type === 'list')
+				.map(([id]) => id)
+
+			if (listedNftIds.length > 0) {
+				const verifyBatch = 10
+				for (let vi = 0; vi < listedNftIds.length; vi += verifyBatch) {
+					const batch = listedNftIds.slice(vi, vi + verifyBatch)
+					const results = await Promise.all(
+						batch.map(async (nftId) => {
+							try {
+								const listing = await fetchListingOnChain(
+									gqlClient,
+									nftId,
+									grpcPrimaryClient,
+									jsonRpcClient,
+								)
+								if (!listing || listing.seller.toLowerCase() !== normalizedAddress) return null
+								const obj = await graphqlGetObject(
+									gqlClient,
+									nftId,
+									{ showContent: true },
+									jsonRpcClient,
+									grpcPrimaryClient,
+								)
+								if (!obj.data?.content || obj.data.content.dataType !== 'moveObject') return null
+								const fields = obj.data.content.fields as Record<string, unknown>
+								const domainName = String(fields.domain_name || '')
+								if (!domainName) return null
+								const normalizedName = normalizeSuinsName(domainName)
+								if (!normalizedName) return null
+								return {
+									nftId,
+									name: normalizedName,
+									price: listing.price,
+									exp: fields.expiration_timestamp_ms,
+								}
+							} catch {
+								return null
+							}
+						}),
+					)
+					for (const r of results) {
+						if (!r || seenNftIds.has(r.nftId)) continue
+						seenNftIds.add(r.nftId)
+						allNames.push({
+							name: r.name,
+							nftId: r.nftId,
+							expirationMs: r.exp ? Number(r.exp) : null,
+							targetAddress: null,
+							isPrimary: false,
+							isListed: true,
+							listingPriceMist: r.price,
+						})
+						eventListingsCount++
+					}
+				}
+			}
+		} catch (evtError) {
+			console.error(
+				'Listing events fallback failed:',
+				evtError instanceof Error ? evtError.message : evtError,
+			)
+		}
+		if (eventListingsCount > 0) {
+			console.log(`Event scan found ${eventListingsCount} listed names for seller`)
 		}
 
 		// Step 2: Use SuinsClient.getNameRecord to resolve each name to its target address
 		// This is more reliable than the raw RPC method
+		const grpcClient = getSuiGrpcClient(env)
 		const suinsClient = new SuinsClient({
-			client: client as never,
+			client: grpcClient as never,
 			network: env.SUI_NETWORK as 'mainnet' | 'testnet',
 		})
 
@@ -1722,6 +1911,7 @@ interface MarketplaceNft {
 	name: string
 	tokenId: string
 	owner: string
+	imageUrl: string | null
 	listings: MarketplaceListing[]
 	bids: MarketplaceBid[]
 }
@@ -1832,12 +2022,14 @@ async function handleMarketplaceData(name: string, _env: Env, tokenId?: string):
 		`https://www.tradeport.xyz/sui/collection/suins?bottomTab=trades&tab=items&tokenId=${tid}&modalSlug=suins&nav=1`
 
 	const client = getSuiGraphQLClient(_env)
+	const rpcClient = getSuiRpcClient(_env)
+	const grpcClient = getSuiGrpcClient(_env)
 
 	let resolvedTokenId = tokenId
 	if (!resolvedTokenId) {
 		try {
 			const suinsClient = new SuinsClient({
-				client: client as never,
+				client: grpcClient as never,
 				network: _env.SUI_NETWORK as 'mainnet' | 'testnet',
 			})
 			const nameRecord = await suinsClient.getNameRecord(normalizedName)
@@ -1866,10 +2058,10 @@ async function handleMarketplaceData(name: string, _env: Env, tokenId?: string):
 
 	try {
 		const [onChainListing, allBidsResult, sales, nftMeta] = await Promise.all([
-			fetchListingOnChain(client, resolvedTokenId),
-			fetchAllBidsForNft(client, resolvedTokenId),
-			fetchOnChainSales(client, resolvedTokenId),
-			fetchNftMetadata(client, resolvedTokenId),
+			fetchListingOnChain(client, resolvedTokenId, grpcClient, rpcClient),
+			fetchAllBidsForNft(client, resolvedTokenId, rpcClient),
+			fetchOnChainSales(client, resolvedTokenId, 50, rpcClient),
+			fetchNftMetadata(client, resolvedTokenId, rpcClient, grpcClient),
 		])
 
 		let bestListing: MarketplaceListing | null = null
@@ -1914,6 +2106,7 @@ async function handleMarketplaceData(name: string, _env: Env, tokenId?: string):
 				name: nftMeta.name,
 				tokenId: nftMeta.tokenId,
 				owner: nftMeta.owner,
+				imageUrl: nftMeta.imageUrl,
 				listings: bestListing ? [bestListing] : [],
 				bids: allBids,
 			})
@@ -1997,104 +2190,19 @@ async function handleNftActivity(nftId: string, _env: Env): Promise<Response> {
 	}
 
 	try {
-		const query = `
-			query fetchNftActivity($nftId: uuid!, $offset: Int, $limit: Int!) {
-				sui {
-					actions(
-						where: {nft_id: {_eq: $nftId}}
-						order_by: [{block_time: desc}, {tx_index: desc}]
-						offset: $offset
-						limit: $limit
-					) {
-						id
-						type
-						price
-						price_coin
-						sender
-						receiver
-						tx_id
-						block_time
-						market_name
-						bought_on_tradeport
-						liquid_bridge_id
-						nonce
-						listing_nonce
-					}
-				}
-			}
-		`
+		const client = getSuiGraphQLClient(_env)
+		const rpcClient = getSuiRpcClient(_env)
+		const onChainEvents = await fetchNftEventsOnChain(client, nftId, 200, rpcClient)
+		const actions = onChainEvents as unknown as NftActivityAction[]
 
-		const response = await fetch(INDEXER_API_URL, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'x-api-user': INDEXER_API_USER,
-				'x-api-key': _env.INDEXER_API_KEY || '',
-			},
-			body: JSON.stringify({
-				query,
-				variables: {
-					nftId,
-					offset: 0,
-					limit: 20,
-				},
-			}),
-		})
-
-		if (!response.ok) {
-			throw new Error(`Indexer API error: ${response.status}`)
+		const activityData = { actions }
+		if (actions.length > 0) {
+			await setCache(activityCacheKey, activityData, NFT_ACTIVITY_CACHE_TTL)
 		}
-
-		const result = (await response.json()) as {
-			data?: {
-				sui?: {
-					actions?: Array<{
-						id: string
-						type: string
-						price: number
-						price_coin: string
-						sender: string
-						receiver: string
-						tx_id: string
-						block_time: string
-						market_name: string
-						bought_on_tradeport: boolean
-						liquid_bridge_id: string | null
-						nonce: string | null
-						listing_nonce: string | null
-					}>
-				}
-			}
-			errors?: Array<{ message: string }>
-		}
-
-		if (result.errors) {
-			throw new Error(result.errors[0]?.message || 'GraphQL error')
-		}
-
-		const actions = result.data?.sui?.actions || []
-		const formattedActions: NftActivityAction[] = actions.map((action) => ({
-			id: action.id,
-			type: action.type,
-			price: action.price,
-			priceCoin: action.price_coin,
-			sender: action.sender,
-			receiver: action.receiver,
-			txId: action.tx_id,
-			blockTime: action.block_time,
-			marketName: action.market_name,
-			boughtOnTradeport: action.bought_on_tradeport,
-			liquidBridgeId: action.liquid_bridge_id,
-			nonce: action.nonce,
-			listingNonce: action.listing_nonce,
-		}))
-
-		const activityData = { actions: formattedActions }
-		await setCache(activityCacheKey, activityData, NFT_ACTIVITY_CACHE_TTL)
 
 		return new Response(JSON.stringify(activityData), {
 			status: 200,
-			headers: { ...corsHeaders, 'X-Cache': 'MISS' },
+			headers: { ...corsHeaders, 'X-Cache': 'MISS', 'X-Activity-Source': 'onchain' },
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch NFT activity'
@@ -2128,13 +2236,21 @@ async function handleNftActivityByTokenId(tokenId: string, _env: Env): Promise<R
 
 	try {
 		const client = getSuiGraphQLClient(_env)
+		const rpcClient = getSuiRpcClient(_env)
+		const grpcClient = getSuiGrpcClient(_env)
 
-		const onChainEvents = await fetchNftEventsOnChain(client, tokenId, 200)
+		const [onChainEvents, listing] = await Promise.all([
+			fetchNftEventsOnChain(client, tokenId, 500, rpcClient),
+			fetchListingOnChain(client, tokenId, grpcClient, rpcClient),
+		])
 
-		const obj = await client.getObject({
-			id: tokenId,
-			options: { showContent: true, showOwner: true, showPreviousTransaction: true },
-		})
+		const obj = await graphqlGetObject(
+			client,
+			tokenId,
+			{ showContent: true, showOwner: true },
+			rpcClient,
+			grpcClient,
+		)
 		let mintAction: NftActivityAction | null = null
 		if (obj.data?.content && obj.data.content.dataType === 'moveObject') {
 			const fields = obj.data.content.fields as Record<string, unknown>
@@ -2169,126 +2285,41 @@ async function handleNftActivityByTokenId(tokenId: string, _env: Env): Promise<R
 		}
 
 		const actions = [...(onChainEvents as unknown as NftActivityAction[])]
+
+		// Inject synthetic "list" activity from current on-chain listing if not already in events
+		if (listing) {
+			const hasListEvent = actions.some((a) => a.type === 'list')
+			if (!hasListEvent) {
+				actions.unshift({
+					id: `${tokenId}-listing`,
+					type: 'list',
+					price: listing.price,
+					priceCoin: '0x2::sui::SUI',
+					sender: listing.seller,
+					receiver: '',
+					txId: '',
+					blockTime: new Date().toISOString(),
+					marketName: 'tradeport',
+					boughtOnTradeport: true,
+					liquidBridgeId: null,
+					nonce: listing.nonce,
+					listingNonce: null,
+				})
+			}
+		}
+
 		if (mintAction) {
 			const hasMint = actions.some((a) => a.type === 'mint')
 			if (!hasMint) actions.push(mintAction)
 		}
+		const activityData = { actions }
 		if (actions.length > 0) {
-			const activityData = { actions }
 			await setCache(activityCacheKey, activityData, NFT_ACTIVITY_CACHE_TTL)
-			return new Response(JSON.stringify(activityData), {
-				status: 200,
-				headers: { ...corsHeaders, 'X-Cache': 'MISS', 'X-Activity-Source': 'onchain' },
-			})
 		}
-
-		const query = `
-			query fetchNftTransactionHistory(
-				$collectionId: uuid!
-				$tokenId: String!
-				$offset: Int
-				$limit: Int!
-			) {
-				sui {
-					actions(
-						where: {
-							collection_id: { _eq: $collectionId }
-							nft: { token_id: { _eq: $tokenId } }
-						}
-						order_by: [{ block_time: desc }, { tx_index: desc }]
-						offset: $offset
-						limit: $limit
-					) {
-						id
-						type
-						price
-						price_coin
-						sender
-						receiver
-						tx_id
-						block_time
-						market_name
-						bought_on_tradeport
-						liquid_bridge_id
-						nonce
-						listing_nonce
-					}
-				}
-			}
-		`
-
-		const response = await fetch(INDEXER_API_URL, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'x-api-user': INDEXER_API_USER,
-				'x-api-key': _env.INDEXER_API_KEY || '',
-			},
-			body: JSON.stringify({
-				query,
-				variables: {
-					collectionId: SUINS_COLLECTION_ID,
-					tokenId,
-					offset: 0,
-					limit: 20,
-				},
-			}),
-		})
-
-		if (!response.ok) {
-			throw new Error(`Indexer API error: ${response.status}`)
-		}
-
-		const result = (await response.json()) as {
-			data?: {
-				sui?: {
-					actions?: Array<{
-						id: string
-						type: string
-						price: number
-						price_coin: string
-						sender: string
-						receiver: string
-						tx_id: string
-						block_time: string
-						market_name: string
-						bought_on_tradeport: boolean
-						liquid_bridge_id: string | null
-						nonce: string | null
-						listing_nonce: string | null
-					}>
-				}
-			}
-			errors?: Array<{ message: string }>
-		}
-
-		if (result.errors) {
-			throw new Error(result.errors[0]?.message || 'GraphQL error')
-		}
-
-		const indexerActions = result.data?.sui?.actions || []
-		const formattedActions: NftActivityAction[] = indexerActions.map((action) => ({
-			id: action.id,
-			type: action.type,
-			price: action.price,
-			priceCoin: action.price_coin,
-			sender: action.sender,
-			receiver: action.receiver,
-			txId: action.tx_id,
-			blockTime: action.block_time,
-			marketName: action.market_name,
-			boughtOnTradeport: action.bought_on_tradeport,
-			liquidBridgeId: action.liquid_bridge_id,
-			nonce: action.nonce,
-			listingNonce: action.listing_nonce,
-		}))
-
-		const activityData = { actions: formattedActions }
-		await setCache(activityCacheKey, activityData, NFT_ACTIVITY_CACHE_TTL)
 
 		return new Response(JSON.stringify(activityData), {
 			status: 200,
-			headers: { ...corsHeaders, 'X-Cache': 'MISS' },
+			headers: { ...corsHeaders, 'X-Cache': 'MISS', 'X-Activity-Source': 'onchain' },
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch NFT activity'
@@ -3289,8 +3320,9 @@ async function handleGraceActivity(env: Env, options: GraceActivityOptions): Pro
 
 		try {
 			const client = getSuiGraphQLClient(env)
+			const rpcClient = getSuiRpcClient(env)
 
-			const onChainEvents = await fetchCollectionEventsOnChain(client, 1000)
+			const onChainEvents = await fetchCollectionEventsOnChain(client, 1000, rpcClient)
 			if (onChainEvents.length > 0) {
 				const minTimeFilter = minBlockTimeMs > 0 ? minBlockTimeMs : 0
 				allActions = onChainEvents
@@ -3438,7 +3470,12 @@ async function handleGraceActivity(env: Env, options: GraceActivityOptions): Pro
 		}
 		return new Response(JSON.stringify(responseBody), {
 			status: 200,
-			headers: { ...corsHeaders, 'X-Cache': 'MISS', 'X-Activity-Source': source, 'Cache-Control': 'no-store, max-age=0' },
+			headers: {
+				...corsHeaders,
+				'X-Cache': 'MISS',
+				'X-Activity-Source': source,
+				'Cache-Control': 'no-store, max-age=0',
+			},
 		})
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to fetch collection activity'
@@ -4504,8 +4541,8 @@ ${socialMeta}
 		.wallet-widget.has-black-diamond .wallet-profile-btn svg {
 			filter: brightness(0.7) contrast(1.2) saturate(0.4);
 		}
-		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected,
-		.wallet-widget.has-black-diamond #wk-widget > div > button.connected {
+		.wallet-widget.has-black-diamond #ski-profile .wk-widget-btn.connected,
+		.wallet-widget.has-black-diamond #ski-profile > div > button.connected {
 			background: linear-gradient(135deg, rgba(8, 8, 16, 0.95), rgba(16, 16, 30, 0.94));
 			border-color: rgba(198, 170, 98, 0.62);
 			color: #d0d4e0;
@@ -4514,8 +4551,8 @@ ${socialMeta}
 				0 10px 24px rgba(0, 0, 0, 0.58),
 				0 0 18px rgba(194, 145, 72, 0.26);
 		}
-		.wallet-widget.has-black-diamond #wk-widget .wk-widget-btn.connected:hover,
-		.wallet-widget.has-black-diamond #wk-widget > div > button.connected:hover {
+		.wallet-widget.has-black-diamond #ski-profile .wk-widget-btn.connected:hover,
+		.wallet-widget.has-black-diamond #ski-profile > div > button.connected:hover {
 			border-color: rgba(234, 206, 128, 0.88);
 			box-shadow:
 				0 0 0 1px rgba(196, 154, 76, 0.34) inset,
@@ -4730,12 +4767,15 @@ ${skiStyleTag()}
 </head>
 <body>
 	<div class="wallet-widget" id="wallet-widget">
+		<button class="wallet-ski-btn ski-dot-btn ski-btn ski-dot" id="ski-dot" title="Open SKI menu" aria-label="Status" style="display:none"></button>
+		<button class="wallet-ski-btn ski-btn" id="ski-btn" style="display:none"></button>
+		<div id="ski-menu"></div>
 		<button class="wallet-profile-btn" id="wallet-profile-btn" title="Go to sui.ski" aria-label="Open wallet profile">
 			${generateLogoSvg(18)}
 		</button>
-		<div id="wk-widget"></div>
+		<div id="ski-profile"></div>
 	</div>
-	<div id="wk-modal"></div>
+	<div id="ski-modal"></div>
 
 	<div class="reg-modal-overlay" id="reg-modal-overlay" style="display:none;">
 		<div class="reg-modal">
@@ -4803,7 +4843,6 @@ ${skiStyleTag()}
 		<span class="sui-price-wrap"><img class="sui-icon" src="/media-pack/SuiIcon.svg" alt="SUI"><span class="price" id="sui-price">$--</span></span>
 	</div>
 
-${skiWidgetMarkup()}
 		<script type="module">
 				let getWallets, getJsonRpcFullnodeUrl, SuiJsonRpcClient, Transaction, SuinsClient, SuinsTransaction;
 				{
@@ -4822,9 +4861,9 @@ ${skiWidgetMarkup()}
 					]);
 					const results = await Promise.allSettled([
 						timedImport('https://esm.sh/@wallet-standard/app@1.1.0'),
-						timedImport('https://esm.sh/@mysten/sui@2.4.0/jsonRpc?bundle'),
-						timedImport('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle'),
-						timedImport('https://esm.sh/@mysten/suins@1.0.0?bundle'),
+						timedImport('https://esm.sh/@mysten/sui@2.6.0/jsonRpc?bundle'),
+						timedImport('https://esm.sh/@mysten/sui@2.6.0/transactions?bundle'),
+						timedImport('https://esm.sh/@mysten/suins@1.0.2?bundle'),
 					]);
 						if (results[0].status === 'fulfilled') ({ getWallets } = results[0].value);
 						if (results[1].status === 'fulfilled') ({ getJsonRpcFullnodeUrl, SuiJsonRpcClient } = results[1].value);
@@ -4864,17 +4903,17 @@ ${skiWidgetMarkup()}
 				let walletDropdownRefreshTimer = null;
 
 				function getConnectedAddress() {
-					var conn = _skiAddr ? { address: _skiAddr, status: 'connected' } : null;
+					var conn = window._skiAddr ? { address: window._skiAddr, status: 'connected' } : null;
 					return conn && (conn.status === 'connected' || conn.status === 'session') ? conn.address : null;
 				}
 
 				function getViewerAddress() {
-					var conn = _skiAddr ? { address: _skiAddr, status: 'connected' } : null;
+					var conn = window._skiAddr ? { address: window._skiAddr, status: 'connected' } : null;
 					return conn && (conn.status === 'connected' || conn.status === 'session') ? conn.address : null;
 				}
 
 				function getConnectedPrimaryName() {
-					var conn = _skiAddr ? { address: _skiAddr, status: 'connected' } : null;
+					var conn = window._skiAddr ? { address: window._skiAddr, status: 'connected' } : null;
 					if (!conn || (conn.status !== 'connected' && conn.status !== 'session')) return null;
 					if (!conn.primaryName) return null;
 					return String(conn.primaryName).replace(/\\.sui$/i, '');
@@ -4940,7 +4979,7 @@ ${skiWidgetMarkup()}
 						profileFallbackHref: 'https://sui.ski',
 					})}
 
-					_skiSubscribe(function() {
+					window._skiSubscribe(function() {
 						syncWalletProfileButtonVisibility();
 						scheduleWalletDrivenDropdownRefresh();
 					}, function() {
@@ -4949,7 +4988,7 @@ ${skiWidgetMarkup()}
 
 			async function executeTransaction(tx) {
 				var txBytes = await tx.build({ client: suiClient });
-				return _skiSignAndExecute(txBytes);
+				return window._skiSignAndExecute(txBytes);
 			}
 
 			const WAAP_REFERRAL_ADDRESS = '0x53f1e3d5f1e3f5aefa47fd3d5a47c9b8cc87e26a2c7bf39e26c870ded4eca7df';
@@ -5064,7 +5103,7 @@ ${skiWidgetMarkup()}
 				var address = getConnectedAddress();
 				if (!address) {
 					regModalShowStatus('Connect your wallet first', 'info');
-					window.dispatchEvent(new CustomEvent('ski:open-modal'));
+					window.dispatchEvent(new CustomEvent('ski:request-signin'));
 					return;
 				}
 				regModalBusy = true;
@@ -5097,7 +5136,7 @@ ${skiWidgetMarkup()}
 					for (var i = 0; i < raw.length; i++) txBytes[i] = raw.charCodeAt(i);
 
 					regModalShowStatus('Approve in wallet...', 'info');
-					var result = await _skiSignAndExecute(txBytes);
+					var result = await window._skiSignAndExecute(txBytes);
 					var digest = result && result.digest ? String(result.digest) : '';
 
 					var effectsStatus = result && result.effects && result.effects.status ? result.effects.status : null;
@@ -6316,8 +6355,6 @@ ${skiStyleTag()}
 		</div>
 	</div>
 
-	<div id="wk-modal"></div>
-
 ${skiWidgetMarkup()}
 	<script type="module">
 	var SDK_TIMEOUT = 20000;
@@ -6331,7 +6368,7 @@ ${skiWidgetMarkup()}
 	${skiEventBridge({ onConnect: 'onGraceWalletConnected', onDisconnect: 'onGraceWalletDisconnected' })}
 
 	function getAddr() {
-		var c = _skiAddr ? { address: _skiAddr, status: 'connected' } : null;
+		var c = window._skiAddr ? { address: window._skiAddr, status: 'connected' } : null;
 		return c && (c.status === 'connected' || c.status === 'session') ? c.address : null;
 	}
 	var wBtn = document.getElementById('wallet-btn');
@@ -6344,8 +6381,8 @@ ${skiWidgetMarkup()}
 	window.onGraceWalletConnected = function() { syncW(); if (window.loadBm) window.loadBm(); };
 	window.onGraceWalletDisconnected = function() { syncW(); window.bookmarks = {}; if (window.renderBm) window.renderBm(); };
 	wBtn.addEventListener('click', function() {
-		if (getAddr()) { _skiDisconnect(); }
-		else { window.dispatchEvent(new CustomEvent('ski:open-modal')); }
+		if (getAddr()) { window._skiDisconnect(); }
+		else { window.dispatchEvent(new CustomEvent('ski:request-signin')); }
 	});
 	setTimeout(syncW, 500);
 	window.getAddr = getAddr;
@@ -6632,8 +6669,6 @@ ${skiStyleTag()}
 <button id="cancelBtn" class="primary">Connect Wallet</button>
 <div id="status" class="status"></div>
 </div>
-<div id="wk-modal"></div>
-
 ${skiWidgetMarkup()}
 <script>
 ${skiWalletBridge({ network: env.SUI_NETWORK })}
@@ -6650,14 +6685,14 @@ function showStatus(msg, type) {
 }
 
 function onWalletConnect() {
-	var conn = _skiAddr ? { address: _skiAddr } : null;
+	var conn = window._skiAddr ? { address: window._skiAddr } : null;
 	if (conn && conn.address) {
 		connectedAddress = conn.address;
 		cancelBtn.textContent = 'Cancel Bid';
 	}
 }
 
-_skiSubscribe(function(conn) {
+window._skiSubscribe(function(conn) {
 	if (conn && conn.address) {
 		onWalletConnect();
 	}
@@ -6668,7 +6703,7 @@ _skiSubscribe(function(conn) {
 
 cancelBtn.addEventListener('click', async function() {
 	if (!connectedAddress) {
-		window.dispatchEvent(new CustomEvent('ski:open-modal'));
+		window.dispatchEvent(new CustomEvent('ski:request-signin'));
 		return;
 	}
 	var bid = (bidInput.value || '').trim();
@@ -6691,10 +6726,10 @@ cancelBtn.addEventListener('click', async function() {
 
 		showStatus('Waiting for wallet approval...', 'info');
 
-		var Tx = await import('https://esm.sh/@mysten/sui@2.4.0/transactions?bundle').then(function(m) { return m.Transaction; });
+		var Tx = await import('https://esm.sh/@mysten/sui@2.6.0/transactions?bundle').then(function(m) { return m.Transaction; });
 		var tx = Tx.from(data.txBytes);
 
-		var result = await _skiSignAndExecute(tx);
+		var result = await window._skiSignAndExecute(tx);
 
 		var digest = result.digest || (result.result && result.result.digest) || '';
 		if (digest) {
@@ -6721,7 +6756,7 @@ cancelBtn.addEventListener('click', async function() {
 });
 
 Promise.resolve([]).then(function() {
-	var conn = _skiAddr ? { address: _skiAddr } : null;
+	var conn = window._skiAddr ? { address: window._skiAddr } : null;
 	if (conn && conn.address) onWalletConnect();
 });
 </script>

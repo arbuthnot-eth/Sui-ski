@@ -42,3 +42,12 @@
 
 - Pattern: multichain wallet providers can expose non-Sui default connect flows unless Sui-scoped providers and chain hints are explicitly preferred.
 - Rule: for Sui-only UX, never rely on wallet-name-only capability checks for multichain wallets (e.g., Backpack/Phantom); require Sui signals or route through `*.sui` providers and attempt connect with `sui:${network}` hints first.
+
+## 2026-03-05
+
+- Pattern: switching a page from local wallet glue to package-native UI can silently drop the package's preload keys and leave cross-subdomain restore partially broken.
+- Rule: when migrating a page to ski.js-native header flow, preserve `ski:last-wallet` and `ski:last-address` seeding before the package script boots, or preload/autoReconnect will regress on subdomains.
+- Pattern: package-owned button styling can flash raw browser chrome if the expected package class is added only after runtime mount.
+- Rule: for ski.js-owned controls like `#ski-dot`, ensure the package's baseline styling class is present in server-rendered markup when you need parity from first paint.
+- Pattern: Bun can own dependency installation without owning every runtime command in this repo.
+- Rule: preserve `npx wrangler deploy` for deploy entry points unless the user explicitly asks to change the Wrangler invocation and the environment has been verified for auth parity.

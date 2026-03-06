@@ -218,6 +218,30 @@
 - [x] Replace `src/handlers/register2.ts` with a simpler implementation.
 - [x] Use the same package-native `.SKI` button mount (`wallet-ski-btn`) from `sui.ski`.
 - [x] Keep exports required by app routes: `generateRegistrationPage`, `handleBuildRegisterTx`, `handleRegistrationSubmission`.
+
+---
+
+# Task Plan: Subdomain Header Cleanup
+
+- [x] Remove the extra far-right profile button from the `*.sui.ski` profile header so the top row only keeps the intended three controls.
+- [x] Restyle the left home button to better match the darker inset/glow treatment from the approved reference.
+- [x] Verify the touched profile files still parse cleanly and document the current WaaP/package split.
+
+## Review
+
+- Updated `src/handlers/profile.ts`:
+  - removed the extra `wallet-profile-btn` from the subdomain/profile header,
+  - removed the subdomain-only click/logo sync for that button,
+  - kept the shared wallet mount in place for `#ski-profile`, so the wallet pill and package SKI button still render.
+- Updated `src/handlers/profile.css.ts`:
+  - restyled `.home-btn` with a darker gradient, slightly larger frame, stronger inset border, and a brighter hover glow closer to the approved reference.
+  - removed now-unused profile-button CSS selectors for the deleted far-right control.
+- Verification:
+  - `bun -e "import('./src/handlers/profile.ts').then(()=>console.log('profile import ok'))"` passed.
+  - `npx biome check src/handlers/profile.ts src/handlers/profile.css.ts` passed with one pre-existing warning in `src/handlers/profile.ts:11615` (`noUselessEscapeInString`), unrelated to this header change.
+- WaaP/package root cause:
+  - profile pages already load the published browser bundle from `https://cdn.jsdelivr.net/npm/sui.ski@0.1.77/public/dist/ski.js`,
+  - but they still layer local glue on top via `generateSharedWalletMountJs(...)`, `generateWalletSessionJs()`, and custom signing/session code, so the subdomain flow is not purely package-native end to end.
 - [x] Verify formatting and module import validity.
 
 ## Review
@@ -236,3 +260,110 @@
 - Verification:
   - `npx biome check src/handlers/register2.ts` passed.
   - `bun -e "import('./src/handlers/register2.ts').then(()=>console.log('register2 import ok'))"` passed.
+
+---
+
+# Task Plan: Profile Page ski.js Alignment
+
+- [x] Compare the profile page header/wallet path against the root `sui.ski` ski.js integration.
+- [x] Remove the profile page’s redundant shared wallet mount so ski.js owns the header widget lifecycle directly on profile pages.
+- [x] Update the local ski bridge to preserve package-compatible wallet state needed by the profile page.
+- [x] Run targeted verification and deploy with `npx wrangler deploy`.
+
+## Review
+
+- Updated `src/handlers/profile.ts`:
+  - removed the profile page’s `generateSharedWalletMountJs(...)` mount path,
+  - removed the profile page’s unused `generateWalletSessionJs()` injection,
+  - moved wallet-connected/disconnected UI refresh onto `window._skiSubscribe(...)`, which now drives the profile page directly from ski.js events.
+- Updated `src/utils/ski-embed.ts`:
+  - enriched `window._skiConn` so it keeps cached primary-name state from `ski:suins:{address}`,
+  - kept transaction/disconnect delegation package-native via ski.js custom events,
+  - avoided inferring `session` signer mode from local storage to prevent false positives on normal connected wallets.
+- Verification:
+  - `bun -e "Promise.all([import('./src/handlers/profile.ts'), import('./src/utils/ski-embed.ts')]).then(()=>console.log('imports ok'))"` passed.
+  - `npx biome check src/handlers/profile.ts src/handlers/profile.css.ts src/utils/ski-embed.ts` still reports one pre-existing warning in `src/handlers/profile.ts:11566` (`noUselessEscapeInString`), unrelated to this migration.
+- Deploy:
+  - `npx wrangler deploy` succeeded.
+  - Worker version: `ecd94523-2a66-4fa1-afaf-84e794083813`.
+
+---
+
+# Task Plan: Profile ski.js Restore + Dot Fix
+
+- [x] Seed ski.js preload keys from the server session on profile pages so cross-subdomain restore works again.
+- [x] Ensure `#ski-dot` has the package baseline class in server-rendered markup so it never renders with raw gray browser chrome.
+- [x] Verify and deploy.
+
+## Review
+
+- Updated `src/handlers/profile.ts`:
+  - seeds `ski:last-address`, `ski:last-wallet`, and `sui_wallet_name` from the server session before ski.js boot,
+  - renders `#ski-dot` with the package baseline classes in the initial markup,
+  - subscribes profile wallet state directly from `window._skiSubscribe(...)` and keeps chrome updates local to ski.js state.
+- Updated `src/utils/ski-embed.ts`:
+  - pins the CDN version to `sui.ski@0.1.77`,
+  - keeps a thin event bridge that reads cached primary names from `ski:suins:{address}` and exposes package-compatible `window._skiConn`.
+- Verification:
+  - `bun -e "Promise.all([import('./src/handlers/profile.ts'), import('./src/utils/ski-embed.ts')]).then(()=>console.log('imports ok'))"` passed.
+  - `npx biome check src/handlers/profile.ts src/handlers/profile.css.ts src/utils/ski-embed.ts` passed except for one pre-existing warning in `src/handlers/profile.ts` (`noUselessEscapeInString`).
+- Deploy:
+  - not rerun in this pass.
+
+---
+
+# Task Plan: Bun-Only Lockfile Cleanup
+
+- [x] Replace repo-level npm install/deploy entry points with Bun equivalents where this project owns the workflow.
+- [x] Update Docker/build configs that currently copy or depend on `package-lock.json`.
+- [x] Remove `package-lock.json` and verify the Bun-first workflow still passes targeted checks.
+
+## Review
+
+- Updated root workflow/config paths:
+  - `.github/workflows/deploy.yml` now uses `oven-sh/setup-bun`, `bun install --frozen-lockfile`, and keeps deployment on `npx wrangler deploy`,
+  - `package.json` keeps the deploy script on `npx wrangler deploy`,
+  - `contribute/wrangler.toml` now installs with Bun during build,
+  - `scripts/full-deploy.sh` now runs a single `npx wrangler deploy` instead of npm + Bun back to back.
+- Updated proxy Bun ownership:
+  - added `proxy/bun.lock`,
+  - removed `proxy/package-lock.json`,
+  - updated `proxy/Dockerfile` to use `oven/bun:1-slim`, `bun install --frozen-lockfile --production`, and `bun run index.ts`,
+  - updated `proxy/README.md` local/render instructions to Bun commands.
+- Removed root npm lockfile:
+  - deleted `package-lock.json`,
+  - kept `bun.lock` as the repo lockfile for the root package.
+- Verification:
+  - `bun install --frozen-lockfile` passed at repo root,
+  - `bun install --frozen-lockfile` passed in `proxy/`,
+  - `npx wrangler deploy --help` is the intended deploy path for this repo,
+  - `npx wrangler deploy --help` in this environment is still subject to the local `snap-confine` Wrangler packaging issue, so deploy-script verification remains partially environment-limited.
+
+---
+
+# Task Plan: Fix Uncommitted Transport Compile Breakages
+
+- [x] Align uncommitted Sui transport changes with the current `@mysten/sui` v2.6 type shapes.
+- [x] Restore a passing repo typecheck for the touched landing/x402/GraphQL/MCP paths.
+- [x] Verify imports and lint on the files fixed in this pass.
+
+## Review
+
+- Updated `src/handlers/landing.ts`:
+  - switched gRPC owned-object pagination from `nextCursor` to the current `cursor`/`hasNextPage` shape.
+- Updated `src/utils/sui-graphql.ts`:
+  - added a shared transaction-result unwrap helper for the new `TransactionResult` union,
+  - switched GraphQL execute/get helpers to request the includes they actually read,
+  - fixed BCS serialization to pass raw bytes,
+  - typed JSON-RPC event filters as `SuiEventFilter`.
+- Updated `src/handlers/x402-register.ts` and `src/utils/transactions.ts`:
+  - migrated GraphQL transaction handling off the removed `.transaction` property,
+  - read created object IDs from `effects.changedObjects` + `objectTypes`,
+  - read events from the typed `events` array.
+- Updated `src/utils/onchain-activity.ts` and `src/handlers/mcp.ts`:
+  - fixed Promise tuple inference in collection event fetching,
+  - narrowed the MCP handler cast through `unknown` to tolerate the duplicated SDK dependency used by `agents/mcp`.
+- Verification:
+  - `bun --bun tsc --noEmit --pretty false --noUnusedLocals false` passed.
+  - `bun -e "Promise.all([import('./src/utils/sui-graphql.ts'), import('./src/handlers/x402-register.ts'), import('./src/handlers/landing.ts')]).then(()=>console.log('imports ok'))"` passed.
+  - `npx biome check --write src/handlers/landing.ts src/utils/sui-graphql.ts src/utils/onchain-activity.ts src/utils/transactions.ts src/handlers/x402-register.ts src/handlers/mcp.ts` passed.

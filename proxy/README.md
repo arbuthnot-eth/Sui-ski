@@ -14,8 +14,8 @@ HTTP proxy for Surflux's gRPC NameService API. Required because Cloudflare Worke
 
 ```bash
 export SURFLUX_API_KEY="your-api-key"
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 ## Deploy to Fly.io
@@ -46,8 +46,8 @@ fly deploy
 ## Deploy to Render
 
 1. Create new Web Service from repo
-2. Set build command: `npm install`
-3. Set start command: `node --experimental-strip-types index.ts`
+2. Set build command: `bun install --frozen-lockfile`
+3. Set start command: `bun run index.ts`
 4. Add `SURFLUX_API_KEY` env var
 
 ## Usage from Cloudflare Worker

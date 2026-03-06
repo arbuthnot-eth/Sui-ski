@@ -27,7 +27,7 @@ export function generateSharedWalletMountJs(options: SharedWalletMountOptions): 
 		onConnect: options.onConnect,
 		onDisconnect: options.onDisconnect,
 		modalId: options.modalId || 'wk-modal',
-		widgetId: options.widgetId || 'wk-widget',
+		widgetId: options.widgetId || 'ski-profile',
 		profileButtonId: options.profileButtonId || null,
 		profileFallbackHref: options.profileFallbackHref || 'https://sui.ski',
 		autoResolvePrimaryName: options.autoResolvePrimaryName !== false,
@@ -43,115 +43,134 @@ export function generateSharedWalletMountJs(options: SharedWalletMountOptions): 
 
 	return `;(function() {
 		var config = ${serializeJs(config)}
-		var walletKit = window.SuiWalletKit
-		if (!walletKit && typeof SuiWalletKit !== 'undefined') {
-			walletKit = SuiWalletKit
-		}
-		if (!walletKit) return
-		if (config.session && config.session.address && typeof window.initSessionFromServer === 'function') {
-			window.initSessionFromServer(config.session)
-		}
 
-		var wrapHandler = function(name, handler) {
-			if (!name) return
-			var current = window[name]
-			var userHandler = null
-			if (typeof current === 'function') {
-				userHandler = current.__suiSkiUserHandler || current
-			}
-			var wrapped = function() {
-				handler()
-				if (typeof userHandler === 'function') {
-					return userHandler.apply(this, arguments)
+		// Seed localStorage from cross-subdomain cookies so ski.js autoReconnect works
+		// ski.js reads 'ski:last-wallet' + 'ski:last-address' for instant preload & reconnect
+		if (config.session && config.session.walletName) {
+			try {
+				if (!localStorage.getItem('ski:last-wallet')) {
+					localStorage.setItem('ski:last-wallet', config.session.walletName)
 				}
-				return undefined
+				if (config.session.address && !localStorage.getItem('ski:last-address')) {
+					localStorage.setItem('ski:last-address', config.session.address)
+				}
+				if (!localStorage.getItem('sui_wallet_name')) {
+					localStorage.setItem('sui_wallet_name', config.session.walletName)
+				}
+			} catch(_) {}
+		}
+
+		function __skiMountInit() {
+			var walletKit = window.SuiWalletKit
+			if (!walletKit && typeof SuiWalletKit !== 'undefined') {
+				walletKit = SuiWalletKit
 			}
-			wrapped.__suiSkiUserHandler = userHandler
-			window[name] = wrapped
-		}
+			if (!walletKit) return false
 
-		var profileBtn = config.profileButtonId ? document.getElementById(config.profileButtonId) : null
-		var rpcClient = null
-		var resolvingForAddress = ''
-		var rpcUrls = {
-			mainnet: 'https://fullnode.mainnet.sui.io:443',
-			testnet: 'https://fullnode.testnet.sui.io:443',
-			devnet: 'https://fullnode.devnet.sui.io:443',
-		}
-		var getClient = function() {
-			if (rpcClient) return rpcClient
-			if (typeof window.SuiJsonRpcClient !== 'function') return null
-			var url = rpcUrls[config.network] || rpcUrls.mainnet
-			rpcClient = new window.SuiJsonRpcClient({ url: url })
-			return rpcClient
-		}
-
-		var getProfileHref = function() {
-			var conn = walletKit.$connection.value
-			if (conn && conn.primaryName) {
-				return 'https://' + encodeURIComponent(conn.primaryName) + '.sui.ski'
+			if (config.session && config.session.address && typeof window.initSessionFromServer === 'function') {
+				window.initSessionFromServer(config.session)
 			}
-			return config.profileFallbackHref
-		}
 
-		var updateProfileButton = function() {
-			if (!profileBtn) return
-			var conn = walletKit.$connection.value
-			var href = getProfileHref()
-			profileBtn.dataset.href = href
-			profileBtn.title = conn && conn.primaryName
-				? 'View my primary profile'
-				: 'Go to sui.ski'
-		}
-
-		if (profileBtn && profileBtn.dataset.walletSharedBound !== '1') {
-			profileBtn.dataset.walletSharedBound = '1'
-			profileBtn.addEventListener('click', function(event) {
-				event.stopPropagation()
-				window.location.href = profileBtn.dataset.href || config.profileFallbackHref
-			})
-		}
-
-		var resolvePrimaryName = function() {
-			if (!config.autoResolvePrimaryName) return
-			var conn = walletKit.$connection.value
-			if (!conn || !conn.address) return
-			if (conn.primaryName) {
-				updateProfileButton()
-				return
-			}
-			if (resolvingForAddress === conn.address) return
-			var client = getClient()
-			if (!client) return
-			resolvingForAddress = conn.address
-			client.resolveNameServiceNames({ address: conn.address }).then(function(result) {
-				var name = result && result.data && result.data[0]
+			var wrapHandler = function(name, handler) {
 				if (!name) return
-				walletKit.setPrimaryName(String(name).replace(/\\.sui$/i, ''))
-				updateProfileButton()
-			}).catch(function() {}).finally(function() {
-				resolvingForAddress = ''
-			})
-		}
+				var current = window[name]
+				var userHandler = null
+				if (typeof current === 'function') {
+					userHandler = current.__suiSkiUserHandler || current
+				}
+				var wrapped = function() {
+					handler()
+					if (typeof userHandler === 'function') {
+						return userHandler.apply(this, arguments)
+					}
+					return undefined
+				}
+				wrapped.__suiSkiUserHandler = userHandler
+				window[name] = wrapped
+			}
 
-		wrapHandler(config.onConnect, function() {
-		updateProfileButton()
-		resolvePrimaryName()
-		if (typeof walletKit.subscribe === 'function' && walletKit.$connection) {
-			walletKit.subscribe(walletKit.$connection, function() {
+			var profileBtn = config.profileButtonId ? document.getElementById(config.profileButtonId) : null
+			var rpcClient = null
+			var resolvingForAddress = ''
+			var rpcUrls = {
+				mainnet: 'https://fullnode.mainnet.sui.io:443',
+				testnet: 'https://fullnode.testnet.sui.io:443',
+				devnet: 'https://fullnode.devnet.sui.io:443',
+			}
+			var getClient = function() {
+				if (rpcClient) return rpcClient
+				if (typeof window.SuiJsonRpcClient !== 'function') return null
+				var url = rpcUrls[config.network] || rpcUrls.mainnet
+				rpcClient = new window.SuiJsonRpcClient({ url: url })
+				return rpcClient
+			}
+
+			var getProfileHref = function() {
+				var conn = walletKit.$connection.value
+				if (conn && conn.primaryName) {
+					return 'https://' + encodeURIComponent(conn.primaryName) + '.sui.ski'
+				}
+				return config.profileFallbackHref
+			}
+
+			var updateProfileButton = function() {
+				if (!profileBtn) return
+				var conn = walletKit.$connection.value
+				var href = getProfileHref()
+				profileBtn.dataset.href = href
+				profileBtn.title = conn && conn.primaryName
+					? 'View my primary profile'
+					: 'Go to sui.ski'
+			}
+
+			if (profileBtn && profileBtn.dataset.walletSharedBound !== '1') {
+				profileBtn.dataset.walletSharedBound = '1'
+				profileBtn.addEventListener('click', function(event) {
+					event.stopPropagation()
+					window.location.href = profileBtn.dataset.href || config.profileFallbackHref
+				})
+			}
+
+			var resolvePrimaryName = function() {
+				if (!config.autoResolvePrimaryName) return
+				var conn = walletKit.$connection.value
+				if (!conn || !conn.address) return
+				if (conn.primaryName) {
+					updateProfileButton()
+					return
+				}
+				if (resolvingForAddress === conn.address) return
+				var client = getClient()
+				if (!client) return
+				resolvingForAddress = conn.address
+				client.resolveNameServiceNames({ address: conn.address }).then(function(result) {
+					var name = result && result.data && result.data[0]
+					if (!name) return
+					walletKit.setPrimaryName(String(name).replace(/\\.sui$/i, ''))
+					updateProfileButton()
+				}).catch(function() {}).finally(function() {
+					resolvingForAddress = ''
+				})
+			}
+
+			wrapHandler(config.onConnect, function() {
 				updateProfileButton()
 				resolvePrimaryName()
+				if (typeof walletKit.subscribe === 'function' && walletKit.$connection) {
+					walletKit.subscribe(walletKit.$connection, function() {
+						updateProfileButton()
+						resolvePrimaryName()
+					})
+				}
+				resolvePrimaryName()
 			})
-		}
-			resolvePrimaryName()
-		})
-		wrapHandler(config.onDisconnect, function() {
-			updateProfileButton()
-		})
+			wrapHandler(config.onDisconnect, function() {
+				updateProfileButton()
+			})
 
-		try {
-			walletKit.renderModal(config.modalId)
-		} catch (_) {}
+			try {
+				walletKit.renderModal(config.modalId)
+			} catch (_) {}
 			try {
 				walletKit.renderWidget(config.widgetId)
 			} catch (_) {}
@@ -162,5 +181,18 @@ export function generateSharedWalletMountJs(options: SharedWalletMountOptions): 
 					return walletKit.autoReconnect()
 				}).catch(function() {})
 			}
+
+			return true
+		}
+
+		if (!__skiMountInit()) {
+			var __skiPollCount = 0
+			var __skiPollTimer = setInterval(function() {
+				__skiPollCount++
+				if (__skiMountInit() || __skiPollCount >= 100) {
+					clearInterval(__skiPollTimer)
+				}
+			}, 100)
+		}
 	})()`
 }
