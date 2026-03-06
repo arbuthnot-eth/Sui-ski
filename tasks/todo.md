@@ -221,6 +221,112 @@
 
 ---
 
+# Task Plan: Remove Legacy Wallet Mounts From ski.js Pages
+
+- [x] Replace `generateSharedWalletMountJs(...)` usage on landing/dashboard with ski.js-native session/profile bridging.
+- [x] Fix landing page profile-button state to read `window._skiConn` so primary-name styling can track package state.
+- [x] Re-verify whether `ski-sign.ts` is still needed after the UI cutover and document the answer.
+- [x] Run targeted verification (`biome`/imports/typecheck) on touched files and record the result.
+
+## Review
+
+- Added `skiProfileButtonBridge(...)` to `src/utils/ski-embed.ts`:
+  - seeds ski.js preload keys from server session,
+  - binds `wallet-profile-btn` click/href behavior,
+  - syncs optional visibility and `has-black-diamond` styling from `window._skiConn`.
+- Removed legacy `generateSharedWalletMountJs(...)` usage from:
+  - `src/handlers/landing.ts`
+  - `src/handlers/dashboard.ts`
+- Deleted unused legacy helper:
+  - `src/utils/shared-wallet-js.ts`
+- Fixed `src/handlers/landing.ts` wallet/profile helpers to read `window._skiConn` instead of reconstructing a stripped connection from only `window._skiAddr`.
+- Verified `ski-sign.ts` still serves a distinct role:
+  - `/sign` route in `src/index.ts` renders it,
+  - `src/utils/wallet-tx-js.ts` still redirects top-frame handoff to `https://sui.ski/sign`,
+  - so it should not be deleted until the hosted signing bridge is redesigned.
+- Verification:
+  - `npx biome check --write src/utils/ski-embed.ts src/handlers/landing.ts src/handlers/dashboard.ts` passed
+  - `bun --bun tsc --noEmit --pretty false --noUnusedLocals false` passed
+  - `bun -e "Promise.all([import('./src/utils/ski-embed.ts'), import('./src/handlers/landing.ts'), import('./src/handlers/dashboard.ts'), import('./src/handlers/ski-sign.ts')]).then(()=>console.log('imports ok'))"` passed
+
+---
+
+# Task Plan: Thin Hosted `/sign` Bridge
+
+- [x] Inspect the actual `wallet-tx-js` bridge contract and keep only the message types it still uses.
+- [x] Replace the bespoke `/sign` page with a thinner hosted bridge focused on handoff, `ping`, `sign`, and `sign-message`.
+- [x] Verify server-side imports/typecheck and record what remains unverified.
+
+## Review
+
+- Rewrote `src/handlers/ski-sign.ts` from a full secondary wallet app into a much thinner hosted bridge page.
+- The new `/sign` page now keeps only:
+  - top-frame reconnect handoff via `?bridge=handoff`,
+  - `ski:ping` -> `ski:ready`,
+  - `ski:sign` -> `ski:signed`,
+  - `ski:sign-message` -> `ski:signed-message`,
+  - optional `ski:disconnect`.
+- Removed the previous extra protocol surface from the page:
+  - wallet discovery/history endpoints,
+  - custom WaaP connect endpoint,
+  - modal-specific relay state,
+  - large bespoke iframe styling/runtime.
+- Size reduction:
+  - `src/handlers/ski-sign.ts` went from 1917 lines to 477 lines.
+- Verification:
+  - `npx biome check --write src/handlers/ski-sign.ts tasks/todo.md tasks/lessons.md` passed
+  - `bun --bun tsc --noEmit --pretty false --noUnusedLocals false` passed
+  - `bun -e "Promise.all([import('./src/handlers/ski-sign.ts'), import('./src/handlers/landing.ts'), import('./src/handlers/dashboard.ts')]).then(()=>console.log('imports ok'))"` passed
+- Remaining limitation:
+  - the new bridge imports wallet helpers from `https://esm.sh/sui.ski@0.1.77/src/wallet.ts` at browser runtime, so local static verification passed but a live browser smoke test is still needed to fully prove the hosted page behavior end-to-end.
+
+---
+
+# Task Plan: Remove `/sign` From This Worker
+
+- [x] Confirm this repo should no longer own the hosted `/sign` route.
+- [x] Remove the route and handler from the wildcard gateway worker.
+- [x] Verify typecheck/imports after deleting the local handler.
+
+## Review
+
+- Deleted the remaining bridge-specific pieces from this repo:
+  - `src/handlers/ski-sign.ts`
+  - `src/utils/wallet-tx-js.ts`
+- Removed the `/sign` route and `generateSkiSignPage` import from `src/index.ts`.
+- This repo now reflects the intended architecture:
+  - ski.js package owns wallet UI/signing,
+  - no local sign bridge remains in the wildcard gateway worker.
+- Verification:
+  - `rg -n "wallet-tx-js|generateWalletTxJs|https://sui\\.ski/sign|generateSkiSignPage|/sign'|/sign\\\"|ski-sign" src` returned no matches
+  - `npx biome check --write src/index.ts tasks/todo.md tasks/lessons.md` passed
+  - `bun --bun tsc --noEmit --pretty false --noUnusedLocals false` passed
+  - `bun -e "Promise.all([import('./src/handlers/landing.ts'), import('./src/handlers/dashboard.ts'), import('./src/utils/ski-embed.ts')]).then(()=>console.log('imports ok'))"` passed
+  - `bun -e "import('./src/index.ts')..."` was not usable here because Bun cannot resolve `cloudflare:workers` outside the Worker runtime
+
+---
+
+# Task Plan: Keep ski.js As The Only Wallet Stack
+
+- [x] Audit the remaining wallet code for vendor-specific or legacy wallet dependencies.
+- [x] Replace the active `SuiWalletKit` dependency path with a ski.js-backed compatibility adapter instead of a second wallet implementation.
+- [x] Update server-session preload so it only seeds ski.js storage keys.
+- [x] Run targeted verification and record the remaining constraints.
+
+## Review
+
+- Updated `src/utils/ski-embed.ts` so the active page bridge is ski.js-native and exposes only a thin compatibility adapter for older scripts that still read `window.SuiWalletKit`.
+- The adapter now delegates to ski.js wallet state and wallet-standard methods via the package wallet module instead of maintaining a second wallet implementation.
+- Updated `src/utils/wallet-session-js.ts` so `initSessionFromServer(...)` only seeds ski.js preload/session keys and no longer depends on `SuiWalletKit.initFromSession(...)`.
+- Removed the stray Slush alias from the compatibility matcher so this repo no longer carries a Slush-specific preference in the active wallet path.
+- Verification:
+  - `npx biome check --write src/utils/ski-embed.ts src/utils/wallet-session-js.ts tasks/todo.md tasks/lessons.md` passed
+  - `bun --bun tsc --noEmit --pretty false --noUnusedLocals false` passed
+  - `bun -e "Promise.all([import('./src/utils/ski-embed.ts'), import('./src/utils/wallet-session-js.ts'), import('./src/handlers/landing.ts'), import('./src/handlers/profile.ts')]).then(()=>console.log('imports ok'))"` passed
+  - `rg -n "Enoki|enoki|Slush|slush" src tasks/lessons.md` returned no matches after cleanup
+
+---
+
 # Task Plan: Subdomain Header Cleanup
 
 - [x] Remove the extra far-right profile button from the `*.sui.ski` profile header so the top row only keeps the intended three controls.

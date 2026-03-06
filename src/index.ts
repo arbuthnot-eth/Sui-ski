@@ -18,7 +18,6 @@ import {
 	handleRegistrationSubmission,
 } from './handlers/register2'
 import { generateSkiPage } from './handlers/ski'
-import { generateSkiSignPage } from './handlers/ski-sign'
 import { thunderRoutes } from './handlers/thunder'
 import { vaultRoutes } from './handlers/vault'
 import {
@@ -322,13 +321,6 @@ app.get('/ipfs/:id{.+}', async (c) => {
 
 app.get('/in', async (c) => {
 	return htmlResponse(generateSkiPage(c.get('env'), c.get('session')))
-})
-
-app.get('/sign', async (c) => {
-	return htmlResponse(generateSkiSignPage(c.get('env')), 200, {
-		'Cache-Control': 'no-store, no-cache, must-revalidate',
-		Pragma: 'no-cache',
-	})
 })
 
 app.get('/register', async (c) => {

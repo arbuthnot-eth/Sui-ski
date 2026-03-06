@@ -28,8 +28,8 @@
 - Rule: when asked to match a shade, copy the same color tokens/values from the reference state (not approximate variants) for all targeted hover states.
 - Pattern: destructive actions need distinct baseline styling, not only hover emphasis.
 - Rule: for destructive menu actions, define a red default background/border and a stronger red hover state that overrides generic hover colors.
-- Pattern: wallet-modal compatibility still depends on wallet-standard runtimes that may internally use JSON-RPC today.
-- Rule: keep wallet connection plumbing on `SuiWalletKit`, but avoid introducing new direct JSON-RPC calls in app-level read paths.
+- Pattern: legacy wallet facades can remain useful as thin compatibility layers even after the product standardizes on ski.js.
+- Rule: keep the real wallet UX/signing on ski.js, and if older page code still expects `SuiWalletKit`, satisfy it with a minimal ski.js-backed adapter rather than a second wallet implementation.
 
 ## 2026-02-23
 
@@ -51,3 +51,12 @@
 - Rule: for ski.js-owned controls like `#ski-dot`, ensure the package's baseline styling class is present in server-rendered markup when you need parity from first paint.
 - Pattern: Bun can own dependency installation without owning every runtime command in this repo.
 - Rule: preserve `npx wrangler deploy` for deploy entry points unless the user explicitly asks to change the Wrangler invocation and the environment has been verified for auth parity.
+
+## 2026-03-06
+
+- Pattern: when package-native wallet UI already supports a feature like WaaP, mixed legacy mounts are a more likely regression source than the package itself.
+- Rule: before adding or blaming custom wallet glue, first verify whether the page is still booting legacy `SuiWalletKit` UI alongside ski.js and remove the duplicate mount path.
+- Pattern: route ownership can shift across workers even when the user-facing hostname stays the same.
+- Rule: before adding or preserving a hosted route like `/sign`, verify which worker actually owns that path in production rather than assuming this repo still deploys it.
+- Pattern: architecture cleanups can fail if old bridge concepts are preserved after the product direction has already moved to package-native ski.js.
+- Rule: when the user says ski.js is the whole wallet UI, delete leftover bridge paths instead of trying to slim or relocate them.

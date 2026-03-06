@@ -1,7 +1,11 @@
 import type { Env } from '../types'
 import { generateLogoSvg } from '../utils/og-image'
-import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
-import { skiScriptTag, skiStyleTag, skiWalletBridge } from '../utils/ski-embed'
+import {
+	skiProfileButtonBridge,
+	skiScriptTag,
+	skiStyleTag,
+	skiWalletBridge,
+} from '../utils/ski-embed'
 import { renderSocialMeta } from '../utils/social'
 import { generateWalletSessionJs } from '../utils/wallet-session-js'
 
@@ -1640,10 +1644,7 @@ export function generateDashboardPage(env: Env): string {
 			}
 		});
 
-		${generateSharedWalletMountJs({
-			network: network,
-			onConnect: 'onWalletConnected',
-			onDisconnect: 'onWalletDisconnected',
+		${skiProfileButtonBridge({
 			profileButtonId: 'wallet-profile-btn',
 			profileFallbackHref: 'https://sui.ski',
 		})}

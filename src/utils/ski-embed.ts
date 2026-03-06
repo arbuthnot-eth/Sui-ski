@@ -1,4 +1,20 @@
 const CDN = 'https://cdn.jsdelivr.net/npm/sui.ski@0.1.77/public'
+const WALLET_API_ESM = 'https://esm.sh/sui.ski@0.1.77/src/wallet.ts'
+const WAAP_API_ESM = 'https://esm.sh/sui.ski@0.1.77/src/waap.ts'
+
+interface SkiSessionState {
+	address: string | null
+	walletName: string | null
+	verified: boolean
+}
+
+interface SkiProfileButtonBridgeOptions {
+	session?: SkiSessionState
+	profileButtonId?: string
+	profileFallbackHref?: string
+	profileVisibleClass?: string
+	widgetPrimaryClass?: string
+}
 
 export function skiStyleTag(): string {
 	return `<link rel="stylesheet" href="${CDN}/styles.css">`
@@ -41,6 +57,11 @@ export function skiWalletBridge(opts: { network?: string } = {}): string {
 	return `// ─── .SKI Wallet Bridge (event-based, delegates to ski.js) ──────────────────
 window._skiAddr = null;
 window._skiConn = null;
+window._skiWalletApi = null;
+window._skiWalletApiPromise = null;
+window._skiCompatUnsub = null;
+window._skiConnListeners = [];
+window.__skiWaaPEnsurePromise = null;
 function __skiReadPrimaryName(address) {
   if (!address) return null;
   try {
@@ -68,14 +89,150 @@ function __skiEmitConn(handler, detail) {
   if (typeof handler !== 'function') return;
   handler(__skiBuildConn(detail));
 }
+function __skiNormalizeWalletName(name) {
+  var normalized = String(name || '').trim().toLowerCase();
+  if (!normalized) return '';
+  normalized = normalized.replace(/[^a-z0-9]+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized.slice(-7) === ' wallet') normalized = normalized.slice(0, -7).trim();
+  return normalized.replace(/ +/g, '');
+}
+function __skiWalletNamesMatch(left, right) {
+  var leftKey = __skiNormalizeWalletName(left);
+  var rightKey = __skiNormalizeWalletName(right);
+  if (!leftKey || !rightKey) return false;
+  if (leftKey === rightKey) return true;
+  var groups = [
+    ['suiet', 'suietwallet'],
+    ['phantom', 'phantomwallet'],
+    ['backpack', 'backpackwallet'],
+    ['keystone'],
+    ['waap'],
+  ];
+  for (var g = 0; g < groups.length; g++) {
+    var group = groups[g];
+    if (group.indexOf(leftKey) !== -1 && group.indexOf(rightKey) !== -1) return true;
+  }
+  return (
+    (leftKey.length >= 5 && leftKey.indexOf(rightKey) !== -1)
+    || (rightKey.length >= 5 && rightKey.indexOf(leftKey) !== -1)
+  );
+}
+function __skiGetRootInUrl() {
+  var host = String(window.location && window.location.hostname ? window.location.hostname : '').toLowerCase();
+  var href = String(window.location && window.location.href ? window.location.href : '');
+  var root = 'https://sui.ski/in';
+  if (host === 't.sui.ski' || host.slice(-10) === '.t.sui.ski') root = 'https://t.sui.ski/in';
+  else if (host === 'd.sui.ski' || host.slice(-10) === '.d.sui.ski') root = 'https://d.sui.ski/in';
+  var next = new URL(root);
+  if (href) next.searchParams.set('return', href);
+  return next.toString();
+}
+function __skiShouldDeferSigninToRoot() {
+  var host = String(window.location && window.location.hostname ? window.location.hostname : '').toLowerCase();
+  if (!host) return false;
+  if (host === 'sui.ski' || host === 't.sui.ski' || host === 'd.sui.ski') return false;
+  return host.slice(-8) === '.sui.ski' || host.slice(-10) === '.t.sui.ski' || host.slice(-10) === '.d.sui.ski';
+}
+function __skiEnsureWaaPRegistered() {
+  if (window.__skiWaaPEnsurePromise) return window.__skiWaaPEnsurePromise;
+  window.__skiWaaPEnsurePromise = __skiLoadWalletApi().then(async function(api) {
+    var wallets = api && typeof api.getSuiWallets === 'function' ? api.getSuiWallets() : [];
+    var hasWaaP = false;
+    for (var i = 0; i < wallets.length; i++) {
+      if (__skiWalletNamesMatch(wallets[i] && wallets[i].name, 'waap')) {
+        hasWaaP = true;
+        break;
+      }
+    }
+    if (hasWaaP) return true;
+    try {
+      var mod = await import('${WAAP_API_ESM}');
+      if (mod && typeof mod.registerWaaP === 'function') {
+        mod.registerWaaP();
+      }
+      return true;
+    } catch (err) {
+      console.warn('[.SKI] WaaP fallback registration failed:', err);
+      return false;
+    }
+  }).finally(function() {
+    window.__skiWaaPEnsurePromise = null;
+  });
+  return window.__skiWaaPEnsurePromise;
+}
+function __skiNotifyConnListeners(conn) {
+  for (var i = 0; i < window._skiConnListeners.length; i++) {
+    try {
+      window._skiConnListeners[i](conn);
+    } catch (_e) {}
+  }
+}
+function __skiSetCompatConn(conn) {
+  if (window.SuiWalletKit && window.SuiWalletKit.$connection) {
+    window.SuiWalletKit.$connection.value = conn;
+  }
+  __skiNotifyConnListeners(conn);
+}
+function __skiLoadWalletApi() {
+  if (window._skiWalletApi) return Promise.resolve(window._skiWalletApi);
+  if (window._skiWalletApiPromise) return window._skiWalletApiPromise;
+  window._skiWalletApiPromise = import('${WALLET_API_ESM}').then(function(mod) {
+    window._skiWalletApi = mod;
+    if (mod && typeof mod.subscribe === 'function') {
+      if (window._skiCompatUnsub) {
+        try { window._skiCompatUnsub(); } catch (_e) {}
+      }
+      window._skiCompatUnsub = mod.subscribe(function(state) {
+        var conn = null;
+        if (state && state.status === 'connected' && state.address) {
+          conn = {
+            address: state.address,
+            walletName: state.walletName || '',
+            wallet: state.wallet || null,
+            account: state.account || null,
+            primaryName: __skiReadPrimaryName(state.address),
+            status: 'connected'
+          };
+          window._skiAddr = state.address;
+          window._skiConn = conn;
+        } else {
+          window._skiAddr = null;
+          window._skiConn = null;
+        }
+        __skiSetCompatConn(conn);
+      });
+    }
+    if (mod && typeof mod.getState === 'function') {
+      var state = mod.getState();
+      if (state && state.status === 'connected' && state.address) {
+        var conn = {
+          address: state.address,
+          walletName: state.walletName || '',
+          wallet: state.wallet || null,
+          account: state.account || null,
+          primaryName: __skiReadPrimaryName(state.address),
+          status: 'connected'
+        };
+        window._skiAddr = state.address;
+        window._skiConn = conn;
+        __skiSetCompatConn(conn);
+      }
+    }
+    return mod;
+  });
+  return window._skiWalletApiPromise;
+}
 window.addEventListener('ski:wallet-connected', function(e) {
   var d = (e && e.detail) || {};
   window._skiAddr = d.address || '';
   window._skiConn = __skiBuildConn(d);
+  __skiSetCompatConn(window._skiConn);
 });
 window.addEventListener('ski:wallet-disconnected', function() {
   window._skiAddr = null;
   window._skiConn = null;
+  __skiSetCompatConn(null);
 });
 window._skiSignAndExecute = function(tx) {
   return new Promise(function(resolve, reject) {
@@ -91,6 +248,37 @@ window._skiSignAndExecute = function(tx) {
     window.dispatchEvent(new CustomEvent('ski:sign-and-execute-transaction', { detail: { transaction: tx, requestId: rid } }));
   });
 };
+window._skiConnect = function(walletName) {
+  return __skiEnsureWaaPRegistered().then(function() {
+    return __skiLoadWalletApi();
+  }).then(async function(api) {
+    var wallets = api && typeof api.getSuiWallets === 'function' ? api.getSuiWallets() : [];
+    if (!wallets || !wallets.length) throw new Error('No Sui wallets detected');
+    var target = null;
+    if (walletName) {
+      for (var i = 0; i < wallets.length; i++) {
+        if (__skiWalletNamesMatch(wallets[i] && wallets[i].name, walletName)) {
+          target = wallets[i];
+          break;
+        }
+      }
+      if (!target) throw new Error('Selected wallet not available: ' + walletName);
+    }
+    if (!target) target = wallets[0];
+    await api.connect(target, { skipSilent: true });
+    return window._skiConn;
+  });
+};
+window._skiSignPersonalMessage = function(messageBytes) {
+  return __skiLoadWalletApi().then(function(api) {
+    return api.signPersonalMessage(messageBytes);
+  });
+};
+window._skiSignTransaction = function(tx) {
+  return __skiLoadWalletApi().then(function(api) {
+    return api.signTransaction(tx);
+  });
+};
 window._skiDisconnect = function() {
   window.dispatchEvent(new CustomEvent('ski:request-disconnect'));
 };
@@ -103,6 +291,71 @@ window._skiSubscribe = function(onConnect, onDisconnect) {
     if (onDisconnect) onDisconnect(null);
   });
 };
+if (!window.SuiWalletKit) {
+  window.SuiWalletKit = {
+    $connection: { value: null },
+    subscribe: function(store, fn) {
+      if (!store || store !== window.SuiWalletKit.$connection || typeof fn !== 'function') {
+        return function() {};
+      }
+      window._skiConnListeners.push(fn);
+      try { fn(store.value || null); } catch (_e) {}
+      return function() {
+        var idx = window._skiConnListeners.indexOf(fn);
+        if (idx !== -1) window._skiConnListeners.splice(idx, 1);
+      };
+    },
+    autoReconnect: function() {
+      return __skiLoadWalletApi().then(function(api) {
+        if (api && typeof api.autoReconnect === 'function') return api.autoReconnect();
+        return !!window._skiConn;
+      });
+    },
+    openModal: function() {
+      window.dispatchEvent(new CustomEvent('ski:request-signin'));
+    },
+    closeModal: function() {},
+    detectWallets: function() {
+      return __skiEnsureWaaPRegistered().then(function() {
+        return __skiLoadWalletApi();
+      }).then(function(api) {
+        return api && typeof api.getSuiWallets === 'function' ? api.getSuiWallets() : [];
+      });
+    },
+    connect: function(wallet) {
+      var walletName = wallet && wallet.name ? wallet.name : wallet;
+      return window._skiConnect(walletName);
+    },
+    disconnect: function() {
+      window._skiDisconnect();
+      return Promise.resolve();
+    },
+    signPersonalMessage: function(messageBytes) {
+      return window._skiSignPersonalMessage(messageBytes);
+    },
+    signTransaction: function(tx) {
+      return window._skiSignTransaction(tx);
+    },
+    signAndExecute: function(tx) {
+      return window._skiSignAndExecute(tx);
+    },
+    initFromSession: function(address, walletName) {
+      try {
+        if (address && !localStorage.getItem('ski:last-address')) localStorage.setItem('ski:last-address', address);
+        if (walletName && !localStorage.getItem('ski:last-wallet')) localStorage.setItem('ski:last-wallet', walletName);
+        if (walletName && !localStorage.getItem('sui_wallet_name')) localStorage.setItem('sui_wallet_name', walletName);
+      } catch (_e) {}
+    }
+  };
+}
+window.addEventListener('ski:request-signin', function(e) {
+  if (!__skiShouldDeferSigninToRoot()) return;
+  if (e && typeof e.preventDefault === 'function') e.preventDefault();
+  if (e && typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+  window.location.href = __skiGetRootInUrl();
+}, true);
+__skiEnsureWaaPRegistered().catch(function() { return null; });
+__skiLoadWalletApi().catch(function() { return null; });
 // ─── End .SKI Wallet Bridge ───────────────────────────────────────────────────`
 }
 
@@ -162,4 +415,88 @@ export function skiEventBridge(opts: { onConnect?: string; onDisconnect?: string
 		)
 	}
 	return lines.join('\n')
+}
+
+function serializeJs(value: unknown): string {
+	return JSON.stringify(value).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e')
+}
+
+export function skiProfileButtonBridge(opts: SkiProfileButtonBridgeOptions = {}): string {
+	const config = {
+		session: opts.session?.address
+			? {
+					address: opts.session.address,
+					walletName: opts.session.walletName,
+					verified: opts.session.verified,
+				}
+			: null,
+		profileButtonId: opts.profileButtonId || '',
+		profileFallbackHref: opts.profileFallbackHref || 'https://sui.ski',
+		profileVisibleClass: opts.profileVisibleClass || '',
+		widgetPrimaryClass: opts.widgetPrimaryClass || '',
+	}
+
+	return `;(function() {
+  var config = ${serializeJs(config)};
+
+  if (config.session && config.session.walletName) {
+    try {
+      if (config.session.address && !localStorage.getItem('ski:last-address')) {
+        localStorage.setItem('ski:last-address', config.session.address);
+      }
+      if (!localStorage.getItem('ski:last-wallet')) {
+        localStorage.setItem('ski:last-wallet', config.session.walletName);
+      }
+      if (!localStorage.getItem('sui_wallet_name')) {
+        localStorage.setItem('sui_wallet_name', config.session.walletName);
+      }
+    } catch (_e) {}
+  }
+
+  var profileBtn = config.profileButtonId ? document.getElementById(config.profileButtonId) : null;
+  var widgetEl = document.getElementById('wallet-widget');
+
+  function getConn() {
+    if (window._skiConn && typeof window._skiConn === 'object') return window._skiConn;
+    if (window._skiAddr) return { address: window._skiAddr, primaryName: null };
+    return null;
+  }
+
+  function getPrimaryName() {
+    var conn = getConn();
+    if (!conn || !conn.primaryName) return '';
+    return String(conn.primaryName).replace(/\\.sui$/i, '');
+  }
+
+  function syncProfileButton() {
+    var conn = getConn();
+    var primaryName = getPrimaryName();
+    if (profileBtn) {
+      if (config.profileVisibleClass) {
+        profileBtn.classList.toggle(config.profileVisibleClass, !!(conn && conn.address));
+      }
+      profileBtn.dataset.href = primaryName
+        ? 'https://' + encodeURIComponent(primaryName) + '.sui.ski'
+        : config.profileFallbackHref;
+      profileBtn.title = primaryName ? primaryName + '.sui' : 'Go to sui.ski';
+    }
+    if (widgetEl && config.widgetPrimaryClass) {
+      widgetEl.classList.toggle(config.widgetPrimaryClass, !!primaryName);
+    }
+  }
+
+  if (profileBtn && profileBtn.dataset.skiProfileBound !== '1') {
+    profileBtn.dataset.skiProfileBound = '1';
+    profileBtn.addEventListener('click', function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      window.location.href = profileBtn.dataset.href || config.profileFallbackHref;
+    });
+  }
+
+  window.__skiSyncProfileButton = syncProfileButton;
+  window.addEventListener('ski:wallet-connected', syncProfileButton);
+  window.addEventListener('ski:wallet-disconnected', syncProfileButton);
+  syncProfileButton();
+})();`
 }

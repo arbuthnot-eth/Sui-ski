@@ -99,9 +99,17 @@ export function generateWalletSessionJs(): string {
 
     function initSessionFromServer(sessionData) {
       if (!sessionData || !sessionData.address) return;
-      if (typeof SuiWalletKit !== 'undefined' && SuiWalletKit.initFromSession) {
-        SuiWalletKit.initFromSession(sessionData.address, sessionData.walletName || '');
-      }
+      try {
+        if (!localStorage.getItem('ski:last-address')) {
+          localStorage.setItem('ski:last-address', sessionData.address);
+        }
+        if (sessionData.walletName && !localStorage.getItem('ski:last-wallet')) {
+          localStorage.setItem('ski:last-wallet', sessionData.walletName);
+        }
+        if (sessionData.walletName && !localStorage.getItem(__WALLET_NAME_KEY)) {
+          localStorage.setItem(__WALLET_NAME_KEY, sessionData.walletName);
+        }
+      } catch (_e) {}
     }
 
     if (typeof window !== 'undefined') {

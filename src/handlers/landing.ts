@@ -17,9 +17,9 @@ import {
 import { calculateRegistrationPrice, formatPricingResponse, getBasePricing } from '../utils/pricing'
 import { jsonResponse } from '../utils/response'
 import { getDefaultRpcUrl } from '../utils/rpc'
-import { generateSharedWalletMountJs } from '../utils/shared-wallet-js'
 import {
 	skiEventBridge,
+	skiProfileButtonBridge,
 	skiScriptTag,
 	skiStyleTag,
 	skiWalletBridge,
@@ -4903,17 +4903,17 @@ ${skiStyleTag()}
 				let walletDropdownRefreshTimer = null;
 
 				function getConnectedAddress() {
-					var conn = window._skiAddr ? { address: window._skiAddr, status: 'connected' } : null;
+					var conn = window._skiConn || (window._skiAddr ? { address: window._skiAddr, status: 'connected' } : null);
 					return conn && (conn.status === 'connected' || conn.status === 'session') ? conn.address : null;
 				}
 
 				function getViewerAddress() {
-					var conn = window._skiAddr ? { address: window._skiAddr, status: 'connected' } : null;
+					var conn = window._skiConn || (window._skiAddr ? { address: window._skiAddr, status: 'connected' } : null);
 					return conn && (conn.status === 'connected' || conn.status === 'session') ? conn.address : null;
 				}
 
 				function getConnectedPrimaryName() {
-					var conn = window._skiAddr ? { address: window._skiAddr, status: 'connected' } : null;
+					var conn = window._skiConn || (window._skiAddr ? { address: window._skiAddr, status: 'connected' } : null);
 					if (!conn || (conn.status !== 'connected' && conn.status !== 'session')) return null;
 					if (!conn.primaryName) return null;
 					return String(conn.primaryName).replace(/\\.sui$/i, '');
@@ -4970,13 +4970,12 @@ ${skiStyleTag()}
 						return undefined;
 					};
 
-					${generateSharedWalletMountJs({
-						network: options.network || 'mainnet',
+					${skiProfileButtonBridge({
 						session: options.session,
-						onConnect: 'onLandingWalletConnected',
-						onDisconnect: 'onLandingWalletDisconnected',
 						profileButtonId: 'wallet-profile-btn',
 						profileFallbackHref: 'https://sui.ski',
+						profileVisibleClass: 'visible',
+						widgetPrimaryClass: 'has-black-diamond',
 					})}
 
 					window._skiSubscribe(function() {
