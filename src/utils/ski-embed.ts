@@ -1,6 +1,6 @@
-const CDN = 'https://cdn.jsdelivr.net/npm/sui.ski@0.1.77/public'
-const WALLET_API_ESM = 'https://esm.sh/sui.ski@0.1.77/src/wallet.ts'
-const WAAP_API_ESM = 'https://esm.sh/sui.ski@0.1.77/src/waap.ts'
+const CDN = 'https://cdn.jsdelivr.net/npm/sui.ski@0.1.86/public'
+const WALLET_API_ESM = 'https://esm.sh/sui.ski@0.1.86/src/wallet.ts'
+const WAAP_API_ESM = 'https://esm.sh/sui.ski@0.1.86/src/waap.ts'
 
 interface SkiSessionState {
 	address: string | null
@@ -22,6 +22,11 @@ export function skiStyleTag(): string {
 
 export function skiScriptTag(): string {
 	return `<script type="module" src="${CDN}/dist/ski.js"></script>`
+}
+
+export function skiScriptLoaderTag(conditionJs?: string): string {
+	if (!conditionJs) return skiScriptTag()
+	return `<script type="module">if (${conditionJs}) import('${CDN}/dist/ski.js').catch(function(err){console.warn('[.SKI] Failed to load ski.js:', err);});</script>`
 }
 
 export function skiWidgetMarkup(): string {
@@ -128,13 +133,149 @@ function __skiGetRootInUrl() {
   if (href) next.searchParams.set('return', href);
   return next.toString();
 }
+function __skiGetRootOrigin() {
+  try {
+    return new URL(__skiGetRootInUrl()).origin;
+  } catch (_e) {
+    return 'https://sui.ski';
+  }
+}
+function __skiIsEmbedMode() {
+  try {
+    return new URLSearchParams(window.location.search).get('embed') === '1';
+  } catch (_e) {
+    return false;
+  }
+}
 function __skiShouldDeferSigninToRoot() {
   var host = String(window.location && window.location.hostname ? window.location.hostname : '').toLowerCase();
   if (!host) return false;
   if (host === 'sui.ski' || host === 't.sui.ski' || host === 'd.sui.ski') return false;
   return host.slice(-8) === '.sui.ski' || host.slice(-10) === '.t.sui.ski' || host.slice(-10) === '.d.sui.ski';
 }
+function __skiShouldRegisterWaaP() {
+  return !__skiIsEmbedMode() && !__skiShouldDeferSigninToRoot();
+}
+function __skiGetPreferredWalletName(explicitWalletName) {
+  return explicitWalletName || (window._skiConn && window._skiConn.walletName) || localStorage.getItem('ski:last-wallet') || localStorage.getItem('sui_wallet_name') || '';
+}
+window.__skiRootFrame = null;
+window.__skiRootFrameReady = false;
+window.__skiRootFrameWaiters = [];
+window.__skiRootBridgePending = {};
+window.__skiRootBridgeBound = false;
+function __skiResolveRootFrameReady() {
+  window.__skiRootFrameReady = true;
+  while (window.__skiRootFrameWaiters.length) {
+    try {
+      var waiter = window.__skiRootFrameWaiters.shift();
+      if (typeof waiter === 'function') waiter();
+    } catch (_e) {}
+  }
+}
+function __skiBindRootBridgeMessages() {
+  if (window.__skiRootBridgeBound) return;
+  window.__skiRootBridgeBound = true;
+  window.addEventListener('message', function(event) {
+    if (!event || event.origin !== __skiGetRootOrigin()) return;
+    var data = event.data || {};
+    if (!data || data.__skiBridge !== 'root-frame') return;
+    if (data.type === 'ready') {
+      __skiResolveRootFrameReady();
+      return;
+    }
+    if (data.type === 'connected' && data.conn) {
+      window._skiAddr = data.conn.address || '';
+      window._skiConn = __skiBuildConn(data.conn);
+      __skiSetCompatConn(window._skiConn);
+      window.dispatchEvent(new CustomEvent('ski:wallet-connected', { detail: data.conn }));
+      return;
+    }
+    if (data.type === 'disconnected') {
+      window._skiAddr = null;
+      window._skiConn = null;
+      __skiSetCompatConn(null);
+      window.dispatchEvent(new CustomEvent('ski:wallet-disconnected'));
+      return;
+    }
+    if (data.type !== 'response' || !data.requestId) return;
+    var pending = window.__skiRootBridgePending[data.requestId];
+    if (!pending) return;
+    delete window.__skiRootBridgePending[data.requestId];
+    if (data.success) pending.resolve(data.result);
+    else pending.reject(new Error(data.error || 'Root frame request failed'));
+  });
+}
+function __skiEnsureRootFrame() {
+  if (!__skiShouldDeferSigninToRoot()) return Promise.resolve(null);
+  __skiBindRootBridgeMessages();
+  if (!window.__skiRootFrame || !window.__skiRootFrame.isConnected) {
+    var frame = document.createElement('iframe');
+    frame.src = __skiGetRootInUrl() + (String(__skiGetRootInUrl()).indexOf('?') === -1 ? '?' : '&') + 'embed=1';
+    frame.setAttribute('aria-hidden', 'true');
+    frame.tabIndex = -1;
+    frame.style.position = 'fixed';
+    frame.style.width = '1px';
+    frame.style.height = '1px';
+    frame.style.opacity = '0';
+    frame.style.pointerEvents = 'none';
+    frame.style.border = '0';
+    frame.style.left = '-9999px';
+    frame.style.bottom = '0';
+    frame.style.zIndex = '-1';
+    document.documentElement.appendChild(frame);
+    window.__skiRootFrame = frame;
+    window.__skiRootFrameReady = false;
+  }
+  if (window.__skiRootFrameReady) return Promise.resolve(window.__skiRootFrame);
+  return new Promise(function(resolve) {
+    window.__skiRootFrameWaiters.push(function() { resolve(window.__skiRootFrame); });
+  });
+}
+function __skiBridgeRequest(action, payload) {
+  return __skiEnsureRootFrame().then(function(frame) {
+    if (!frame || !frame.contentWindow) throw new Error('Root signing frame unavailable');
+    return new Promise(function(resolve, reject) {
+      var requestId = 'root-' + Math.random().toString(36).slice(2);
+      window.__skiRootBridgePending[requestId] = { resolve: resolve, reject: reject };
+      frame.contentWindow.postMessage({
+        __skiBridge: 'parent',
+        type: 'request',
+        action: action,
+        requestId: requestId,
+        payload: payload || {},
+      }, __skiGetRootOrigin());
+      setTimeout(function() {
+        if (!window.__skiRootBridgePending[requestId]) return;
+        delete window.__skiRootBridgePending[requestId];
+        reject(new Error('Root signing frame timed out'));
+      }, 45000);
+    });
+  });
+}
+function __skiSerializeBytes(value) {
+  if (!value) return [];
+  if (value instanceof Uint8Array) return Array.from(value);
+  if (value instanceof ArrayBuffer) return Array.from(new Uint8Array(value));
+  return Array.from(value);
+}
+function __skiPrepareBridgeTransaction(tx) {
+  if (tx instanceof Uint8Array || tx instanceof ArrayBuffer) {
+    return Promise.resolve({ kind: 'bytes', value: __skiSerializeBytes(tx) });
+  }
+  if (typeof tx === 'string') {
+    return Promise.resolve({ kind: 'text', value: tx });
+  }
+  if (tx && typeof tx.build === 'function') {
+    var client = typeof window.getSuiClient === 'function' ? window.getSuiClient() : null;
+    return Promise.resolve(client ? tx.build({ client: client }) : tx.build()).then(function(built) {
+      return { kind: 'bytes', value: __skiSerializeBytes(built) };
+    });
+  }
+  throw new Error('Unsupported transaction payload for root signer');
+}
 function __skiEnsureWaaPRegistered() {
+  if (!__skiShouldRegisterWaaP()) return Promise.resolve(false);
   if (window.__skiWaaPEnsurePromise) return window.__skiWaaPEnsurePromise;
   window.__skiWaaPEnsurePromise = __skiLoadWalletApi().then(async function(api) {
     var wallets = api && typeof api.getSuiWallets === 'function' ? api.getSuiWallets() : [];
@@ -234,21 +375,40 @@ window.addEventListener('ski:wallet-disconnected', function() {
   window._skiConn = null;
   __skiSetCompatConn(null);
 });
+function __skiHasDirectWallet() {
+  return !!(window._skiConn && window._skiConn.wallet && window._skiConn.account);
+}
 window._skiSignAndExecute = function(tx) {
-  return new Promise(function(resolve, reject) {
-    var rid = 'r' + Math.random().toString(36).slice(2);
-    function onResult(e) {
-      var d = (e && e.detail) || {};
-      if (d.requestId !== rid) return;
-      window.removeEventListener('ski:transaction-result', onResult);
-      if (d.success) resolve(d);
-      else reject(new Error(d.error || 'Transaction failed'));
-    }
-    window.addEventListener('ski:transaction-result', onResult);
-    window.dispatchEvent(new CustomEvent('ski:sign-and-execute-transaction', { detail: { transaction: tx, requestId: rid } }));
+  if (__skiShouldDeferSigninToRoot() && !__skiHasDirectWallet()) {
+    return __skiPrepareBridgeTransaction(tx).then(function(serializedTx) {
+      return __skiBridgeRequest('signAndExecute', {
+        transaction: serializedTx,
+        walletName: __skiGetPreferredWalletName(''),
+      });
+    });
+  }
+  return __skiLoadWalletApi().then(function(api) {
+    return api.signAndExecuteTransaction(tx);
   });
 };
 window._skiConnect = function(walletName) {
+  if (__skiShouldDeferSigninToRoot()) {
+    var preferredWalletName = __skiGetPreferredWalletName(walletName || '');
+    if (!preferredWalletName && !(window._skiConn && window._skiConn.address) && !window._skiAddr) {
+      return Promise.reject(new Error('Root iframe connect requires a remembered wallet; use root sign-in'));
+    }
+    return __skiBridgeRequest('connect', {
+      walletName: preferredWalletName,
+      address: (window._skiConn && window._skiConn.address) || window._skiAddr || '',
+    }).then(function(conn) {
+      if (conn && conn.address) {
+        window._skiAddr = conn.address;
+        window._skiConn = __skiBuildConn(conn);
+        __skiSetCompatConn(window._skiConn);
+      }
+      return window._skiConn;
+    });
+  }
   return __skiEnsureWaaPRegistered().then(function() {
     return __skiLoadWalletApi();
   }).then(async function(api) {
@@ -270,11 +430,25 @@ window._skiConnect = function(walletName) {
   });
 };
 window._skiSignPersonalMessage = function(messageBytes) {
+  if (__skiShouldDeferSigninToRoot() && !__skiHasDirectWallet()) {
+    return __skiBridgeRequest('signPersonalMessage', {
+      messageBytes: __skiSerializeBytes(messageBytes),
+      walletName: __skiGetPreferredWalletName(''),
+    });
+  }
   return __skiLoadWalletApi().then(function(api) {
     return api.signPersonalMessage(messageBytes);
   });
 };
 window._skiSignTransaction = function(tx) {
+  if (__skiShouldDeferSigninToRoot() && !__skiHasDirectWallet()) {
+    return __skiPrepareBridgeTransaction(tx).then(function(serializedTx) {
+      return __skiBridgeRequest('signTransaction', {
+        transaction: serializedTx,
+        walletName: __skiGetPreferredWalletName(''),
+      });
+    });
+  }
   return __skiLoadWalletApi().then(function(api) {
     return api.signTransaction(tx);
   });
@@ -290,6 +464,21 @@ window._skiSubscribe = function(onConnect, onDisconnect) {
   window.addEventListener('ski:wallet-disconnected', function() {
     if (onDisconnect) onDisconnect(null);
   });
+  if (window._skiConn) {
+    __skiEmitConn(onConnect, window._skiConn);
+    return;
+  }
+  __skiLoadWalletApi().then(function(api) {
+    if (window._skiConn) {
+      __skiEmitConn(onConnect, window._skiConn);
+      return;
+    }
+    if (!api || typeof api.getState !== 'function') return;
+    var state = api.getState();
+    if (state && state.status === 'connected' && state.address) {
+      __skiEmitConn(onConnect, state);
+    }
+  }).catch(function() {});
 };
 if (!window.SuiWalletKit) {
   window.SuiWalletKit = {
@@ -352,9 +541,21 @@ window.addEventListener('ski:request-signin', function(e) {
   if (!__skiShouldDeferSigninToRoot()) return;
   if (e && typeof e.preventDefault === 'function') e.preventDefault();
   if (e && typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-  window.location.href = __skiGetRootInUrl();
+  if (!__skiGetPreferredWalletName('') && !(window._skiConn && window._skiConn.address) && !window._skiAddr) {
+    window.location.href = __skiGetRootInUrl();
+    return;
+  }
+  __skiBridgeRequest('connect', {
+    walletName: __skiGetPreferredWalletName(''),
+    address: (window._skiConn && window._skiConn.address) || window._skiAddr || '',
+  }).catch(function(err) {
+    console.warn('[.SKI] Root iframe connect failed:', err);
+    window.location.href = __skiGetRootInUrl();
+  });
 }, true);
-__skiEnsureWaaPRegistered().catch(function() { return null; });
+if (__skiShouldRegisterWaaP()) {
+  __skiEnsureWaaPRegistered().catch(function() { return null; });
+}
 __skiLoadWalletApi().catch(function() { return null; });
 // ─── End .SKI Wallet Bridge ───────────────────────────────────────────────────`
 }
