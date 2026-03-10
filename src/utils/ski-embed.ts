@@ -1,6 +1,6 @@
-const CDN = 'https://cdn.jsdelivr.net/npm/sui.ski@0.1.86/public'
-const WALLET_API_ESM = 'https://esm.sh/sui.ski@0.1.86/src/wallet.ts'
-const WAAP_API_ESM = 'https://esm.sh/sui.ski@0.1.86/src/waap.ts'
+const CDN = 'https://cdn.jsdelivr.net/npm/sui.ski@0.1.88/public'
+const WALLET_API_ESM = `${CDN}/dist/ski.js`
+const WAAP_API_ESM = `${CDN}/dist/ski.js`
 
 interface SkiSessionState {
 	address: string | null
