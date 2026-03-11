@@ -1,4 +1,4 @@
-const CDN = 'https://cdn.jsdelivr.net/npm/sui.ski@0.1.89/public'
+const CDN = 'https://cdn.jsdelivr.net/npm/sui.ski@0.1.90/public'
 const WALLET_API_ESM = `${CDN}/dist/ski.js`
 const WAAP_API_ESM = `${CDN}/dist/ski.js`
 
